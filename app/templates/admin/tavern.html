@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Taverna - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="auth-panel" aria-labelledby="tavern-admin-title">
+    <p class="eyebrow">Administração</p>
+    <h1 id="tavern-admin-title">Taverna</h1>
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    <form class="form-stack" method="post" action="/admin/tavern">
+      <div class="form-grid">
+        <label>Custo inicial Aprendiz <input type="number" name="base_apprentice_cost" min="1" value="{{ config.base_apprentice_cost }}"></label>
+        <label>Limite de custo <input type="number" name="apprentice_cost_threshold" min="1" value="{{ config.apprentice_cost_threshold }}"></label>
+        <label>Crescimento antes limite (%) <input type="number" name="apprentice_growth_before_threshold_percent" min="0" value="{{ config.apprentice_growth_before_threshold_percent }}"></label>
+        <label>Crescimento após limite (%) <input type="number" name="apprentice_growth_after_threshold_percent" min="0" value="{{ config.apprentice_growth_after_threshold_percent }}"></label>
+        <label>Chance Comum (%) <input type="number" name="common_apprentice_chance" min="0" max="100" value="{{ config.common_apprentice_chance }}"></label>
+        <label>Chance Incomum (%) <input type="number" name="uncommon_apprentice_chance" min="0" max="100" value="{{ config.uncommon_apprentice_chance }}"></label>
+        <label>Cooldown oferta (h) <input type="number" name="special_spawn_cooldown_hours" min="1" value="{{ config.special_spawn_cooldown_hours }}"></label>
+        <label>Duração oferta (h) <input type="number" name="special_offer_duration_hours" min="1" value="{{ config.special_offer_duration_hours }}"></label>
+        <label>Chance oferta (%) <input type="number" name="special_spawn_chance" min="0" max="100" value="{{ config.special_spawn_chance }}"></label>
+        <label>Raro (%) <input type="number" name="special_rare_chance" min="0" max="100" value="{{ config.special_rare_chance }}"></label>
+        <label>Épico (%) <input type="number" name="special_epic_chance" min="0" max="100" value="{{ config.special_epic_chance }}"></label>
+        <label>Lendário (%) <input type="number" name="special_legendary_chance" min="0" max="100" value="{{ config.special_legendary_chance }}"></label>
+        <label>Mítico (%) <input type="number" name="special_mythic_chance" min="0" max="100" value="{{ config.special_mythic_chance }}"></label>
+        <label>Custo Raro <input type="number" name="special_rare_cost" min="0" value="{{ config.special_rare_cost }}"></label>
+        <label>Custo Épico <input type="number" name="special_epic_cost" min="0" value="{{ config.special_epic_cost }}"></label>
+        <label>Custo Lendário <input type="number" name="special_legendary_cost" min="0" value="{{ config.special_legendary_cost }}"></label>
+        <label>Custo Mítico <input type="number" name="special_mythic_cost" min="0" value="{{ config.special_mythic_cost }}"></label>
+      </div>
+      <p class="note">Ao alterar cooldown, duração ou chance da oferta especial, a próxima checagem das guildas é reiniciada imediatamente.</p>
+      <label class="check-row"><input type="checkbox" name="is_active" {% if config.is_active %}checked{% endif %}> Ativa</label>
+      <button type="submit">Salvar</button>
+    </form>
+    <p class="form-footer"><a href="/admin">Voltar</a></p>
+  </section>
+{% endblock %}

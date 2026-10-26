@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% from "components/building_lock.html" import building_lock %}
+
+{% block title %}Taverna - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="tavern-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">{{ guild.name }}</p>
+        <h1 id="tavern-title">Taverna</h1>
+        <p class="note">Avalie custo, potencial e raridade antes de ampliar sua equipe.</p>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mercenaries">Mercenários</a>
+        <a href="/classes">Guia de Classes</a>
+        <a href="/class-change">Troca de Classe</a>
+        <a href="/missions">Missões</a>
+        <a href="/dungeons">Masmorras</a>
+        <a href="/buildings">Construções</a>
+        {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+
+    {% if tavern_level < 1 %}
+      {{ building_lock('♜', 'A Taverna ainda não foi construída', 'Taverna', 'Evolua a construção Taverna para o nível 1 e abra o recrutamento da guilda.') }}
+    {% else %}
+
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+
+    <div class="dashboard-grid">
+      <article class="panel tavern-hero">
+        <h2>Contratar Aprendiz</h2>
+        <div class="asset-placeholder">♜</div>
+        <dl class="stat-list">
+          <div><dt>Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
+          <div><dt>Custo base</dt><dd>{{ current_apprentice_base_cost }}</dd></div>
+          <div><dt>Desconto da Taverna</dt><dd>-{{ apprentice_chances.hire_discount_percent }}%</dd></div>
+          <div><dt>Custo final</dt><dd>{{ current_apprentice_final_cost }}</dd></div>
+          <div><dt>Contratações</dt><dd>{{ state.apprentice_hire_count }}</dd></div>
+          <div><dt>Limite</dt><dd>{{ mercenary_count }}/{{ mercenary_limit }}</dd></div>
+        </dl>
+        <div class="badge-row">
+          <span class="rarity-badge rarity-common">Comum {{ apprentice_chances.common_final }}%</span>
+          <span class="rarity-badge rarity-uncommon">Incomum {{ apprentice_chances.uncommon_final }}%</span>
+          <span class="tag">Bônus Incomum +{{ apprentice_chances.uncommon_bonus_percentage_points }} p.p.</span>
+        </div>
+        {% if apprentice_chances.next_milestone_level %}<p class="note">Próximo marco: Taverna nível {{ apprentice_chances.next_milestone_level }} · Incomum {{ apprentice_chances.next_uncommon_final }}% · desconto {{ apprentice_chances.next_hire_discount_percent }}%.</p>{% else %}<p class="note">Benefício máximo da Taverna atingido.</p>{% endif %}
+        <div class="candidate-preview rarity-card rarity-{{ apprentice_preview.rarity }}">
+          <div class="section-heading">
+            <div>
+              <strong>Candidato disponível</strong>
+              <p class="note">O nome é escolhido por você; raridade e atributos já estão definidos.</p>
+            </div>
+            <span class="rarity-badge rarity-{{ apprentice_preview.rarity }}">{{ apprentice_preview.rarity_label }}</span>
+          </div>
+          <div class="attribute-row">
+            <span title="Força"><small>FOR</small>{{ apprentice_preview.attributes.power }}</span>
+            <span title="Vitalidade"><small>VIT</small>{{ apprentice_preview.attributes.vitality }}</span>
+            <span title="Agilidade"><small>AGI</small>{{ apprentice_preview.attributes.agility }}</span>
+            <span title="Inteligência"><small>INT</small>{{ apprentice_preview.attributes.intelligence }}</span>
+            <span title="Sorte"><small>SOR</small>{{ apprentice_preview.attributes.luck }}</span>
+          </div>
+          <span class="bonus-pill">Poder Total {{ apprentice_preview.power_score }}</span>
+          <span class="bonus-pill">Evolução +{{ apprentice_preview.progression_bonus_percent }}%</span>
+        </div>
+        <form class="form-stack" method="post" action="/tavern/hire-apprentice">
+          <label>Nome do Aprendiz <input type="text" name="name" required></label>
+          <button type="submit">Contratar Aprendiz</button>
+        </form>
+        <form
+          class="form-stack bulk-hire-form"
+          method="post"
+          action="/tavern/hire-apprentices-bulk"
+          data-confirm-title="Contratar {{ bulk_hire_count }} Aprendizes?"
+          data-confirm-message="O investimento será de {{ bulk_hire_cost }} ouro. Os nomes, raridades e atributos serão gerados automaticamente."
+          data-confirm-key="hire_bulk"
+          data-confirm-action="Contratar equipe"
+        >
+          <div>
+            <strong>Contratação em massa</strong>
+            <p class="note">Custo base {{ bulk_hire_base_cost }} ouro · desconto {{ apprentice_chances.hire_discount_percent }}% · total {{ bulk_hire_cost }} ouro.</p>
+          </div>
+          <button type="submit" {% if mercenary_count + bulk_hire_count > mercenary_limit or not resources or resources.gold < bulk_hire_cost %}disabled{% endif %}>
+            Contratar {{ bulk_hire_count }}
+          </button>
+        </form>
+      </article>
+
+      <article class="panel {% if active_offer %}rarity-card rarity-{{ active_offer.rarity }}{% endif %}">
+        <h2>Oferta especial</h2>
+        {% if active_offer %}
+          <div class="mercenary-head">
+            <div class="avatar-placeholder avatar-class-icon">
+              {% if active_offer.class_icon_path %}
+                <img class="asset-icon class-icon-img" src="{{ url_for('static', path=active_offer.class_icon_path) }}" alt="{{ active_offer.class_label }}" loading="lazy">
+              {% else %}
+                <span aria-hidden="true">{{ active_offer.class_label[:1] }}</span>
+              {% endif %}
+            </div>
+            <div>
+              <h3>{{ active_offer.name }}</h3>
+              <div class="badge-row">
+                <span class="rarity-badge rarity-{{ active_offer.rarity }}">{{ active_offer.rarity_label }}</span>
+                <span class="status-badge status-active">Oferta ativa</span>
+                <span class="bonus-pill">Evolução +{{ active_offer.progression_bonus_percent }}%</span>
+              </div>
+            </div>
+          </div>
+          <dl class="stat-list">
+            <div><dt>Classe</dt><dd>{{ active_offer.class_label }}</dd></div>
+            <div><dt>Nível</dt><dd>{{ active_offer.level }}</dd></div>
+            <div><dt>Poder Total</dt><dd>{{ active_offer.power_score }}</dd></div>
+            <div><dt>Custo</dt><dd>{{ active_offer.gold_cost }}</dd></div>
+          </dl>
+          <p class="note">Expira em: <strong class="countdown" data-ends-at="{{ active_offer.available_until.isoformat() }}">calculando...</strong></p>
+          <div class="bonus-list">
+            {% if active_offer.power > 0 %}<span class="bonus-pill" title="Força">FOR {{ active_offer.power }}</span>{% endif %}
+            {% if active_offer.vitality > 0 %}<span class="bonus-pill" title="Vitalidade">VIT {{ active_offer.vitality }}</span>{% endif %}
+            {% if active_offer.agility > 0 %}<span class="bonus-pill" title="Agilidade">AGI {{ active_offer.agility }}</span>{% endif %}
+            {% if active_offer.intelligence > 0 %}<span class="bonus-pill" title="Inteligência">INT {{ active_offer.intelligence }}</span>{% endif %}
+            {% if active_offer.luck > 0 %}<span class="bonus-pill" title="Sorte">SOR {{ active_offer.luck }}</span>{% endif %}
+          </div>
+          <form
+            class="form-stack"
+            method="post"
+            action="/tavern/hire-special"
+            data-confirm-title="Contratar {{ active_offer.name }}?"
+            data-confirm-message="Esta oferta especial custará {{ active_offer.gold_cost }} ouro e ocupará uma vaga no Alojamento."
+            data-confirm-action="Contratar mercenário"
+            data-confirm-key="hire_special"
+          >
+            <input type="hidden" name="offer_id" value="{{ active_offer.id }}">
+            <button type="submit">Contratar Mercenário</button>
+          </form>
+        {% else %}
+          <div class="empty-state">
+            <strong>Nenhum mercenário especial disponível.</strong>
+            <p>Próxima tentativa em: <span class="countdown" data-ends-at="{{ state.next_special_check_at.isoformat() }}">calculando...</span></p>
+          </div>
+        {% endif %}
+        {% if active_offer %}<form
+          class="form-stack"
+          method="post"
+          action="/tavern/refresh-special"
+          data-confirm-title="Renovar visitantes?"
+          data-confirm-message="A renovação custará {{ manual_refresh_cost }} ouro e encerrará a oferta especial atual."
+          data-confirm-action="Renovar agora"
+          data-confirm-key="refresh_special"
+        >
+          <button type="submit" {% if not resources or resources.gold < manual_refresh_cost %}disabled{% endif %}>
+            Renovar visitantes ({{ manual_refresh_cost }} ouro)
+          </button>
+        </form>
+        {% endif %}
+      </article>
+
+      <article class="panel">
+        <h2>Construção</h2>
+        <dl class="stat-list">
+          <div><dt>Taverna</dt><dd>Nível {{ tavern_level }}</dd></div>
+          <div><dt>Guilda</dt><dd>Nível {{ guild.level }}</dd></div>
+        </dl>
+        <div class="action-row compact">
+          <a class="button-link secondary" href="/buildings">Evoluir construções</a>
+        </div>
+      </article>
+    </div>
+    {% endif %}
+  </section>
+{% endblock %}

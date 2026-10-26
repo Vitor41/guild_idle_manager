@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Masmorra - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="auth-panel" aria-labelledby="dungeon-form-title">
+    <p class="eyebrow">Administracao</p>
+    <h1 id="dungeon-form-title">{{ dungeon.name if dungeon else 'Criar masmorra' }}</h1>
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    {% set duration = split_duration(dungeon.duration_seconds) if dungeon else {'hours': 0, 'minutes': 30, 'seconds': 0} %}
+    <form class="form-stack" method="post" action="{{ '/admin/dungeons/' ~ dungeon.id ~ '/edit' if dungeon else '/admin/dungeons/create' }}">
+      <label>Nome <input type="text" name="name" value="{{ dungeon.name if dungeon else form.name if form else '' }}" required></label>
+      <label>Descrição <textarea name="description">{{ dungeon.description if dungeon else form.description if form else '' }}</textarea></label>
+      <div class="form-grid">
+        {% set current_type = form.content_type if form else dungeon.content_type if dungeon else 'dungeon' %}<label>Tipo <select name="content_type"><option value="dungeon" {% if current_type == 'dungeon' %}selected{% endif %}>Masmorra</option><option value="boss" {% if current_type == 'boss' %}selected{% endif %}>Chefe</option><option value="event" {% if current_type == 'event' %}selected{% endif %}>Evento</option></select></label>
+        {% set current_difficulty = form.difficulty if form else dungeon.difficulty if dungeon else 'normal' %}<label>Dificuldade <select name="difficulty"><option value="normal" {% if current_difficulty == 'normal' %}selected{% endif %}>Normal</option><option value="hard" {% if current_difficulty == 'hard' %}selected{% endif %}>Difícil</option><option value="heroic" {% if current_difficulty == 'heroic' %}selected{% endif %}>Heroica</option><option value="legendary" {% if current_difficulty == 'legendary' %}selected{% endif %}>Lendária</option><option value="elite" {% if current_difficulty == 'elite' %}selected{% endif %}>Elite</option></select></label>
+      </div>
+      <div class="form-grid">
+        {% set current_band = form.level_band if form else dungeon.level_band if dungeon else '1-20' %}
+        <label>Faixa de nível <select name="level_band">{% for band in ['1-20', '21-50', '51-100', '101-130', '131-200', '201-250', '251-300', '301-350'] %}<option value="{{ band }}" {% if current_band == band %}selected{% endif %}>{{ band }}</option>{% endfor %}</select></label>
+        <label>Nível recomendado <input type="number" name="recommended_level" min="1" value="{{ form.recommended_level if form else dungeon.recommended_level if dungeon else 1 }}" required></label>
+        <label>Bioma <input type="text" name="biome" value="{{ form.biome if form else dungeon.biome if dungeon and dungeon.biome else '' }}" placeholder="woods, ruins, fortress..."></label>
+      </div>
+      <div class="form-grid">
+        <label>Horas <input type="number" name="duration_hours" min="0" value="{{ form.duration_hours if form and form.duration_hours is defined else duration.hours }}" required></label>
+        <label>Minutos <input type="number" name="duration_minutes" min="0" max="59" value="{{ form.duration_minutes if form and form.duration_minutes is defined else duration.minutes }}" required></label>
+        <label>Segundos <input type="number" name="duration_seconds" min="0" max="59" value="{{ form.duration_seconds if form and form.duration_seconds is defined else duration.seconds }}" required></label>
+      </div>
+      <div class="form-grid">
+        <label>Ouro base <input type="number" name="base_gold_reward" min="0" value="{{ dungeon.base_gold_reward if dungeon else form.base_gold_reward if form else 150 }}" required></label>
+        <label>XP base <input type="number" name="base_xp_reward" min="0" value="{{ dungeon.base_xp_reward if dungeon else form.base_xp_reward if form else 80 }}" required></label>
+        <label>Chance <input type="number" name="base_success_chance" min="1" max="100" value="{{ dungeon.base_success_chance if dungeon else form.base_success_chance if form else 60 }}" required></label>
+        <label>Grupo mínimo <input type="number" name="min_party_size" min="1" value="{{ dungeon.min_party_size if dungeon else form.min_party_size if form else 2 }}" required></label>
+        <label>Grupo máximo <input type="number" name="max_party_size" min="1" value="{{ dungeon.max_party_size if dungeon else form.max_party_size if form else 3 }}" required></label>
+        <label>Nível da guilda <input type="number" name="required_guild_level" min="1" value="{{ dungeon.required_guild_level if dungeon else form.required_guild_level if form else 1 }}" required></label>
+        <label>Nível do mercenário <input type="number" name="required_min_mercenary_level" min="1" value="{{ dungeon.required_min_mercenary_level if dungeon else form.required_min_mercenary_level if form else 1 }}" required></label>
+        <label>Construção exigida <input type="text" name="required_building_type" value="{{ dungeon.required_building_type if dungeon and dungeon.required_building_type else form.required_building_type if form else '' }}"></label>
+        <label>Nível da construção <input type="number" name="required_building_level" min="0" value="{{ dungeon.required_building_level if dungeon else form.required_building_level if form else 0 }}"></label>
+        <label>Poder total mínimo <input type="number" name="required_total_power" min="0" value="{{ dungeon.required_total_power if dungeon else form.required_total_power if form else 0 }}"></label>
+        <label>Classe obrigatória (código) <input type="text" name="required_class_code" value="{{ dungeon.required_class_code if dungeon and dungeon.required_class_code else form.required_class_code if form else '' }}"></label>
+        <label>Tanques exigidos <input type="number" name="required_tank_count" min="0" value="{{ dungeon.required_tank_count if dungeon else form.required_tank_count if form else 0 }}"></label>
+        <label>Suportes exigidos <input type="number" name="required_support_count" min="0" value="{{ dungeon.required_support_count if dungeon else form.required_support_count if form else 0 }}"></label>
+        <label>Atacantes exigidos <input type="number" name="required_damage_count" min="0" value="{{ dungeon.required_damage_count if dungeon else form.required_damage_count if form else 0 }}"></label>
+        <label>Tier mínimo de equipamento <input type="number" name="required_equipment_tier" min="0" max="8" value="{{ form.required_equipment_tier if form else dungeon.required_equipment_tier if dungeon else 0 }}"></label>
+      </div>
+      <label class="check-row"><input type="checkbox" name="is_active" {% if (form and form.is_active is defined) or (not form and (dungeon is none or dungeon.is_active)) %}checked{% endif %}> Ativa</label>
+      <button type="submit">Salvar</button>
+    </form>
+    <p class="form-footer"><a href="/admin/dungeons">Voltar</a></p>
+  </section>
+{% endblock %}

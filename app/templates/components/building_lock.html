@@ -1,0 +1,8 @@
+{% macro building_lock(icon, title, building_name, description) %}
+  <section class="panel empty-state building-lock-state" aria-label="Construção necessária">
+    <span class="empty-state__icon" aria-hidden="true">{{ icon }}</span>
+    <h2>{{ title }}</h2>
+    <p>{{ description }}</p>
+    <a class="button-link" href="/buildings">Ir para Construções</a>
+  </section>
+{% endmacro %}

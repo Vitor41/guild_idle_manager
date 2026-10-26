@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Drop - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="auth-panel" aria-labelledby="drop-form-title">
+    <p class="eyebrow">Administracao</p>
+    <h1 id="drop-form-title">{{ 'Editar drop' if drop else 'Criar drop' }}</h1>
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    <form class="form-stack" method="post" action="{{ '/admin/mission-drops/' ~ drop.id ~ '/edit' if drop else '/admin/mission-drops/create' }}">
+      <label>
+        Missao
+        <select name="mission_template_id" required>
+          {% for mission in missions %}
+            <option value="{{ mission.id }}" {% if drop and drop.mission_template_id == mission.id %}selected{% endif %}>{{ mission.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        Item
+        <select name="item_template_id" required>
+          {% for item in items %}
+            <option value="{{ item.id }}" {% if drop and drop.item_template_id == item.id %}selected{% endif %}>{{ item.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Chance <input type="number" name="drop_chance" min="0" max="100" value="{{ drop.drop_chance if drop else form.drop_chance if form else 50 }}" required></label>
+      <label>Quantidade minima <input type="number" name="min_quantity" min="1" value="{{ drop.min_quantity if drop else form.min_quantity if form else 1 }}" required></label>
+      <label>Quantidade maxima <input type="number" name="max_quantity" min="1" value="{{ drop.max_quantity if drop else form.max_quantity if form else 1 }}" required></label>
+      <label class="check-row"><input type="checkbox" name="is_active" {% if drop is none or drop.is_active %}checked{% endif %}> Ativo</label>
+      <button type="submit">Salvar</button>
+    </form>
+    <p class="form-footer"><a href="/admin/mission-drops">Voltar</a></p>
+  </section>
+{% endblock %}

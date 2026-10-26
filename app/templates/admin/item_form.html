@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Item - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="auth-panel" aria-labelledby="item-form-title">
+    <p class="eyebrow">Administracao</p>
+    <h1 id="item-form-title">{{ item.name if item else 'Criar item' }}</h1>
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    <form class="form-stack" method="post" action="{{ '/admin/items/' ~ item.id ~ '/edit' if item else '/admin/items/create' }}">
+      <label>Nome <input type="text" name="name" value="{{ form.name if form else item.name if item else '' }}" required></label>
+      <label>Descrição <textarea name="description">{{ form.description if form else item.description if item else '' }}</textarea></label>
+      <label>
+        Tipo
+        <select name="item_type" required>
+          {% set current_type = form.item_type if form else item.item_type if item else 'material' %}
+          <option value="material" {% if current_type == 'material' %}selected{% endif %}>Material</option>
+          <option value="consumable" {% if current_type == 'consumable' %}selected{% endif %}>Consumível</option>
+          <option value="misc" {% if current_type == 'misc' %}selected{% endif %}>Diversos</option>
+          <option value="equipment" {% if current_type == 'equipment' %}selected{% endif %}>Equipamento</option>
+        </select>
+      </label>
+      <div class="form-grid">
+        {% set current_band = form.level_band if form else item.level_band if item else '1-20' %}
+        <label>Faixa de nível <select name="level_band">{% for band in ['1-20', '21-50', '51-100', '101-130', '131-200', '201-250', '251-300', '301-350'] %}<option value="{{ band }}" {% if current_band == band %}selected{% endif %}>{{ band }}</option>{% endfor %}</select></label>
+        <label>Família de material <input type="text" name="material_family" value="{{ form.material_family if form else item.material_family if item and item.material_family else '' }}" placeholder="wood, ore, leather..."></label>
+        <label>Classe favorecida <input type="text" name="favored_class_code" value="{{ form.favored_class_code if form else item.favored_class_code if item and item.favored_class_code else '' }}" placeholder="warrior, mage..."></label>
+        <label>Atributo favorecido <input type="text" name="favored_attribute" value="{{ form.favored_attribute if form else item.favored_attribute if item and item.favored_attribute else '' }}" placeholder="power, vitality, agility..."></label>
+      </div>
+      <label>
+        Raridade
+        {% set current_rarity = form.rarity if form else item.rarity if item else 'common' %}
+        <select name="rarity" required>
+          <option value="common" {% if current_rarity == 'common' %}selected{% endif %}>Comum</option>
+          <option value="uncommon" {% if current_rarity == 'uncommon' %}selected{% endif %}>Incomum</option>
+          <option value="rare" {% if current_rarity == 'rare' %}selected{% endif %}>Raro</option>
+          <option value="epic" {% if current_rarity == 'epic' %}selected{% endif %}>Épico</option>
+          <option value="legendary" {% if current_rarity == 'legendary' %}selected{% endif %}>Lendário</option>
+          <option value="mythic" {% if current_rarity == 'mythic' %}selected{% endif %}>Mítico</option>
+        </select>
+      </label>
+      <label>
+        Grupo visual
+        <input
+          type="text"
+          name="icon_group"
+          list="icon-groups"
+          value="{{ form.icon_group if form else item.icon_group if item else '' }}"
+          placeholder="sword, helmet, ring, wood..."
+        >
+      </label>
+      <datalist id="icon-groups">
+        <option value="sword">
+        <option value="axe">
+        <option value="bow">
+        <option value="staff">
+        <option value="dagger">
+        <option value="pistol">
+        <option value="shield">
+        <option value="helmet">
+        <option value="chest">
+        <option value="gloves">
+        <option value="boots">
+        <option value="earring">
+        <option value="ring">
+        <option value="belt">
+        <option value="necklace">
+        <option value="wood">
+        <option value="ore">
+        <option value="crystal">
+        <option value="hide">
+        <option value="material">
+        <option value="consumable">
+      </datalist>
+      <div class="form-grid">
+        <label>Item level <input type="number" name="item_level" min="1" value="{{ form.item_level if form else item.item_level if item else 1 }}"></label>
+        <label>Tier <input type="number" name="tier" min="1" max="8" value="{{ form.tier if form else item.tier if item else 1 }}"></label>
+        <label>Valor base de venda <input type="number" name="base_sell_value" min="1" value="{{ form.base_sell_value if form else item.base_sell_value if item else 1 }}"></label>
+      </div>
+      <label>
+        Slot de equipamento
+        {% set current_slot = form.equipment_slot if form else item.equipment_slot if item else '' %}
+        <select name="equipment_slot">
+          <option value="">Nao se aplica</option>
+          <option value="main_hand" {% if current_slot in ['main_hand', 'weapon'] %}selected{% endif %}>Arma principal</option>
+          <option value="off_hand" {% if current_slot == 'off_hand' %}selected{% endif %}>Arma secundaria</option>
+          <option value="shield" {% if current_slot == 'shield' %}selected{% endif %}>Escudo</option>
+          <option value="helmet" {% if current_slot == 'helmet' %}selected{% endif %}>Elmo</option>
+          <option value="chest" {% if current_slot in ['chest', 'armor'] %}selected{% endif %}>Peito</option>
+          <option value="gloves" {% if current_slot == 'gloves' %}selected{% endif %}>Luvas</option>
+          <option value="boots" {% if current_slot == 'boots' %}selected{% endif %}>Botas</option>
+          <option value="earring" {% if current_slot == 'earring' %}selected{% endif %}>Brinco</option>
+          <option value="ring" {% if current_slot in ['ring', 'accessory'] %}selected{% endif %}>Anel</option>
+          <option value="belt" {% if current_slot == 'belt' %}selected{% endif %}>Cinto</option>
+          <option value="necklace" {% if current_slot == 'necklace' %}selected{% endif %}>Colar</option>
+        </select>
+      </label>
+      <label>Nível mínimo <input type="number" name="required_level" min="1" value="{{ form.required_level if form else item.required_level if item else 1 }}"></label>
+      <div class="form-grid">
+        <label>Bônus força <input type="number" name="bonus_power" min="0" value="{{ form.bonus_power if form else item.bonus_power if item else 0 }}"></label>
+        <label>Bônus vitalidade <input type="number" name="bonus_vitality" min="0" value="{{ form.bonus_vitality if form else item.bonus_vitality if item else 0 }}"></label>
+        <label>Bônus agilidade <input type="number" name="bonus_agility" min="0" value="{{ form.bonus_agility if form else item.bonus_agility if item else 0 }}"></label>
+        <label>Bônus inteligência <input type="number" name="bonus_intelligence" min="0" value="{{ form.bonus_intelligence if form else item.bonus_intelligence if item else 0 }}"></label>
+        <label>Bônus sorte <input type="number" name="bonus_luck" min="0" value="{{ form.bonus_luck if form else item.bonus_luck if item else 0 }}"></label>
+        <label>Bônus armadura <input type="number" name="bonus_armor" min="0" value="{{ form.bonus_armor if form else item.bonus_armor if item else 0 }}"></label>
+        <label>Bônus aleatório mínimo <input type="number" name="rng_bonus_min" min="0" value="{{ form.rng_bonus_min if form else item.rng_bonus_min if item else 0 }}"></label>
+        <label>Bônus aleatório máximo <input type="number" name="rng_bonus_max" min="0" value="{{ form.rng_bonus_max if form else item.rng_bonus_max if item else 0 }}"></label>
+      </div>
+      <label class="check-row"><input type="checkbox" name="is_active" {% if (form and form.is_active is defined) or (not form and (item is none or item.is_active)) %}checked{% endif %}> Ativo</label>
+      <button type="submit">Salvar</button>
+    </form>
+    <p class="form-footer"><a href="/admin/items">Voltar</a></p>
+  </section>
+{% endblock %}

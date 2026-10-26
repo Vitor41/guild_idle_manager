@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Classe - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="auth-panel" aria-labelledby="class-form-title">
+    <p class="eyebrow">Administracao</p>
+    <h1 id="class-form-title">{{ class.display_name or class.name }}</h1>
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    <form class="form-stack" method="post" action="/admin/classes/{{ class.id }}/edit">
+      <label>Nome interno <input type="text" name="name" value="{{ form.name if form else class.name }}" required></label>
+      <label>Código interno <input type="text" value="{{ class.code or '-' }}" readonly><small class="note">Identificador protegido para não quebrar requisitos e progressões existentes.</small></label>
+      <label>Nome exibido <input type="text" name="display_name" value="{{ form.display_name if form else class.display_name or class.name }}"></label>
+      <label>Descricao <textarea name="description">{{ form.description if form else class.description }}</textarea></label>
+      <div class="form-grid">
+        <label>Tier <input type="number" name="tier" min="0" value="{{ form.tier if form else class.tier }}"></label>
+        <label>Nivel requerido <input type="number" name="required_level" min="1" value="{{ form.required_level if form else class.required_level }}"></label>
+        {% set current_profile = form.allowed_weapon_profile if form else class.allowed_weapon_profile %}
+        <label>Perfil de arma <select name="allowed_weapon_profile">{% for value, label in {'any': 'Qualquer arma', 'melee': 'Corpo a corpo', 'light': 'Armas leves', 'ranged': 'À distância', 'arcane': 'Arcano', 'holy': 'Sagrado'}.items() %}<option value="{{ value }}" {% if current_profile == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        {% set current_role = form.role_type if form else class.role_type %}
+        <label>Papel <select name="role_type">{% for value, label in {'balanced': 'Equilibrado', 'tank': 'Tanque', 'frontline': 'Linha de frente', 'support': 'Suporte', 'caster': 'Conjurador', 'ranged': 'Atirador', 'duelist': 'Duelista', 'skirmisher': 'Escaramuçador'}.items() %}<option value="{{ value }}" {% if current_role == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        {% set current_parent = form.parent_class_id if form else class.parent_class_id %}
+        <label>Classe de origem <select name="parent_class_id"><option value="">Classe inicial</option>{% for option in classes if option.id != class.id %}<option value="{{ option.id }}" {% if current_parent|string == option.id|string %}selected{% endif %}>{{ option.display_name or option.name }}</option>{% endfor %}</select></label>
+      </div>
+      <div class="form-grid">
+        <label>Força base <input type="number" name="base_power" min="0" value="{{ form.base_power if form else class.base_power }}" required></label>
+        <label>Vitalidade base <input type="number" name="base_vitality" min="0" value="{{ form.base_vitality if form else class.base_vitality }}" required></label>
+        <label>Agilidade base <input type="number" name="base_agility" min="0" value="{{ form.base_agility if form else class.base_agility }}" required></label>
+        <label>Inteligência base <input type="number" name="base_intelligence" min="0" value="{{ form.base_intelligence if form else class.base_intelligence }}" required></label>
+        <label>Sorte base <input type="number" name="base_luck" min="0" value="{{ form.base_luck if form else class.base_luck }}" required></label>
+      </div>
+      <label class="check-row"><input type="checkbox" name="is_active" {% if (form and form.is_active is defined) or (not form and class.is_active) %}checked{% endif %}> Ativa</label>
+      <button type="submit">Salvar</button>
+    </form>
+    <p class="form-footer"><a href="/admin/classes">Voltar</a></p>
+  </section>
+{% endblock %}

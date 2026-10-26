@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="admin-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Administracao</p>
+        <h1 id="admin-title">Admin</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/dashboard">Dashboard</a>
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Configuracoes</h2>
+      <div class="action-row compact">
+        <a class="button-link secondary" href="/admin/missions">Editar missoes</a>
+        <a class="button-link secondary" href="/admin/buildings">Editar construcoes</a>
+        <a class="button-link secondary" href="/admin/dungeons">Editar masmorras</a>
+        <a class="button-link secondary" href="/admin/items">Editar itens</a>
+        <a class="button-link secondary" href="/admin/classes">Editar classes</a>
+        <a class="button-link secondary" href="/admin/tavern">Configurar Taverna</a>
+        <a class="button-link secondary" href="/admin/mission-drops">Editar drops</a>
+        <a class="button-link secondary" href="/admin/dungeon-drops">Editar drops de masmorra</a>
+        <a class="button-link secondary" href="/admin/content-report">Validar conteúdo massivo</a>
+      </div>
+    </section>
+  </section>
+{% endblock %}

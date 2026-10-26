@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Construcoes - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="admin-buildings-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Administracao</p>
+        <h1 id="admin-buildings-title">Construcoes globais</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/admin">Admin</a>
+        <a href="/dashboard">Dashboard</a>
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    <div class="action-row compact">
+      <a class="button-link secondary" href="/admin/buildings/create">Criar construcao</a>
+    </div>
+    <section class="panel table-panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Efeito</th><th>Custos base</th><th>Max</th><th>Ativa</th><th></th></tr></thead>
+          <tbody>
+            {% for building in buildings %}
+              <tr>
+                <td>{{ building.name }}</td>
+                <td>{{ get_effect_label(building.effect_type) }}</td>
+                <td>{{ building.base_upgrade_gold_cost }} ouro, {{ building.base_upgrade_wood_cost }} madeira, {{ building.base_upgrade_ore_cost }} minerio, {{ building.base_upgrade_crystals_cost }} cristais</td>
+                <td>{{ building.max_level }}</td>
+                <td>{{ 'Sim' if building.is_active else 'Nao' }}</td>
+                <td><a href="/admin/buildings/{{ building.id }}/edit">Editar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+{% endblock %}

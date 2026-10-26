@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Mercenário - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="mercenary-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">{{ guild.name }}</p>
+        <h1 id="mercenary-title">{{ mercenary.name }}</h1>
+        <div class="badge-row">
+          <span class="rarity-badge rarity-{{ mercenary.rarity }}">{{ mercenary.rarity_label }}</span>
+          <span class="status-badge status-{{ mercenary.status }}">{{ mercenary.status_label }}</span>
+        </div>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/tavern">Taverna</a>
+        <a href="/class-change">Troca de Classe</a>
+        <a href="/mercenaries">Mercenários</a>
+        <a href="/missions">Missões</a>
+        <a href="/dungeons">Masmorras</a>
+        <a href="/buildings">Construções</a>
+        <a href="/inventory">Inventário</a>
+        {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+
+    <div class="dashboard-grid">
+      <article class="panel">
+        <h2>Resumo</h2>
+        <dl class="stat-list">
+          <div><dt>Classe</dt><dd>{{ mercenary.mercenary_class.display_name or mercenary.mercenary_class.name }}</dd></div>
+          <div><dt>Profissão</dt><dd>{{ mercenary.profession.name if mercenary.profession else 'Sem profissão' }}</dd></div>
+          {% if mercenary.profession %}<div><dt>Bônus profissional</dt><dd>+{{ mercenary.profession.bonus_percent }}% em coleta de {{ profession_family_label }}</dd></div>{% endif %}
+          <div><dt>Armas permitidas</dt><dd>{{ weapon_profile_label }}</dd></div>
+          <div><dt>Nível</dt><dd>{{ mercenary.level }}</dd></div>
+          <div><dt>XP</dt><dd>{{ mercenary.xp }}</dd></div>
+          <div><dt>Status</dt><dd>{{ mercenary.status_label }}</dd></div>
+          <div><dt>Bônus de evolução</dt><dd>+{{ mercenary.progression_bonus_percent }}%</dd></div>
+          <div><dt>Valor pago</dt><dd>{{ mercenary.hire_cost }}</dd></div>
+          <div><dt>Reembolso por demissão</dt><dd>{{ ((mercenary.hire_cost or 0) * 0.3)|int }}</dd></div>
+          <div><dt>Poder total</dt><dd>{{ attribute_summary.total_power_score }}</dd></div>
+        </dl>
+        <form
+          class="form-stack"
+          method="post"
+          action="/mercenaries/{{ mercenary.id }}/dismiss"
+          data-confirm-title="Demitir {{ mercenary.name }}?"
+          data-confirm-message="O mercenário deixará sua equipe e você receberá {{ ((mercenary.hire_cost or 0) * 0.3)|int }} ouro. Esta ação não pode ser desfeita."
+          data-confirm-action="Demitir mercenário"
+          data-confirm-variant="danger"
+          data-confirm-key="dismiss_mercenary"
+        >
+          <button class="danger-button" type="submit" {% if mercenary.status != "available" %}disabled{% endif %}>Demitir mercenário</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <h2>Atributos</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Atributo</th><th>Base</th><th>Bonus</th><th>Total</th></tr></thead>
+            <tbody>
+              {% for key, label in [('power', 'FOR'), ('vitality', 'VIT'), ('agility', 'AGI'), ('intelligence', 'INT'), ('luck', 'SOR'), ('armor', 'ARM')] %}
+                <tr>
+                  <td title="{{ attribute_tooltips.get(key, '') }}">{{ label }}</td>
+                  <td>{{ attribute_summary.base[key] }}</td>
+                  <td>{{ attribute_summary.bonus[key] }}</td>
+                  <td>{{ attribute_summary.total[key] }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+
+    <section class="panel table-panel" aria-labelledby="equipped-title">
+      <h2 id="equipped-title">Equipamentos atuais</h2>
+      {% set slots = attribute_summary.get('equipment_by_slot', {}) %}
+      {% set slot_icons = {
+        'helmet': '⛑',
+        'chest': '▰',
+        'gloves': '▱',
+        'boots': '⌞',
+        'main_hand': '⚔',
+        'off_hand': '⚔',
+        'necklace': '◇',
+        'earring': '○',
+        'belt': '▬',
+        'ring': '○'
+      } %}
+      <div class="equipment-layout">
+        {% for slot_key, slot_label, slot_class, index in [
+          ('helmet', 'Elmo', 'slot-helmet', 0),
+          ('chest', 'Peito', 'slot-chest', 0),
+          ('gloves', 'Luvas', 'slot-gloves', 0),
+          ('boots', 'Botas', 'slot-boots', 0),
+          ('main_hand', 'Arma principal', 'slot-main', 0),
+          ('off_hand', 'Arma secundária', 'slot-off', 0),
+          ('necklace', 'Colar', 'slot-necklace', 0),
+          ('earring', 'Brinco', 'slot-earring-a', 0),
+          ('earring', 'Brinco', 'slot-earring-b', 1),
+          ('belt', 'Cinto', 'slot-belt', 0),
+          ('ring', 'Anel', 'slot-ring-a', 0),
+          ('ring', 'Anel', 'slot-ring-b', 1)
+        ] %}
+          {% set equipped = slots[slot_key][index] if slots.get(slot_key) and slots[slot_key]|length > index else none %}
+          <div class="equipment-slot {{ slot_class }} {{ 'filled' if equipped else '' }}">
+            <span class="slot-icon">
+              {% if equipped and equipped.icon_path %}
+                <img class="asset-icon item-icon-img slot-item-icon" src="{{ url_for('static', path=equipped.icon_path) }}" alt="{{ equipped.item_template.name }}" loading="lazy">
+              {% else %}
+                <span aria-hidden="true">{{ equipped.view_icon if equipped and equipped.view_icon is defined else slot_icons.get(slot_key, '◇') }}</span>
+              {% endif %}
+            </span>
+            <span class="slot-name">{{ slot_label }}</span>
+            {% if equipped %}
+              <strong>{{ equipped.display_name }}{% if equipped.upgrade_level > 0 %} +{{ equipped.upgrade_level }}{% endif %}</strong>
+              <small>{{ equipped.rarity_label }} · T{{ equipped.item_template.tier }}</small>
+              <form method="post" action="/mercenaries/{{ mercenary.id }}/unequip">
+                <input type="hidden" name="item_instance_id" value="{{ equipped.id }}">
+                <button type="submit">Remover</button>
+              </form>
+            {% else %}
+              <small>Vazio</small>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      {% if attribute_summary.get('equipment_items') %}
+        <div class="bonus-list table-panel">
+          {% for item in attribute_summary.get('equipment_items', []) %}
+            <span class="bonus-pill">{{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} · {{ item.slot_label }}</span>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="note">Nenhum equipamento equipado.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel table-panel" aria-labelledby="mercenary-skills-title">
+      <h2 id="mercenary-skills-title">Habilidades</h2>
+      {% if skills %}<div class="skill-grid">{% for skill in skills %}
+        <article class="skill-card"><div class="skill-rank">Nv. {{ skill.level }}</div><h3>{{ skill.skill_template.name }}</h3><p class="note">{{ skill.skill_template.description }}</p><span class="bonus-pill">{{ skill_effect_label(skill.skill_template.effect_type) }} +{{ skill.skill_template.effect_value * skill.level }}{{ skill_effect_suffix(skill.skill_template.effect_type) }}</span></article>
+      {% endfor %}</div>{% else %}<p class="note">Esta classe ainda não possui habilidades.</p>{% endif %}
+    </section>
+
+    <section class="panel table-panel" aria-labelledby="available-equipment-title">
+      <h2 id="available-equipment-title">Equipar item</h2>
+      {% if available_equipment %}
+        <form class="inline-form" method="post" action="/mercenaries/{{ mercenary.id }}/equip">
+          <select name="item_instance_id" required>
+            <option value="">Escolha um equipamento</option>
+            {% for item in available_equipment %}
+              <option value="{{ item.id }}">
+                {{ item.view_icon if item.view_icon is defined else '◇' }} {{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} | {{ item.slot_label }} | T{{ item.item_template.tier }} {{ item.rarity_label }} | nível {{ item.required_level }}
+                {% if item.rng_bonus_attribute %}| Bônus +{{ item.rng_bonus_value }} {{ bonus_attribute_labels.get(item.rng_bonus_attribute, item.rng_bonus_attribute) }}{% endif %}
+                | Poder {{ item.equipment_power_score }} | {{ '+' if item.comparison_delta >= 0 else '' }}{{ item.comparison_delta }}{% if item.comparison_current_name %} vs. {{ item.comparison_current_name }}{% endif %}
+                | {{ item.class_restriction_label }}
+              </option>
+            {% endfor %}
+          </select>
+          <button type="submit">Equipar</button>
+        </form>
+      {% else %}
+        <p class="note">Nenhum equipamento livre disponível para este nível.</p>
+      {% endif %}
+    </section>
+  </section>
+{% endblock %}

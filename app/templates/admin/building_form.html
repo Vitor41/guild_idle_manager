@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Construcao - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="auth-panel" aria-labelledby="building-form-title">
+    <p class="eyebrow">Administracao</p>
+    <h1 id="building-form-title">{{ building.name if building else 'Criar construcao' }}</h1>
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    <form class="form-stack" method="post" action="{{ '/admin/buildings/' ~ building.id ~ '/edit' if building else '/admin/buildings/create' }}">
+      <label>Nome <input type="text" name="name" value="{{ building.name if building else form.name if form else '' }}" required></label>
+      <label>Descricao <textarea name="description">{{ building.description if building else form.description if form else '' }}</textarea></label>
+      <label>Tipo de efeito <input type="text" name="effect_type" value="{{ building.effect_type if building else form.effect_type if form else '' }}" required></label>
+      <div class="form-grid">
+        <label>Custo ouro <input type="number" name="base_upgrade_gold_cost" min="0" value="{{ building.base_upgrade_gold_cost if building else form.base_upgrade_gold_cost if form else 0 }}"></label>
+        <label>Custo madeira <input type="number" name="base_upgrade_wood_cost" min="0" value="{{ building.base_upgrade_wood_cost if building else form.base_upgrade_wood_cost if form else 0 }}"></label>
+        <label>Custo minerio <input type="number" name="base_upgrade_ore_cost" min="0" value="{{ building.base_upgrade_ore_cost if building else form.base_upgrade_ore_cost if form else 0 }}"></label>
+        <label>Custo cristais <input type="number" name="base_upgrade_crystals_cost" min="0" value="{{ building.base_upgrade_crystals_cost if building else form.base_upgrade_crystals_cost if form else 0 }}"></label>
+        <label>Nível máximo <input type="number" name="max_level" min="1" max="50" value="{{ building.max_level if building else form.max_level if form else 50 }}"></label>
+        <label>Nivel minimo da guilda <input type="number" name="required_guild_level" min="1" value="{{ building.required_guild_level if building else form.required_guild_level if form else 1 }}"></label>
+      </div>
+      <label class="check-row"><input type="checkbox" name="is_active" {% if building is none or building.is_active %}checked{% endif %}> Ativa</label>
+      <button type="submit">Salvar</button>
+    </form>
+    <p class="form-footer"><a href="/admin/buildings">Voltar</a></p>
+  </section>
+{% endblock %}

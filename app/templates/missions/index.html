@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% from "components/result_card.html" import result_card %}
+
+{% block title %}Missões - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="missions-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">{{ guild.name }}</p>
+        <h1 id="missions-title">Missões</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mercenaries">Mercenários</a>
+        <a href="/buildings">Construções</a>
+        <a href="/dungeons">Masmorras</a>
+        <a href="/inventory">Inventário</a>
+        {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+
+    {% if awaiting_loot_count > 0 %}
+      <div class="loot-shortcut"><span>Você possui {{ awaiting_loot_count }} recompensa(s) aguardando coleta.</span><a class="button-link" href="#loot-disponivel">Receber recompensas</a></div>
+    {% endif %}
+    {% if message %}
+      <p class="{{ 'error-message' if result_status == 'failed' else 'success-message' }}">{{ message }}</p>
+    {% endif %}
+    {% if error %}
+      <p class="error-message">{{ error }}</p>
+    {% endif %}
+
+    <section class="panel" aria-labelledby="available-missions-title">
+      <form class="catalog-toolbar" method="get" action="/missions">
+        <input type="hidden" name="band" value="{{ selected_band }}"><input type="hidden" name="category" value="{{ selected_category }}">
+        <label>Foco<select name="focus"><option value="all" {% if selected_focus == 'all' %}selected{% endif %}>Todos</option><option value="gold" {% if selected_focus == 'gold' %}selected{% endif %}>Ouro</option><option value="xp" {% if selected_focus == 'xp' %}selected{% endif %}>XP</option><option value="equipment" {% if selected_focus == 'equipment' %}selected{% endif %}>Equipamentos</option></select></label>
+        <label>Ordenar<select name="sort"><option value="level" {% if selected_sort == 'level' %}selected{% endif %}>Nível</option><option value="time" {% if selected_sort == 'time' %}selected{% endif %}>Tempo</option><option value="xp" {% if selected_sort == 'xp' %}selected{% endif %}>Maior XP</option><option value="gold" {% if selected_sort == 'gold' %}selected{% endif %}>Maior ouro</option><option value="chance" {% if selected_sort == 'chance' %}selected{% endif %}>Chance</option></select></label>
+        <label>Tipo<select name="mode"><option value="standard" {% if selected_mode == 'standard' %}selected{% endif %}>Missões comuns</option><option value="long" {% if selected_mode == 'long' %}selected{% endif %}>Missões longas</option><option value="all" {% if selected_mode == 'all' %}selected{% endif %}>Todas</option></select></label>
+        <details class="multi-select-filter"><summary>{{ selected_levels|length ~ ' níveis selecionados' if selected_levels else 'Todos os níveis da faixa' }}</summary><div class="multi-select-options">{% for level in available_levels %}<label><input type="checkbox" name="levels" value="{{ level }}" {% if level in selected_levels %}checked{% endif %}> Nível {{ level }}</label>{% endfor %}<button type="button" data-close-multi-select>Concluir seleção</button></div></details>
+        {% if selected_category == 'gathering' %}<label>Material<select name="material"><option value="all">Todos os materiais</option>{% for family in gathering_families %}<option value="{{ family }}" {% if selected_material == family %}selected{% endif %}>{{ family_labels.get(family, family) }}</option>{% endfor %}</select></label>{% endif %}
+        <button type="submit">Aplicar</button>
+      </form>
+      <nav class="filter-tabs" aria-label="Tipo de missão">
+        <a href="/missions?{{ category_queries.combat }}" class="{% if selected_category == 'combat' %}active{% endif %}">Missões</a>
+        <a href="/missions?{{ category_queries.gathering }}" class="{% if selected_category == 'gathering' %}active{% endif %}">Coleta</a>
+        <a href="/missions?{{ category_queries.all }}" class="{% if selected_category == 'all' %}active{% endif %}">Todas</a>
+      </nav>
+      <nav class="filter-tabs" aria-label="Faixas de nível">
+        {% for band in mission_level_bands %}<a href="/missions?{{ band_queries[band] }}" class="{% if selected_band == band %}active{% endif %}">Nível {{ band }}</a>{% endfor %}
+      </nav>
+      <div class="section-heading"><h2 id="available-missions-title">Missões disponíveis</h2><span>{{ total_templates }} opções nesta faixa</span></div>
+      {% if selected_mode in ('long', 'all') %}<p class="note">Missões longas ativas: {{ long_idle_active_count }}/{{ long_idle_limit }}. Esse limite não afeta missões comuns ou coletas.</p>{% endif %}
+      {% if mission_templates %}
+        <div class="mission-list">
+          {% for mission in mission_templates %}
+            <article class="mission-card">
+              <div>
+                <h3>{{ mission.name }}</h3>
+                <p class="note">{{ mission.description }}</p>
+                <dl class="inline-stats">
+                  <div><dt>Duração</dt><dd>{{ format_duration(mission.duration_seconds) }}</dd></div>
+                  <div><dt>Ouro</dt><dd>{{ mission.base_gold_reward }}</dd></div>
+                  <div><dt>XP</dt><dd>{{ mission.base_xp_reward }}</dd></div>
+                  <div><dt>Chance</dt><dd>{{ mission.base_success_chance }}%</dd></div>
+                  <div><dt>Grupo</dt><dd>{{ mission.min_party_size }}-{{ mission.max_party_size }}</dd></div>
+                  <div><dt>Nível merc.</dt><dd>{{ mission.required_min_mercenary_level }}+</dd></div>
+                </dl>
+                <div class="badge-row">
+                  {% if mission.is_long_idle %}<span class="tag long-idle-badge">Missão longa · {{ mission.long_idle_hours }}h · chance fixa {{ mission.base_success_chance }}%</span>{% endif %}
+                  <span class="tag">{{ difficulty_labels.get(mission.difficulty, mission.difficulty) }}</span>
+                  <span class="tag">Nível {{ mission.level_band }}</span>
+                  <span class="tag">{{ mission.min_party_size }}-{{ mission.max_party_size }} membros</span>
+                  {% if mission.mission_type == 'gathering' %}<span class="tag">Coleta: {{ family_labels.get(mission.gathering_family, mission.gathering_family) }}</span><span class="tag profession-tag" style="--profession-color: {{ profession_colors.get(mission.profession_code, '#a98a52') }}">Profissão: {{ profession_labels.get(mission.profession_code, mission.profession_code) }}</span>{% endif %}
+                </div>
+                <p class="note">Recomendado: nível {{ mission.recommended_level }} · poder {{ mission.recommended_power }}</p>
+                {% if mission.max_party_size > 1 %}
+                  <p class="note subtle-note">Seu limite atual de grupo por construções: {{ max_allowed_party_size }}</p>
+                {% endif %}
+                <div class="mission-card-info-footer">
+                  <div class="bonus-box">
+                    <strong>Bônus de construções</strong>
+                    <span>XP +{{ building_bonuses.xp_bonus_percent }}%</span><span>Equip. +{{ building_bonuses.equipment_drop_bonus_percent }} p.p.</span><span>+{{ building_bonuses.material_quantity_bonus }} materiais principais</span><span>Máx. {{ building_bonuses.max_run_multiplier }}x</span>
+                  </div>
+                  <div class="loot-preview"><strong>Loot possível</strong><div class="loot-preview-list">{% for drop in mission.visible_drops %}<span class="loot-preview-item rarity-{{ drop.item_template.rarity }}" title="{{ drop.rarity_label }}"><span class="loot-preview-icon">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span><span>{{ drop.display_name }}<small>{{ drop.effective_drop_chance }}%{% if drop.effective_drop_chance > drop.base_drop_chance %} ({{ drop.base_drop_chance }}% + Ferreiro){% endif %} · {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}-{{ drop.max_quantity }}{% endif %}x</small></span></span>{% else %}<span class="subtle-note">{% if mission.is_long_idle %}Sem loot · apenas ouro e XP{% else %}Sem loot cadastrado{% endif %}</span>{% endfor %}</div></div>
+                </div>
+              </div>
+              <form class="party-form" method="post" action="/missions/start">
+                <input type="hidden" name="mission_template_id" value="{{ mission.id }}">
+                <label>
+                  Multiplicador
+                  <select name="run_multiplier" {% if mission.is_long_idle %}disabled{% endif %}>
+                    <option value="1">1x tempo e recompensas</option>
+                    {% if not mission.is_long_idle and max_run_multiplier >= 2 %}<option value="2">2x tempo e recompensas</option>{% endif %}
+                    {% if not mission.is_long_idle and max_run_multiplier >= 3 %}<option value="3">3x tempo e recompensas</option>{% endif %}
+                  </select>
+                </label>
+                <div class="choice-list">
+                  {% for mercenary in mission_mercenaries[mission.id] %}
+                    {% set chance = mission_chances[mission.id][mercenary.id] %}
+                    <label class="merc-choice rarity-{{ mercenary.rarity }}">
+                      <input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}">
+                      <span class="choice-avatar rarity-{{ mercenary.rarity }}">{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="{{ mercenary.class_label }}">{% else %}{{ mercenary.name[:1] }}{% endif %}</span>
+                      <span>
+                        <strong>{{ mercenary.name }} <span class="merc-level">Nv. {{ mercenary.level }}</span></strong>
+                        <small>
+                          Poder {{ chance.total_power_score }}
+                          | Chance individual {{ chance.final_chance }}%
+                          | Poder {{ '+' if chance.bonus_chance >= 0 else '' }}{{ chance.bonus_chance }}%
+                          | Classe +{{ chance.class_bonus_chance }}%
+                          | Habilidade +{{ chance.skill_bonus_chance }}%
+                          | Raridade +{{ chance.rarity_bonus_chance }}%
+                        </small>
+                        {% if mission.mission_type == 'gathering' and mercenary.profession %}<span class="profession-marker" style="--profession-color: {{ profession_colors.get(mercenary.profession.code, '#a98a52') }}" title="{{ mercenary.profession.name }}{% if mercenary.profession.code == mission.profession_code %}: bônus compatível +15 p.p.{% endif %}"></span>{% if mercenary.profession.code == mission.profession_code %}<small class="profession-active" style="--profession-color: {{ profession_colors.get(mercenary.profession.code, '#a98a52') }}">Bônus de profissão ativo: +15 p.p. no material principal</small>{% endif %}{% endif %}
+                      </span>
+                    </label>
+                  {% endfor %}
+                </div>
+                <button type="submit" {% if not mission_mercenaries[mission.id] %}disabled{% endif %}>Iniciar</button>
+              </form>
+            </article>
+          {% endfor %}
+        </div>
+        {% if total_pages > 1 %}<nav class="pagination" aria-label="Páginas de missões">{% if current_page > 1 %}<a href="/missions?{{ filter_query }}&page={{ current_page - 1 }}">Anterior</a>{% endif %}<span>Página {{ current_page }} de {{ total_pages }}</span>{% if current_page < total_pages %}<a href="/missions?{{ filter_query }}&page={{ current_page + 1 }}">Próxima</a>{% endif %}</nav>{% endif %}
+      {% else %}
+        <p class="note">Nenhuma missão disponível.</p>
+      {% endif %}
+    </section>
+
+    <section id="loot-disponivel" class="panel table-panel loot-destination" aria-labelledby="active-missions-title">
+      <div class="section-heading"><h2 id="active-missions-title">Em andamento</h2>{% if awaiting_loot_count > 0 %}<form method="post" action="/missions/claim-all"><button>Receber todos os loots ({{ awaiting_loot_count }})</button></form>{% endif %}</div>
+      {% if in_progress_runs %}
+        <div class="mission-list">
+          {% for run in in_progress_runs %}
+            <article class="mission-card {% if run.ends_at <= now %}ready-card{% endif %}">
+              <div>
+                <h3>{{ run.mission_template.name }}</h3>
+                <p class="note">Grupo: {{ run.members|map(attribute='mercenary.name')|join(', ') if run.members else 'Indisponível' }}</p>
+                <p class="note">Multiplicador: {{ run.run_multiplier }}x</p>
+                <p class="note">
+                  Tempo restante:
+                  <strong class="mission-timer" data-ends-at="{{ run.ends_at.isoformat() }}">
+                    {% if run.ends_at <= now %}Concluída{% else %}Calculando...{% endif %}
+                  </strong>
+                </p>
+              </div>
+              <form method="post" action="/missions/{{ run.id }}/claim">
+                <button
+                  type="submit"
+                  class="claim-button"
+                  data-ends-at="{{ run.ends_at.isoformat() }}"
+                  {% if run.ends_at > now %}disabled{% endif %}
+                >
+                  Receber Loot
+                </button>
+              </form>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="note">Nenhuma missão em andamento.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel table-panel" aria-labelledby="history-title">
+      <h2 id="history-title">Histórico recente</h2>
+      {% if finished_runs %}
+        <div class="result-history-list">
+          {% for run in finished_runs %}
+            {{ result_card(run, run.mission_template.name) }}
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="note">Nenhuma missão finalizada ainda.</p>
+      {% endif %}
+    </section>
+  </section>
+  <script src="{{ url_for('static', path='/js/mission_timers.js') }}"></script>
+{% endblock %}

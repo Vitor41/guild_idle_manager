@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Classes - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="classes-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Administracao</p>
+        <h1 id="classes-title">Classes</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/admin">Admin</a>
+        <a href="/dashboard">Dashboard</a>
+      </div>
+    </header>
+
+    <section class="panel table-panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Codigo</th><th>Tier</th><th>Nivel req.</th><th>Perfil</th><th>Papel</th><th>Ativa</th><th></th></tr></thead>
+          <tbody>
+            {% for class in classes %}
+              <tr>
+                <td>{{ class.display_name or class.name }}</td>
+                <td>{{ class.code or '-' }}</td>
+                <td>{{ class.tier }}</td>
+                <td>{{ class.required_level }}</td>
+                <td>{{ class.allowed_weapon_profile }}</td>
+                <td>{{ class.role_type }}</td>
+                <td>{{ 'sim' if class.is_active else 'nao' }}</td>
+                <td><a href="/admin/classes/{{ class.id }}/edit">Editar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+{% endblock %}

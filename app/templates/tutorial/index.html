@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Tutorial - Guild Idle Manager{% endblock %}
+{% block content %}
+<section class="tutorial-page"><article class="tutorial-card">
+  <div class="tutorial-progress"><span>Guia da Guilda</span><strong>{{ step }} de {{ steps|length }}</strong></div><div class="progress-track"><span style="width: {{ (step * 100 / steps|length)|round }}%"></span></div>
+  <span class="tutorial-sigil">{{ step }}</span><p class="eyebrow">Etapa {{ step }}</p><h1>{{ step_data[0] }}</h1><p class="tutorial-copy">{{ step_data[1] }}</p>
+  <div class="tutorial-actions">{% if step > 1 %}<a class="secondary-button" href="/tutorial?step={{ step - 1 }}{% if replay %}&replay=1{% endif %}">Voltar</a>{% else %}<span></span>{% endif %}<form method="post" action="/tutorial/decline" data-confirm="Você poderá rever este guia depois pelo menu Ajuda."><button class="text-button">Pular tutorial</button></form>{% if step < steps|length %}<a class="button-link" href="/tutorial?step={{ step + 1 }}{% if replay %}&replay=1{% endif %}">Próximo</a>{% else %}<form method="post" action="/tutorial/complete"><button>Concluir</button></form>{% endif %}</div>
+</article></section>
+{% endblock %}

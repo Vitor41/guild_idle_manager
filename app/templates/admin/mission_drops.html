@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Drops - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="admin-drops-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Administracao</p>
+        <h1 id="admin-drops-title">Drops de missao</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/admin">Admin</a>
+        <a href="/dashboard">Dashboard</a>
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    <div class="action-row compact">
+      <a class="button-link secondary" href="/admin/mission-drops/create">Criar drop</a>
+    </div>
+    <section class="panel table-panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Missao</th><th>Item</th><th>Chance</th><th>Qtd</th><th>Ativo</th><th></th></tr></thead>
+          <tbody>
+            {% for drop in drops %}
+              <tr>
+                <td>{{ drop.mission_template.name }}</td>
+                <td>{{ drop.item_template.name }}</td>
+                <td>{{ drop.drop_chance }}%</td>
+                <td>{{ drop.min_quantity }}-{{ drop.max_quantity }}</td>
+                <td>{{ 'Sim' if drop.is_active else 'Nao' }}</td>
+                <td><a href="/admin/mission-drops/{{ drop.id }}/edit">Editar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+{% endblock %}

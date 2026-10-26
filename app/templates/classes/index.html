@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Guia de Classes - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="classes-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Academia da Guilda</p>
+        <h1 id="classes-title">Guia de Classes</h1>
+        <p class="note">Compare caminhos, atributos recomendados e marcos antes de evoluir um mercenário.</p>
+      </div>
+      <div class="action-row compact">
+        <a class="button-link secondary" href="/class-change">Evoluir classe</a>
+        <a class="button-link secondary" href="/mercenaries">Ver mercenários</a>
+      </div>
+    </header>
+
+    <nav class="filter-tabs guide-nav" aria-label="Seções do guia">
+      <a href="#guia-classes">Classes</a><a href="#guia-habilidades">Habilidades</a><a href="#guia-atributos">Atributos</a><a href="#guia-combinacoes">Combinações</a><a href="#guia-coleta">Coleta</a><a href="#guia-dungeons">Masmorras</a>
+    </nav>
+
+    <div id="guia-classes"></div>
+    {% for tier, tier_label in class_tiers.items() %}
+      <section class="panel table-panel">
+        <h2>{{ tier_label }}</h2>
+        <div class="class-guide-grid">
+          {% for card in class_cards if card.class.tier == tier %}
+            <article class="class-guide-card">
+              <div class="mercenary-head">
+                <div class="class-emblem {% if card.icon_path and '/assets/extended/' in card.icon_path %}extended-emblem{% endif %}">
+                  {% if card.icon_path %}
+                    <img class="asset-icon class-emblem-img {% if '/assets/extended/' in card.icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=card.icon_path) }}" alt="{{ card.class.view_label }}" loading="lazy">
+                  {% else %}
+                    <span aria-hidden="true">{{ card.class.view_label[:1] }}</span>
+                  {% endif %}
+                </div>
+                <div>
+                  <h3>{{ card.class.view_label }}</h3>
+                  <p class="note">Nível necessário: {{ card.class.required_level }}</p>
+                </div>
+              </div>
+              <p>{{ card.class.description }}</p>
+              <p class="note">{{ card.role_description }}</p>
+              <div class="badge-row">
+                {% for attribute in card.primary_attributes %}
+                  <span class="tag" title="Atributo recomendado para esta classe">{{ attribute }}</span>
+                {% endfor %}
+                <span class="bonus-pill">Chance +{{ card.success_bonus }}%</span>
+              </div>
+              <dl class="stat-list">
+                <div><dt>Origem</dt><dd>{{ card.parent_name or "Contratação" }}</dd></div>
+                <div><dt>Próximos caminhos</dt><dd>{{ card.children_names|join(", ") if card.children_names else "Classe final" }}</dd></div>
+                <div><dt>Armas permitidas</dt><dd>{{ card.weapon_profile_label }}</dd></div>
+                <div><dt>Habilidade</dt><dd>{{ card.skills|map(attribute='name')|join(', ') if card.skills else 'Sem habilidade cadastrada' }}</dd></div>
+              </dl>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+
+    <section id="guia-habilidades" class="panel table-panel guide-section">
+      <h2>Guia de Habilidades</h2><p class="note">Cada caminho possui uma identidade mecânica. Os bônus de grupo respeitam limites para evitar combinações quebradas.</p>
+      <div class="benefit-grid">{% for card in skill_guide %}<article><span class="tag">{{ card.class_name }}</span><h3>{{ card.skill.name }}</h3><p>{{ card.skill.description }}</p><strong>{{ card.effect_label }} +{{ card.skill.effect_value }}{{ card.effect_suffix }}</strong><p class="note">Onde funciona: {{ card.works_in }}</p><p class="note">Combina com: {{ card.synergy }}</p></article>{% endfor %}</div>
+    </section>
+    <section id="guia-atributos" class="panel table-panel guide-section"><h2>Guia de Atributos</h2><div class="benefit-grid">{% for item in attribute_guide %}<article><span class="tag">{{ item.code }}</span><h3>{{ item.name }}</h3><p class="note">{{ item.description }}</p></article>{% endfor %}</div></section>
+    <section id="guia-combinacoes" class="panel table-panel guide-section"><h2>Guia de Combinações</h2><p class="note">São referências para experimentar, não receitas obrigatórias.</p><div class="benefit-grid">{% for item in combination_guide %}<article><h3>{{ item.name }}</h3><strong>{{ item.members }}</strong><p class="note">{{ item.use }}</p></article>{% endfor %}</div></section>
+    <section id="guia-coleta" class="panel table-panel guide-section"><h2>Coleta e Profissões</h2><ul class="guide-list">{% for tip in profession_tips %}<li>{{ tip }}</li>{% endfor %}</ul></section>
+    <section id="guia-dungeons" class="panel table-panel guide-section"><h2>Masmorras</h2><ul class="guide-list">{% for tip in dungeon_tips %}<li>{{ tip }}</li>{% endfor %}</ul></section>
+  </section>
+{% endblock %}

@@ -1,0 +1,189 @@
+{
+  "package": "guild_idle_manager_class_icons_v1",
+  "version": "1.0.0",
+  "generated_for": "Guild Idle Manager",
+  "visual_identity": {
+    "style": "medieval_fantasy_dark_ui",
+    "transparent_background": true,
+    "no_text_inside_icons": true,
+    "master_size_px": 512,
+    "ui_size_px": 128,
+    "current_ui_slots": {
+      "mercenary_card_avatar": {
+        "css_selector": ".avatar-placeholder",
+        "width_px": 68,
+        "height_px": 68,
+        "recommended_render_px": 54
+      },
+      "class_guide_emblem": {
+        "css_selector": ".class-emblem",
+        "width_px": 48,
+        "height_px": 48,
+        "recommended_render_px": 38
+      }
+    },
+    "palette_reference": {
+      "background": "#11100e",
+      "surface": "#211b16",
+      "surface_2": "#2b231b",
+      "gold": "#d2a84a",
+      "gold_light": "#f0cb72",
+      "parchment": "#e7d6aa"
+    }
+  },
+  "integration_recommendation": {
+    "preferred_mapping_key": "MercenaryClass.code",
+    "preferred_asset_field": "mercenary_classes.icon_path ou helper visual por code",
+    "recommended_html_mercenary_card": "<img class=\"class-icon\" src=\"/static/img/classes/128/class_{{ mercenary.mercenary_class.code }}.png\" alt=\"{{ mercenary.class_label }}\">",
+    "recommended_html_class_guide": "<img class=\"class-icon\" src=\"/static/img/classes/128/class_{{ card.class.code }}.png\" alt=\"{{ card.class.view_label }}\">"
+  },
+  "classes": [
+    {
+      "class_id": "class_apprentice",
+      "code": "apprentice",
+      "label": "Aprendiz",
+      "type": "class",
+      "description": "Recruta em treinamento, com evolução definida pela Taverna.",
+      "role": "Inicial / flexível",
+      "tier": 0,
+      "required_level": 1,
+      "weapon_profile": "any",
+      "primary_attributes": [
+        "FOR",
+        "VIT",
+        "AGI",
+        "INT",
+        "SOR"
+      ],
+      "theme": "neutro, treinamento, começo de jornada",
+      "accent_color": "#d2a84a",
+      "aliases": [
+        "Aprendiz"
+      ],
+      "path_512": "app/static/img/classes/512/class_apprentice.png",
+      "path_128": "app/static/img/classes/128/class_apprentice.png",
+      "url_128": "/static/img/classes/128/class_apprentice.png"
+    },
+    {
+      "class_id": "class_warrior",
+      "code": "warrior",
+      "label": "Guerreiro",
+      "type": "class",
+      "description": "Combatente resistente para a linha de frente.",
+      "role": "Tanque / combate físico",
+      "tier": 1,
+      "required_level": 20,
+      "weapon_profile": "melee",
+      "primary_attributes": [
+        "FOR",
+        "VIT"
+      ],
+      "theme": "força, defesa, espada e escudo",
+      "accent_color": "#b94b40",
+      "aliases": [
+        "Warrior",
+        "Guerreiro"
+      ],
+      "path_512": "app/static/img/classes/512/class_warrior.png",
+      "path_128": "app/static/img/classes/128/class_warrior.png",
+      "url_128": "/static/img/classes/128/class_warrior.png"
+    },
+    {
+      "class_id": "class_rogue",
+      "code": "rogue",
+      "label": "Ladino",
+      "type": "class",
+      "description": "Especialista veloz em risco, sorte e oportunidades.",
+      "role": "Crítico / agilidade",
+      "tier": 1,
+      "required_level": 20,
+      "weapon_profile": "light",
+      "primary_attributes": [
+        "AGI",
+        "SOR"
+      ],
+      "theme": "adaga, furtividade, sombra",
+      "accent_color": "#9b75d9",
+      "aliases": [
+        "Rogue",
+        "Ladino"
+      ],
+      "path_512": "app/static/img/classes/512/class_rogue.png",
+      "path_128": "app/static/img/classes/128/class_rogue.png",
+      "url_128": "/static/img/classes/128/class_rogue.png"
+    },
+    {
+      "class_id": "class_mage",
+      "code": "mage",
+      "label": "Mago",
+      "type": "class",
+      "description": "Conjurador de alto intelecto e poder arcano.",
+      "role": "Dano mágico",
+      "tier": 1,
+      "required_level": 20,
+      "weapon_profile": "arcane",
+      "primary_attributes": [
+        "INT",
+        "SOR"
+      ],
+      "theme": "cajado, runa, tomo arcano e energia mágica",
+      "accent_color": "#6e9ecf",
+      "aliases": [
+        "Mage",
+        "Mago"
+      ],
+      "path_512": "app/static/img/classes/512/class_mage.png",
+      "path_128": "app/static/img/classes/128/class_mage.png",
+      "url_128": "/static/img/classes/128/class_mage.png"
+    },
+    {
+      "class_id": "class_cleric",
+      "code": "cleric",
+      "label": "Clérigo",
+      "type": "class",
+      "description": "Devoto equilibrado com foco em suporte e sabedoria.",
+      "role": "Suporte / cura",
+      "tier": 1,
+      "required_level": 20,
+      "weapon_profile": "holy",
+      "primary_attributes": [
+        "INT",
+        "VIT"
+      ],
+      "theme": "luz, cura, tomo e símbolo sagrado genérico",
+      "accent_color": "#f0cb72",
+      "aliases": [
+        "Cleric",
+        "Clerigo",
+        "Clérigo"
+      ],
+      "path_512": "app/static/img/classes/512/class_cleric.png",
+      "path_128": "app/static/img/classes/128/class_cleric.png",
+      "url_128": "/static/img/classes/128/class_cleric.png"
+    },
+    {
+      "class_id": "class_archer",
+      "code": "archer",
+      "label": "Arqueiro",
+      "type": "class",
+      "description": "Atirador ágil com bom alcance e precisão.",
+      "role": "Precisão / ataque à distância",
+      "tier": 1,
+      "required_level": 20,
+      "weapon_profile": "ranged",
+      "primary_attributes": [
+        "AGI",
+        "SOR"
+      ],
+      "theme": "arco, flecha, mira e precisão",
+      "accent_color": "#6ea85a",
+      "aliases": [
+        "Archer",
+        "Arqueiro"
+      ],
+      "path_512": "app/static/img/classes/512/class_archer.png",
+      "path_128": "app/static/img/classes/128/class_archer.png",
+      "url_128": "/static/img/classes/128/class_archer.png"
+    }
+  ]
+}

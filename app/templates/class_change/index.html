@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Troca de Classe - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="class-change-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">{{ guild.name }}</p>
+        <h1 id="class-change-title">Troca de Classe</h1>
+        <p class="note">Treinamentos especiais para evoluir o caminho dos mercenários.</p>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mercenaries">Mercenários</a>
+        <a href="/classes">Guia de Classes</a>
+        <a href="/tavern">Taverna</a>
+        <a href="/missions">Missões</a>
+        <a href="/buildings">Construções</a>
+        {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+
+    <div class="dashboard-grid">
+      <article class="panel tavern-hero">
+        <h2>Requisitos globais</h2>
+        <div class="class-requirement-summary">
+          <article class="class-requirement-line">
+            <div>
+              <strong>Ouro</strong>
+              <span>Você possui {{ resources.gold if resources else 0 }}</span>
+            </div>
+            <div class="class-requirement-steps">
+              {% for step in requirement_steps %}<span>{{ loop.index }}ª: {{ step.gold_cost }}</span>{% endfor %}
+            </div>
+          </article>
+          <article class="class-requirement-line">
+            <div>
+              <strong>Guilda</strong>
+              <span>Atual: nível {{ guild.level }}</span>
+            </div>
+            <div class="class-requirement-steps">
+              {% for step in requirement_steps %}<span>{{ loop.index }}ª: nível {{ step.required_guild_level }}</span>{% endfor %}
+            </div>
+          </article>
+          <article class="class-requirement-line">
+            <div>
+              <strong>Campo de Treino</strong>
+              <span>Atual: nível {{ training_ground_level }}</span>
+            </div>
+            <div class="class-requirement-steps">
+              {% for step in requirement_steps %}<span>{{ loop.index }}ª: nível {{ step.required_training_ground_level }}</span>{% endfor %}
+            </div>
+          </article>
+          <article class="class-requirement-line">
+            <div>
+              <strong>Mercenário</strong>
+              <span>Nível exigido por etapa</span>
+            </div>
+            <div class="class-requirement-steps">
+              {% for step in requirement_steps %}<span>{{ loop.index }}ª: nível {{ step.required_mercenary_level }}+</span>{% endfor %}
+            </div>
+          </article>
+        </div>
+      </article>
+    </div>
+
+    <section class="panel table-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Trocas disponíveis</h2>
+          <p class="note">A classe só muda quando o treinamento termina e você conclui a troca.</p>
+        </div>
+        <a class="button-link secondary" href="/classes">Consultar caminhos</a>
+      </div>
+      {% if mercenaries %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Mercenário</th><th>Classe atual</th><th>Nível</th><th>Status</th><th>Opções</th></tr>
+            </thead>
+            <tbody>
+              {% for mercenary in mercenaries %}
+                <tr>
+                  <td>{{ mercenary.name }}</td>
+                  <td>
+                    <span class="class-name-with-icon">
+                      <span class="class-icon-mini">
+                        {% if mercenary.class_icon_path %}
+                          <img class="asset-icon class-icon-img {% if '/assets/extended/' in mercenary.class_icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="{{ mercenary.class_label }}" loading="lazy">
+                        {% else %}
+                          <span aria-hidden="true">{{ mercenary.class_label[:1] }}</span>
+                        {% endif %}
+                      </span>
+                      {{ mercenary.mercenary_class.display_name or mercenary.mercenary_class.name }}
+                    </span>
+                  </td>
+                  <td>{{ mercenary.level }}</td>
+                  <td><span class="status-badge status-{{ mercenary.status }}">{{ mercenary.status_label }}</span></td>
+                  <td>
+                    {% set transitions = transitions_by_mercenary.get(mercenary.id, []) %}
+                    {% if transitions and mercenary.status == "available" %}
+                      <div class="class-transition-previews">
+                        {% for transition in transitions %}
+                          <span class="class-transition-preview">
+                            <span class="class-icon-mini">
+                              {% if transition.to_class.icon_path %}
+                                <img class="asset-icon class-icon-img {% if '/assets/extended/' in transition.to_class.icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=transition.to_class.icon_path) }}" alt="{{ transition.to_class.view_label }}" loading="lazy">
+                              {% else %}
+                                <span aria-hidden="true">{{ transition.to_class.view_label[:1] }}</span>
+                              {% endif %}
+                            </span>
+                            <span>{{ transition.to_class.view_label }}</span>
+                          </span>
+                        {% endfor %}
+                      </div>
+                      <form class="inline-form" method="post" action="/class-change/start">
+                        <input type="hidden" name="mercenary_id" value="{{ mercenary.id }}">
+                        <select name="to_class_id" required>
+                          {% for transition in transitions %}
+                            <option value="{{ transition.to_class_id }}">
+                              {{ transition.to_class.view_label }}
+                              | Nível {{ transition.required_mercenary_level }}
+                              | Guilda {{ transition.required_guild_level }}
+                              | Treino {{ transition.required_training_ground_level }}
+                              | {{ transition.gold_cost }} ouro
+                            </option>
+                          {% endfor %}
+                        </select>
+                        <button type="submit">Iniciar</button>
+                      </form>
+                    {% elif transitions %}
+                      <span class="status-badge status-busy">Mercenário ocupado</span>
+                    {% else %}
+                      <span class="tag">Sem evolução disponível</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="note">Nenhum mercenário atende aos requisitos de uma nova classe no momento.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel table-panel">
+      <h2>Trocas em andamento</h2>
+      {% if in_progress_runs %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Mercenário</th><th>Nova classe</th><th>Tempo</th><th></th></tr></thead>
+            <tbody>
+              {% for run in in_progress_runs %}
+                <tr>
+                  <td>{{ run.mercenary.name }}</td>
+                  <td>
+                    <span class="class-name-with-icon">
+                      <span class="class-icon-mini">
+                        {% if run.to_class.icon_path %}
+                          <img class="asset-icon class-icon-img {% if '/assets/extended/' in run.to_class.icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=run.to_class.icon_path) }}" alt="{{ run.to_class.display_name or run.to_class.name }}" loading="lazy">
+                        {% else %}
+                          <span aria-hidden="true">{{ (run.to_class.display_name or run.to_class.name)[:1] }}</span>
+                        {% endif %}
+                      </span>
+                      {{ run.to_class.display_name or run.to_class.name }}
+                    </span>
+                  </td>
+                  <td><strong class="countdown" data-ends-at="{{ run.ends_at.isoformat() }}">calculando...</strong></td>
+                  <td>
+                    <form method="post" action="/class-change/{{ run.id }}/claim">
+                      <button type="submit" {% if now < run.ends_at %}disabled{% endif %}>Concluir</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="note">Nenhuma troca em andamento.</p>
+      {% endif %}
+    </section>
+  </section>
+{% endblock %}

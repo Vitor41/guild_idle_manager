@@ -1,0 +1,568 @@
+{
+  "bands": [
+    {
+      "band": "1-20",
+      "normal_count": 140,
+      "gathering_count": 40,
+      "long_count": 3,
+      "best_normal_xp_name": "Dominar a Batalha de Sinais Misteriosos em Estrada do Carvalho",
+      "normal_xp_per_hour": 1367.0,
+      "best_normal_gold_name": "Revelar Feras Desgarradas em Bosque dos Sinos",
+      "normal_gold_per_hour": 373.8,
+      "best_gathering_name": "Coletar Madeira de Carvalho em Arredores da Guilda",
+      "gathering_materials_per_hour": 37.37,
+      "gathering_xp_per_hour": 1125.6,
+      "gathering_gold_per_hour": 298.5,
+      "long_durations": [
+        1,
+        3,
+        8
+      ],
+      "xp_required": 19000,
+      "estimated_active_missions": 86,
+      "estimated_active_gold": 5096
+    },
+    {
+      "band": "21-50",
+      "normal_count": 170,
+      "gathering_count": 70,
+      "long_count": 3,
+      "best_normal_xp_name": "Revelar Relíquia Desaparecida em Mata das Corujas",
+      "normal_xp_per_hour": 3749.8,
+      "best_normal_gold_name": "Revelar Relíquia Desaparecida em Mata das Corujas",
+      "normal_gold_per_hour": 1051.1,
+      "best_gathering_name": "Recuperar Fragmentos Sagrados em Fronteira Cinzenta",
+      "gathering_materials_per_hour": 12.85,
+      "gathering_xp_per_hour": 2537.8,
+      "gathering_gold_per_hour": 570.8,
+      "long_durations": [
+        1,
+        3,
+        8
+      ],
+      "xp_required": 101500,
+      "estimated_active_missions": 95,
+      "estimated_active_gold": 28736
+    },
+    {
+      "band": "51-100",
+      "normal_count": 220,
+      "gathering_count": 80,
+      "long_count": 3,
+      "best_normal_xp_name": "Decifrar Acampamento Inimigo em Pântano Luminoso",
+      "normal_xp_per_hour": 5638.2,
+      "best_normal_gold_name": "Decifrar Acampamento Inimigo em Pântano Luminoso",
+      "normal_gold_per_hour": 1340.9,
+      "best_gathering_name": "Coletar Madeira de Carvalho em Serra de Ferro",
+      "gathering_materials_per_hour": 9.22,
+      "gathering_xp_per_hour": 3841.0,
+      "gathering_gold_per_hour": 737.7,
+      "long_durations": [
+        1,
+        3,
+        8
+      ],
+      "xp_required": 367500,
+      "estimated_active_missions": 122,
+      "estimated_active_gold": 87523
+    },
+    {
+      "band": "101-130",
+      "normal_count": 150,
+      "gathering_count": 60,
+      "long_count": 3,
+      "best_normal_xp_name": "Decifrar Sentinelas Corrompidas em Cordilheira Rúnica",
+      "normal_xp_per_hour": 6201.9,
+      "best_normal_gold_name": "Decifrar Sentinelas Corrompidas em Cordilheira Rúnica",
+      "normal_gold_per_hour": 1357.4,
+      "best_gathering_name": "Coletar Madeira de Carvalho em Terras Arcanas",
+      "gathering_materials_per_hour": 5.99,
+      "gathering_xp_per_hour": 4247.8,
+      "gathering_gold_per_hour": 756.0,
+      "long_durations": [
+        1,
+        3,
+        8
+      ],
+      "xp_required": 333500,
+      "estimated_active_missions": 78,
+      "estimated_active_gold": 73410
+    },
+    {
+      "band": "131-200",
+      "normal_count": 280,
+      "gathering_count": 90,
+      "long_count": 2,
+      "best_normal_xp_name": "Revelar Mensageiros da Guilda em Ermos Imperiais",
+      "normal_xp_per_hour": 7631.9,
+      "best_normal_gold_name": "Revelar Mensageiros da Guilda em Ermos Imperiais",
+      "normal_gold_per_hour": 1467.6,
+      "best_gathering_name": "Coletar Madeira de Carvalho em Marchas Sombrias",
+      "gathering_materials_per_hour": 5.41,
+      "gathering_xp_per_hour": 5267.7,
+      "gathering_gold_per_hour": 832.2,
+      "long_durations": [
+        3,
+        8
+      ],
+      "xp_required": 1138500,
+      "estimated_active_missions": 145,
+      "estimated_active_gold": 219073
+    },
+    {
+      "band": "201-250",
+      "normal_count": 230,
+      "gathering_count": 70,
+      "long_count": 2,
+      "best_normal_xp_name": "Revelar Mercadores Isolados em Fenda Celeste",
+      "normal_xp_per_hour": 8143.7,
+      "best_normal_gold_name": "Revelar Mercadores Isolados em Fenda Celeste",
+      "normal_gold_per_hour": 1430.9,
+      "best_gathering_name": "Coletar Madeira de Carvalho em Domínios Dracônicos",
+      "gathering_materials_per_hour": 3.86,
+      "gathering_xp_per_hour": 5662.4,
+      "gathering_gold_per_hour": 826.8,
+      "long_durations": [
+        3,
+        8
+      ],
+      "xp_required": 1102500,
+      "estimated_active_missions": 107,
+      "estimated_active_gold": 195459
+    },
+    {
+      "band": "251-300",
+      "normal_count": 230,
+      "gathering_count": 70,
+      "long_count": 2,
+      "best_normal_xp_name": "Revelar Mercadores Isolados em Céu Estilhaçado",
+      "normal_xp_per_hour": 8638.1,
+      "best_normal_gold_name": "Revelar Mercadores Isolados em Céu Estilhaçado",
+      "normal_gold_per_hour": 1412.4,
+      "best_gathering_name": "Coletar Madeira de Carvalho em Abismo Primordial",
+      "gathering_materials_per_hour": 3.29,
+      "gathering_xp_per_hour": 6039.4,
+      "gathering_gold_per_hour": 828.7,
+      "long_durations": [
+        3,
+        8
+      ],
+      "xp_required": 1347500,
+      "estimated_active_missions": 103,
+      "estimated_active_gold": 221692
+    },
+    {
+      "band": "301-350",
+      "normal_count": 240,
+      "gathering_count": 70,
+      "long_count": 2,
+      "best_normal_xp_name": "Revelar Mercadores Isolados em Aurora Extinta",
+      "normal_xp_per_hour": 8977.0,
+      "best_normal_gold_name": "Revelar Mercadores Isolados em Aurora Extinta",
+      "normal_gold_per_hour": 1366.3,
+      "best_gathering_name": "Coletar Madeira de Carvalho em Limiar do Fim",
+      "gathering_materials_per_hour": 2.86,
+      "gathering_xp_per_hour": 6314.6,
+      "gathering_gold_per_hour": 815.8,
+      "long_durations": [
+        3,
+        8
+      ],
+      "xp_required": 1592500,
+      "estimated_active_missions": 101,
+      "estimated_active_gold": 244402
+    }
+  ],
+  "profiles": {
+    "Ativo": {
+      "20": 2.78,
+      "50": 8.49,
+      "100": 21.79,
+      "200": 63.15,
+      "350": 158.74
+    },
+    "Híbrido": {
+      "20": 3.52,
+      "50": 10.88,
+      "100": 27.64,
+      "200": 77.53,
+      "350": 186.27
+    },
+    "Casual/idle": {
+      "20": 4.34,
+      "50": 13.32,
+      "100": 32.86,
+      "200": 87.39,
+      "350": 197.27
+    }
+  },
+  "drop_simulation_runs": 1000,
+  "drop_distribution": {
+    "Missão": {
+      "common": 135,
+      "uncommon": 79,
+      "rare": 32,
+      "epic": 5,
+      "legendary": 0,
+      "mythic": 1
+    },
+    "Coleta": {
+      "common": 156,
+      "uncommon": 16,
+      "rare": 1,
+      "epic": 0,
+      "legendary": 0,
+      "mythic": 0
+    },
+    "Masmorra": {
+      "common": 78,
+      "uncommon": 61,
+      "rare": 65,
+      "epic": 29,
+      "legendary": 11,
+      "mythic": 0
+    },
+    "Chefe": {
+      "common": 65,
+      "uncommon": 33,
+      "rare": 57,
+      "epic": 43,
+      "legendary": 31,
+      "mythic": 2
+    }
+  },
+  "findings": [
+    {
+      "severity": "Observação",
+      "finding": "Missões normais entregam 1.21x XP/h e 1.25x ouro/h contra coleta no early game."
+    },
+    {
+      "severity": "Observação",
+      "finding": "Todas as faixas possuem Missões Longas válidas; opções podem ser desativadas intencionalmente pelo admin."
+    },
+    {
+      "severity": "Baixo",
+      "finding": "20 coletas duplicadas foram desativadas mantendo os gaps por material."
+    }
+  ],
+  "building_costs": [
+    {
+      "name": "Alojamento",
+      "gold_10": 5500,
+      "wood_10": 1100,
+      "ore_10": 0,
+      "crystals_10": 0,
+      "gold_25": 38500,
+      "wood_25": 7700,
+      "ore_25": 0,
+      "crystals_25": 0,
+      "gold_50": 190250,
+      "wood_50": 38050,
+      "ore_50": 0,
+      "crystals_50": 0
+    },
+    {
+      "name": "Campo de Treino",
+      "gold_10": 6600,
+      "wood_10": 550,
+      "ore_10": 550,
+      "crystals_10": 0,
+      "gold_25": 46200,
+      "wood_25": 3850,
+      "ore_25": 3850,
+      "crystals_25": 0,
+      "gold_50": 228300,
+      "wood_50": 19025,
+      "ore_50": 19025,
+      "crystals_50": 0
+    },
+    {
+      "name": "Ferreiro",
+      "gold_10": 8250,
+      "wood_10": 0,
+      "ore_10": 1375,
+      "crystals_10": 0,
+      "gold_25": 57750,
+      "wood_25": 0,
+      "ore_25": 9625,
+      "crystals_25": 0,
+      "gold_50": 285375,
+      "wood_50": 0,
+      "ore_50": 47562,
+      "crystals_50": 0
+    },
+    {
+      "name": "Armazem",
+      "gold_10": 4950,
+      "wood_10": 1650,
+      "ore_10": 0,
+      "crystals_10": 0,
+      "gold_25": 34650,
+      "wood_25": 11550,
+      "ore_25": 0,
+      "crystals_25": 0,
+      "gold_50": 171225,
+      "wood_50": 57075,
+      "ore_50": 0,
+      "crystals_50": 0
+    },
+    {
+      "name": "Escritório de Missões",
+      "gold_10": 9900,
+      "wood_10": 1100,
+      "ore_10": 1100,
+      "crystals_10": 0,
+      "gold_25": 69300,
+      "wood_25": 7700,
+      "ore_25": 7700,
+      "crystals_25": 0,
+      "gold_50": 342450,
+      "wood_50": 38050,
+      "ore_50": 38050,
+      "crystals_50": 0
+    },
+    {
+      "name": "Exploradores",
+      "gold_10": 8800,
+      "wood_10": 1100,
+      "ore_10": 550,
+      "crystals_10": 0,
+      "gold_25": 61600,
+      "wood_25": 7700,
+      "ore_25": 3850,
+      "crystals_25": 0,
+      "gold_50": 304400,
+      "wood_50": 38050,
+      "ore_50": 19025,
+      "crystals_50": 0
+    },
+    {
+      "name": "Taverna",
+      "gold_10": 7700,
+      "wood_10": 1375,
+      "ore_10": 275,
+      "crystals_10": 0,
+      "gold_25": 53900,
+      "wood_25": 9625,
+      "ore_25": 1925,
+      "crystals_25": 0,
+      "gold_50": 266350,
+      "wood_50": 47562,
+      "ore_50": 9512,
+      "crystals_50": 0
+    },
+    {
+      "name": "Mercado",
+      "gold_10": 7150,
+      "wood_10": 1100,
+      "ore_10": 275,
+      "crystals_10": 0,
+      "gold_25": 50050,
+      "wood_25": 7700,
+      "ore_25": 1925,
+      "crystals_25": 0,
+      "gold_50": 247325,
+      "wood_50": 38050,
+      "ore_50": 9512,
+      "crystals_50": 0
+    },
+    {
+      "name": "Docas",
+      "gold_10": 27500,
+      "wood_10": 5500,
+      "ore_10": 2750,
+      "crystals_10": 0,
+      "gold_25": 192500,
+      "wood_25": 38500,
+      "ore_25": 19250,
+      "crystals_25": 0,
+      "gold_50": 951250,
+      "wood_50": 190250,
+      "ore_50": 95125,
+      "crystals_50": 0
+    }
+  ],
+  "balance_changes": {
+    "duplicates_deactivated": [
+      {
+        "id": 1708,
+        "name": "Separar Troncos Resistentes em Arredores da Guilda",
+        "band": "1-20",
+        "level": 1,
+        "family": "wood",
+        "kept_id": 1668
+      },
+      {
+        "id": 1709,
+        "name": "Prospectar Veios Metálicos em Arredores da Guilda",
+        "band": "1-20",
+        "level": 2,
+        "family": "ore",
+        "kept_id": 1669
+      },
+      {
+        "id": 1710,
+        "name": "Catalogar Flores Raras em Arredores da Guilda",
+        "band": "1-20",
+        "level": 3,
+        "family": "herb",
+        "kept_id": 1670
+      },
+      {
+        "id": 1711,
+        "name": "Preparar Peles Resistentes em Arredores da Guilda",
+        "band": "1-20",
+        "level": 4,
+        "family": "leather",
+        "kept_id": 1671
+      },
+      {
+        "id": 1712,
+        "name": "Preparar Fios Silvestres em Arredores da Guilda",
+        "band": "1-20",
+        "level": 5,
+        "family": "cloth",
+        "kept_id": 1672
+      },
+      {
+        "id": 1713,
+        "name": "Localizar Gemas Rúnicas em Arredores da Guilda",
+        "band": "1-20",
+        "level": 6,
+        "family": "gem",
+        "kept_id": 1673
+      },
+      {
+        "id": 1714,
+        "name": "Catalogar Fragmentos Sagrados em Arredores da Guilda",
+        "band": "1-20",
+        "level": 7,
+        "family": "relic",
+        "kept_id": 1674
+      },
+      {
+        "id": 1715,
+        "name": "Recolher Resíduos Mágicos em Arredores da Guilda",
+        "band": "1-20",
+        "level": 8,
+        "family": "essence",
+        "kept_id": 1675
+      },
+      {
+        "id": 1716,
+        "name": "Coletar Resina Antiga em Arredores da Guilda",
+        "band": "1-20",
+        "level": 9,
+        "family": "wood",
+        "kept_id": 1676
+      },
+      {
+        "id": 1717,
+        "name": "Extrair Pedra Mineral em Arredores da Guilda",
+        "band": "1-20",
+        "level": 10,
+        "family": "ore",
+        "kept_id": 1677
+      },
+      {
+        "id": 1718,
+        "name": "Colher Raízes Alquímicas em Arredores da Guilda",
+        "band": "1-20",
+        "level": 11,
+        "family": "herb",
+        "kept_id": 1678
+      },
+      {
+        "id": 1719,
+        "name": "Rastrear Partes de Criatura em Arredores da Guilda",
+        "band": "1-20",
+        "level": 12,
+        "family": "leather",
+        "kept_id": 1679
+      },
+      {
+        "id": 1720,
+        "name": "Separar Tecidos Naturais em Arredores da Guilda",
+        "band": "1-20",
+        "level": 13,
+        "family": "cloth",
+        "kept_id": 1680
+      },
+      {
+        "id": 1721,
+        "name": "Garimpar Fragmentos Luminosos em Arredores da Guilda",
+        "band": "1-20",
+        "level": 14,
+        "family": "gem",
+        "kept_id": 1681
+      },
+      {
+        "id": 1722,
+        "name": "Recuperar Insígnias Perdidas em Arredores da Guilda",
+        "band": "1-20",
+        "level": 15,
+        "family": "relic",
+        "kept_id": 1682
+      },
+      {
+        "id": 1723,
+        "name": "Extrair Ecos Elementais em Arredores da Guilda",
+        "band": "1-20",
+        "level": 16,
+        "family": "essence",
+        "kept_id": 1683
+      },
+      {
+        "id": 1724,
+        "name": "Cortar Resina Antiga em Arredores da Guilda",
+        "band": "1-20",
+        "level": 17,
+        "family": "wood",
+        "kept_id": 1684
+      },
+      {
+        "id": 1725,
+        "name": "Minerar Pedra Mineral em Arredores da Guilda",
+        "band": "1-20",
+        "level": 18,
+        "family": "ore",
+        "kept_id": 1685
+      },
+      {
+        "id": 1726,
+        "name": "Buscar Raízes Alquímicas em Arredores da Guilda",
+        "band": "1-20",
+        "level": 19,
+        "family": "herb",
+        "kept_id": 1686
+      },
+      {
+        "id": 1727,
+        "name": "Recolher Partes de Criatura em Arredores da Guilda",
+        "band": "1-20",
+        "level": 20,
+        "family": "leather",
+        "kept_id": 1687
+      }
+    ],
+    "gathering_adjusted": 40,
+    "normal_reviewed": 140,
+    "normal_adjusted": 134,
+    "mission_equipment_drops": 1704,
+    "dungeon_equipment_drops": 622,
+    "early_common_equipment_adjusted": 0,
+    "long_idle_adjusted": 24
+  },
+  "early_leveling": {
+    "Missões normais": {
+      "attempts": 54,
+      "hours": 4.23,
+      "gold": 932
+    },
+    "Coletas": {
+      "attempts": 78,
+      "hours": 4.9,
+      "gold": 861
+    }
+  }
+}

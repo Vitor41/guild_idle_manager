@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Itens - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="admin-items-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Administracao</p>
+        <h1 id="admin-items-title">Itens globais</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/admin">Admin</a>
+        <a href="/dashboard">Dashboard</a>
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    <div class="action-row compact">
+      <a class="button-link secondary" href="/admin/items/create">Criar item</a>
+    </div>
+    <section class="panel table-panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Tipo</th><th>Tier</th><th>Item level</th><th>Venda</th><th>Slot</th><th>Nivel</th><th>Raridade</th><th>Ativo</th><th></th></tr></thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.item_type }}</td>
+                <td>{{ item.tier }}</td>
+                <td>{{ item.item_level }}</td>
+                <td>{{ item.base_sell_value }}</td>
+                <td>{{ item.slot_label if item.slot_label is defined else '-' }}</td>
+                <td>{{ item.required_level }}</td>
+                <td>{{ item.rarity }}</td>
+                <td>{{ 'Sim' if item.is_active else 'Nao' }}</td>
+                <td><a href="/admin/items/{{ item.id }}/edit">Editar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Masmorras - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="admin-dungeons-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Administracao</p>
+        <h1 id="admin-dungeons-title">Masmorras globais</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/admin">Admin</a>
+        <a href="/dashboard">Dashboard</a>
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    <div class="action-row compact">
+      <a class="button-link secondary" href="/admin/dungeons/create">Criar masmorra</a>
+    </div>
+    <section class="panel table-panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Duracao</th><th>Grupo</th><th>Ouro</th><th>XP</th><th>Chance</th><th>Ativa</th><th></th></tr></thead>
+          <tbody>
+            {% for dungeon in dungeons %}
+              <tr>
+                <td>{{ dungeon.name }}</td>
+                <td>{{ format_duration(dungeon.duration_seconds) }}</td>
+                <td>{{ dungeon.min_party_size }}-{{ dungeon.max_party_size }}</td>
+                <td>{{ dungeon.base_gold_reward }}</td>
+                <td>{{ dungeon.base_xp_reward }}</td>
+                <td>{{ dungeon.base_success_chance }}%</td>
+                <td>{{ 'Sim' if dungeon.is_active else 'Não' }}</td>
+                <td><a href="/admin/dungeons/{{ dungeon.id }}/edit">Editar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+{% endblock %}

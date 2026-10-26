@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Construções - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="buildings-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">{{ guild.name }}</p>
+        <h1 id="buildings-title">Construções</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mercenaries">Mercenários</a>
+        <a href="/missions">Missões</a>
+        <a href="/dungeons">Masmorras</a>
+        <a href="/inventory">Inventário</a>
+        {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+
+    <section class="panel">
+      <h2>Recursos</h2>
+      <dl class="inline-stats">
+        <div><dt>Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
+        <div><dt>Madeira</dt><dd>{{ resources.wood if resources else 0 }}</dd></div>
+        <div><dt>Minerio</dt><dd>{{ resources.ore if resources else 0 }}</dd></div>
+        <div><dt>Cristais</dt><dd>{{ resources.crystals if resources else 0 }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="building-grid">
+        {% for building in buildings %}
+          {% set cost = get_upgrade_cost(building) %}
+          {% set effect = building.building_template.effect_type %}
+          {% set icon = building.view_icon if building.view_icon is defined else '□' %}
+          <article class="panel building-card">
+            <div class="building-icon-row">
+              <div class="asset-placeholder building-icon"><span aria-hidden="true">{{ icon }}</span></div>
+              <span class="status-badge {{ 'status-active' if building.building_template.is_active else 'status-expired' }}">{{ 'Ativa' if building.building_template.is_active else 'Inativa' }}</span>
+            </div>
+            <div class="building-body">
+              <h3>{{ building.building_template.name }}</h3>
+              <p class="note">{{ building.building_template.description }}</p>
+              <dl class="inline-stats">
+                <div><dt>Nível</dt><dd>{{ building.level }}/{{ building.building_template.max_level }}</dd></div>
+                <div><dt>Custo</dt><dd>{{ cost.gold }} ouro, {{ cost.wood }} madeira, {{ cost.ore }} minério, {{ cost.crystals }} cristais</dd></div>
+                <div><dt>Requisito</dt><dd>Guilda nível {{ building.next_required_guild_level }}</dd></div>
+              </dl>
+              <div class="building-benefits"><strong>Benefício atual</strong>{% for line in building.benefit.current %}<span>{{ line }}</span>{% endfor %}</div>
+              <div class="building-benefits next"><strong>{% if building.benefit.is_max_level %}Nível máximo atingido{% else %}Próximo marco: nível {{ building.benefit.next_milestone_level }}{% endif %}</strong>{% for line in building.benefit.next %}<span>{{ line }}</span>{% endfor %}</div>
+              <p class="note">Impacta: {{ building.benefit.systems|join(', ') }}</p>
+              <form class="form-stack" method="post" action="/buildings/{{ building.id }}/upgrade">
+                <button type="submit" {% if building.level >= building.building_template.max_level or guild.level < building.next_required_guild_level %}disabled{% endif %}>
+                  {{ 'Comprar' if building.level == 0 else 'Evoluir' }}
+                </button>
+              </form>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  </section>
+{% endblock %}

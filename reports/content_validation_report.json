@@ -1,0 +1,427 @@
+{
+  "passed": true,
+  "issues": [],
+  "sequential_names": 0,
+  "duplicate_names": 0,
+  "band_metrics": [
+    {
+      "band": "1-20",
+      "missions": 140,
+      "dungeons": 36,
+      "mission_xp_average": 223.79,
+      "mission_gold_average": 71.66,
+      "dungeon_xp_average": 396.53,
+      "dungeon_gold_average": 187.64
+    },
+    {
+      "band": "21-50",
+      "missions": 170,
+      "dungeons": 48,
+      "mission_xp_average": 944.45,
+      "mission_gold_average": 294.38,
+      "dungeon_xp_average": 1534.6,
+      "dungeon_gold_average": 649.88
+    },
+    {
+      "band": "51-100",
+      "missions": 220,
+      "dungeons": 72,
+      "mission_xp_average": 2848.82,
+      "mission_gold_average": 788.54,
+      "dungeon_xp_average": 4654.5,
+      "dungeon_gold_average": 1712.12
+    },
+    {
+      "band": "101-130",
+      "missions": 150,
+      "dungeons": 48,
+      "mission_xp_average": 5508.33,
+      "mission_gold_average": 1412.25,
+      "dungeon_xp_average": 9350.02,
+      "dungeon_gold_average": 3153.17
+    },
+    {
+      "band": "131-200",
+      "missions": 280,
+      "dungeons": 84,
+      "mission_xp_average": 9628.42,
+      "mission_gold_average": 2297.9,
+      "dungeon_xp_average": 16231.48,
+      "dungeon_gold_average": 5086.32
+    },
+    {
+      "band": "201-250",
+      "missions": 230,
+      "dungeons": 72,
+      "mission_xp_average": 15261.32,
+      "mission_gold_average": 3439.38,
+      "dungeon_xp_average": 26581.46,
+      "dungeon_gold_average": 7828.67
+    },
+    {
+      "band": "251-300",
+      "missions": 230,
+      "dungeons": 72,
+      "mission_xp_average": 20811.11,
+      "mission_gold_average": 4508.2,
+      "dungeon_xp_average": 36587.14,
+      "dungeon_gold_average": 10343.07
+    },
+    {
+      "band": "301-350",
+      "missions": 240,
+      "dungeons": 84,
+      "mission_xp_average": 27006.99,
+      "mission_gold_average": 5658.34,
+      "dungeon_xp_average": 47967.06,
+      "dungeon_gold_average": 13098.23
+    }
+  ],
+  "balance": {
+    "simulation_runs_per_band": 1000,
+    "progression": [
+      {
+        "band": "1-20",
+        "level_start": 1,
+        "level_end": 20,
+        "xp_required": 19000,
+        "mission_count": 140,
+        "gathering_count": 60,
+        "dungeon_count": 36,
+        "average_xp": 223.79,
+        "average_gold": 71.66,
+        "average_duration_seconds": 492.94,
+        "average_success_chance": 84.02,
+        "expected_attempts": 96.46,
+        "expected_time_hours": 13.21,
+        "expected_gold": 5808.16,
+        "gold_per_hour": 439.75,
+        "p50_attempts": 98,
+        "p75_attempts": 102,
+        "p90_attempts": 106,
+        "p95_attempts": 108,
+        "p50_time_hours": 13.41,
+        "p90_time_hours": 14.23,
+        "p95_time_hours": 14.54,
+        "p50_gold": 5835,
+        "p90_gold": 5969,
+        "recommended_mission_count": 128,
+        "recommended_dungeon_count": 21,
+        "content_coverage_ok": true
+      },
+      {
+        "band": "21-50",
+        "level_start": 21,
+        "level_end": 50,
+        "xp_required": 101500,
+        "mission_count": 170,
+        "gathering_count": 70,
+        "dungeon_count": 48,
+        "average_xp": 944.45,
+        "average_gold": 294.38,
+        "average_duration_seconds": 996.84,
+        "average_success_chance": 78.01,
+        "expected_attempts": 128.69,
+        "expected_time_hours": 35.64,
+        "expected_gold": 29554.2,
+        "gold_per_hour": 829.35,
+        "p50_attempts": 129,
+        "p75_attempts": 133,
+        "p90_attempts": 137,
+        "p95_attempts": 139,
+        "p50_time_hours": 35.83,
+        "p90_time_hours": 37.64,
+        "p95_time_hours": 38.17,
+        "p50_gold": 29715,
+        "p90_gold": 30252,
+        "recommended_mission_count": 165,
+        "recommended_dungeon_count": 27,
+        "content_coverage_ok": true
+      },
+      {
+        "band": "51-100",
+        "level_start": 51,
+        "level_end": 100,
+        "xp_required": 367500,
+        "mission_count": 220,
+        "gathering_count": 80,
+        "dungeon_count": 72,
+        "average_xp": 2848.82,
+        "average_gold": 788.54,
+        "average_duration_seconds": 1750.82,
+        "average_success_chance": 65.01,
+        "expected_attempts": 174.9,
+        "expected_time_hours": 85.06,
+        "expected_gold": 89657.94,
+        "gold_per_hour": 1054.04,
+        "p50_attempts": 176,
+        "p75_attempts": 182,
+        "p90_attempts": 187,
+        "p95_attempts": 190,
+        "p50_time_hours": 85.74,
+        "p90_time_hours": 90.41,
+        "p95_time_hours": 91.53,
+        "p50_gold": 89889,
+        "p90_gold": 92043,
+        "recommended_mission_count": 216,
+        "recommended_dungeon_count": 44,
+        "content_coverage_ok": true
+      },
+      {
+        "band": "101-130",
+        "level_start": 101,
+        "level_end": 130,
+        "xp_required": 333500,
+        "mission_count": 150,
+        "gathering_count": 60,
+        "dungeon_count": 48,
+        "average_xp": 5508.33,
+        "average_gold": 1412.25,
+        "average_duration_seconds": 2538.84,
+        "average_success_chance": 55.0,
+        "expected_attempts": 91.39,
+        "expected_time_hours": 64.45,
+        "expected_gold": 70984.5,
+        "gold_per_hour": 1101.39,
+        "p50_attempts": 92,
+        "p75_attempts": 96,
+        "p90_attempts": 100,
+        "p95_attempts": 102,
+        "p50_time_hours": 64.99,
+        "p90_time_hours": 70.23,
+        "p95_time_hours": 71.85,
+        "p50_gold": 71438,
+        "p90_gold": 74585,
+        "recommended_mission_count": 115,
+        "recommended_dungeon_count": 23,
+        "content_coverage_ok": true
+      },
+      {
+        "band": "131-200",
+        "level_start": 131,
+        "level_end": 200,
+        "xp_required": 1138500,
+        "mission_count": 280,
+        "gathering_count": 90,
+        "dungeon_count": 84,
+        "average_xp": 9628.42,
+        "average_gold": 2297.9,
+        "average_duration_seconds": 3479,
+        "average_success_chance": 43.01,
+        "expected_attempts": 206.52,
+        "expected_time_hours": 199.58,
+        "expected_gold": 204095.62,
+        "gold_per_hour": 1022.63,
+        "p50_attempts": 208,
+        "p75_attempts": 215,
+        "p90_attempts": 221,
+        "p95_attempts": 227,
+        "p50_time_hours": 200.75,
+        "p90_time_hours": 213.2,
+        "p95_time_hours": 218.12,
+        "p50_gold": 204486,
+        "p90_gold": 214051,
+        "recommended_mission_count": 244,
+        "recommended_dungeon_count": 49,
+        "content_coverage_ok": true
+      },
+      {
+        "band": "201-350",
+        "level_start": 201,
+        "level_end": 350,
+        "xp_required": 4097500,
+        "mission_count": 700,
+        "gathering_count": 210,
+        "dungeon_count": 228,
+        "average_xp": 21111.91,
+        "average_gold": 4551.35,
+        "average_duration_seconds": 5505.01,
+        "average_success_chance": 26.95,
+        "expected_attempts": 429.25,
+        "expected_time_hours": 656.4,
+        "expected_gold": 526571.7,
+        "gold_per_hour": 802.21,
+        "p50_attempts": 436,
+        "p75_attempts": 447,
+        "p90_attempts": 457,
+        "p95_attempts": 463,
+        "p50_time_hours": 666.83,
+        "p90_time_hours": 698.07,
+        "p95_time_hours": 708.6,
+        "p50_gold": 519008,
+        "p90_gold": 550583,
+        "recommended_mission_count": 503,
+        "recommended_dungeon_count": 101,
+        "content_coverage_ok": true
+      }
+    ],
+    "materials": [
+      {
+        "family": "beast",
+        "mission_sources": 140,
+        "expected_quantity_per_full_rotation": 416.78,
+        "has_demand": true
+      },
+      {
+        "family": "catalyst",
+        "mission_sources": 90,
+        "expected_quantity_per_full_rotation": 256.35,
+        "has_demand": true
+      },
+      {
+        "family": "cloth",
+        "mission_sources": 211,
+        "expected_quantity_per_full_rotation": 765.31,
+        "has_demand": true
+      },
+      {
+        "family": "essence",
+        "mission_sources": 227,
+        "expected_quantity_per_full_rotation": 806.28,
+        "has_demand": true
+      },
+      {
+        "family": "gem",
+        "mission_sources": 211,
+        "expected_quantity_per_full_rotation": 782.11,
+        "has_demand": true
+      },
+      {
+        "family": "herb",
+        "mission_sources": 253,
+        "expected_quantity_per_full_rotation": 878.81,
+        "has_demand": true
+      },
+      {
+        "family": "insignia",
+        "mission_sources": 60,
+        "expected_quantity_per_full_rotation": 171.7,
+        "has_demand": true
+      },
+      {
+        "family": "leather",
+        "mission_sources": 213,
+        "expected_quantity_per_full_rotation": 762.71,
+        "has_demand": true
+      },
+      {
+        "family": "ore",
+        "mission_sources": 274,
+        "expected_quantity_per_full_rotation": 886.17,
+        "has_demand": true
+      },
+      {
+        "family": "relic",
+        "mission_sources": 197,
+        "expected_quantity_per_full_rotation": 740.56,
+        "has_demand": true
+      },
+      {
+        "family": "stone",
+        "mission_sources": 120,
+        "expected_quantity_per_full_rotation": 303.2,
+        "has_demand": true
+      },
+      {
+        "family": "wood",
+        "mission_sources": 234,
+        "expected_quantity_per_full_rotation": 789.72,
+        "has_demand": true
+      }
+    ],
+    "gold_economy": {
+      "sources": {
+        "missions": [
+          {
+            "band": "1-20",
+            "gold_per_hour": 439.75,
+            "risk": "médio"
+          },
+          {
+            "band": "21-50",
+            "gold_per_hour": 829.35,
+            "risk": "médio"
+          },
+          {
+            "band": "51-100",
+            "gold_per_hour": 1054.04,
+            "risk": "médio"
+          },
+          {
+            "band": "101-130",
+            "gold_per_hour": 1101.39,
+            "risk": "médio"
+          },
+          {
+            "band": "131-200",
+            "gold_per_hour": 1022.63,
+            "risk": "médio"
+          },
+          {
+            "band": "201-350",
+            "gold_per_hour": 802.21,
+            "risk": "médio"
+          }
+        ],
+        "dungeons": [
+          {
+            "band": "1-20",
+            "gold_per_hour": 348.42,
+            "risk": "alto",
+            "requirement": "grupo, poder e equipamento"
+          },
+          {
+            "band": "21-50",
+            "gold_per_hour": 660.91,
+            "risk": "alto",
+            "requirement": "grupo, poder e equipamento"
+          },
+          {
+            "band": "51-100",
+            "gold_per_hour": 982.89,
+            "risk": "alto",
+            "requirement": "grupo, poder e equipamento"
+          },
+          {
+            "band": "101-130",
+            "gold_per_hour": 1196.88,
+            "risk": "alto",
+            "requirement": "grupo, poder e equipamento"
+          },
+          {
+            "band": "131-200",
+            "gold_per_hour": 1292.32,
+            "risk": "alto",
+            "requirement": "grupo, poder e equipamento"
+          },
+          {
+            "band": "201-350",
+            "gold_per_hour": 1364.21,
+            "risk": "alto",
+            "requirement": "grupo, poder e equipamento"
+          }
+        ],
+        "offline_gold_per_hour": 5,
+        "market": "valor complementar limitado por slots e tempo"
+      },
+      "drains": {
+        "tavern_initial_hire": 50,
+        "tavern_refresh": 100,
+        "building_base_costs": {
+          "housing": 100,
+          "training_ground": 120,
+          "blacksmith": 150,
+          "warehouse": 90,
+          "contract_office": 180,
+          "scouts": 160,
+          "tavern": 140,
+          "market": 130,
+          "docks": 500
+        },
+        "docks": "preço de compra superior ao valor de venda; alternativa para completar materiais",
+        "crafting": "ouro e materiais por receita",
+        "refinement": "custo crescente por nível e raridade"
+      }
+    }
+  }
+}

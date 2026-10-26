@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+  {% from "components/treasury.html" import treasury %}
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Guild Idle Manager{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20260623-1">
+  </head>
+  <body>
+    {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
+    {% if has_app_shell %}
+      <div class="app-frame" data-session-started-at="{{ request.session.get('session_started_at', 0) }}" data-session-global-seconds="{{ request.session.get('session_global_seconds', 18000) }}" data-session-idle-seconds="{{ request.session.get('session_idle_seconds', 3600) }}" data-confirmation-preferences='{{ current_user.confirmation_preferences or "{}" }}'>
+        <aside class="sidebar" aria-label="Navegacao principal">
+          <a class="brand-mark" href="/dashboard">
+            <span class="brand-sigil">G</span>
+            <span>
+              <strong>Guild Idle</strong>
+              <small>Manager</small>
+            </span>
+          </a>
+          <nav class="sidebar-nav">
+            <a href="/dashboard"><span class="nav-icon">⌂</span><span>Visão geral</span></a>
+            <a href="/tavern"><span class="nav-icon">♜</span><span>Taverna</span></a>
+            <a href="/mercenaries"><span class="nav-icon">⚔</span><span>Mercenários</span></a>
+            <a href="/professions"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
+            <a href="/missions"><span class="nav-icon">✦</span><span>Missões</span></a>
+            <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
+            <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
+            <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
+            <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
+            <a href="/docks"><span class="nav-icon">&#9875;</span><span>Docas</span></a>
+            <a href="/buildings"><span class="nav-icon">▣</span><span>Construções</span></a>
+            <a href="/class-change"><span class="nav-icon">✧</span><span>Troca de Classe</span></a>
+            <a href="/guild/progress"><span class="nav-icon">&#9733;</span><span>Progresso da Guilda</span></a>
+            <span class="nav-section-label">Guias e registros</span>
+            <a href="/classes"><span class="nav-icon">✧</span><span>Guia de Classes</span></a>
+            <a href="/tiers"><span class="nav-icon">◇</span><span>Guia de Tiers</span></a>
+            <a href="/codex"><span class="nav-icon">&#9782;</span><span>Conquistas e Códex</span></a>
+            <a href="/guide"><span class="nav-icon">?</span><span>Guia do Jogo</span></a>
+            {% if current_user.is_admin %}
+              <a href="/admin"><span class="nav-icon">⚙</span><span>Admin</span></a>
+            {% endif %}
+          </nav>
+        </aside>
+
+        <div class="main-column">
+          <header class="game-topbar">
+            <button class="topbar-back-button" type="button" data-back-button title="Voltar para a tela anterior" aria-label="Voltar para a tela anterior">
+              <span aria-hidden="true">&#8592;</span><span>Voltar</span>
+            </button>
+            <div class="guild-banner">
+              <span class="crest-placeholder">✦</span>
+              <div>
+                <span class="topbar-label">Guilda</span>
+                <strong>{{ guild.name if guild is defined and guild else 'Administração' }}</strong>
+              </div>
+            </div>
+            <div class="topbar-stats">
+              <span><small>Usuário</small>{{ current_user.username }}</span>
+              <span><small>Nível</small>{{ guild.level if guild is defined and guild else '-' }}</span>
+              <span><small>XP</small>{{ guild.xp if guild is defined and guild and guild.xp is defined else 0 }}</span>
+              {% if resources is defined and resources %}{{ treasury(resources) }}{% endif %}
+            </div>
+            <a class="topbar-power-button" href="/logout" title="Sair" aria-label="Sair"><span aria-hidden="true">&#x23FB;</span></a>
+          </header>
+          <main class="page-shell game-shell">
+    {% else %}
+      <main class="page-shell public-shell">
+    {% endif %}
+      {% block content %}{% endblock %}
+    {% if has_app_shell %}
+          </main>
+        </div>
+      </div>
+    {% else %}
+      </main>
+    {% endif %}
+    <dialog class="confirmation-dialog" id="confirmation-dialog" aria-labelledby="confirmation-title" aria-describedby="confirmation-message">
+      <div class="confirmation-dialog__header">
+        <span class="confirmation-dialog__sigil" aria-hidden="true">!</span>
+        <div>
+          <p class="eyebrow">Confirmar ação</p>
+          <h2 id="confirmation-title">Você tem certeza?</h2>
+        </div>
+        <button class="confirmation-dialog__close" type="button" data-confirm-cancel aria-label="Fechar confirmação">&times;</button>
+      </div>
+      <p class="confirmation-dialog__message" id="confirmation-message"></p>
+      <label class="confirmation-skip"><input type="checkbox" data-confirm-skip> Não perguntar novamente para esta ação</label>
+      <div class="confirmation-dialog__actions">
+        <button class="secondary-button" type="button" data-confirm-cancel>Cancelar</button>
+        <button type="button" data-confirm-accept>Confirmar</button>
+      </div>
+    </dialog>
+    {% if has_app_shell and current_user.tutorial_status == 'pending' %}
+      <dialog class="confirmation-dialog tutorial-invite" id="tutorial-invite" data-tutorial-invite aria-labelledby="tutorial-invite-title">
+        <div class="confirmation-dialog__header"><span class="confirmation-dialog__sigil">?</span><div><p class="eyebrow">Primeiros passos</p><h2 id="tutorial-invite-title">Conhecer a guilda?</h2></div></div>
+        <p class="confirmation-dialog__message">Deseja participar de um tutorial rápido para conhecer o jogo?</p>
+        <div class="confirmation-dialog__actions"><form method="post" action="/tutorial/decline"><button class="secondary-button">Não, pular tutorial</button></form><form method="post" action="/tutorial/start"><button>Sim, iniciar tutorial</button></form></div>
+      </dialog>
+    {% endif %}
+    {% if request is defined and request.state._state.get('offline_summary') %}
+      {% set offline = request.state._state.get('offline_summary') %}
+      <dialog class="confirmation-dialog offline-dialog" id="offline-dialog" data-auto-open aria-labelledby="offline-title">
+        <div class="confirmation-dialog__header">
+          <span class="confirmation-dialog__sigil" aria-hidden="true">$</span>
+          <div><p class="eyebrow">Retorno a guilda</p><h2 id="offline-title">Progresso offline</h2></div>
+          <button class="confirmation-dialog__close" type="button" data-offline-close aria-label="Fechar">&times;</button>
+        </div>
+        <div class="offline-summary">
+          <p>Você ficou ausente por <strong>{{ offline.elapsed_label }}</strong>.</p>
+          <dl class="offline-reward-grid">
+            <div><dt>Ouro</dt><dd>+{{ offline.gold }}</dd></div>
+            <div><dt>Madeira</dt><dd>+{{ offline.materials.wood_total }}</dd></div>
+            <div><dt>Minérios</dt><dd>+{{ offline.materials.ore_total }}</dd></div>
+            <div><dt>Cristais</dt><dd>+{{ offline.materials.crystals }}</dd></div>
+          </dl>
+          {% if offline.cap_reached %}<p class="note">O limite offline de {{ offline.cap_hours }} horas foi atingido.</p>{% endif %}
+          <footer class="offline-summary__notice">
+            <span>O bônus do Armazém já está aplicado.</span>
+            <span>Para mais detalhes, acesse o <a href="/guide#idle">Guia do Jogo</a>.</span>
+          </footer>
+        </div>
+        <div class="confirmation-dialog__actions"><button type="button" data-offline-close>Continuar</button></div>
+      </dialog>
+    {% endif %}
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20260622-4"></script>
+  </body>
+</html>

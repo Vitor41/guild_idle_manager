@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Mercenários - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="mercenaries-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Equipe da Guilda</p>
+        <h1 id="mercenaries-title">Mercenários</h1>
+        <p class="note">Gerencie sua equipe, equipamentos e caminhos de evolução.</p>
+      </div>
+      <form class="sort-form" method="get" action="/mercenaries">
+        <label>
+          Ordenar por
+          <select name="sort" onchange="this.form.requestSubmit()">
+            <option value="power" {% if selected_sort == "power" %}selected{% endif %}>Poder Total</option>
+            <option value="level" {% if selected_sort == "level" %}selected{% endif %}>Nível</option>
+            <option value="rarity" {% if selected_sort == "rarity" %}selected{% endif %}>Raridade</option>
+            <option value="name" {% if selected_sort == "name" %}selected{% endif %}>Nome</option>
+            <option value="strength" {% if selected_sort == "strength" %}selected{% endif %}>FOR</option>
+            <option value="agility" {% if selected_sort == "agility" %}selected{% endif %}>AGI</option>
+            <option value="intelligence" {% if selected_sort == "intelligence" %}selected{% endif %}>INT</option>
+            <option value="vitality" {% if selected_sort == "vitality" %}selected{% endif %}>VIT</option>
+          </select>
+        </label>
+      </form>
+    </header>
+
+    {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+
+    <div class="dashboard-grid">
+      <article class="panel tavern-hero">
+        <h2>Contratação</h2>
+        <dl class="stat-list">
+          <div><dt>Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
+          <div><dt>Vagas</dt><dd>{{ mercenaries|length }}/{{ mercenary_limit }}</dd></div>
+        </dl>
+        <p class="note">Novos mercenários entram pela Taverna e nascem como Aprendiz.</p>
+        <div class="action-row compact">
+          <a class="button-link secondary" href="/tavern">Abrir Taverna</a>
+          <a class="button-link secondary" href="/class-change">Troca de Classe</a>
+        </div>
+      </article>
+    </div>
+
+    {% if mercenaries %}
+      <section class="mercenary-grid table-panel" aria-label="Membros da guilda">
+        {% for mercenary in mercenaries %}
+          {% set summary = (attribute_summaries|default({})).get(mercenary.id) %}
+          <article class="mercenary-card rarity-{{ mercenary.rarity }}">
+            <div class="mercenary-head">
+              <div class="avatar-placeholder avatar-class-icon">
+                {% if mercenary.class_icon_path %}
+                  <img class="asset-icon class-icon-img {% if '/assets/extended/' in mercenary.class_icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="{{ mercenary.class_label }}" loading="lazy">
+                {% else %}
+                  <span aria-hidden="true">{{ mercenary.class_label[:1] }}</span>
+                {% endif %}
+              </div>
+              <div>
+                <h2>{{ mercenary.name }}</h2>
+                <p class="note">{{ mercenary.class_label }} | Nível {{ mercenary.level }}</p>
+                <div class="badge-row">
+                  <span class="rarity-badge rarity-{{ mercenary.rarity }}">{{ mercenary.rarity_label }}</span>
+                  <span class="status-badge status-{{ mercenary.status }}">{{ mercenary.status_label }}</span>
+                  <span class="bonus-pill">Evolução +{{ mercenary.progression_bonus_percent }}%</span>
+                  {% if mercenary.profession %}<span class="tag">{{ mercenary.profession.name }}</span>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="attribute-row">
+              <span title="{{ attribute_tooltips.power }}"><small>FOR</small>{{ mercenary.power }}</span>
+              <span title="{{ attribute_tooltips.vitality }}"><small>VIT</small>{{ mercenary.vitality }}</span>
+              <span title="{{ attribute_tooltips.agility }}"><small>AGI</small>{{ mercenary.agility }}</span>
+              <span title="{{ attribute_tooltips.intelligence }}"><small>INT</small>{{ mercenary.intelligence }}</span>
+              <span title="{{ attribute_tooltips.luck }}"><small>SOR</small>{{ mercenary.luck }}</span>
+            </div>
+
+            <dl class="stat-list">
+              <div><dt>Poder total</dt><dd>{{ summary.total_power_score if summary else mercenary.power }}</dd></div>
+              <div><dt>XP</dt><dd>{{ mercenary.xp }}</dd></div>
+              <div><dt>Valor pago</dt><dd>{{ mercenary.hire_cost }}</dd></div>
+            </dl>
+
+            <div class="action-row compact">
+              <a class="button-link secondary" href="/mercenaries/{{ mercenary.id }}">Detalhes</a>
+              <form
+                method="post"
+                action="/mercenaries/{{ mercenary.id }}/dismiss"
+                data-confirm-title="Demitir {{ mercenary.name }}?"
+                data-confirm-message="O mercenário deixará sua equipe e a guilda receberá 30% do valor investido. Esta ação não pode ser desfeita."
+                data-confirm-action="Demitir mercenário"
+                data-confirm-variant="danger"
+                data-confirm-key="dismiss_mercenary"
+              >
+                <button class="danger-button" type="submit" {% if mercenary.status != "available" %}disabled{% endif %}>Demitir</button>
+              </form>
+            </div>
+          </article>
+        {% endfor %}
+      </section>
+    {% else %}
+      <section class="panel table-panel">
+        <p class="note">Nenhum mercenário contratado ainda.</p>
+        <div class="action-row compact">
+          <a class="button-link secondary" href="/tavern">Contratar primeiro Aprendiz</a>
+        </div>
+      </section>
+    {% endif %}
+  </section>
+{% endblock %}

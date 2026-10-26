@@ -1,0 +1,58 @@
+{% macro result_card(run, title) %}
+  <article class="result-history-card {{ 'is-success' if run.success else 'is-failure' }}">
+    <header class="result-history-card__header">
+      <div>
+        <p class="eyebrow">{{ 'Concluída com sucesso' if run.success else 'Concluída com falha' }}</p>
+        <h3>{{ title }}</h3>
+        {% if run.resolved_at %}<p class="note">{{ run.resolved_at.strftime('%d/%m/%Y %H:%M') }}</p>{% endif %}
+      </div>
+      <span class="status-badge {{ 'status-completed' if run.success else 'status-failed' }}">
+        {{ 'Sucesso' if run.success else 'Falha' }}
+      </span>
+    </header>
+
+    <dl class="result-reward-grid">
+      <div><dt>Ouro</dt><dd>{{ run.gold_reward or 0 }}</dd></div>
+      <div><dt>XP por mercenário</dt><dd>{{ run.xp_reward or 0 }}</dd></div>
+      <div><dt>Grupo</dt><dd>{{ run.members|length }}</dd></div>
+      <div><dt>Multiplicador</dt><dd>{{ run.run_multiplier or 1 }}x</dd></div>
+    </dl>
+
+    {% if run.result_view["has_details"] %}
+      <div class="result-detail-grid">
+        {% if run.result_view["xp_awards"] %}
+          <section>
+            <h4>Experiência</h4>
+            <ul>{% for entry in run.result_view["xp_awards"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+          </section>
+        {% endif %}
+        {% if run.result_view["level_ups"] %}
+          <section class="result-highlight">
+            <h4>Evoluções</h4>
+            <ul>{% for entry in run.result_view["level_ups"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+          </section>
+        {% endif %}
+        {% if run.result_view["guild_progress"] %}
+          <section>
+            <h4>Guilda</h4>
+            <ul>{% for entry in run.result_view["guild_progress"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+          </section>
+        {% endif %}
+        {% if run.result_view["items"] %}
+          <section class="result-items">
+            <h4>Itens obtidos</h4>
+            <ul>{% for entry in run.result_view["items"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+          </section>
+        {% endif %}
+        {% if run.result_view["notes"] %}
+          <section>
+            <h4>Outros detalhes</h4>
+            <ul>{% for entry in run.result_view["notes"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+          </section>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="note">Nenhuma ocorrência adicional neste resultado.</p>
+    {% endif %}
+  </article>
+{% endmacro %}

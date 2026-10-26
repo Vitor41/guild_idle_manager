@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Missoes - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="admin-missions-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Administracao</p>
+        <h1 id="admin-missions-title">Missoes globais</h1>
+      </div>
+      <div class="user-menu">
+        <a href="javascript:history.back()">Voltar</a>
+        <a href="/admin">Admin</a>
+        <a href="/dashboard">Dashboard</a>
+        <span>{{ current_user.username }}</span>
+      </div>
+    </header>
+
+    {% if message %}
+      <p class="success-message">{{ message }}</p>
+    {% endif %}
+    <div class="action-row compact">
+      <a class="button-link secondary" href="/admin/missions/create">Criar missao</a>
+    </div>
+
+    <form class="mission-order-form" method="post" action="/admin/missions/reorder">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <h2>Ordem de exibição</h2>
+          <p class="note">Arraste as linhas ou use as setas. A ordem salva será exibida aos jogadores.</p>
+        </div>
+        <button type="submit">Salvar ordem</button>
+      </div>
+      <div class="table-wrap">
+        <table class="sortable-table">
+          <thead>
+            <tr>
+              <th aria-label="Ordem"></th>
+              <th>Nome</th>
+              <th>Faixa</th>
+              <th>Dificuldade</th>
+              <th>Duracao</th>
+              <th>Grupo</th>
+              <th>Ouro</th>
+              <th>XP</th>
+              <th>Chance</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody data-sortable-list>
+            {% for mission in missions %}
+              <tr draggable="true" data-sortable-item>
+                <td class="order-controls">
+                  <input type="hidden" name="mission_ids" value="{{ mission.id }}">
+                  <span class="drag-handle" title="Arrastar missão" aria-hidden="true">⋮⋮</span>
+                  <button type="button" data-move-up title="Mover para cima" aria-label="Mover {{ mission.name }} para cima">↑</button>
+                  <button type="button" data-move-down title="Mover para baixo" aria-label="Mover {{ mission.name }} para baixo">↓</button>
+                </td>
+                <td>{{ mission.name }}</td>
+                <td>{{ mission.level_band }}</td>
+                <td>{{ mission.difficulty }}</td>
+                <td>{{ format_duration(mission.duration_seconds) }}</td>
+                <td>{{ mission.min_party_size }}-{{ mission.max_party_size }}</td>
+                <td>{{ mission.base_gold_reward }}</td>
+                <td>{{ mission.base_xp_reward }}</td>
+                <td>{{ mission.base_success_chance }}%</td>
+                <td><a href="/admin/missions/{{ mission.id }}/edit">Editar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    </form>
+  </section>
+{% endblock %}

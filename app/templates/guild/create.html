@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Criar Guilda - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="auth-panel" aria-labelledby="guild-title">
+    <p class="eyebrow">Primeiro acesso</p>
+    <h1 id="guild-title">Criar guilda</h1>
+    <p class="note">Ola, {{ current_user.username }}. Escolha o nome da sua guilda para iniciar seu progresso.</p>
+
+    {% if error %}
+      <p class="error-message">{{ error }}</p>
+    {% endif %}
+
+    <form class="form-stack" method="post" action="/guild/create">
+      <label>
+        Nome da guilda
+        <input type="text" name="name" value="{{ guild_name }}" required>
+      </label>
+      <button type="submit">Fundar guilda</button>
+    </form>
+
+    <p class="form-footer"><a href="/logout">Sair</a></p>
+  </section>
+{% endblock %}
+

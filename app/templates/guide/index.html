@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Guia do Jogo - Guild Idle Manager{% endblock %}
+
+{% block content %}
+<section class="game-guide" aria-labelledby="game-guide-title">
+  <header class="guide-hero">
+    <div class="guide-hero-copy">
+      <p class="eyebrow">Crônicas da guilda</p>
+      <h1 id="game-guide-title">Guia do Jogo</h1>
+      <p class="guide-lead">Entenda os sistemas que trabalham nos bastidores e tome decisões melhores sem perder o prazer de descobrir sua própria estratégia.</p>
+    </div>
+    <div class="guide-crest" aria-hidden="true"><span><b>G</b></span><small>Honra · Ouro · Legado</small></div>
+  </header>
+
+  <nav class="guide-index" aria-label="Índice do guia">
+    <a href="#lore">A história</a>
+    <a href="#idle">Progresso offline</a>
+    <a href="#grupos">Grupos e classes</a>
+    <a href="#construcoes">Construções</a>
+    <a href="#progressao">Progressão</a>
+    <a href="#economia">Economia</a>
+    <a href="#conselhos">Conselhos</a>
+  </nav>
+
+  <section class="guide-lore" id="lore">
+    <div>
+      <p class="eyebrow">O chamado</p>
+      <h2>Uma companhia ainda sem lenda</h2>
+    </div>
+    <div class="guide-lore-copy">
+      <p>As antigas rotas deixaram de ser seguras. Ruínas voltaram a despertar, criaturas ocupam as estradas e reinos enfraquecidos dependem cada vez mais de companhias independentes. É nesse mundo que sua guilda abre as portas: pequena, desconhecida e cercada por oportunidades perigosas.</p>
+      <p>Seu papel não é apenas reunir guerreiros. Você administra recursos, desenvolve instalações, descobre talentos e decide quais missões merecem o risco. Cada Aprendiz pode se tornar um nome lendário; cada expedição pode financiar o próximo grande avanço.</p>
+      <p><strong>Crie, administre e fortaleça sua companhia até que ela seja reconhecida como a maior guilda de mercenários de todas as terras.</strong> O caminho, as classes e as histórias que sobreviverão pertencem a você.</p>
+    </div>
+  </section>
+
+  <section class="guide-section" id="idle">
+    <header class="guide-section-heading"><span class="guide-number">01</span><div><p class="eyebrow">Enquanto você está longe</p><h2>Progresso offline</h2></div></header>
+    <div class="guide-layout guide-layout-feature">
+      <article class="guide-feature">
+        <h3>Quando o ouro começa a acumular?</h3>
+        <p>Somente quando sua conta está <strong>desconectada</strong>. Permanecer com uma sessão ativa não produz ouro offline. Após sair, o sistema considera ausências de pelo menos {{ offline_minimum_minutes }} minutos e credita até {{ offline_cap_hours }} horas por retorno.</p>
+        <p>Uma sessão também é encerrada após longa inatividade ou ao atingir o limite global. A partir desse desligamento começa o período offline. Além do ouro, o retorno concede madeira e minério básicos em ritmo inferior às coletas ativas; atingir todo o limite offline concede 1 cristal.</p>
+      </article>
+      <aside class="guide-rate" aria-label="Produção offline atual">
+        <span>Produção atual</span>
+        <strong>{{ idle_rate.total }} <small>ouro/hora</small></strong>
+        <dl>
+          <div><dt>Base</dt><dd>{{ idle_rate.base }}</dd></div>
+          <div><dt>Nível da guilda</dt><dd>+{{ idle_rate.guild }}</dd></div>
+          <div><dt>Mercenários</dt><dd>+{{ idle_rate.mercenaries }}</dd></div>
+          <div><dt>Armazém</dt><dd>+{{ idle_rate.building }}</dd></div>
+        </dl>
+      </aside>
+    </div>
+    <div class="guide-tip-row">
+      <article><span>↑</span><div><h3>Eleve a guilda</h3><p>Cada nível amplia gradualmente a produção passiva.</p></div></article>
+      <article><span>⚔</span><div><h3>Desenvolva o elenco</h3><p>Uma companhia maior contribui para o retorno enquanto você está fora.</p></div></article>
+      <article><span>▣</span><div><h3>Invista no Armazém</h3><p>Além dos materiais, certos marcos melhoram a produção offline.</p></div></article>
+    </div>
+  </section>
+
+  <section class="guide-section" id="grupos">
+    <header class="guide-section-heading"><span class="guide-number">02</span><div><p class="eyebrow">Mais que poder bruto</p><h2>Grupos, papéis e combinações</h2></div></header>
+    <div class="guide-columns">
+      <article>
+        <h3>Leia a composição recomendada</h3>
+        <p>Masmorras e Chefes podem favorecer tanque, suporte e ataque em proporções diferentes. Cumprir os papéis indicados concede sinergia, mas uma formação criativa ainda pode vencer se tiver poder, habilidades e equipamentos suficientes.</p>
+      </article>
+      <article>
+        <h3>Classe não é apenas atributo</h3>
+        <p>Classes determinam perfil de armas, crescimento e habilidade. Um grupo equilibrado costuma ser confiável; formações especializadas podem render melhor quando o desafio combina com seus pontos fortes.</p>
+      </article>
+      <article>
+        <h3>A chance é a melhor pista</h3>
+        <p>A chance estimada reúne poder, classe, raridade, habilidades e equipamentos. Ela ajuda a comparar formações, mas não elimina o risco.</p>
+      </article>
+    </div>
+    <div class="guide-combinations">
+      <article><strong>Linha resistente</strong><span>Defesa + suporte + dano constante</span><p>Útil quando sobreviver ao desafio importa mais que terminar com força bruta.</p></article>
+      <article><strong>Investida rápida</strong><span>Agilidade + dano + controle</span><p>Pode funcionar bem contra alvos prioritários, desde que o grupo suporte o risco.</p></article>
+      <article><strong>Expedição preparada</strong><span>Profissão compatível + proteção</span><p>Nas coletas, alinhar profissão e material pode ser mais valioso que escolher apenas o maior poder.</p></article>
+    </div>
+    <p class="guide-callout">Estas combinações são pontos de partida, não receitas obrigatórias. Consulte o <a href="/classes">Guia de Classes</a> para conhecer caminhos e habilidades.</p>
+  </section>
+
+  <section class="guide-section" id="construcoes">
+    <header class="guide-section-heading"><span class="guide-number">03</span><div><p class="eyebrow">A fortaleza molda a estratégia</p><h2>Construções que mudam o jogo</h2></div></header>
+    <div class="guide-building-grid">
+      <article><span>⌂</span><h3>Alojamento</h3><p>Controla a capacidade do elenco. Evolua antes de planejar uma grande contratação.</p></article>
+      <article><span>⚔</span><h3>Campo de Treino</h3><p>Acelera XP e participa dos requisitos para evoluções de classe.</p><small>Bônus atual: +{{ building_bonuses.xp_bonus_percent }}% XP</small></article>
+      <article><span>⚒</span><h3>Ferreiro</h3><p>No nível 1, abre a oficina, as receitas rotativas e uma bancada de desmontagem. A segunda bancada chega no nível 25 e a terceira no 50. O refino de equipamentos começa no nível 10.</p><small>Bônus atual: +{{ building_bonuses.equipment_drop_bonus_percent }}%</small></article>
+      <article><span>▣</span><h3>Armazém</h3><p>Adiciona uma quantidade fixa ao material principal obtido e também contribui para a produção offline.</p><small>Bônus atual: +{{ building_bonuses.material_quantity_bonus }} materiais principais</small></article>
+      <article><span>✦</span><h3>Escritório de Missões</h3><p>Permite organizar grupos maiores para desafios que exigem mais membros.</p><small>Grupo atual: até {{ building_bonuses.max_mission_party_size }}</small></article>
+      <article><span>◇</span><h3>Exploradores</h3><p>Abre Masmorras e libera multiplicadores que trocam mais tempo por mais recompensas.</p><small>Multiplicador atual: {{ building_bonuses.max_run_multiplier }}x</small></article>
+    </div>
+  </section>
+
+  <section class="guide-section" id="progressao">
+    <header class="guide-section-heading"><span class="guide-number">04</span><div><p class="eyebrow">Escolhas de longo prazo</p><h2>Mercenários e progressão</h2></div></header>
+    <div class="guide-columns">
+      <article><h3>Aprendizes têm potencial diferente</h3><p>Raridade, atributos iniciais e crescimento tornam cada contratação uma aposta. Compare poder e distribuição de atributos; o maior número nem sempre é o melhor encaixe para o caminho desejado.</p></article>
+      <article><h3>Evoluir exige preparação</h3><p>Trocas de classe dependem do nível do mercenário, da guilda e do Campo de Treino. Apenas candidatos elegíveis aparecem na seleção, e a mudança é concluída após a missão especial.</p></article>
+      <article><h3>Profissão e combate são decisões distintas</h3><p>A profissão melhora famílias específicas de coleta sem substituir a classe de combate. Escolha pensando nos materiais que sua guilda mais procura.</p></article>
+      <article><h3>Raridade recompensa investimento</h3><p>Mercenários mais raros recebem uma vantagem gradual de crescimento. Equipamentos também usam raridade e Tier, mas cada sistema representa uma qualidade diferente.</p></article>
+    </div>
+  </section>
+
+  <section class="guide-section" id="economia">
+    <header class="guide-section-heading"><span class="guide-number">05</span><div><p class="eyebrow">Nada prospera isoladamente</p><h2>Loot, equipamentos e economia</h2></div></header>
+    <div class="guide-path">
+      <article><span>1</span><h3>Escolha a fonte</h3><p>Missões, coletas, Masmorras e Chefes exibem o loot possível. Compare chance, duração e necessidade atual.</p></article>
+      <article><span>2</span><h3>Transforme o resultado</h3><p>Materiais alimentam progressão e criação. Equipamentos podem fortalecer o elenco, seguir para o Mercado ou, com Ferreiro nível 10, ser refinados.</p></article>
+      <article><span>3</span><h3>Reinvista com propósito</h3><p>Ouro parado não desenvolve a companhia. Priorize o gargalo que bloqueia seu próximo objetivo.</p></article>
+    </div>
+    <div class="guide-note-grid">
+      <article><h3>Tier e raridade</h3><p>Tier indica a faixa estrutural do item; raridade representa sua qualidade. Dois itens do mesmo Tier podem ter raridades, bônus gerados e valor bem diferentes.</p></article>
+      <article><h3>Docas e Mercado</h3><p>As Docas ajudam a encontrar recursos e equipamentos rotativos. O Mercado converte excedentes em ouro, mas ocupa espaços até a venda ser coletada.</p></article>
+      <article><h3>Multiplicadores</h3><p>Multiplicar uma atividade aumenta tempo e recompensas sem elevar a chance de sucesso. Use quando confiar no grupo e quiser reduzir interações.</p></article>
+      <article><h3>Desmontagem no Ferreiro</h3><p>Equipamentos livres podem virar materiais de sua composição: madeira, minério, couro, tecido ou gemas. Cada item retorna de 1 a 3 unidades; quantidade, custo e tempo crescem juntos. O equipamento e seus aprimoramentos são consumidos ao iniciar, então compare essa escolha com a venda no Mercado.</p></article>
+    </div>
+  </section>
+
+  <section class="guide-section guide-final" id="conselhos">
+    <header class="guide-section-heading"><span class="guide-number">06</span><div><p class="eyebrow">Conselho do intendente</p><h2>Antes de partir</h2></div></header>
+    <ol class="guide-advice-list">
+      <li><span>01</span><p>Defina um objetivo por vez: ampliar o elenco, trocar uma classe, melhorar equipamentos ou preparar uma Masmorra.</p></li>
+      <li><span>02</span><p>Não escolha atividades apenas pela recompensa bruta. Tempo, chance e loot possível mudam o valor real.</p></li>
+      <li><span>03</span><p>Mercenários ocupados não podem assumir outra tarefa. Planeje uma rotação em vez de prender todo o elenco.</p></li>
+      <li><span>04</span><p>Use o Códex e os guias como pistas. Parte da diversão está em descobrir quais formações funcionam para sua guilda.</p></li>
+    </ol>
+    <div class="guide-actions"><a class="button-link" href="/dashboard">Voltar à guilda</a><a class="button-link secondary" href="/tutorial?replay=1">Rever tutorial básico</a></div>
+  </section>
+</section>
+{% endblock %}

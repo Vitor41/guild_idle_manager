@@ -1,0 +1,2319 @@
+{
+  "attempts_per_case": 100000,
+  "bands": [
+    {
+      "band": "1-20",
+      "dungeon_count": 12,
+      "dungeon_equipment_candidates_current": 1.3,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.3,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.5183333333333333,
+          "any_equipment": 0.22032108333333333,
+          "rare_plus": 0.02,
+          "mythic": 0.0,
+          "hours_any": 2.1699180871419266,
+          "hours_rare": 23.903935185185183,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.8033333333333333,
+          "any_equipment": 0.42767316666666666,
+          "rare_plus": 0.04374999999999999,
+          "mythic": 0.0,
+          "hours_any": 1.1178599476555977,
+          "hours_rare": 10.92751322751323,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.9233333333333333,
+          "any_equipment": 0.68345791,
+          "rare_plus": 0.09025,
+          "mythic": 0.0,
+          "hours_any": 0.6994998473332523,
+          "hours_rare": 5.2972709551656925,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.9499999999999998,
+          "any_equipment": 0.8898333333333333,
+          "rare_plus": 0.12666666666666668,
+          "mythic": 0.0,
+          "hours_any": 0.5372676947410044,
+          "hours_rare": 3.7743055555555554,
+          "hours_mythic": 0
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.5183333333333333,
+          "any_equipment": 0.19696666666666665,
+          "rare_plus": 0.003939333333333334,
+          "mythic": 0.0,
+          "hours_any": 2.4272061450518043,
+          "hours_rare": 121.3603072525902,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.7983333333333333,
+          "any_equipment": 0.3337033333333334,
+          "rare_plus": 0.006674066666666668,
+          "mythic": 0.0,
+          "hours_any": 1.432645874190759,
+          "hours_rare": 71.63229370953795,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.8983333333333334,
+          "any_equipment": 0.45060400000000006,
+          "rare_plus": 0.00901208,
+          "mythic": 0.0,
+          "hours_any": 1.0609730577263043,
+          "hours_rare": 53.048652886315224,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.92,
+          "any_equipment": 0.5418800000000001,
+          "rare_plus": 0.010837600000000003,
+          "mythic": 0.0,
+          "hours_any": 0.882259363149966,
+          "hours_rare": 44.1129681574983,
+          "hours_mythic": 0
+        }
+      },
+      "boss_count": 2,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 4,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.49,
+          "any_equipment": 0.20579999999999998,
+          "rare_plus": 0.0798,
+          "mythic": 0.0,
+          "hours_any": 3.482345319080013,
+          "hours_rare": 8.980785296574771,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.74,
+          "any_equipment": 0.38285,
+          "rare_plus": 0.16559999999999997,
+          "mythic": 0.0,
+          "hours_any": 1.871925471246354,
+          "hours_rare": 4.327697262479872,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.9299999999999999,
+          "any_equipment": 0.68425,
+          "rare_plus": 0.3185,
+          "mythic": 0.0,
+          "hours_any": 1.0473754719279016,
+          "hours_rare": 2.250130821559393,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.91675,
+          "rare_plus": 0.44175,
+          "mythic": 0.0,
+          "hours_any": 0.7817471138987365,
+          "hours_rare": 1.622335408413507,
+          "hours_mythic": 0
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.49,
+          "any_equipment": 0.23520000000000002,
+          "rare_plus": 0.01176,
+          "mythic": 0.0,
+          "hours_any": 3.0470521541950113,
+          "hours_rare": 60.941043083900226,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.74,
+          "any_equipment": 0.39072,
+          "rare_plus": 0.019536,
+          "mythic": 0.0,
+          "hours_any": 1.834220584220584,
+          "hours_rare": 36.684411684411685,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.8,
+          "any_equipment": 0.5068800000000001,
+          "rare_plus": 0.025344000000000005,
+          "mythic": 0.0,
+          "hours_any": 1.4138783670033668,
+          "hours_rare": 28.277567340067336,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.8,
+          "any_equipment": 0.5952000000000001,
+          "rare_plus": 0.029760000000000005,
+          "mythic": 0.0,
+          "hours_any": 1.2040770609318996,
+          "hours_rare": 24.081541218637987,
+          "hours_mythic": 0
+        }
+      }
+    },
+    {
+      "band": "21-50",
+      "dungeon_count": 15,
+      "dungeon_equipment_candidates_current": 1.0,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.5,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.5419999999999999,
+          "any_equipment": 0.1703,
+          "rare_plus": 0.07749999999999999,
+          "mythic": 0.0,
+          "hours_any": 3.077140558056589,
+          "hours_rare": 6.761768219832738,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.8119999999999999,
+          "any_equipment": 0.3352,
+          "rare_plus": 0.16519999999999999,
+          "mythic": 0.0,
+          "hours_any": 1.5633563157429506,
+          "hours_rare": 3.172137028069232,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.9493333333333333,
+          "any_equipment": 0.59812,
+          "rare_plus": 0.32452,
+          "mythic": 0.0,
+          "hours_any": 0.8761403013392581,
+          "hours_rare": 1.6148065975503425,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.817,
+          "rare_plus": 0.456,
+          "mythic": 0.0,
+          "hours_any": 0.6414162020037174,
+          "hours_rare": 1.1492040285899936,
+          "hours_mythic": 0
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.5419999999999999,
+          "any_equipment": 0.19512000000000002,
+          "rare_plus": 0.0117072,
+          "mythic": 0.0,
+          "hours_any": 2.6857166719815346,
+          "hours_rare": 44.761944533025584,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.8066666666666666,
+          "any_equipment": 0.31944,
+          "rare_plus": 0.019166400000000004,
+          "mythic": 0.0,
+          "hours_any": 1.640486592277226,
+          "hours_rare": 27.34144320462043,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.9,
+          "any_equipment": 0.42768,
+          "rare_plus": 0.025660799999999998,
+          "mythic": 0.0,
+          "hours_any": 1.2253017139848417,
+          "hours_rare": 20.421695233080698,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.9,
+          "any_equipment": 0.5022,
+          "rare_plus": 0.030132,
+          "mythic": 0.0,
+          "hours_any": 1.0434827499741879,
+          "hours_rare": 17.39137916623646,
+          "hours_mythic": 0
+        }
+      },
+      "boss_count": 3,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 5,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.4266666666666667,
+          "any_equipment": 0.16213333333333332,
+          "rare_plus": 0.16213333333333332,
+          "mythic": 0.0,
+          "hours_any": 5.756578947368421,
+          "hours_rare": 5.756578947368421,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.6966666666666667,
+          "any_equipment": 0.33440000000000003,
+          "rare_plus": 0.33440000000000003,
+          "mythic": 0.0,
+          "hours_any": 2.7910685805422646,
+          "hours_rare": 2.7910685805422646,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.9033333333333333,
+          "any_equipment": 0.6323333333333333,
+          "rare_plus": 0.6323333333333333,
+          "mythic": 0.0,
+          "hours_any": 1.4760147601476015,
+          "hours_rare": 1.4760147601476015,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.9499999999999998,
+          "any_equipment": 0.8835000000000001,
+          "rare_plus": 0.8835000000000001,
+          "mythic": 0.0,
+          "hours_any": 1.0564044519901905,
+          "hours_rare": 1.0564044519901905,
+          "hours_mythic": 0
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.4266666666666667,
+          "any_equipment": 0.18773333333333334,
+          "rare_plus": 0.022528000000000003,
+          "mythic": 0.0,
+          "hours_any": 4.971590909090909,
+          "hours_rare": 41.429924242424235,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.6733333333333333,
+          "any_equipment": 0.32589333333333337,
+          "rare_plus": 0.03910720000000001,
+          "mythic": 0.0,
+          "hours_any": 2.8639227559119544,
+          "hours_rare": 23.866022965932952,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.7200000000000001,
+          "any_equipment": 0.41817600000000005,
+          "rare_plus": 0.05018112,
+          "mythic": 0.0,
+          "hours_any": 2.2319151107029893,
+          "hours_rare": 18.599292589191577,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.7200000000000001,
+          "any_equipment": 0.4910400000000001,
+          "rare_plus": 0.058924800000000006,
+          "mythic": 0.0,
+          "hours_any": 1.9007277071793198,
+          "hours_rare": 15.839397559827665,
+          "hours_mythic": 0
+        }
+      }
+    },
+    {
+      "band": "51-100",
+      "dungeon_count": 22,
+      "dungeon_equipment_candidates_current": 1.0,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.5,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.5140909090909092,
+          "any_equipment": 0.13880454545454549,
+          "rare_plus": 0.08207727272727273,
+          "mythic": 0.0,
+          "hours_any": 4.336451590602293,
+          "hours_rare": 7.333567160780984,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.8040909090909092,
+          "any_equipment": 0.29711818181818184,
+          "rare_plus": 0.18666363636363636,
+          "mythic": 0.0,
+          "hours_any": 2.025857819389625,
+          "hours_rare": 3.2246194472854,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.95,
+          "any_equipment": 0.5592045454545453,
+          "rare_plus": 0.3726590909090909,
+          "mythic": 0.0,
+          "hours_any": 1.076384655332024,
+          "hours_rare": 1.615200612578182,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.7777045454545455,
+          "rare_plus": 0.5315681818181818,
+          "mythic": 0.0,
+          "hours_any": 0.7739689775985401,
+          "hours_rare": 1.1323461646262964,
+          "hours_mythic": 0
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.5140909090909092,
+          "any_equipment": 0.1747909090909091,
+          "rare_plus": 0.020974909090909093,
+          "mythic": 0.0,
+          "hours_any": 3.4436527337135856,
+          "hours_rare": 28.69710611427988,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.7949999999999999,
+          "any_equipment": 0.29733000000000004,
+          "rare_plus": 0.035679600000000006,
+          "mythic": 0.0,
+          "hours_any": 2.024414596304416,
+          "hours_rare": 16.87012163587013,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.88,
+          "any_equipment": 0.39494399999999996,
+          "rare_plus": 0.04739328,
+          "mythic": 0.0,
+          "hours_any": 1.5240621250587223,
+          "hours_rare": 12.700517708822684,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.88,
+          "any_equipment": 0.46375999999999995,
+          "rare_plus": 0.055651200000000005,
+          "mythic": 0.0,
+          "hours_any": 1.2979109710177505,
+          "hours_rare": 10.815924758481254,
+          "hours_mythic": 0
+        }
+      },
+      "boss_count": 5,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 6,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.328,
+          "any_equipment": 0.09936,
+          "rare_plus": 0.09936,
+          "mythic": 0.0,
+          "hours_any": 11.171497584541063,
+          "hours_rare": 11.171497584541063,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.618,
+          "any_equipment": 0.24989999999999996,
+          "rare_plus": 0.24989999999999996,
+          "mythic": 0.0,
+          "hours_any": 4.441776710684275,
+          "hours_rare": 4.441776710684275,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.8619999999999999,
+          "any_equipment": 0.5386599999999999,
+          "rare_plus": 0.5386599999999999,
+          "mythic": 0.0,
+          "hours_any": 2.0606690676864816,
+          "hours_rare": 2.0606690676864816,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.8131999999999999,
+          "rare_plus": 0.8131999999999999,
+          "mythic": 0.0,
+          "hours_any": 1.3649778652238074,
+          "hours_rare": 1.3649778652238074,
+          "hours_mythic": 0
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.328,
+          "any_equipment": 0.1312,
+          "rare_plus": 0.0328,
+          "mythic": 0.0,
+          "hours_any": 8.460365853658537,
+          "hours_rare": 33.84146341463415,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.618,
+          "any_equipment": 0.27192000000000005,
+          "rare_plus": 0.06798000000000001,
+          "mythic": 0.0,
+          "hours_any": 4.082082965578111,
+          "hours_rare": 16.328331862312442,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.65,
+          "any_equipment": 0.3432,
+          "rare_plus": 0.0858,
+          "mythic": 0.0,
+          "hours_any": 3.2342657342657346,
+          "hours_rare": 12.937062937062938,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.65,
+          "any_equipment": 0.40300000000000014,
+          "rare_plus": 0.10075000000000003,
+          "mythic": 0.0,
+          "hours_any": 2.7543424317617857,
+          "hours_rare": 11.017369727047143,
+          "hours_mythic": 0
+        }
+      }
+    },
+    {
+      "band": "101-130",
+      "dungeon_count": 15,
+      "dungeon_equipment_candidates_current": 1.0,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.5,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.48333333333333334,
+          "any_equipment": 0.09628666666666667,
+          "rare_plus": 0.09628666666666667,
+          "mythic": 0.0,
+          "hours_any": 7.392662343157392,
+          "hours_rare": 7.392662343157392,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.7833333333333333,
+          "any_equipment": 0.23442,
+          "rare_plus": 0.23442,
+          "mythic": 0.0,
+          "hours_any": 3.036493536450878,
+          "hours_rare": 3.036493536450878,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.9493333333333333,
+          "any_equipment": 0.4930666666666666,
+          "rare_plus": 0.4930666666666666,
+          "mythic": 0.0,
+          "hours_any": 1.4436482182561146,
+          "hours_rare": 1.4436482182561146,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.7118666666666666,
+          "rare_plus": 0.7118666666666666,
+          "mythic": 0.0,
+          "hours_any": 0.9999271607250629,
+          "hours_rare": 0.9999271607250629,
+          "hours_mythic": 0
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.48333333333333334,
+          "any_equipment": 0.14983333333333335,
+          "rare_plus": 0.029966666666666666,
+          "mythic": 0.0,
+          "hours_any": 4.7507106661722895,
+          "hours_rare": 23.75355333086145,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.7739999999999999,
+          "any_equipment": 0.263934,
+          "rare_plus": 0.0527868,
+          "mythic": 0.0,
+          "hours_any": 2.696942473553293,
+          "hours_rare": 13.484712367766464,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.85,
+          "any_equipment": 0.34781999999999996,
+          "rare_plus": 0.069564,
+          "mythic": 0.0,
+          "hours_any": 2.0465034064022047,
+          "hours_rare": 10.232517032011023,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.85,
+          "any_equipment": 0.408425,
+          "rare_plus": 0.081685,
+          "mythic": 0.0,
+          "hours_any": 1.742828707387684,
+          "hours_rare": 8.71414353693842,
+          "hours_mythic": 0
+        }
+      },
+      "boss_count": 3,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 7,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.3,
+          "any_equipment": 0.075,
+          "rare_plus": 0.075,
+          "mythic": 0.0,
+          "hours_any": 16.444444444444446,
+          "hours_rare": 16.444444444444446,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.6,
+          "any_equipment": 0.21,
+          "rare_plus": 0.21,
+          "mythic": 0.0,
+          "hours_any": 5.8730158730158735,
+          "hours_rare": 5.8730158730158735,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.8566666666666666,
+          "any_equipment": 0.48829999999999996,
+          "rare_plus": 0.48829999999999996,
+          "mythic": 0.0,
+          "hours_any": 2.525769677111066,
+          "hours_rare": 2.525769677111066,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.9499999999999998,
+          "any_equipment": 0.7600000000000001,
+          "rare_plus": 0.7600000000000001,
+          "mythic": 0.0,
+          "hours_any": 1.6228070175438594,
+          "hours_rare": 1.6228070175438594,
+          "hours_mythic": 0
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.3,
+          "any_equipment": 0.10200000000000002,
+          "rare_plus": 0.0408,
+          "mythic": 0.0,
+          "hours_any": 12.091503267973854,
+          "hours_rare": 30.22875816993464,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.58,
+          "any_equipment": 0.21692000000000003,
+          "rare_plus": 0.08676800000000001,
+          "mythic": 0.0,
+          "hours_any": 5.685659843874854,
+          "hours_rare": 14.214149609687134,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.58,
+          "any_equipment": 0.260304,
+          "rare_plus": 0.1041216,
+          "mythic": 0.0,
+          "hours_any": 4.738049869895712,
+          "hours_rare": 11.84512467473928,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.58,
+          "any_equipment": 0.30566,
+          "rare_plus": 0.122264,
+          "mythic": 0.0,
+          "hours_any": 4.034984405330542,
+          "hours_rare": 10.087461013326354,
+          "hours_mythic": 0
+        }
+      }
+    },
+    {
+      "band": "131-200",
+      "dungeon_count": 30,
+      "dungeon_equipment_candidates_current": 1.0,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.5,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.45699999999999996,
+          "any_equipment": 0.07205333333333334,
+          "rare_plus": 0.07205333333333334,
+          "mythic": 0.0,
+          "hours_any": 11.07782815198618,
+          "hours_rare": 11.07782815198618,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.777,
+          "any_equipment": 0.19967333333333334,
+          "rare_plus": 0.19967333333333334,
+          "mythic": 0.0,
+          "hours_any": 3.9975014746307855,
+          "hours_rare": 3.9975014746307855,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.95,
+          "any_equipment": 0.4522,
+          "rare_plus": 0.4522,
+          "mythic": 0.0,
+          "hours_any": 1.7651358789129687,
+          "hours_rare": 1.7651358789129687,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.6707,
+          "rare_plus": 0.6707,
+          "mythic": 0.0,
+          "hours_any": 1.1900916124115766,
+          "hours_rare": 1.1900916124115766,
+          "hours_mythic": 0
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.45699999999999996,
+          "any_equipment": 0.12796000000000002,
+          "rare_plus": 0.0409472,
+          "mythic": 0.0,
+          "hours_any": 6.237843423292,
+          "hours_rare": 19.493260697787502,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.759,
+          "any_equipment": 0.23377200000000004,
+          "rare_plus": 0.07480704000000002,
+          "mythic": 0.0,
+          "hours_any": 3.414414234572337,
+          "hours_rare": 10.670044483038552,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.82,
+          "any_equipment": 0.303072,
+          "rare_plus": 0.09698304,
+          "mythic": 0.0,
+          "hours_any": 2.6336792723987843,
+          "hours_rare": 8.230247726246201,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.82,
+          "any_equipment": 0.35588000000000003,
+          "rare_plus": 0.11388160000000001,
+          "mythic": 0.0,
+          "hours_any": 2.2428752513331585,
+          "hours_rare": 7.0089851604161195,
+          "hours_mythic": 0
+        }
+      },
+      "boss_count": 8,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 8,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.26875000000000004,
+          "any_equipment": 0.045375000000000006,
+          "rare_plus": 0.045375000000000006,
+          "mythic": 0.0,
+          "hours_any": 31.95592286501377,
+          "hours_rare": 31.95592286501377,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.58875,
+          "any_equipment": 0.15944999999999998,
+          "rare_plus": 0.15944999999999998,
+          "mythic": 0.0,
+          "hours_any": 9.09375979931013,
+          "hours_rare": 9.09375979931013,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.865,
+          "any_equipment": 0.42504999999999993,
+          "rare_plus": 0.42504999999999993,
+          "mythic": 0.0,
+          "hours_any": 3.4113633690154104,
+          "hours_rare": 3.4113633690154104,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.686375,
+          "rare_plus": 0.686375,
+          "mythic": 0.0,
+          "hours_any": 2.112547805499909,
+          "hours_rare": 2.112547805499909,
+          "hours_mythic": 0
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.26875000000000004,
+          "any_equipment": 0.07525000000000001,
+          "rare_plus": 0.04138750000000001,
+          "mythic": 0.00037625000000000007,
+          "hours_any": 19.26910299003322,
+          "hours_rare": 35.03473270915131,
+          "hours_mythic": 3853.8205980066436
+        },
+        "No nível": {
+          "completion": 0.5,
+          "any_equipment": 0.15400000000000003,
+          "rare_plus": 0.08470000000000001,
+          "mythic": 0.0007700000000000002,
+          "hours_any": 9.415584415584414,
+          "hours_rare": 17.119244391971662,
+          "hours_mythic": 1883.1168831168827
+        },
+        "Forte": {
+          "completion": 0.5,
+          "any_equipment": 0.18480000000000002,
+          "rare_plus": 0.10164000000000001,
+          "mythic": 0.0009240000000000001,
+          "hours_any": 7.846320346320345,
+          "hours_rare": 14.266036993309719,
+          "hours_mythic": 1569.264069264069
+        },
+        "Máximo": {
+          "completion": 0.5,
+          "any_equipment": 0.21700000000000003,
+          "rare_plus": 0.11935000000000003,
+          "mythic": 0.001085,
+          "hours_any": 6.6820276497695845,
+          "hours_rare": 12.149141181399242,
+          "hours_mythic": 1336.405529953917
+        }
+      }
+    },
+    {
+      "band": "201-250",
+      "dungeon_count": 22,
+      "dungeon_equipment_candidates_current": 1.0,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.5,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.42590909090909096,
+          "any_equipment": 0.06924545454545455,
+          "rare_plus": 0.06924545454545455,
+          "mythic": 0.0,
+          "hours_any": 12.680517264014702,
+          "hours_rare": 12.680517264014702,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.7759090909090909,
+          "any_equipment": 0.20347272727272728,
+          "rare_plus": 0.20347272727272728,
+          "mythic": 0.0,
+          "hours_any": 4.31540970422661,
+          "hours_rare": 4.31540970422661,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.95,
+          "any_equipment": 0.45772727272727276,
+          "rare_plus": 0.45772727272727276,
+          "mythic": 0.0,
+          "hours_any": 1.9183217477656402,
+          "hours_rare": 1.9183217477656402,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.6762272727272727,
+          "rare_plus": 0.6762272727272727,
+          "mythic": 0.0,
+          "hours_any": 1.298480876520804,
+          "hours_rare": 1.298480876520804,
+          "hours_mythic": 0
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.42590909090909096,
+          "any_equipment": 0.10647727272727274,
+          "rare_plus": 0.04791477272727273,
+          "mythic": 0.0,
+          "hours_any": 8.246531483457844,
+          "hours_rare": 18.325625518795206,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.7527272727272728,
+          "any_equipment": 0.20700000000000002,
+          "rare_plus": 0.09315000000000001,
+          "mythic": 0.0,
+          "hours_any": 4.24187527448397,
+          "hours_rare": 9.426389498853267,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.8,
+          "any_equipment": 0.264,
+          "rare_plus": 0.1188,
+          "mythic": 0.0,
+          "hours_any": 3.3260158402203857,
+          "hours_rare": 7.391146311600857,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.8,
+          "any_equipment": 0.31000000000000005,
+          "rare_plus": 0.13950000000000004,
+          "mythic": 0.0,
+          "hours_any": 2.8324780058651022,
+          "hours_rare": 6.294395568589115,
+          "hours_mythic": 0
+        }
+      },
+      "boss_count": 6,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 9,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.24,
+          "any_equipment": 0.039066666666666666,
+          "rare_plus": 0.039066666666666666,
+          "mythic": 0.0,
+          "hours_any": 39.81797497155859,
+          "hours_rare": 39.81797497155859,
+          "hours_mythic": 0
+        },
+        "No nível": {
+          "completion": 0.59,
+          "any_equipment": 0.15639999999999998,
+          "rare_plus": 0.15639999999999998,
+          "mythic": 0.0,
+          "hours_any": 9.946007388462633,
+          "hours_rare": 9.946007388462633,
+          "hours_mythic": 0
+        },
+        "Forte": {
+          "completion": 0.88,
+          "any_equipment": 0.4273333333333333,
+          "rare_plus": 0.4273333333333333,
+          "mythic": 0.0,
+          "hours_any": 3.6401456058242334,
+          "hours_rare": 3.6401456058242334,
+          "hours_mythic": 0
+        },
+        "Máximo": {
+          "completion": 0.9499999999999998,
+          "any_equipment": 0.6808333333333333,
+          "rare_plus": 0.6808333333333333,
+          "mythic": 0.0,
+          "hours_any": 2.284781721746226,
+          "hours_rare": 2.284781721746226,
+          "hours_mythic": 0
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.24,
+          "any_equipment": 0.05279999999999999,
+          "rare_plus": 0.035904,
+          "mythic": 0.000528,
+          "hours_any": 29.461279461279467,
+          "hours_rare": 43.3254109724698,
+          "hours_mythic": 2946.127946127946
+        },
+        "No nível": {
+          "completion": 0.45,
+          "any_equipment": 0.10890000000000001,
+          "rare_plus": 0.074052,
+          "mythic": 0.0010890000000000001,
+          "hours_any": 14.284256708499132,
+          "hours_rare": 21.0062598654399,
+          "hours_mythic": 1428.425670849913
+        },
+        "Forte": {
+          "completion": 0.45,
+          "any_equipment": 0.13068,
+          "rare_plus": 0.0888624,
+          "mythic": 0.0013067999999999997,
+          "hours_any": 11.90354725708261,
+          "hours_rare": 17.505216554533252,
+          "hours_mythic": 1190.3547257082614
+        },
+        "Máximo": {
+          "completion": 0.45,
+          "any_equipment": 0.15345,
+          "rare_plus": 0.104346,
+          "mythic": 0.0015345,
+          "hours_any": 10.137214438289707,
+          "hours_rare": 14.907668291602512,
+          "hours_mythic": 1013.7214438289707
+        }
+      }
+    },
+    {
+      "band": "251-300",
+      "dungeon_count": 22,
+      "dungeon_equipment_candidates_current": 1.0,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.5,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.39590909090909093,
+          "any_equipment": 0.03976818181818183,
+          "rare_plus": 0.03976818181818183,
+          "mythic": 0.0008636363636363644,
+          "hours_any": 24.393898985280853,
+          "hours_rare": 24.393898985280853,
+          "hours_mythic": 1123.2748538011685
+        },
+        "No nível": {
+          "completion": 0.765909090909091,
+          "any_equipment": 0.15335909090909092,
+          "rare_plus": 0.15335909090909092,
+          "mythic": 0.01875,
+          "hours_any": 6.325683103299512,
+          "hours_rare": 6.325683103299512,
+          "hours_mythic": 51.73872053872054
+        },
+        "Forte": {
+          "completion": 0.95,
+          "any_equipment": 0.399,
+          "rare_plus": 0.399,
+          "mythic": 0.07125000000000002,
+          "hours_any": 2.431330852383484,
+          "hours_rare": 2.431330852383484,
+          "hours_mythic": 13.615452773347506
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.6174999999999999,
+          "rare_plus": 0.6174999999999999,
+          "mythic": 0.12090909090909091,
+          "hours_any": 1.5710137815400975,
+          "hours_rare": 1.5710137815400975,
+          "hours_mythic": 8.023391812865498
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.39590909090909093,
+          "any_equipment": 0.09105909090909092,
+          "rare_plus": 0.05281427272727273,
+          "mythic": 0.0002276477272727273,
+          "hours_any": 10.653532782020775,
+          "hours_rare": 18.36815996900134,
+          "hours_mythic": 4261.413112808311
+        },
+        "No nível": {
+          "completion": 0.7377272727272728,
+          "any_equipment": 0.18664500000000003,
+          "rare_plus": 0.10825410000000003,
+          "mythic": 0.00046661250000000015,
+          "hours_any": 5.197572986691366,
+          "hours_rare": 8.961332735674768,
+          "hours_mythic": 2079.029194676546
+        },
+        "Forte": {
+          "completion": 0.78,
+          "any_equipment": 0.23680800000000002,
+          "rare_plus": 0.13734864000000002,
+          "mythic": 0.0005920200000000001,
+          "hours_any": 4.096571949009366,
+          "hours_rare": 7.063055084498907,
+          "hours_mythic": 1638.6287796037466
+        },
+        "Máximo": {
+          "completion": 0.78,
+          "any_equipment": 0.27807000000000004,
+          "rare_plus": 0.16128060000000002,
+          "mythic": 0.0006951750000000001,
+          "hours_any": 3.488693530769267,
+          "hours_rare": 6.0149888461539085,
+          "hours_mythic": 1395.4774123077066
+        }
+      },
+      "boss_count": 6,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 10,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.21,
+          "any_equipment": 0.01996666666666667,
+          "rare_plus": 0.01996666666666667,
+          "mythic": 0.002200000000000002,
+          "hours_any": 85.42014468558708,
+          "hours_rare": 85.42014468558708,
+          "hours_mythic": 775.2525252525246
+        },
+        "No nível": {
+          "completion": 0.58,
+          "any_equipment": 0.11373333333333334,
+          "rare_plus": 0.11373333333333334,
+          "mythic": 0.025566666666666668,
+          "hours_any": 14.996092223524814,
+          "hours_rare": 14.996092223524814,
+          "hours_mythic": 66.71012603215992
+        },
+        "Forte": {
+          "completion": 0.8666666666666667,
+          "any_equipment": 0.361,
+          "rare_plus": 0.361,
+          "mythic": 0.10149999999999999,
+          "hours_any": 4.724530624807633,
+          "hours_rare": 4.724530624807633,
+          "hours_mythic": 16.803503010399563
+        },
+        "Máximo": {
+          "completion": 0.9499999999999998,
+          "any_equipment": 0.6143333333333333,
+          "rare_plus": 0.6143333333333333,
+          "mythic": 0.18366666666666664,
+          "hours_any": 2.776270573340568,
+          "hours_rare": 2.776270573340568,
+          "hours_mythic": 9.28614640048397
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.21,
+          "any_equipment": 0.0336,
+          "rare_plus": 0.026208,
+          "mythic": 0.0006720000000000002,
+          "hours_any": 50.76058201058201,
+          "hours_rare": 65.07766924433591,
+          "hours_mythic": 2538.0291005290997
+        },
+        "No nível": {
+          "completion": 0.4000000000000001,
+          "any_equipment": 0.0704,
+          "rare_plus": 0.054911999999999996,
+          "mythic": 0.0014080000000000002,
+          "hours_any": 24.22664141414141,
+          "hours_rare": 31.059796684796687,
+          "hours_mythic": 1211.3320707070704
+        },
+        "Forte": {
+          "completion": 0.4000000000000001,
+          "any_equipment": 0.08448000000000001,
+          "rare_plus": 0.0658944,
+          "mythic": 0.0016896000000000003,
+          "hours_any": 20.18886784511784,
+          "hours_rare": 25.883163903997232,
+          "hours_mythic": 1009.443392255892
+        },
+        "Máximo": {
+          "completion": 0.4000000000000001,
+          "any_equipment": 0.09920000000000001,
+          "rare_plus": 0.077376,
+          "mythic": 0.001984,
+          "hours_any": 17.193100358422935,
+          "hours_rare": 22.042436356952486,
+          "hours_mythic": 859.6550179211469
+        }
+      }
+    },
+    {
+      "band": "301-350",
+      "dungeon_count": 26,
+      "dungeon_equipment_candidates_current": 1.0,
+      "dungeon_material_candidates_current": 1.0,
+      "dungeon_equipment_candidates_proposed": 3.5,
+      "dungeon_current": {
+        "Fraco": {
+          "completion": 0.3819230769230769,
+          "any_equipment": 0.030250000000000016,
+          "rare_plus": 0.030250000000000016,
+          "mythic": 0.0008038461538461546,
+          "hours_any": 34.92300628664263,
+          "hours_rare": 34.92300628664263,
+          "hours_mythic": 1314.2078681552355
+        },
+        "No nível": {
+          "completion": 0.7719230769230769,
+          "any_equipment": 0.13774230769230772,
+          "rare_plus": 0.13774230769230772,
+          "mythic": 0.01874230769230769,
+          "hours_any": 7.669545819798519,
+          "hours_rare": 7.669545819798519,
+          "hours_mythic": 56.36557448069864
+        },
+        "Forte": {
+          "completion": 0.95,
+          "any_equipment": 0.37780769230769234,
+          "rare_plus": 0.37780769230769234,
+          "mythic": 0.07234615384615385,
+          "hours_any": 2.7961869535217794,
+          "hours_rare": 2.7961869535217794,
+          "hours_mythic": 14.602309646169294
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.5963076923076923,
+          "rare_plus": 0.5963076923076923,
+          "mythic": 0.12276923076923077,
+          "hours_any": 1.7716037438367158,
+          "hours_rare": 1.7716037438367158,
+          "hours_mythic": 8.604932470064048
+        }
+      },
+      "dungeon_proposed": {
+        "Fraco": {
+          "completion": 0.3819230769230769,
+          "any_equipment": 0.0763846153846154,
+          "rare_plus": 0.053469230769230776,
+          "mythic": 0.0005728846153846154,
+          "hours_any": 13.830284211704148,
+          "hours_rare": 19.75754887386307,
+          "hours_mythic": 1844.0378948938867
+        },
+        "No nível": {
+          "completion": 0.7238461538461538,
+          "any_equipment": 0.15924615384615387,
+          "rare_plus": 0.1114723076923077,
+          "mythic": 0.001194346153846154,
+          "hours_any": 6.633886688350024,
+          "hours_rare": 9.476980983357178,
+          "hours_mythic": 884.5182251133366
+        },
+        "Forte": {
+          "completion": 0.75,
+          "any_equipment": 0.198,
+          "rare_plus": 0.1386,
+          "mythic": 0.0014850000000000002,
+          "hours_any": 5.335459293792627,
+          "hours_rare": 7.622084705418039,
+          "hours_mythic": 711.3945725056835
+        },
+        "Máximo": {
+          "completion": 0.75,
+          "any_equipment": 0.23250000000000004,
+          "rare_plus": 0.16275,
+          "mythic": 0.0017437500000000003,
+          "hours_any": 4.54374597922985,
+          "hours_rare": 6.491065684614071,
+          "hours_mythic": 605.8327972306465
+        }
+      },
+      "boss_count": 10,
+      "boss_equipment_candidates_current": 1.0,
+      "boss_material_candidates_current": 1.0,
+      "boss_equipment_candidates_proposed": 12,
+      "boss_current": {
+        "Fraco": {
+          "completion": 0.188,
+          "any_equipment": 0.012440000000000003,
+          "rare_plus": 0.012440000000000003,
+          "mythic": 0.0036000000000000034,
+          "hours_any": 150.5894962486602,
+          "hours_rare": 150.5894962486602,
+          "hours_mythic": 520.3703703703699
+        },
+        "No nível": {
+          "completion": 0.5780000000000001,
+          "any_equipment": 0.09754,
+          "rare_plus": 0.09754,
+          "mythic": 0.046020000000000005,
+          "hours_any": 19.205795912787917,
+          "hours_rare": 19.205795912787917,
+          "hours_mythic": 40.70693901202375
+        },
+        "Forte": {
+          "completion": 0.885,
+          "any_equipment": 0.34435,
+          "rare_plus": 0.34435,
+          "mythic": 0.18865,
+          "hours_any": 5.440201345530226,
+          "hours_rare": 5.440201345530226,
+          "hours_mythic": 9.930205848573195
+        },
+        "Máximo": {
+          "completion": 0.95,
+          "any_equipment": 0.589,
+          "rare_plus": 0.589,
+          "mythic": 0.33059999999999995,
+          "hours_any": 3.180531975099038,
+          "hours_rare": 3.180531975099038,
+          "hours_mythic": 5.666465013107482
+        }
+      },
+      "boss_proposed": {
+        "Fraco": {
+          "completion": 0.188,
+          "any_equipment": 0.018800000000000004,
+          "rare_plus": 0.016544,
+          "mythic": 0.000564,
+          "hours_any": 99.64539007092196,
+          "hours_rare": 113.2333978078659,
+          "hours_mythic": 3321.513002364066
+        },
+        "No nível": {
+          "completion": 0.35,
+          "any_equipment": 0.0385,
+          "rare_plus": 0.03388,
+          "mythic": 0.001155,
+          "hours_any": 48.658008658008654,
+          "hours_rare": 55.29319165682802,
+          "hours_mythic": 1621.933621933622
+        },
+        "Forte": {
+          "completion": 0.35,
+          "any_equipment": 0.0462,
+          "rare_plus": 0.040656,
+          "mythic": 0.001386,
+          "hours_any": 40.54834054834055,
+          "hours_rare": 46.077659714023355,
+          "hours_mythic": 1351.6113516113514
+        },
+        "Máximo": {
+          "completion": 0.35,
+          "any_equipment": 0.05425000000000001,
+          "rare_plus": 0.04774000000000001,
+          "mythic": 0.0016275,
+          "hours_any": 34.53149001536098,
+          "hours_rare": 39.2403295629102,
+          "hours_mythic": 1151.0496671786993
+        }
+      }
+    }
+  ],
+  "simulations": {
+    "1-20": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 52026,
+            "equipment": 22207,
+            "rare_plus": 2047,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 80297,
+            "equipment": 42835,
+            "rare_plus": 4341,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 92312,
+            "equipment": 68465,
+            "rare_plus": 9055,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 95002,
+            "equipment": 89037,
+            "rare_plus": 12488,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 52026,
+            "equipment": 19933,
+            "rare_plus": 413,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 79790,
+            "equipment": 33454,
+            "rare_plus": 693,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 89799,
+            "equipment": 45212,
+            "rare_plus": 941,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 92046,
+            "equipment": 54229,
+            "rare_plus": 1096,
+            "mythic": 0
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 49122,
+            "equipment": 20524,
+            "rare_plus": 7860,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 73840,
+            "equipment": 38360,
+            "rare_plus": 16559,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 93152,
+            "equipment": 68366,
+            "rare_plus": 31732,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 95038,
+            "equipment": 91648,
+            "rare_plus": 44298,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 49122,
+            "equipment": 23416,
+            "rare_plus": 1203,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 73840,
+            "equipment": 39108,
+            "rare_plus": 1952,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 80111,
+            "equipment": 50550,
+            "rare_plus": 2534,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 79980,
+            "equipment": 59633,
+            "rare_plus": 3027,
+            "mythic": 0
+          }
+        }
+      }
+    },
+    "21-50": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 54177,
+            "equipment": 17059,
+            "rare_plus": 7756,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 81213,
+            "equipment": 33289,
+            "rare_plus": 16253,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 94967,
+            "equipment": 60135,
+            "rare_plus": 32507,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94989,
+            "equipment": 81731,
+            "rare_plus": 45889,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 54177,
+            "equipment": 19572,
+            "rare_plus": 1224,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 80697,
+            "equipment": 31788,
+            "rare_plus": 1911,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 90085,
+            "equipment": 42818,
+            "rare_plus": 2600,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 89926,
+            "equipment": 50300,
+            "rare_plus": 3019,
+            "mythic": 0
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 42452,
+            "equipment": 16155,
+            "rare_plus": 16155,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 69620,
+            "equipment": 33591,
+            "rare_plus": 33591,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 90164,
+            "equipment": 63274,
+            "rare_plus": 63274,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94899,
+            "equipment": 88362,
+            "rare_plus": 88362,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 42452,
+            "equipment": 18698,
+            "rare_plus": 2248,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 67303,
+            "equipment": 32774,
+            "rare_plus": 4006,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 71627,
+            "equipment": 41718,
+            "rare_plus": 4984,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 71989,
+            "equipment": 48990,
+            "rare_plus": 5855,
+            "mythic": 0
+          }
+        }
+      }
+    },
+    "51-100": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 51241,
+            "equipment": 13689,
+            "rare_plus": 8109,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 80400,
+            "equipment": 29544,
+            "rare_plus": 18529,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 94988,
+            "equipment": 55777,
+            "rare_plus": 37152,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 95049,
+            "equipment": 77952,
+            "rare_plus": 53311,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 51241,
+            "equipment": 17259,
+            "rare_plus": 2083,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 79512,
+            "equipment": 29602,
+            "rare_plus": 3618,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 88079,
+            "equipment": 39027,
+            "rare_plus": 4622,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 87973,
+            "equipment": 46377,
+            "rare_plus": 5611,
+            "mythic": 0
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 32858,
+            "equipment": 10050,
+            "rare_plus": 10050,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 62048,
+            "equipment": 24865,
+            "rare_plus": 24865,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 86282,
+            "equipment": 53834,
+            "rare_plus": 53834,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 95025,
+            "equipment": 81205,
+            "rare_plus": 81205,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 32858,
+            "equipment": 13181,
+            "rare_plus": 3398,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 62048,
+            "equipment": 27137,
+            "rare_plus": 6672,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 65010,
+            "equipment": 34348,
+            "rare_plus": 8691,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 64958,
+            "equipment": 40229,
+            "rare_plus": 9986,
+            "mythic": 0
+          }
+        }
+      }
+    },
+    "101-130": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 48468,
+            "equipment": 9642,
+            "rare_plus": 9642,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 78323,
+            "equipment": 23405,
+            "rare_plus": 23405,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 94971,
+            "equipment": 49411,
+            "rare_plus": 49411,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 95107,
+            "equipment": 71310,
+            "rare_plus": 71310,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 48468,
+            "equipment": 15019,
+            "rare_plus": 3041,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 77348,
+            "equipment": 26326,
+            "rare_plus": 5222,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 85042,
+            "equipment": 34882,
+            "rare_plus": 7032,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 85103,
+            "equipment": 40956,
+            "rare_plus": 8083,
+            "mythic": 0
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 29792,
+            "equipment": 7646,
+            "rare_plus": 7646,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 59763,
+            "equipment": 21074,
+            "rare_plus": 21074,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 85658,
+            "equipment": 48848,
+            "rare_plus": 48848,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94990,
+            "equipment": 75937,
+            "rare_plus": 75937,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 29792,
+            "equipment": 10334,
+            "rare_plus": 4067,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 57770,
+            "equipment": 21759,
+            "rare_plus": 8626,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 57685,
+            "equipment": 26285,
+            "rare_plus": 10578,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 57970,
+            "equipment": 30268,
+            "rare_plus": 12138,
+            "mythic": 0
+          }
+        }
+      }
+    },
+    "131-200": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 45649,
+            "equipment": 7186,
+            "rare_plus": 7186,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 77678,
+            "equipment": 20107,
+            "rare_plus": 20107,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 94967,
+            "equipment": 45006,
+            "rare_plus": 45006,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94925,
+            "equipment": 66949,
+            "rare_plus": 66949,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 45649,
+            "equipment": 12665,
+            "rare_plus": 4096,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 75876,
+            "equipment": 23457,
+            "rare_plus": 7582,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 81971,
+            "equipment": 30258,
+            "rare_plus": 9712,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 82082,
+            "equipment": 35539,
+            "rare_plus": 11371,
+            "mythic": 0
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 26757,
+            "equipment": 4617,
+            "rare_plus": 4617,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 58803,
+            "equipment": 16034,
+            "rare_plus": 16034,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 86468,
+            "equipment": 42449,
+            "rare_plus": 42449,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94794,
+            "equipment": 68710,
+            "rare_plus": 68710,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 26757,
+            "equipment": 7599,
+            "rare_plus": 4179,
+            "mythic": 34
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 49814,
+            "equipment": 15467,
+            "rare_plus": 8433,
+            "mythic": 76
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 49869,
+            "equipment": 18421,
+            "rare_plus": 10214,
+            "mythic": 89
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 49814,
+            "equipment": 21975,
+            "rare_plus": 11941,
+            "mythic": 103
+          }
+        }
+      }
+    },
+    "201-250": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 42589,
+            "equipment": 6905,
+            "rare_plus": 6905,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 77685,
+            "equipment": 20350,
+            "rare_plus": 20350,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 94969,
+            "equipment": 45960,
+            "rare_plus": 45960,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 95051,
+            "equipment": 67497,
+            "rare_plus": 67497,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 42589,
+            "equipment": 10604,
+            "rare_plus": 4878,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 75391,
+            "equipment": 20630,
+            "rare_plus": 9233,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 79990,
+            "equipment": 26518,
+            "rare_plus": 11856,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 79869,
+            "equipment": 31099,
+            "rare_plus": 13881,
+            "mythic": 0
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 23984,
+            "equipment": 3829,
+            "rare_plus": 3829,
+            "mythic": 0
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 59411,
+            "equipment": 15454,
+            "rare_plus": 15454,
+            "mythic": 0
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 87967,
+            "equipment": 42721,
+            "rare_plus": 42721,
+            "mythic": 0
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94926,
+            "equipment": 68302,
+            "rare_plus": 68302,
+            "mythic": 0
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 23984,
+            "equipment": 5193,
+            "rare_plus": 3507,
+            "mythic": 60
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 45334,
+            "equipment": 10744,
+            "rare_plus": 7284,
+            "mythic": 103
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 44983,
+            "equipment": 13034,
+            "rare_plus": 8886,
+            "mythic": 146
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 45012,
+            "equipment": 15289,
+            "rare_plus": 10328,
+            "mythic": 143
+          }
+        }
+      }
+    },
+    "251-300": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 39804,
+            "equipment": 3888,
+            "rare_plus": 3888,
+            "mythic": 88
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 76520,
+            "equipment": 15255,
+            "rare_plus": 15255,
+            "mythic": 1868
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 95104,
+            "equipment": 39766,
+            "rare_plus": 39766,
+            "mythic": 7217
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 95039,
+            "equipment": 61846,
+            "rare_plus": 61846,
+            "mythic": 12116
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 39804,
+            "equipment": 9093,
+            "rare_plus": 5211,
+            "mythic": 19
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 73746,
+            "equipment": 18594,
+            "rare_plus": 10775,
+            "mythic": 47
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 78031,
+            "equipment": 23574,
+            "rare_plus": 13711,
+            "mythic": 52
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 78104,
+            "equipment": 27765,
+            "rare_plus": 16176,
+            "mythic": 62
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 21224,
+            "equipment": 2019,
+            "rare_plus": 2019,
+            "mythic": 235
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 58151,
+            "equipment": 11256,
+            "rare_plus": 11256,
+            "mythic": 2565
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 86745,
+            "equipment": 36349,
+            "rare_plus": 36349,
+            "mythic": 10095
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94929,
+            "equipment": 61447,
+            "rare_plus": 61447,
+            "mythic": 18136
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 21224,
+            "equipment": 3383,
+            "rare_plus": 2620,
+            "mythic": 60
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 40084,
+            "equipment": 7018,
+            "rare_plus": 5512,
+            "mythic": 153
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 40231,
+            "equipment": 8429,
+            "rare_plus": 6643,
+            "mythic": 162
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 39447,
+            "equipment": 9991,
+            "rare_plus": 7796,
+            "mythic": 208
+          }
+        }
+      }
+    },
+    "301-350": {
+      "dungeon": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 38091,
+            "equipment": 3102,
+            "rare_plus": 3102,
+            "mythic": 86
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 77178,
+            "equipment": 13754,
+            "rare_plus": 13754,
+            "mythic": 1853
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 95019,
+            "equipment": 37866,
+            "rare_plus": 37866,
+            "mythic": 7214
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94905,
+            "equipment": 59630,
+            "rare_plus": 59630,
+            "mythic": 12469
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 38091,
+            "equipment": 7707,
+            "rare_plus": 5453,
+            "mythic": 65
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 72380,
+            "equipment": 15817,
+            "rare_plus": 11142,
+            "mythic": 123
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 75091,
+            "equipment": 19927,
+            "rare_plus": 13901,
+            "mythic": 155
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 75192,
+            "equipment": 23098,
+            "rare_plus": 16142,
+            "mythic": 177
+          }
+        }
+      },
+      "boss": {
+        "current": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 18783,
+            "equipment": 1226,
+            "rare_plus": 1226,
+            "mythic": 359
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 57838,
+            "equipment": 9840,
+            "rare_plus": 9840,
+            "mythic": 4621
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 88577,
+            "equipment": 34559,
+            "rare_plus": 34559,
+            "mythic": 18745
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 94936,
+            "equipment": 58987,
+            "rare_plus": 58987,
+            "mythic": 33057
+          }
+        },
+        "proposed": {
+          "Fraco": {
+            "attempts": 100000,
+            "successes": 18783,
+            "equipment": 1865,
+            "rare_plus": 1653,
+            "mythic": 51
+          },
+          "No nível": {
+            "attempts": 100000,
+            "successes": 35031,
+            "equipment": 3905,
+            "rare_plus": 3441,
+            "mythic": 112
+          },
+          "Forte": {
+            "attempts": 100000,
+            "successes": 35146,
+            "equipment": 4605,
+            "rare_plus": 4075,
+            "mythic": 146
+          },
+          "Máximo": {
+            "attempts": 100000,
+            "successes": 35001,
+            "equipment": 5540,
+            "rare_plus": 4852,
+            "mythic": 177
+          }
+        }
+      }
+    }
+  }
+}

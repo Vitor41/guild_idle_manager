@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Visão geral - Guild Idle Manager{% endblock %}
+{% block content %}
+<section class="dashboard" aria-labelledby="dashboard-title">
+  <header class="topbar"><div><p class="eyebrow">Sala da Guilda</p><h1 id="dashboard-title">{{ guild.name }}</h1><p class="note">Comande missões, equipe mercenários e evolua sua fortaleza.</p></div></header>
+  {% if mission_summary.awaiting_loot > 0 or dungeon_summary.awaiting_loot > 0 %}<p class="success-message">Existem recompensas aguardando coleta.</p>{% endif %}
+
+  <section class="dashboard-band"><h2>Fundação da guilda</h2><div class="dashboard-grid dashboard-grid-four">
+    <article class="panel dashboard-card"><span class="card-kicker">Guilda</span><div class="card-value">Nv. {{ guild.level }}</div><p class="note">XP {{ guild.xp }} · Reputação {{ guild.reputation }}</p><a class="button-link secondary" href="/guild/progress">Ver progresso</a></article>
+    <article class="panel dashboard-card"><span class="card-kicker">Tesouro</span><div class="card-value">{{ resources.gold if resources else 0 }}</div><p class="note">Madeira {{ resources.wood if resources else 0 }} · Minério {{ resources.ore if resources else 0 }} · Cristais {{ resources.crystals if resources else 0 }}</p><a class="button-link secondary" href="/missions?category=gathering">Coletar recursos</a></article>
+    <article class="panel dashboard-card"><span class="card-kicker">Construções</span><div class="card-value">{{ building_summary.owned }}/{{ building_summary.total }}</div><p class="note">Construções ativas. Grupo máximo {{ building_summary.max_mission_party_size }} · Multiplicador {{ building_summary.max_run_multiplier }}x.</p><a class="button-link secondary" href="/buildings">Administrar</a></article>
+    <article class="panel dashboard-card"><span class="card-kicker">Inventário</span><div class="card-value">{{ inventory_summary.equipment_count }}</div><p class="note">{{ inventory_summary.distinct_items }} materiais diferentes · {{ inventory_summary.total_quantity }} unidades acumuladas.</p><a class="button-link secondary" href="/inventory">Abrir inventário</a></article>
+  </div></section>
+
+  <section class="dashboard-band"><h2>Equipe</h2><div class="dashboard-grid dashboard-grid-three">
+    <article class="panel dashboard-card tavern-hero"><span class="card-kicker">Taverna</span>{% if not tavern_summary.is_built %}<div class="card-value">Não construída</div><p class="note">Evolua a Taverna para começar o recrutamento.</p><a class="button-link secondary" href="/buildings">Construir Taverna</a>{% elif tavern_summary.special_offer_active %}<div class="card-value offer-name">{{ tavern_summary.special_offer_name }}</div><div class="badge-row"><span class="rarity-badge rarity-{{ tavern_summary.special_offer_rarity }}">{{ tavern_summary.special_offer_rarity_label }}</span><span class="tag">Expira em <strong data-ends-at="{{ tavern_summary.special_offer_until.isoformat() }}">...</strong></span></div><a class="button-link secondary" href="/tavern">Abrir Taverna</a>{% else %}<div class="card-value">{{ tavern_summary.apprentice_cost }} ouro</div><p class="note">Próxima busca por visitante: <strong data-ends-at="{{ tavern_summary.next_special_check_at.isoformat() }}">...</strong></p><a class="button-link secondary" href="/tavern">Abrir Taverna</a>{% endif %}</article>
+    <article class="panel dashboard-card"><span class="card-kicker">Mercenários</span><div class="card-value">{{ mercenary_summary.total }}/{{ building_summary.mercenary_limit }}</div><p class="note">{{ mercenary_summary.available }} disponíveis · {{ mercenary_summary.busy }} ocupados.</p><div class="action-row compact"><a class="button-link secondary" href="/mercenaries">Ver equipe</a><a class="button-link secondary" href="/tavern">Contratar</a></div></article>
+    <article class="panel dashboard-card"><span class="card-kicker">Classes e profissões</span><div class="card-value">Treinamento</div><p class="note">Evolua classes e especialize coletores quando os requisitos forem cumpridos.</p><div class="action-row compact"><a class="button-link secondary" href="/class-change">Trocar classe</a><a class="button-link secondary" href="/professions">Treinar profissão</a></div></article>
+  </div></section>
+
+  <section class="dashboard-band"><h2>Expedições</h2><div class="dashboard-grid dashboard-grid-two">
+    <article class="panel dashboard-card"><span class="card-kicker">Missões</span><div class="card-value">{{ mission_summary.in_progress }}</div><p class="note">{{ mission_summary.awaiting_loot }} aguardando coleta · {{ mission_summary.completed }} finalizadas.</p><a class="button-link secondary" href="/missions">Abrir missões</a></article>
+    <article class="panel dashboard-card"><span class="card-kicker">Masmorras</span><div class="card-value">{{ dungeon_summary.in_progress }}</div><p class="note">{{ dungeon_summary.awaiting_loot }} aguardando coleta · {{ dungeon_summary.completed }} finalizadas.</p><a class="button-link secondary" href="/dungeons">Explorar</a></article>
+  </div></section>
+</section>
+{% endblock %}

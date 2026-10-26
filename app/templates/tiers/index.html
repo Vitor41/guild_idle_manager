@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Guia de Tiers - Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard" aria-labelledby="tiers-title">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Arquivo da Guilda</p>
+        <h1 id="tiers-title">Guia de Tiers</h1>
+        <p class="note">Entenda como raridade, potencial e progressão diferenciam mercenários e equipamentos.</p>
+      </div>
+      <div class="action-row compact">
+        <a class="button-link secondary" href="/classes">Guia de Classes</a>
+        <a class="button-link secondary" href="/tavern">Abrir Taverna</a>
+      </div>
+    </header>
+
+    <section class="panel table-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Mercenários</p>
+          <h2>Raridade e progressão</h2>
+        </div>
+      </div>
+      <div class="tier-guide-grid">
+        {% for rarity in rarity_cards %}
+          <article class="tier-guide-card rarity-card rarity-{{ rarity.code }}">
+            <div class="tier-guide-card__head">
+              <span class="tier-gem" aria-hidden="true">{{ loop.index }}</span>
+              <div>
+                <span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span>
+                <h3>Tier {{ loop.index }}</h3>
+              </div>
+            </div>
+            <p>{{ rarity.description }}</p>
+            <dl class="stat-list">
+              <div><dt>Bônus de evolução</dt><dd>+{{ rarity.progression_bonus_percent }}%</dd></div>
+              <div>
+                <dt>Poder inicial protegido</dt>
+                <dd>
+                  {% if rarity.maximum_power %}
+                    {{ rarity.minimum_power }}–{{ rarity.maximum_power }}
+                  {% else %}
+                    {{ rarity.minimum_power }}+
+                  {% endif %}
+                </dd>
+              </div>
+            </dl>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Equipamentos</p>
+          <h2>Níveis de item</h2>
+          <p class="note">O tier define a base do equipamento; a raridade define sua qualidade visual e o potencial do bônus aleatório.</p>
+        </div>
+      </div>
+      <div class="item-tier-track">
+        {% for item_tier in item_tiers %}
+          <article class="item-tier-card tier-border-{{ item_tier.tier }}">
+            <span class="tier-number">T{{ item_tier.tier }}</span>
+            <div>
+              <h3>{{ item_tier.label }}</h3>
+              <p class="note">{{ item_tier.description }}</p>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  </section>
+{% endblock %}

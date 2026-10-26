@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Guild Idle Manager - Local{% endblock %}
+
+{% block content %}
+  <section class="status-panel" aria-labelledby="page-title">
+    <p class="eyebrow">Ambiente {{ app_env }}</p>
+    <h1 id="page-title">Guild Idle Manager</h1>
+    <p class="lead">Aplicacao local em execucao.</p>
+    <p class="note">Crie uma conta, entre e funde sua primeira guilda para iniciar a base do jogo.</p>
+    <div class="action-row">
+      <a class="button-link" href="/login">Entrar</a>
+      <a class="button-link secondary" href="/register">Criar conta</a>
+    </div>
+  </section>
+{% endblock %}

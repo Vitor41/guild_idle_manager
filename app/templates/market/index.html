@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "components/building_lock.html" import building_lock %}
+{% block title %}Mercado - Guild Idle Manager{% endblock %}
+{% block content %}
+<section class="dashboard" aria-labelledby="market-title">
+  <header class="topbar"><div><p class="eyebrow">{{ guild.name }}</p><h1 id="market-title">Mercado</h1><p class="note">Anuncie itens, aguarde a venda e colete o ouro manualmente.</p></div></header>
+  {% if market.level < 1 %}
+    {{ building_lock('$', 'O Mercado ainda não foi construído', 'Mercado', 'Evolua a construção Mercado para o nível 1 e abra o comércio da guilda.') }}
+  {% else %}
+  {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+  {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+
+  <section class="panel market-overview">
+    <dl class="inline-stats">
+      <div><dt>Nivel do Mercado</dt><dd>{{ market.level }}</dd></div>
+      <div><dt>Espacos</dt><dd>{{ active_sales|length }}/{{ market.slots }}</dd></div>
+      <div><dt>Reducao de tempo</dt><dd>{{ market.time_reduction_percent }}%</dd></div>
+      <div><dt>Bonus de valor</dt><dd>{{ market.value_bonus_percent }}%</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel" aria-labelledby="active-sales-title">
+    <div class="section-heading"><div><h2 id="active-sales-title">Vendas em andamento</h2><p class="note">O relógio do servidor define quando a coleta é liberada.</p></div><form method="post" action="/market/collect-all"><button {% if ready_sales_count == 0 %}disabled{% endif %}>Coletar tudo{% if ready_sales_count > 0 %} ({{ ready_sales_count }}){% endif %}</button></form></div>
+    {% if active_sales %}<div class="market-grid">
+      {% for sale in active_sales %}<article class="market-sale-card rarity-{{ sale.item_template.rarity }}">
+        <div><h3>{{ sale.item_template.name }}</h3><p class="note">{{ sale.quantity }} unidade(s) por {{ sale.unit_value }} ouro</p></div>
+        <dl class="inline-stats"><div><dt>Valor total</dt><dd>{{ sale.total_value }}</dd></div><div><dt>Tempo</dt><dd class="mission-timer" data-ends-at="{{ sale.ends_at.isoformat() }}">Calculando...</dd></div></dl>
+        <form method="post" action="/market/{{ sale.id }}/collect"><button class="claim-button" data-ends-at="{{ sale.ends_at.isoformat() }}" {% if sale.ends_at > now %}disabled{% endif %}>Coletar venda</button></form>
+      </article>{% endfor %}
+    </div>{% else %}<p class="note">Nenhum item anunciado.</p>{% endif %}
+  </section>
+
+  <div class="market-columns">
+    <section class="panel"><h2>Materiais e acumulaveis</h2>
+      {% if inventory_items %}<div class="market-catalog">{% for item in inventory_items %}
+        <article class="market-item-row rarity-{{ item.item_template.rarity }}">
+          <div class="asset-placeholder item-icon-frame">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
+          <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Disponivel: {{ item.quantity }} | {{ item.item_template.base_sell_value }} ouro/un.</small></div>
+          <form class="inline-form" method="post" action="/market/sell/material"><input type="hidden" name="item_template_id" value="{{ item.item_template_id }}"><input type="number" name="quantity" min="1" max="{{ item.quantity }}" value="1" aria-label="Quantidade"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button></form>
+        </article>
+      {% endfor %}</div>{% else %}<p class="note">Nenhum item acumulavel disponivel.</p>{% endif %}
+    </section>
+    <section class="panel"><h2>Equipamentos livres</h2>
+      {% if equipment_items %}<div class="market-catalog">{% for item in equipment_items %}
+        <article class="market-item-row rarity-{{ item.item_template.rarity }}">
+          <div class="asset-placeholder item-icon-frame">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
+          <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Tier {{ item.item_template.tier }} | {{ item.item_template.base_sell_value }} ouro</small></div>
+          <form method="post" action="/market/sell/equipment" data-confirm-title="Anunciar equipamento?" data-confirm-message="O equipamento ficara reservado ate a conclusao da venda." data-confirm-action="Anunciar"><input type="hidden" name="item_instance_id" value="{{ item.id }}"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button></form>
+        </article>
+      {% endfor %}</div>{% else %}<p class="note">Nenhum equipamento livre para venda.</p>{% endif %}
+    </section>
+  </div>
+
+  <section class="panel table-panel"><h2>Histórico recente</h2>
+    {% if completed_sales %}<div class="table-wrap"><table><thead><tr><th>Item</th><th>Quantidade</th><th>Ouro</th><th>Coletado em</th></tr></thead><tbody>{% for sale in completed_sales %}<tr><td>{{ sale.item_template.name }}</td><td>{{ sale.quantity }}</td><td>{{ sale.total_value }}</td><td>{{ sale.collected_at.strftime('%d/%m/%Y %H:%M') if sale.collected_at else '-' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="note">Nenhuma venda coletada ainda.</p>{% endif %}
+  </section>
+  {% endif %}
+</section>
+{% endblock %}
