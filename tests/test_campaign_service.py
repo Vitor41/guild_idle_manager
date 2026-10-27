@@ -19,7 +19,9 @@ from sqlalchemy import func, select, text
 from app.database.connection import SessionLocal, configure_database
 from app.core.dependencies import CampaignPlayer
 from app.models import (
+    CraftingRecipe,
     CampaignMetadata,
+    DockOffer,
     DungeonRun,
     DungeonTemplate,
     GuildItemInstance,
@@ -29,14 +31,22 @@ from app.models import (
     MissionTemplate,
     MissionTemplateItemDrop,
     MissionRun,
+    ProfessionTemplate,
     User,
 )
+from app.repositories.item_repository import add_inventory_quantity
 from app.repositories.building_repository import get_guild_building_by_effect
 from app.services.building_service import ensure_guild_buildings, upgrade_guild_building
 from app.services.campaign_service import CampaignService
 from app.services.dungeon_service import claim_dungeon_loot, start_dungeon
+from app.services.achievement_service import evaluate_achievements, get_codex_context, sync_codex
+from app.services.crafting_service import craft_recipe, get_blacksmith_context
+from app.services.dock_service import buy_dock_offer, create_dock_rotation
+from app.services.equipment_service import create_equipment_instance_from_template, equip_item
 from app.services.guild_service import get_current_guild_context
+from app.services.market_service import collect_market_sale, start_material_sale
 from app.services.mission_service import claim_mission_loot, start_mission
+from app.services.profession_service import complete_profession_training, start_profession_training
 from app.services.tavern_service import generate_apprentice_preview, get_tavern_page_context, hire_apprentice
 from app.routes.tavern_routes import _get_apprentice_preview
 
@@ -489,6 +499,11 @@ asyncio.run(main())
         )
 
     def _exercise_gameplay(self, db, guild, resources) -> None:
+        resources.gold = 100_000
+        db.add(resources)
+        for material_template in db.scalars(select(ItemTemplate).where(ItemTemplate.item_type == "material")):
+            add_inventory_quantity(db, guild.id, material_template.id, 1_000)
+        db.commit()
         ensure_guild_buildings(db, guild.id)
         housing = get_guild_building_by_effect(db, guild.id, "housing")
         tavern = get_guild_building_by_effect(db, guild.id, "tavern")
@@ -556,6 +571,8 @@ asyncio.run(main())
         ))
         db.commit()
         mission_run = start_mission(db, guild, str(mission_template.id), [str(mercenaries[0].id)])
+        with self.assertRaisesRegex(ValueError, "ainda não foi concluída"):
+            claim_mission_loot(db, guild, resources, mission_run.id)
         mission_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         db.flush()
         with patch("app.services.mission_service.randint", return_value=1):
@@ -566,6 +583,11 @@ asyncio.run(main())
             + db.scalar(select(func.count(GuildItemInstance.id)).where(GuildItemInstance.guild_id == guild.id)),
             0,
         )
+        failed_run = start_mission(db, guild, str(mission_template.id), [str(mercenaries[0].id)])
+        failed_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        with patch("app.services.mission_service.randint", return_value=100):
+            failed_mission = claim_mission_loot(db, guild, resources, failed_run.id)
+        self.assertEqual(failed_mission.status, "failed")
 
         scouts = get_guild_building_by_effect(db, guild.id, "scouts")
         scouts.level = 1
@@ -597,6 +619,100 @@ asyncio.run(main())
         with patch("app.services.dungeon_service.randint", return_value=1):
             completed_dungeon = claim_dungeon_loot(db, guild, resources, dungeon_run.id)
         self.assertEqual(completed_dungeon.status, "completed")
+
+        introductory_boss = db.scalar(select(DungeonTemplate).where(
+            DungeonTemplate.is_active.is_(True),
+            DungeonTemplate.content_type == "boss",
+            DungeonTemplate.level_band == "1-20",
+            DungeonTemplate.recommended_level <= 1,
+        ).order_by(DungeonTemplate.id))
+        self.assertIsNotNone(introductory_boss)
+        boss_run = start_dungeon(
+            db, guild, str(introductory_boss.id), [str(mercenaries[0].id)]
+        )
+        with self.assertRaisesRegex(ValueError, "ainda não foi concluída"):
+            claim_dungeon_loot(db, guild, resources, boss_run.id)
+        boss_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        with patch("app.services.dungeon_service.randint", return_value=1):
+            completed_boss = claim_dungeon_loot(db, guild, resources, boss_run.id)
+        self.assertEqual(completed_boss.status, "completed")
+
+        # Equipment creation and equip state are committed in the campaign database.
+        armor = db.scalar(select(ItemTemplate).where(
+            ItemTemplate.item_type == "equipment",
+            ItemTemplate.equipment_slot == "chest",
+            ItemTemplate.required_level <= mercenaries[0].level,
+        ).order_by(ItemTemplate.id))
+        self.assertIsNotNone(armor)
+        equipment = create_equipment_instance_from_template(db, guild.id, armor)
+        db.flush()
+        equipped = equip_item(db, guild.id, mercenaries[0].id, equipment.id)
+        self.assertEqual(equipped.equipped_to_mercenary_id, mercenaries[0].id)
+
+        # Market uses a real inventory item and does not pay until the timer has ended.
+        market = get_guild_building_by_effect(db, guild.id, "market")
+        market = upgrade_guild_building(db, guild, resources, market.id)
+        material_stock = db.scalar(select(GuildInventoryItem).where(
+            GuildInventoryItem.guild_id == guild.id,
+            GuildInventoryItem.item_template_id == material.id,
+        ))
+        self.assertIsNotNone(material_stock)
+        sale = start_material_sale(db, guild, str(material.id), "1")
+        with self.assertRaisesRegex(ValueError, "ainda nao foi concluida"):
+            collect_market_sale(db, guild, resources, sale.id)
+        sale.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        collected_sale = collect_market_sale(db, guild, resources, sale.id)
+        self.assertEqual(collected_sale.status, "completed")
+
+        # Profession training and dock offers are timed/stock-backed campaign transactions.
+        profession = db.scalar(select(ProfessionTemplate).where(ProfessionTemplate.is_active.is_(True)).order_by(ProfessionTemplate.id))
+        self.assertIsNotNone(profession)
+        training = start_profession_training(db, guild, resources, mercenaries[0].id, profession.id)
+        with self.assertRaisesRegex(ValueError, "ainda não terminou"):
+            complete_profession_training(db, guild, training.id)
+        training.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        completed_training = complete_profession_training(db, guild, training.id)
+        self.assertEqual(completed_training.status, "completed")
+
+        docks = get_guild_building_by_effect(db, guild.id, "docks")
+        docks = upgrade_guild_building(db, guild, resources, docks.id)
+        rotation = create_dock_rotation(db, guild, docks.level)
+        dock_merchant_ids = [merchant.id for merchant in rotation.merchants]
+        dock_offer = db.scalar(select(DockOffer).where(
+            DockOffer.dock_rotation_merchant_id.in_(dock_merchant_ids)
+        ).order_by(DockOffer.id))
+        self.assertIsNotNone(dock_offer)
+        buy_dock_offer(db, guild, resources, dock_offer.id, 1)
+        self.assertLess(dock_offer.remaining_stock, dock_offer.initial_stock)
+
+        # Blacksmith crafting, guild progression, achievements, and Codex all persist locally.
+        blacksmith = get_guild_building_by_effect(db, guild.id, "blacksmith")
+        blacksmith = upgrade_guild_building(db, guild, resources, blacksmith.id)
+        blacksmith_context = get_blacksmith_context(db, guild)
+        recipe = next((entry for entry in blacksmith_context["recipes"] if entry.materials), None)
+        if recipe is None:
+            recipe = db.scalar(select(CraftingRecipe).where(CraftingRecipe.is_active.is_(True)).order_by(CraftingRecipe.id))
+        self.assertIsNotNone(recipe)
+        for ingredient in recipe.materials:
+            owned = db.scalar(select(GuildInventoryItem).where(
+                GuildInventoryItem.guild_id == guild.id,
+                GuildInventoryItem.item_template_id == ingredient.item_template_id,
+            ))
+            shortfall = ingredient.quantity - (owned.quantity if owned else 0)
+            if shortfall > 0:
+                add_inventory_quantity(db, guild.id, ingredient.item_template_id, shortfall)
+        db.commit()
+        self.assertIn("criado com sucesso", craft_recipe(db, guild, resources, str(recipe.id)))
+
+        from app.services.guild_progression_service import add_guild_xp
+        prior_level = guild.level
+        add_guild_xp(guild, 10_000)
+        db.add(guild)
+        db.commit()
+        self.assertGreaterEqual(guild.level, prior_level)
+        self.assertTrue(evaluate_achievements(db, guild))
+        sync_codex(db, guild)
+        self.assertGreater(get_codex_context(db, guild)["total_count"], 0)
 
 
 if __name__ == "__main__":
