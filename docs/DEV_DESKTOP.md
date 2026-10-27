@@ -11,7 +11,7 @@ Set-Location 'C:\Users\vitor\Guild Idle Manager\App GIM'
 .\scripts\build_desktop_dev.ps1
 ```
 
-Consulte [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md) para os hashes dos artefatos e o estado dos gates. O ZIP e o Setup atuais passaram na validação isolada de instalação; mantenha o gate de release nativo aberto até a janela pywebview carregar o gerente e expor o bridge.
+Consulte [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md) para os hashes dos artefatos e as evidências. Em 2026-10-27, o smoke nativo confirmou `shown`, `loaded`, DOM e bridge em duas execuções; a instalação congelada também passou pelo fluxo de campanha e pelo smoke offline. Isso fecha a pendência de renderização inicial registrada anteriormente. A validação do instalador e o layout estreito também estão documentados ali.
 
 O instalador inclui o executável e arquivos locais de templates, imagens, estilos, JavaScript, migrations Alembic e catálogo de nomes. Para instalar sem PostgreSQL ou conexão de rede, execute o Setup; ele valida a cópia temporária offline antes de trocar a instalação em `%LOCALAPPDATA%\Programs\GuildIdleManager` e cria um atalho na área de trabalho. Os saves continuam em `%LOCALAPPDATA%\GuildIdleManager\saves`, fora da pasta do aplicativo.
 
@@ -29,7 +29,7 @@ Para validar novamente em um computador limpo, extraia o ZIP, execute o instalad
 
 ## Preparação única neste checkout
 
-No PowerShell, em `C:\Users\vitor\Guild Idle Manager\App GIM` (este host não tem o comando `py`; usa-se o Python 3.12 já disponível no checkout pai apenas para criar o ambiente novo):
+No PowerShell, na pasta `App GIM`. Neste host, use o Python do checkout pai somente para criar o ambiente; instale e execute as dependências desktop dentro de `.venv-desktop`. O Python pai não é usado para rodar a aplicação ou os testes:
 
 ```powershell
 & 'C:\Users\vitor\Guild Idle Manager\.venv\Scripts\python.exe' -m venv .venv-desktop
@@ -42,8 +42,11 @@ Para rodar os testes do desktop, defina o modo antes de importar o aplicativo:
 
 ```powershell
 $env:APP_MODE = 'desktop'
-.\.venv-desktop\Scripts\python.exe -m unittest tests.test_clock_guard tests.test_desktop_bridge tests.test_desktop_security tests.test_desktop_http_smoke tests.test_campaign_service -q
+$env:DATABASE_URL = 'sqlite:///:memory:'
+.\.venv-desktop\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+O último resultado registrado foi de 64 testes aprovados e um smoke nativo opt-in ignorado pela descoberta normal. O smoke nativo foi executado separadamente duas vezes e passou; veja a tabela de execução em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md).
 
 O smoke nativo de janela é opt-in porque precisa abrir uma janela Windows real. Ele usa uma pasta temporária, espera `shown` e `loaded` do pywebview, confere o DOM do gerente e do dashboard, cria uma campanha pelo formulário nativo, retorna ao gerente, destrói a janela pelo próprio objeto pywebview e verifica evento `closed`, encerramento do servidor e metadados da campanha:
 
@@ -53,7 +56,7 @@ $env:GIM_RUN_DESKTOP_RUNTIME_SMOKE = '1'
 .\.venv-desktop\Scripts\python.exe -m unittest tests.test_desktop_runtime -v
 ```
 
-O smoke HTTP local e os testes de campanha cobrem persistência SQLite, abertura e fechamento de saves, migração Alembic, recuperação por backup, exportação e importação. O smoke HTTP não substitui a validação visual nativa do WebView; mantenha o gate visual aberto enquanto `shown`, `loaded` e o DOM nativo não forem confirmados na máquina-alvo.
+O smoke HTTP local e os testes de campanha cobrem persistência SQLite, abertura e fechamento de saves, migração Alembic, recuperação por backup, exportação e importação. O smoke nativo também confirmou o carregamento do WebView, DOM, bridge e retorno ao menu. A inspeção visual do aplicativo instalado, incluindo janela estreita, está registrada em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md).
 
 ## Abrir
 
@@ -73,5 +76,25 @@ Fechar a janela pede confirmação e encerra o servidor. `Ctrl+R` atualiza a pá
 - Logs: `%LOCALAPPDATA%\GuildIdleManager\logs`
 - Exportações: escolha o destino no diálogo nativo de arquivos.
 
+### Backup e recuperação
+
+No gerenciador de campanhas, use **Criar backup** para salvar uma cópia consistente da campanha. Para restaurar, use **Restaurar backup** no cartão da campanha e escolha o arquivo desejado; o aplicativo cria um backup de segurança antes de substituir o progresso. Se um save não puder ser aberto, ele aparece em **Arquivos que precisam de recuperação** e pode ser restaurado a partir de um backup compatível. Mantenha o aplicativo fechado antes de copiar arquivos manualmente.
+
+Os arquivos ficam em `%LOCALAPPDATA%\GuildIdleManager\saves` e `%LOCALAPPDATA%\GuildIdleManager\backups`. Estes comandos mostram os arquivos e abrem a pasta de backups no Explorer:
+
+```powershell
+$data = Join-Path $env:LOCALAPPDATA 'GuildIdleManager'
+Get-ChildItem (Join-Path $data 'saves')
+Get-ChildItem (Join-Path $data 'backups') -Recurse
+Start-Process explorer.exe (Join-Path $data 'backups')
+```
+
+Para manter uma cópia externa, feche o jogo e copie a pasta de dados inteira para um destino seguro. Para recuperar, abra o aplicativo e use **Restaurar backup** no gerenciador; não substitua um `.db` aberto manualmente.
+
+```powershell
+$data = Join-Path $env:LOCALAPPDATA 'GuildIdleManager'
+$destination = Join-Path $env:USERPROFILE 'Documents\GuildIdleManager-backup'
+Copy-Item $data $destination -Recurse
+```
+
 O servidor só aceita o Host e a origem definidos pelo launcher, bloqueia requisições cross-site e não tem middleware de sessão no modo desktop. O launcher fixa o bind em IPv4 loopback.
-When running the desktop-focused test modules from PowerShell, set `$env:APP_MODE = 'desktop'` first so the intentionally PostgreSQL-free environment does not load the web database default.

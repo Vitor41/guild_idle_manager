@@ -16,7 +16,45 @@ Projeto web idle/manager de guilda e mercenarios. O estado atual possui bootstra
 
 ## Launcher desktop DEV (Windows)
 
-O launcher desktop usa SQLite por campanha, funciona sem PostgreSQL e não baixa conteúdo ao abrir. A preparação, os testes, a geração do pacote offline e a instalação DEV ficam descritos em [docs/DEV_DESKTOP.md](docs/DEV_DESKTOP.md). Saves, backups e logs são guardados em `%LOCALAPPDATA%\GuildIdleManager`, fora da pasta do aplicativo.
+O launcher desktop usa SQLite por campanha e abre sem PostgreSQL ou acesso à rede. A preparação do ambiente e os detalhes da instalação estão em [docs/DEV_DESKTOP.md](docs/DEV_DESKTOP.md).
+
+### Início rápido DEV e build
+
+Execute os comandos na raiz do projeto, a pasta App GIM onde este README está. Com o ambiente .venv-desktop preparado, inicie o jogo:
+
+```powershell
+./Iniciando_jogo_dev.bat
+```
+
+Rode a suíte completa e gere o ZIP portátil e o instalador offline:
+
+```powershell
+$env:APP_MODE = 'desktop'
+$env:DATABASE_URL = 'sqlite:///:memory:'
+./.venv-desktop/Scripts/python.exe -m unittest discover -s tests -v
+Remove-Item Env:DATABASE_URL
+Remove-Item Env:APP_MODE
+./scripts/build_desktop_dev.ps1
+./dist/GuildIdleManager-DEV-Setup.exe
+```
+
+### Backup e recuperação de campanhas
+
+No gerenciador, **Criar backup** gera uma cópia consistente. **Restaurar backup** permite escolher um arquivo e cria uma cópia de segurança do estado atual antes de restaurar. Saves que não abrem aparecem na lista de recuperação, onde também é possível selecionar um backup compatível. O procedimento completo está em [docs/DEV_DESKTOP.md — Backup e recuperação](docs/DEV_DESKTOP.md#backup-e-recuperação).
+
+Para listar ou guardar uma cópia externa, feche o jogo antes de copiar os arquivos:
+
+```powershell
+$data = Join-Path $env:LOCALAPPDATA 'GuildIdleManager'
+Get-ChildItem (Join-Path $data 'saves')
+Get-ChildItem (Join-Path $data 'backups') -Recurse
+$destination = Join-Path $env:USERPROFILE 'Documents/GuildIdleManager-backup'
+Copy-Item $data $destination -Recurse
+```
+
+Para recuperar essa cópia, abra o jogo e use **Restaurar backup** no gerenciador; não substitua manualmente um banco aberto.
+
+Saves, backups e logs do desktop ficam em `%LOCALAPPDATA%\GuildIdleManager`, fora da pasta do aplicativo.
 
 ## Pre-requisitos
 
