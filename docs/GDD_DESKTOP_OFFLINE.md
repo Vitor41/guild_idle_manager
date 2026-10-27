@@ -354,6 +354,7 @@ cd "C:\Users\vitor\Guild Idle Manager\App GIM"
 ### Testes
 
 ```powershell
+$env:APP_MODE = 'desktop'
 .\.venv-desktop\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv-desktop\Scripts\python.exe scripts\balance\validate_content.py
 .\.venv-desktop\Scripts\python.exe scripts\prd_qa.py
@@ -361,7 +362,7 @@ cd "C:\Users\vitor\Guild Idle Manager\App GIM"
 .\.venv-desktop\Scripts\python.exe scripts\prd3_dungeons_bosses_qa.py
 ```
 
-O agente deve conferir os nomes reais dos scripts antes de copiar comandos para README/CI. QA que atualmente exige PostgreSQL deverá receber modo SQLite ou fixture isolada; testes de gameplay não podem depender de dados da guilda real do usuário.
+O modo desktop deve ser definido antes de importar `app`, pois o ambiente isolado não instala o driver PostgreSQL do modo web. O agente deve conferir os nomes reais dos scripts antes de copiar comandos para README/CI. QA que atualmente exige PostgreSQL deverá receber modo SQLite ou fixture isolada; testes de gameplay não podem depender de dados da guilda real do usuário.
 
 ### Build de desenvolvimento
 
