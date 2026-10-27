@@ -7,6 +7,7 @@
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20260623-1">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261027-1">{% endif %}
   </head>
   <body data-app-mode="{{ request.app.state.app_mode }}" data-route="{{ request.url.path }}">
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
@@ -26,9 +27,9 @@
             <a href="/dashboard"><span class="nav-icon">⌂</span><span>Visão geral</span></a>
             <a href="/tavern"><span class="nav-icon">♜</span><span>Taverna</span></a>
             <a href="/mercenaries"><span class="nav-icon">⚔</span><span>Mercenários</span></a>
-            <a href="/professions"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
             <a href="/missions"><span class="nav-icon">✦</span><span>Missões</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
+            {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
             <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
             <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
@@ -36,6 +37,7 @@
             <a href="/buildings"><span class="nav-icon">▣</span><span>Construções</span></a>
             <a href="/class-change"><span class="nav-icon">✧</span><span>Troca de Classe</span></a>
             <a href="/guild/progress"><span class="nav-icon">&#9733;</span><span>Progresso da Guilda</span></a>
+            <a href="/professions"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
             <span class="nav-section-label">Guias e registros</span>
             <a href="/classes"><span class="nav-icon">✧</span><span>Guia de Classes</span></a>
             <a href="/tiers"><span class="nav-icon">◇</span><span>Guia de Tiers</span></a>
@@ -46,6 +48,12 @@
             {% endif %}
           </nav>
           </details>
+          {% if request.app.state.app_mode == 'desktop' %}
+            <div class="desktop-save-state">
+              <span class="desktop-save-state__light" aria-hidden="true"></span>
+              <span><small>Campanha local</small><strong>Gravada a cada ação concluída</strong></span>
+            </div>
+          {% endif %}
         </aside>
 
         <div class="main-column">

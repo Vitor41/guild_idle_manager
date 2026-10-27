@@ -28,8 +28,8 @@ Installer regression tests cover refusal of a foreign install directory and a ju
 
 Current artifacts from the final build:
 
-- `dist/GuildIdleManager-DEV.zip` — SHA-256 `7D7EAD1DF4AA64AC014449B851533E8199853188F795E8C987CD4F72E83560C8`.
-- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `DF24AE8B601472633F86345D47EFDFBFAAE0B1C32743A9442C753997C3ED2001`.
+- `dist/GuildIdleManager-DEV.zip` — SHA-256 `728E307C6BD7ACAA1106C9D047E914413BA70E2ECD79E93C5994DDE88A8F2198`.
+- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `6684FF82326017A33EF1D55BEC99E5ACC601385F30304DCDD390E7A285C45CC9`.
 
 IExpress returned exit code 0 before the Setup file appeared; the build script now waits up to 90 seconds for a stable output and verifies its PE header before moving it into `dist`. The final Setup passed isolated first install and managed update (`Start-Process -Wait`: exit 0 for both) with a temporary `%LOCALAPPDATA%`. The saves sentinel remained unchanged, the marker identified the DEV install, and a planted obsolete app file was removed. All 856 installed app files had hashes identical to the current packaged bundle. The Setup now matches the final ZIP used by the build script.
 
@@ -106,3 +106,31 @@ Final regression run: 67 tests passed, one optional native-runtime test skipped.
 The desktop open flow now carries a migration report separately from offline progress. In an isolated campaign with save version 1, opening it created a pre-migration backup, advanced the save to version 2, and returned the previous/current revisions without a filesystem path. The following dashboard response rendered an accessible `role="status"` notice with the version change and backup confirmation; the notice appeared once and remained separate from the idle-progress dialog. The loopback smoke verifies the API response, the saved pre-migration version, the rendered notice, and that no backup path is exposed.
 
 The rebuilt Setup installed successfully in a fresh temporary profile. The frozen executable smoke again reported `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`. Current package hashes are listed above.
+
+### Identidade visual desktop — 2026-10-27
+
+The GDD §7.1 visual system is implemented for the real desktop pages through `app/static/css/desktop-theme.css`, loaded only in desktop mode. The dashboard leads with the operation queue and keeps resource totals in one place; Missions and Dungeons use compact page introductions so the first operation is visible sooner. At narrow widths, the teal navigation remains a compact menu. The save label describes local campaign storage without implying a live autosave state. Gameplay rules and saves were not changed. `tests/test_desktop_art.py` checks that the desktop theme and markup do not leak into web mode; the HTTP smoke checks the stylesheet and compact introductions on real routes.
+
+The final Setup was installed into disposable `%LOCALAPPDATA%` profiles. The installed executable, stylesheet, dashboard, Missions, and Dungeons templates match the corresponding final build files by SHA-256. The packaged `--smoke` result file reports `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`.
+
+| Final artifact | SHA-256 |
+| --- | --- |
+| `dist/GuildIdleManager-DEV.zip` | `728E307C6BD7ACAA1106C9D047E914413BA70E2ECD79E93C5994DDE88A8F2198` |
+| `dist/GuildIdleManager-DEV-Setup.exe` | `6684FF82326017A33EF1D55BEC99E5ACC601385F30304DCDD390E7A285C45CC9` |
+| Installed and packaged `GuildIdleManager.exe` | `4AEC56FE956209328796B97E4B3BC4CF9E1EE3FA8C8E55AB773958A5235DDB2A` |
+| Installed and packaged `desktop-theme.css` | `093D29F79CB0F13150225370E9DCC99C61961D54C5A86FC7387ABB8A916D3F12` |
+| Installed and packaged `dashboard.html` | `5ECC16C089BFE092B400C43C1ED92AA17D038AAD19FE47ADD7E1BA91E2365008` |
+| Installed and packaged `missions/index.html` | `30DBD8ECD82D48F55238FF91E60A8B77F928D7A7B78BAEDD0A6CBC34ED0286EB` |
+| Installed and packaged `dungeons/index.html` | `AE11B649BDDEBA379FC33078C508ACD39017CDC02BF139711096A10D0B02B2C0` |
+
+The final visual-review screenshots are **not yet available**. After updating the disposable install, the app opened only in the elevated session, and the UI controller could not deliver clicks or keyboard input to that window. Per instruction, screenshots from an earlier process/package were not used as proof. This blocked capture of the installed dashboard, Missions, and Dungeons with an unlocked challenge, as well as Taverna, Mercenaries, and Inventory. The DA visual review remains pending until these final pages can be captured in an interactive elevated session.
+
+### Final validation — 2026-10-27
+
+| Check | Result |
+| --- | --- |
+| Full regression suite | 70 tests ran; 69 passed and one opt-in native runtime test was skipped. |
+| Restricted-context source native smoke | Failed before page load: the WebView core was unavailable (`webview_page_loaded=false`, `bridge_ready=false`); no application flow ran. |
+| Elevated source native smoke, diagnostics disabled | Passed; campaign create, return flow, and clean close completed (`Ran 1 test in 24.917s`). |
+| Final Setup and installed package smoke | Setup installed in a disposable profile; installed file hashes matched the final package. The packaged offline smoke result file reports `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`. |
+| Final installed visual interaction | Blocked because the elevated app window did not accept UI input. No page-specific screenshot is claimed for this final package. |

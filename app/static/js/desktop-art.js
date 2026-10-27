@@ -133,7 +133,9 @@
 
       for (const element of document.querySelectorAll("[data-desktop-resource]")) {
         const resource = normalizeKey(element.dataset.desktopResource);
-        const key = iconMaps.resources?.[resource] || iconMaps.item_icon_groups?.[resource];
+        const key = iconMaps.resources?.[resource]
+          || (resource === "crystal" ? iconMaps.resources?.crystals : null)
+          || iconMaps.item_icon_groups?.[resource];
         const url = key && spriteUrl(key);
         if (url && !element.querySelector(".desktop-resource-art")) {
           element.prepend(makeImage(url, "desktop-resource-art"));
@@ -188,7 +190,7 @@
       const illustration = currentArt.illustration && illustrationUrl(currentArt.illustration);
       const header = route === "/desktop/campaigns"
         ? document.querySelector(".masthead")
-        : document.querySelector("main.game-shell .dashboard > .topbar");
+        : document.querySelector("main.game-shell .dashboard > .topbar, main.game-shell .dashboard > .desktop-operations-intro");
       if (header && illustration && !header.querySelector(".desktop-page-illustration")) {
         header.classList.add("desktop-page-hero");
         header.append(makeImage(illustration, "desktop-page-illustration"));

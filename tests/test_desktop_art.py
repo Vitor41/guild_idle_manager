@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from jinja2 import Environment, FileSystemLoader
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +41,70 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn("/js/desktop-art.js", base)
         self.assertIn('data-app-mode="desktop"', campaigns)
         self.assertIn("/js/desktop-art.js", campaigns)
+
+    def test_new_visual_system_and_operation_hierarchy_are_desktop_scoped(self):
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        dashboard = (ROOT / "app" / "templates" / "dashboard.html").read_text(encoding="utf-8")
+        missions = (ROOT / "app" / "templates" / "missions" / "index.html").read_text(encoding="utf-8")
+        dungeons = (ROOT / "app" / "templates" / "dungeons" / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("request.app.state.app_mode == 'desktop'", base)
+        self.assertIn("/css/desktop-theme.css", base)
+        self.assertIn('body[data-app-mode="desktop"]', theme)
+        self.assertIn('font-family: "Segoe UI", Tahoma, sans-serif', theme)
+        self.assertIn("--teal: #68c3b5", theme)
+        self.assertIn("--gold: #e6b965", theme)
+        self.assertIn("Gravada a cada ação concluída", base)
+        self.assertNotIn('class="desktop-save-state" role="status"', base)
+        self.assertIn("desktop-resource-row", dashboard)
+        self.assertLess(dashboard.index("desktop-operations-band"), dashboard.index("Fundação da guilda"))
+        self.assertIn("desktop-operations-intro", missions)
+        self.assertIn("desktop-operations-intro", dungeons)
+
+    def test_visual_markup_preserves_web_dashboard_order_and_hides_desktop_panels(self):
+        dashboard = (ROOT / "app" / "templates" / "dashboard.html").read_text(encoding="utf-8")
+        missions = (ROOT / "app" / "templates" / "missions" / "index.html").read_text(encoding="utf-8")
+        dungeons = (ROOT / "app" / "templates" / "dungeons" / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("{% if desktop_mode %}\n    <section class=\"desktop-resource-row\"", dashboard)
+        self.assertIn("{% if not desktop_mode %}{{ operation_band() }}{% endif %}", dashboard)
+        self.assertLess(dashboard.index("<section class=\"dashboard-band\"><h2>Fundação"), dashboard.index("{% if not desktop_mode %}{{ operation_band() }}"))
+        self.assertLess(missions.index("{% if request.app.state.app_mode == 'desktop' %}"), missions.index('class="desktop-operations-intro desktop-page-hero"'))
+        self.assertIn("{% if request.app.state.app_mode == 'desktop' %}", dungeons)
+        self.assertLess(dungeons.index("{% if request.app.state.app_mode == 'desktop' %}"), dungeons.index('class="desktop-operations-intro desktop-page-hero"'))
+
+    def test_web_dashboard_render_keeps_original_hierarchy_without_desktop_shell_theme(self):
+        environment = Environment(loader=FileSystemLoader(ROOT / "app" / "templates"), autoescape=True)
+        environment.globals["url_for"] = lambda endpoint, **kwargs: "/static/" + str(kwargs.get("path", ""))
+        request = SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(app_mode="web")),
+            url=SimpleNamespace(path="/dashboard"),
+            scope={},
+            state=SimpleNamespace(_state={}),
+        )
+        current_user = SimpleNamespace(
+            username="Web QA", is_admin=False, confirmation_preferences="{}", tutorial_status="complete"
+        )
+        context = {
+            "request": request,
+            "current_user": current_user,
+            "guild": SimpleNamespace(name="Guild Web", level=1, xp=0, reputation=0),
+            "resources": SimpleNamespace(gold=100, wood=3, ore=2, crystals=1),
+            "mission_summary": SimpleNamespace(in_progress=0, awaiting_loot=0, completed=0),
+            "dungeon_summary": SimpleNamespace(in_progress=0, awaiting_loot=0, completed=0),
+            "building_summary": SimpleNamespace(owned=0, total=9, max_mission_party_size=1, max_run_multiplier=1, mercenary_limit=0),
+            "inventory_summary": SimpleNamespace(equipment_count=0, distinct_items=0, total_quantity=0),
+            "tavern_summary": SimpleNamespace(is_built=False, special_offer_active=False, apprentice_cost=10),
+            "mercenary_summary": SimpleNamespace(total=0, available=0, busy=0),
+        }
+        markup = environment.get_template("dashboard.html").render(context)
+
+        self.assertNotIn("/css/desktop-theme.css", markup)
+        self.assertNotIn('class="desktop-resource-row"', markup)
+        self.assertNotIn('class="desktop-operations-band"', markup)
+        self.assertLess(markup.index("Fundação da guilda"), markup.index("Expedições"))
+        self.assertIn("Madeira 3 · Minério 2 · Cristais 1", markup)
 
     def test_semantic_entity_maps_have_matching_art_and_keep_names_in_templates(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))

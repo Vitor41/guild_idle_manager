@@ -6,7 +6,7 @@
 
 {% block content %}
   <section class="dashboard" aria-labelledby="dungeons-title">
-    <header class="topbar">
+    {% if request.app.state.app_mode != 'desktop' %}<header class="topbar">
       <div>
         <p class="eyebrow">{{ guild.name }}</p>
         <h1 id="dungeons-title">Masmorras</h1>
@@ -21,10 +21,32 @@
         {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
         <span>{{ current_user.username }}</span>
       </div>
-    </header>
+    </header>{% endif %}
+
+    {% if request.app.state.app_mode == 'desktop' %}
+    <section class="desktop-operations-intro desktop-page-hero" aria-label="Resumo das incursões">
+      <div>
+        <p class="eyebrow">{{ guild.name }} · abaixo da superfície</p>
+        <h1 id="dungeons-title">Masmorras</h1>
+        {% if dungeons_available %}<p><strong>Prepare a companhia para a incursão.</strong> Confira requisitos, riscos e recompensas antes de partir.</p>{% else %}<p><strong>O caminho subterrâneo está fechado.</strong> Construa Exploradores nível 1 para liberar Masmorras e Chefes.</p>{% endif %}
+        <div class="action-row compact">
+          {% if not dungeons_available %}<a class="button-link secondary" href="/buildings">Ver Exploradores</a>{% else %}
+          <a class="button-link secondary" href="#available-dungeons-title">Ver desafios</a>
+          {% if awaiting_loot_count > 0 %}<a class="button-link" href="#loot-disponivel">Receber recompensas</a>{% endif %}
+          {% endif %}
+        </div>
+      </div>
+      {% if dungeons_available %}
+      <dl class="desktop-operations-intro__counts">
+        <div><dt>Desafios nesta faixa</dt><dd>{{ total_templates }}</dd></div>
+        <div><dt>Aguardando coleta</dt><dd>{{ awaiting_loot_count }}</dd></div>
+      </dl>
+      {% endif %}
+    </section>
+    {% endif %}
 
     {% if not dungeons_available %}
-      {{ building_lock('◇', 'As Masmorras ainda não foram liberadas', 'Exploradores', 'Evolua a construção Exploradores para o nível 1 e abra o caminho para Masmorras e Chefes.') }}
+      {% if request.app.state.app_mode != 'desktop' %}{{ building_lock('◇', 'As Masmorras ainda não foram liberadas', 'Exploradores', 'Evolua a construção Exploradores para o nível 1 e abra o caminho para Masmorras e Chefes.') }}{% endif %}
     {% else %}
 
     {% if awaiting_loot_count > 0 %}<div class="loot-shortcut"><span>Você possui {{ awaiting_loot_count }} recompensa(s) aguardando coleta.</span><a class="button-link" href="#loot-disponivel">Receber recompensas</a></div>{% endif %}

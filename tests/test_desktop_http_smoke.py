@@ -112,6 +112,11 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
+        assert b"/css/desktop-theme.css?v=20261027-1" in rendered_pages["/dashboard"]
+        assert b'desktop-resource-row' in rendered_pages["/dashboard"]
+        assert b'desktop-operations-band' in rendered_pages["/dashboard"]
+        assert b'desktop-operations-intro desktop-page-hero' in rendered_pages["/missions"]
+        assert b'desktop-operations-intro desktop-page-hero' in rendered_pages["/dungeons"]
         assert b"Chance base" in rendered_pages["/missions"]
         assert b"chance final m\xc3\xa1xima de 95%" in rendered_pages["/missions"]
         assert b"Chance base" in rendered_pages["/dungeons"]

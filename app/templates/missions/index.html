@@ -5,7 +5,7 @@
 
 {% block content %}
   <section class="dashboard" aria-labelledby="missions-title">
-    <header class="topbar">
+    {% if request.app.state.app_mode != 'desktop' %}<header class="topbar">
       <div>
         <p class="eyebrow">{{ guild.name }}</p>
         <h1 id="missions-title">Missões</h1>
@@ -20,7 +20,23 @@
         {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
         <span>{{ current_user.username }}</span>
       </div>
-    </header>
+    </header>{% endif %}
+
+    {% if request.app.state.app_mode == 'desktop' %}<section class="desktop-operations-intro desktop-page-hero" aria-label="Resumo de operações">
+      <div>
+        <p class="eyebrow">{{ guild.name }} · mapa de campanha</p>
+        <h1 id="missions-title">Missões</h1>
+        <p><strong>Decida, prepare e colete.</strong> Escolha a companhia antes de partir. Recompensas concluídas entram no tesouro após a coleta manual.</p>
+        <div class="action-row compact">
+          <a class="button-link secondary" href="#available-missions-title">Ver missões</a>
+          {% if awaiting_loot_count > 0 %}<a class="button-link" href="#loot-disponivel">Receber recompensas</a>{% endif %}
+        </div>
+      </div>
+      <dl class="desktop-operations-intro__counts">
+        <div><dt>Opções nesta faixa</dt><dd>{{ total_templates }}</dd></div>
+        <div><dt>Aguardando coleta</dt><dd>{{ awaiting_loot_count }}</dd></div>
+      </dl>
+    </section>{% endif %}
 
     {% if awaiting_loot_count > 0 %}
       <div class="loot-shortcut"><span>Você possui {{ awaiting_loot_count }} recompensa(s) aguardando coleta.</span><a class="button-link" href="#loot-disponivel">Receber recompensas</a></div>
