@@ -4,7 +4,7 @@
 
 {% block content %}
   <section class="dashboard" aria-labelledby="mercenaries-title">
-    <header class="topbar">
+    <header class="topbar desktop-page-hero">
       <div>
         <p class="eyebrow">Equipe da Guilda</p>
         <h1 id="mercenaries-title">Mercenários</h1>
@@ -51,7 +51,7 @@
           {% set summary = (attribute_summaries|default({})).get(mercenary.id) %}
           <article class="mercenary-card rarity-{{ mercenary.rarity }}">
             <div class="mercenary-head">
-              <div class="avatar-placeholder avatar-class-icon">
+              <div class="avatar-placeholder avatar-class-icon" data-desktop-class="{{ mercenary.mercenary_class.code or mercenary.mercenary_class.name }}">
                 {% if mercenary.class_icon_path %}
                   <img class="asset-icon class-icon-img {% if '/assets/extended/' in mercenary.class_icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="{{ mercenary.class_label }}" loading="lazy">
                 {% else %}

@@ -4,6 +4,8 @@ from random import choices, randint, sample
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.time import as_utc
+from app.core.time import prepare_timer_context
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.guild import Guild, GuildResources
 from app.repositories.item_repository import add_inventory_quantity
@@ -86,10 +88,11 @@ def get_docks_context(db: Session, guild: Guild) -> dict[str, object]:
     rotation = None
     if level > 0:
         rotation = db.scalar(select(DockRotation).where(DockRotation.guild_id == guild.id, DockRotation.status == "active").order_by(DockRotation.id.desc()))
-        if rotation is None or rotation.ends_at <= utc_now():
+        if rotation is None or as_utc(rotation.ends_at) <= utc_now():
             rotation = create_dock_rotation(db, guild, level)
         else:
             rotation = _load_rotation(db, rotation.id)
+        prepare_timer_context(rotation, utc_now())
     return {"dock_level": level, "rotation": rotation, "now": utc_now(), "offer_slots": _offer_count(level) if level else 0}
 
 
@@ -102,7 +105,7 @@ def buy_dock_offer(db: Session, guild: Guild, resources: GuildResources, offer_i
     if offer is None or offer.rotation_merchant.rotation.guild_id != guild.id:
         raise DockError("Oferta indisponível.")
     rotation = offer.rotation_merchant.rotation
-    if rotation.status != "active" or rotation.ends_at <= utc_now():
+    if rotation.status != "active" or as_utc(rotation.ends_at) <= utc_now():
         raise DockError("Esta rotação já terminou.")
     if offer.item_template.item_type == "equipment" and quantity != 1:
         raise DockError("Equipamentos são comprados uma unidade por vez.")

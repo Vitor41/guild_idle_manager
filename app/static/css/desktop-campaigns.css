@@ -1,0 +1,82 @@
+:root {
+  color-scheme: dark;
+  --ink: #e9dfc6;
+  --muted: #a49a82;
+  --panel: #1b211e;
+  --panel-raised: #252d27;
+  --line: #514834;
+  --gold: #c6a25c;
+  --gold-bright: #e2c47f;
+  --danger: #a95f55;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background: radial-gradient(ellipse at 50% -20%, #3c4435 0, #1b211e 54%, #111613 100%);
+  font: 16px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+.desktop-shell { width: min(1040px, calc(100% - 48px)); margin: 0 auto; padding: 48px 0 64px; }
+.masthead { display: flex; align-items: center; gap: 22px; margin-bottom: 34px; }
+.seal, .campaign-mark { display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--gold); color: var(--gold-bright); background: linear-gradient(145deg, #343b2d, #171d19); font-family: Georgia, serif; }
+.seal { width: 70px; height: 70px; border-radius: 50%; font-size: 37px; box-shadow: inset 0 0 0 5px #20251f, 0 0 22px #c6a25c20; }
+.eyebrow { margin: 0 0 3px; color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+h1, h2, h3, p { margin-top: 0; }
+h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; }
+h1 { margin-bottom: 4px; font-size: clamp(32px, 5vw, 46px); font-weight: 500; }
+h2 { margin-bottom: 15px; font-size: 24px; font-weight: 500; }
+h3 { margin-bottom: 6px; font-size: 21px; }
+.intro, .campaign-details p, .empty-state p { margin-bottom: 0; color: var(--muted); }
+.create-panel, .campaign-card, .empty-state { border: 1px solid var(--line); background: #1a201ddf; box-shadow: 0 14px 34px #0003; }
+.create-panel { padding: 24px; margin-bottom: 38px; }
+.create-panel form { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px; }
+label { grid-row: 1; color: var(--muted); font-size: 13px; }
+input { min-width: 0; height: 44px; padding: 0 12px; border: 1px solid #62583f; border-radius: 4px; color: var(--ink); background: #111714; font: inherit; }
+input:focus-visible, button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.button { min-height: 40px; padding: 9px 14px; border: 1px solid #62583f; border-radius: 4px; color: var(--ink); background: #30372f; font: 600 13px/1.2 "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+.button:hover { border-color: var(--gold); background: #3a4034; }
+.button.primary { border-color: #b28e4a; color: #211d13; background: linear-gradient(#e0c274, #bd984e); }
+.button.primary:hover { background: linear-gradient(#ecd28f, #c8a458); }
+.button.quiet { background: transparent; }
+.button.danger { border-color: #70423d; color: #e1aaa0; background: transparent; }
+.button.danger:hover { background: #603531; }
+.campaign-section { margin-top: 10px; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
+.section-heading h2 { margin-bottom: 0; }
+.campaign-list { display: grid; gap: 12px; }
+.campaign-card { display: grid; grid-template-columns: 54px minmax(160px, 1fr) minmax(260px, auto); align-items: center; gap: 18px; padding: 18px; }
+.campaign-mark { width: 52px; height: 52px; border-radius: 50% 50% 44% 44%; font: 28px Georgia, serif; }
+.campaign-details p { font-size: 12px; }
+.campaign-details .save-status { margin-top: 4px; color: #c6a25c; }
+.campaign-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.campaign-actions .button { min-height: 34px; padding: 7px 10px; font-size: 12px; }
+.empty-state { padding: 40px 24px; text-align: center; }
+.empty-ornament { display: block; margin-bottom: 8px; color: var(--gold); font-size: 29px; }
+.empty-state h3 { margin-bottom: 6px; }
+.status-message { min-height: 24px; margin: 18px 0 0; color: var(--gold-bright); }
+.status-message.error { color: #efa89a; }
+.recovery-panel { margin-top: 24px; padding: 20px; border: 1px solid #80584c; background: #251d1b; }
+.recovery-panel p, .recovery-panel li span { color: var(--muted); }
+.recovery-panel ul { display: grid; gap: 10px; padding-left: 20px; }
+.recovery-panel li span { display: block; font-size: 13px; }
+.recovery-panel li .button { margin-top: 8px; }
+dialog { width: min(480px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--gold); color: var(--ink); background: #1b211e; box-shadow: 0 20px 60px #0009; }
+dialog::backdrop { background: #080b09c9; }
+dialog h2 { margin-bottom: 8px; }
+dialog .dialog-message { color: var(--muted); }
+dialog input { width: 100%; margin-top: 6px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+@media (max-width: 760px) {
+  .desktop-shell { width: min(100% - 28px, 560px); padding-top: 28px; }
+  .masthead { gap: 14px; }
+  .seal { width: 56px; height: 56px; font-size: 30px; }
+  .create-panel form { grid-template-columns: 1fr; gap: 8px; }
+  label { grid-row: auto; margin-top: 4px; }
+  .create-panel form .button { margin-top: 8px; }
+  .section-heading { align-items: flex-start; }
+  .campaign-card { grid-template-columns: 44px 1fr; gap: 12px; padding: 14px; }
+  .campaign-mark { width: 44px; height: 44px; font-size: 24px; }
+  .campaign-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}

@@ -50,25 +50,30 @@ def upgrade() -> None:
             )
             INSERT INTO guild_inventory_items
                 (guild_id, item_template_id, quantity, created_at, updated_at)
-            SELECT guild_id, item_template_id, quantity, NOW(), NOW()
+            SELECT guild_id, item_template_id, quantity, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             FROM missing
+            WHERE 1 = 1
             ON CONFLICT (guild_id, item_template_id)
             DO UPDATE SET quantity = guild_inventory_items.quantity + EXCLUDED.quantity,
-                          updated_at = NOW()
+                          updated_at = CURRENT_TIMESTAMP
         """)
         connection.exec_driver_sql(f"""
-            UPDATE guild_resources gr
-            SET {resource_column} = totals.quantity,
-                updated_at = NOW()
-            FROM (
-                SELECT gi.guild_id, COALESCE(SUM(gi.quantity), 0) AS quantity
-                FROM guild_inventory_items gi
-                JOIN item_templates it ON it.id = gi.item_template_id
-                WHERE it.item_type = 'material' AND it.material_family IN ({family_list})
-                GROUP BY gi.guild_id
-            ) totals
-            WHERE totals.guild_id = gr.guild_id
-              AND gr.{resource_column} <> totals.quantity
+            UPDATE guild_resources
+            SET {resource_column} = (
+                    SELECT COALESCE(SUM(gi.quantity), 0)
+                    FROM guild_inventory_items gi
+                    JOIN item_templates it ON it.id = gi.item_template_id
+                    WHERE gi.guild_id = guild_resources.guild_id
+                      AND it.item_type = 'material' AND it.material_family IN ({family_list})
+                ),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE {resource_column} <> (
+                    SELECT COALESCE(SUM(gi.quantity), 0)
+                    FROM guild_inventory_items gi
+                    JOIN item_templates it ON it.id = gi.item_template_id
+                    WHERE gi.guild_id = guild_resources.guild_id
+                      AND it.item_type = 'material' AND it.material_family IN ({family_list})
+                )
         """)
 
 

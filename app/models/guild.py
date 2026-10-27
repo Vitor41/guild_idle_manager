@@ -28,7 +28,10 @@ class Guild(Base):
     __tablename__ = "guilds"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), unique=True, nullable=True, index=True)
+    campaign_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_metadata.campaign_id"), unique=True, nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -41,7 +44,7 @@ class Guild(Base):
         nullable=False,
     )
 
-    user: Mapped["User"] = relationship(back_populates="guild")
+    user: Mapped["User | None"] = relationship(back_populates="guild")
     resources: Mapped["GuildResources | None"] = relationship(
         back_populates="guild",
         uselist=False,

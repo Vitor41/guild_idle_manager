@@ -5,6 +5,8 @@ from random import Random
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.time import prepare_timer_context
+
 from app.core.game_balance import BLACKSMITH_REFINE_LEVEL, REFINE_BASE_GOLD_COST, REFINE_BASE_ORE_COST, REFINE_RARITY_CAPS
 from app.models.crafting import CraftingRecipeMaterial
 from app.models.guild import Guild, GuildResources
@@ -211,6 +213,8 @@ def list_rotating_recipes(
 def get_blacksmith_context(db: Session, guild: Guild) -> dict[str, object]:
     blacksmith_level = get_building_level(db, guild.id, "blacksmith")
     recipes, rotation = list_rotating_recipes(db, guild, blacksmith_level)
+    if rotation is not None and rotation.get("ends_at") is not None:
+        prepare_timer_context(rotation, datetime.now(timezone.utc))
     for recipe in recipes:
         recipe.material_status = []
         for material in recipe.materials:

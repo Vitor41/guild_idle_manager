@@ -20,6 +20,8 @@ def home(
     db: DbSession,
     current_user: User | None = Depends(get_current_user),
 ):
+    if settings.app_mode == "desktop":
+        return RedirectResponse("/desktop/campaigns", status_code=303)
     if current_user:
         guild, _ = get_current_guild_context(db, current_user.id)
         return RedirectResponse("/dashboard" if guild else "/guild/create", status_code=303)
@@ -27,5 +29,9 @@ def home(
     return templates.TemplateResponse(
         request=request,
         name="home.html",
-        context={"app_env": settings.app_env, "current_user": current_user},
+        context={
+            "app_env": settings.app_env,
+            "current_user": current_user,
+            "desktop_mode": settings.app_mode == "desktop",
+        },
     )

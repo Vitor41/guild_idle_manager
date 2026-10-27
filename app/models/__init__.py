@@ -15,10 +15,12 @@ from app.models.tavern import GuildTavernState, TavernConfig, TavernSpecialOffer
 from app.models.user import User
 from app.models.content import ContentSeedRun, ProfessionTemplate, ProfessionTraining
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
+from app.models.campaign import CampaignMetadata
 
 
 __all__ = [
     "BuildingTemplate",
+    "CampaignMetadata",
     "AchievementTemplate",
     "Base",
     "ClassChangeRun",

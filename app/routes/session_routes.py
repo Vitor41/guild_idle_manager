@@ -2,17 +2,20 @@ import json
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_player, get_current_user
 from app.models.user import User
 from app.core.dependencies import DbSession
 from app.core.forms import read_form_fields
+from app.models.campaign import CampaignMetadata
 
 
 router = APIRouter(prefix="/session")
 
 
 @router.post("/heartbeat", status_code=204)
-def heartbeat(current_user: User | None = Depends(get_current_user)) -> Response:
+def heartbeat(request: Request, current_user: User | None = Depends(get_current_user)) -> Response:
+    if request.app.state.app_mode == "desktop":
+        return Response(status_code=404)
     if current_user is None:
         return Response(status_code=401)
     return Response(status_code=204)
@@ -22,7 +25,7 @@ def heartbeat(current_user: User | None = Depends(get_current_user)) -> Response
 async def confirmation_preference(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ) -> Response:
     if current_user is None:
         return Response(status_code=401)
@@ -35,7 +38,14 @@ async def confirmation_preference(
     except (TypeError, json.JSONDecodeError):
         preferences = {}
     preferences[key] = False
-    current_user.confirmation_preferences = json.dumps(preferences, separators=(",", ":"))
-    db.add(current_user)
+    serialized = json.dumps(preferences, separators=(",", ":"))
+    if isinstance(current_user.id, str):
+        campaign = db.get(CampaignMetadata, current_user.id)
+        if campaign is None:
+            return Response(status_code=404)
+        campaign.confirmation_preferences = serialized
+    else:
+        current_user.confirmation_preferences = serialized
+        db.add(current_user)
     db.commit()
     return Response(status_code=204)

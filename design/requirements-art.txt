@@ -1,0 +1,2 @@
+# Optional tooling for regenerating desktop art exports; not used by the app runtime.
+Pillow==12.3.0

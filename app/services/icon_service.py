@@ -4,6 +4,7 @@ import unicodedata
 from functools import lru_cache
 from pathlib import Path
 
+from app.core.config import settings
 from app.models.item import GuildInventoryItem, GuildItemInstance, ItemTemplate
 
 
@@ -11,6 +12,7 @@ STATIC_ROOT = Path(__file__).resolve().parents[1] / "static"
 ITEM_MANIFEST_PATH = STATIC_ROOT / "assets" / "items" / "manifest_assets.json"
 CLASS_MANIFEST_PATH = STATIC_ROOT / "assets" / "classes" / "manifest_class_icons.json"
 EXTENDED_MANIFEST_PATH = STATIC_ROOT / "assets" / "extended" / "manifest_extended_icons.json"
+DESKTOP_MANIFEST_PATH = STATIC_ROOT / "assets" / "desktop" / "manifest.json"
 
 EXTENDED_CLASS_ALIASES = {
     "knight": "cavaleiro",
@@ -159,6 +161,26 @@ def _read_manifest(path: Path) -> tuple[dict[str, object], int]:
     return _load_manifest(str(path), modified_at), modified_at
 
 
+def _desktop_sprite_path(map_name: str, *keys: str | None) -> str | None:
+    manifest, _ = _read_manifest(DESKTOP_MANIFEST_PATH)
+    icon_maps = manifest.get("icon_maps", {})
+    sprites = manifest.get("sprites", {})
+    if not isinstance(icon_maps, dict) or not isinstance(sprites, dict):
+        return None
+    mapping = icon_maps.get(map_name, {})
+    if not isinstance(mapping, dict):
+        return None
+    for candidate in keys:
+        normalized = normalize_asset_key(candidate)
+        sprite_key = mapping.get(normalized)
+        sprite = sprites.get(sprite_key) if isinstance(sprite_key, str) else None
+        paths = sprite.get("paths", {}) if isinstance(sprite, dict) else {}
+        relative_path = (paths.get("64") or paths.get("128")) if isinstance(paths, dict) else None
+        if isinstance(relative_path, str) and (DESKTOP_MANIFEST_PATH.parent / relative_path).is_file():
+            return f"/assets/desktop/{relative_path}"
+    return None
+
+
 def _resolve_static_path(asset: dict[str, object]) -> str | None:
     url = str(asset.get("url_128") or "")
     if url.startswith("/static/"):
@@ -291,6 +313,12 @@ def get_final_class_icon_path(class_key_or_name: object) -> str | None:
 
 
 def get_building_icon_path(building_key_or_name: object) -> str | None:
+    if settings.app_mode == "desktop":
+        candidates = [building_key_or_name] if isinstance(building_key_or_name, str) else [
+            getattr(building_key_or_name, attribute, None)
+            for attribute in ("effect_type", "name")
+        ]
+        return _desktop_sprite_path("buildings", *candidates)
     return get_extended_icon_path(building_key_or_name, "building")
 
 
@@ -332,6 +360,14 @@ def get_item_icon(item: ItemTemplate | GuildItemInstance | GuildInventoryItem) -
 
 def get_item_icon_path(item: ItemTemplate | GuildItemInstance | GuildInventoryItem) -> str | None:
     item_template = item.item_template if hasattr(item, "item_template") else item
+    if settings.app_mode == "desktop":
+        if icon_path := _desktop_sprite_path("item_icon_groups", normalize_icon_group(item_template.icon_group)):
+            return icon_path
+        if icon_path := _desktop_sprite_path("material_families", item_template.material_family):
+            return icon_path
+        if icon_path := _desktop_sprite_path("equipment_slots", item_template.equipment_slot):
+            return icon_path
+        return None
     _, modified_at = _read_manifest(ITEM_MANIFEST_PATH)
     if not modified_at:
         return None
@@ -348,6 +384,24 @@ def get_item_icon_path(item: ItemTemplate | GuildItemInstance | GuildInventoryIt
 
 
 def get_class_icon_path(class_key_or_name: object) -> str | None:
+    if settings.app_mode == "desktop":
+        candidates: list[str | None] = []
+        if isinstance(class_key_or_name, str):
+            candidates.append(class_key_or_name)
+        else:
+            candidates.extend(
+                getattr(class_key_or_name, attribute, None)
+                for attribute in ("code", "display_name", "name")
+            )
+        display_aliases = {display_name: code for code, display_name in EXTENDED_CLASS_ALIASES.items()}
+        for candidate in candidates:
+            normalized = normalize_asset_key(candidate)
+            if icon_path := _desktop_sprite_path("classes", normalized):
+                return icon_path
+            canonical = display_aliases.get(normalized)
+            if canonical and (icon_path := _desktop_sprite_path("classes", canonical)):
+                return icon_path
+        return None
     extended_path = (
         get_specialization_icon_path(class_key_or_name)
         or get_final_class_icon_path(class_key_or_name)

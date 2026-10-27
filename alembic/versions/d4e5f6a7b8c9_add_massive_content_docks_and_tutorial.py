@@ -68,7 +68,8 @@ def upgrade() -> None:
     op.create_index("ix_profession_templates_code", "profession_templates", ["code"])
     op.create_index("ix_profession_templates_material_family", "profession_templates", ["material_family"])
     op.add_column("mercenaries", sa.Column("profession_id", sa.Integer(), nullable=True))
-    op.create_foreign_key("fk_mercenaries_profession", "mercenaries", "profession_templates", ["profession_id"], ["id"])
+    with op.batch_alter_table("mercenaries") as batch_op:
+        batch_op.create_foreign_key("fk_mercenaries_profession", "profession_templates", ["profession_id"], ["id"])
     op.create_index("ix_mercenaries_profession_id", "mercenaries", ["profession_id"])
     op.create_table(
         "profession_trainings",

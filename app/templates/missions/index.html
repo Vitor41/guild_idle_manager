@@ -5,7 +5,7 @@
 
 {% block content %}
   <section class="dashboard" aria-labelledby="missions-title">
-    <header class="topbar">
+    {% if request.app.state.app_mode != 'desktop' %}<header class="topbar">
       <div>
         <p class="eyebrow">{{ guild.name }}</p>
         <h1 id="missions-title">Missões</h1>
@@ -20,7 +20,23 @@
         {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
         <span>{{ current_user.username }}</span>
       </div>
-    </header>
+    </header>{% endif %}
+
+    {% if request.app.state.app_mode == 'desktop' %}<section class="desktop-operations-intro desktop-page-hero" aria-label="Resumo de operações">
+      <div>
+        <p class="eyebrow">{{ guild.name }} · mapa de campanha</p>
+        <h1 id="missions-title">Missões</h1>
+        <p><strong>Decida, prepare e colete.</strong> Escolha a companhia antes de partir. Recompensas concluídas entram no tesouro após a coleta manual.</p>
+        <div class="action-row compact">
+          <a class="button-link secondary" href="#available-missions-title">Ver missões</a>
+          {% if awaiting_loot_count > 0 %}<a class="button-link" href="#loot-disponivel">Receber recompensas</a>{% endif %}
+        </div>
+      </div>
+      <dl class="desktop-operations-intro__counts">
+        <div><dt>Opções nesta faixa</dt><dd>{{ total_templates }}</dd></div>
+        <div><dt>Aguardando coleta</dt><dd>{{ awaiting_loot_count }}</dd></div>
+      </dl>
+    </section>{% endif %}
 
     {% if awaiting_loot_count > 0 %}
       <div class="loot-shortcut"><span>Você possui {{ awaiting_loot_count }} recompensa(s) aguardando coleta.</span><a class="button-link" href="#loot-disponivel">Receber recompensas</a></div>
@@ -51,6 +67,7 @@
         {% for band in mission_level_bands %}<a href="/missions?{{ band_queries[band] }}" class="{% if selected_band == band %}active{% endif %}">Nível {{ band }}</a>{% endfor %}
       </nav>
       <div class="section-heading"><h2 id="available-missions-title">Missões disponíveis</h2><span>{{ total_templates }} opções nesta faixa</span></div>
+      <p class="note">A chance exibida é a base. Missões padrão ajustam esse valor pelo grupo e têm chance final máxima de 95%; missões longas usam a chance fixa informada.</p>
       {% if selected_mode in ('long', 'all') %}<p class="note">Missões longas ativas: {{ long_idle_active_count }}/{{ long_idle_limit }}. Esse limite não afeta missões comuns ou coletas.</p>{% endif %}
       {% if mission_templates %}
         <div class="mission-list">
@@ -63,7 +80,7 @@
                   <div><dt>Duração</dt><dd>{{ format_duration(mission.duration_seconds) }}</dd></div>
                   <div><dt>Ouro</dt><dd>{{ mission.base_gold_reward }}</dd></div>
                   <div><dt>XP</dt><dd>{{ mission.base_xp_reward }}</dd></div>
-                  <div><dt>Chance</dt><dd>{{ mission.base_success_chance }}%</dd></div>
+                  <div><dt>Chance base</dt><dd>{{ mission.base_success_chance }}%</dd></div>
                   <div><dt>Grupo</dt><dd>{{ mission.min_party_size }}-{{ mission.max_party_size }}</dd></div>
                   <div><dt>Nível merc.</dt><dd>{{ mission.required_min_mercenary_level }}+</dd></div>
                 </dl>
@@ -133,15 +150,15 @@
       {% if in_progress_runs %}
         <div class="mission-list">
           {% for run in in_progress_runs %}
-            <article class="mission-card {% if run.ends_at <= now %}ready-card{% endif %}">
+            <article class="mission-card {% if run.ready_for_loot %}ready-card{% endif %}">
               <div>
                 <h3>{{ run.mission_template.name }}</h3>
                 <p class="note">Grupo: {{ run.members|map(attribute='mercenary.name')|join(', ') if run.members else 'Indisponível' }}</p>
                 <p class="note">Multiplicador: {{ run.run_multiplier }}x</p>
                 <p class="note">
                   Tempo restante:
-                  <strong class="mission-timer" data-ends-at="{{ run.ends_at.isoformat() }}">
-                    {% if run.ends_at <= now %}Concluída{% else %}Calculando...{% endif %}
+                  <strong class="mission-timer" data-ends-at="{{ run.ends_at_iso }}">
+                    {% if run.ready_for_loot %}Concluída{% else %}Calculando...{% endif %}
                   </strong>
                 </p>
               </div>
@@ -149,8 +166,8 @@
                 <button
                   type="submit"
                   class="claim-button"
-                  data-ends-at="{{ run.ends_at.isoformat() }}"
-                  {% if run.ends_at > now %}disabled{% endif %}
+                  data-ends-at="{{ run.ends_at_iso }}"
+                  {% if not run.ready_for_loot %}disabled{% endif %}
                 >
                   Receber Loot
                 </button>

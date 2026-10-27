@@ -25,7 +25,11 @@ def upgrade() -> None:
     op.create_index(op.f("ix_mission_templates_mission_type"), "mission_templates", ["mission_type"], unique=False)
 
     op.add_column("item_templates", sa.Column("base_sell_value", sa.Integer(), server_default="1", nullable=False))
-    op.execute("UPDATE item_templates SET base_sell_value = CASE WHEN item_type = 'equipment' THEN GREATEST(10, tier * 20) ELSE GREATEST(1, tier * 2) END")
+    op.execute(
+        "UPDATE item_templates SET base_sell_value = "
+        "CASE WHEN item_type = 'equipment' THEN CASE WHEN tier * 20 < 10 THEN 10 ELSE tier * 20 END "
+        "ELSE CASE WHEN tier * 2 < 1 THEN 1 ELSE tier * 2 END END"
+    )
 
     op.create_table(
         "guild_activity",

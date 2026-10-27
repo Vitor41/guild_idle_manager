@@ -1,0 +1,366 @@
+"""Opt-in end-to-end smoke for the real pywebview window lifecycle."""
+
+import json
+import os
+from contextlib import closing
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+import unittest
+from urllib.error import URLError
+from urllib.request import urlopen
+import sqlite3
+
+
+RUNTIME_SMOKE_ENABLED = os.environ.get("GIM_RUN_DESKTOP_RUNTIME_SMOKE") == "1"
+
+
+@unittest.skipUnless(os.name == "nt" and RUNTIME_SMOKE_ENABLED, "Set GIM_RUN_DESKTOP_RUNTIME_SMOKE=1 on Windows to run the native window smoke.")
+class DesktopRuntimeSmokeTests(unittest.TestCase):
+    def test_window_create_return_close_stops_server_and_closes_campaign(self):
+        with tempfile.TemporaryDirectory(prefix="gim-desktop-smoke-") as temp_dir:
+            root = Path(temp_dir)
+            marker_path = root / "runtime-smoke.json"
+            child_script = textwrap.dedent(
+                r'''
+                import json
+                import os
+                import logging
+                from pathlib import Path
+                import subprocess
+                import threading
+                import time
+                import traceback
+                import webview
+                from webview.platforms.edgechromium import EdgeChrome
+                from System.Threading import Thread
+                from app.desktop.launcher import run
+
+                marker = Path(os.environ["GIM_RUNTIME_SMOKE_MARKER"])
+                pywebview_log = Path(os.environ["LOCALAPPDATA"]) / "pywebview-runtime.log"
+                pywebview_handler = logging.FileHandler(pywebview_log, encoding="utf-8")
+                pywebview_handler.setLevel(logging.DEBUG)
+                pywebview_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+                pywebview_logger = logging.getLogger("pywebview")
+                pywebview_logger.setLevel(logging.DEBUG)
+                pywebview_logger.addHandler(pywebview_handler)
+                initialization_results = []
+                edge_instances = []
+                navigation_events = []
+                edge_actions = []
+                capture_diagnostics = os.environ.get("GIM_CAPTURE_WEBVIEW_DIAGNOSTICS", "1") == "1"
+
+                if capture_diagnostics:
+                    original_webview_ready = EdgeChrome.on_webview_ready
+                    original_navigation_start = EdgeChrome.on_navigation_start
+                    original_navigation_completed = EdgeChrome.on_navigation_completed
+                    original_load_url = EdgeChrome.load_url
+                    original_edge_init = EdgeChrome.__init__
+
+                    def capture_edge_initialization(self, *args, **kwargs):
+                        original_edge_init(self, *args, **kwargs)
+                        edge_instances.append(self)
+
+                    EdgeChrome.__init__ = capture_edge_initialization
+
+                    def capture_webview_initialization(self, sender, args):
+                        try:
+                            event_result = {
+                                "is_success": bool(args.IsSuccess),
+                                "exception": str(args.InitializationException) if args.InitializationException else None,
+                                "thread_apartment": str(Thread.CurrentThread.GetApartmentState()),
+                                "real_url": str(self.pywebview_window.real_url) if self.pywebview_window.real_url else None,
+                            }
+                        except BaseException as error:
+                            event_result = {"capture_error": repr(error)}
+                        initialization_results.append(event_result)
+                        try:
+                            handler_result = original_webview_ready(self, sender, args)
+                            if os.environ.get("GIM_TEST_DIRECT_NAVIGATE") == "1" and self.pywebview_window.real_url:
+                                try:
+                                    sender.CoreWebView2.Navigate(self.pywebview_window.real_url)
+                                    edge_actions.append({
+                                        "action": "direct_core_navigate_returned",
+                                        "url": str(self.pywebview_window.real_url),
+                                        "core_source": str(sender.CoreWebView2.Source),
+                                    })
+                                except BaseException as error:
+                                    edge_actions.append({
+                                        "action": "direct_core_navigate_exception",
+                                        "error": repr(error),
+                                        "traceback": traceback.format_exc(),
+                                    })
+                            return handler_result
+                        except BaseException as error:
+                            event_result["handler_exception"] = traceback.format_exc()
+                            raise
+
+                    def capture_navigation_completed(self, sender, args):
+                        navigation_events.append({
+                            "source": str(sender.Source) if sender.Source else None,
+                            "is_success": bool(args.IsSuccess),
+                            "web_error_status": str(args.WebErrorStatus),
+                        })
+                        return original_navigation_completed(self, sender, args)
+
+                    def capture_navigation_start(self, sender, args):
+                        navigation_events.append({
+                            "event": "starting",
+                            "uri": str(args.Uri),
+                        })
+                        return original_navigation_start(self, sender, args)
+
+                    def capture_load_url(self, url):
+                        edge_actions.append({"action": "load_url", "url": str(url)})
+                        try:
+                            result = original_load_url(self, url)
+                            edge_actions.append({
+                                "action": "load_url_returned",
+                                "return": repr(result),
+                                "source": str(self.webview.Source) if self.webview.Source else None,
+                                "core_source": str(self.webview.CoreWebView2.Source) if self.webview.CoreWebView2 else None,
+                            })
+                            return result
+                        except BaseException as error:
+                            edge_actions.append({"action": "load_url_exception", "error": repr(error), "traceback": traceback.format_exc()})
+                            raise
+
+                    EdgeChrome.on_webview_ready = capture_webview_initialization
+                    EdgeChrome.on_navigation_start = capture_navigation_start
+                    EdgeChrome.on_navigation_completed = capture_navigation_completed
+                    EdgeChrome.load_url = capture_load_url
+                original_start = webview.start
+                window_closed = threading.Event()
+                webview_responses = []
+
+                def smoke_window_lifecycle():
+                    window = webview.windows[0]
+                    result = {
+                        "probe_started": True,
+                        "window_shown": False,
+                        "webview_page_loaded": False,
+                        "manager_dom_visible": False,
+                        "dashboard_dom_visible": False,
+                        "tutorial_invitation_dismissed": False,
+                        "campaign_created_and_opened": False,
+                        "returned_to_menu": False,
+                        "manager_restored": False,
+                        "window_closed": False,
+                    }
+
+                    def save_progress():
+                        marker.write_text(json.dumps(result), encoding="utf-8")
+
+                    def wait_for_dom(script, timeout=30):
+                        deadline = time.monotonic() + timeout
+                        while time.monotonic() < deadline:
+                            if window.evaluate_js(script) is True:
+                                return True
+                            time.sleep(0.1)
+                        return False
+
+                    save_progress()
+                    try:
+                        if not window.events.shown.wait(30):
+                            raise RuntimeError("pywebview window did not reach its shown event")
+                        result["window_shown"] = True
+                        save_progress()
+
+                        result["webview_page_loaded"] = window.events.loaded.wait(30)
+                        if not result["webview_page_loaded"]:
+                            result["bridge_ready"] = window.events._pywebviewready.is_set()
+                            result["webview_responses"] = list(webview_responses)
+                            result["webview_initialization"] = list(initialization_results)
+                            result["navigation_events"] = list(navigation_events)
+                            result["webview_actions"] = list(edge_actions)
+                            result["webview_control"] = [
+                                {
+                                    "is_handle_created": bool(getattr(instance.webview, "IsHandleCreated", False)),
+                                    "core_available": instance.webview.CoreWebView2 is not None,
+                                }
+                                for instance in edge_instances
+                            ]
+                            result["webview_runtime_processes"] = subprocess.run(
+                                ["tasklist", "/FI", "IMAGENAME eq msedgewebview2.exe", "/FO", "CSV", "/NH"],
+                                capture_output=True,
+                                text=True,
+                                check=False,
+                            ).stdout.strip()
+                            result["webview_user_data"] = [
+                                {
+                                    "path": str(instance.user_data_folder),
+                                    "exists": Path(str(instance.user_data_folder)).exists(),
+                                    "entries": [path.name for path in Path(str(instance.user_data_folder)).glob("*")][:10],
+                                }
+                                for instance in edge_instances
+                            ]
+                            result["webview_source"] = [
+                                {
+                                    "source": str(instance.webview.Source) if instance.webview.Source else None,
+                                    "core_source": str(instance.webview.CoreWebView2.Source) if instance.webview.CoreWebView2 else None,
+                                }
+                                for instance in edge_instances
+                            ]
+                            raise RuntimeError(f"campaign manager did not load in pywebview; bridge_ready={result['bridge_ready']}, responses={result['webview_responses']!r}")
+                        if window.evaluate_js("document.querySelector('#create-campaign-form') !== null") is not True:
+                            raise RuntimeError("campaign manager DOM was not present in the native WebView")
+                        result["manager_dom_visible"] = True
+                        result["bridge_api_visible"] = window.evaluate_js(
+                            "typeof window.pywebview?.api?.export_campaign === 'function'"
+                        ) is True
+                        if not result["bridge_api_visible"]:
+                            raise RuntimeError("desktop bridge API was not present in the native WebView")
+                        save_progress()
+
+                        from app.main import app
+                        window.evaluate_js("""(() => {
+                            document.querySelector('#campaign-name').value = 'Smoke runtime';
+                            document.querySelector('#guild-name').value = 'Guilda de teste';
+                            document.querySelector('#create-campaign-form').requestSubmit();
+                            return true;
+                        })()""")
+
+                        deadline = time.monotonic() + 35
+                        while time.monotonic() < deadline:
+                            if window.evaluate_js("window.location.pathname") == "/dashboard":
+                                break
+                            time.sleep(0.1)
+                        else:
+                            raise RuntimeError("the native WebView did not navigate to the new campaign dashboard")
+                        if window.evaluate_js("document.querySelector('#tutorial-invite form[action=\"/tutorial/decline\"] button') !== null") is True:
+                            window.evaluate_js("document.querySelector('#tutorial-invite form[action=\"/tutorial/decline\"] button').click(); true")
+                            if not wait_for_dom("document.querySelector('#tutorial-invite') === null"):
+                                raise RuntimeError("the native WebView did not dismiss the first-run tutorial invitation")
+                            result["tutorial_invitation_dismissed"] = True
+                        if not wait_for_dom("document.querySelector('form[action=\"/desktop/return-to-campaigns\"]') !== null"):
+                            raise RuntimeError("campaign dashboard did not show the return-to-campaigns action")
+                        result["dashboard_dom_visible"] = True
+                        result["campaign_id"] = app.state.active_campaign.campaign_id
+                        result["campaign_created_and_opened"] = True
+                        save_progress()
+
+                        window.evaluate_js("window.__gimSubmitEvents = []; document.addEventListener('submit', event => window.__gimSubmitEvents.push({action: event.target.action, method: event.target.method, defaultPrevented: event.defaultPrevented}), true); true")
+                        window.evaluate_js("document.querySelector('form[action=\"/desktop/return-to-campaigns\"]').requestSubmit(); true")
+                        deadline = time.monotonic() + 35
+                        while time.monotonic() < deadline:
+                            if window.evaluate_js("window.location.pathname") == "/desktop/campaigns":
+                                break
+                            time.sleep(0.1)
+                        else:
+                            result["return_diagnostics"] = {
+                                "url": window.evaluate_js("window.location.href"),
+                                "title": window.evaluate_js("document.title"),
+                                "body_text": window.evaluate_js("document.body.innerText.slice(0, 2000)"),
+                                "form": window.evaluate_js("(() => { const f = document.querySelector('form[action=\"/desktop/return-to-campaigns\"]'); return f && {action:f.action, method:f.method, connected:f.isConnected}; })()"),
+                                "submit_events": window.evaluate_js("window.__gimSubmitEvents"),
+                                "resource_requests": window.evaluate_js("performance.getEntriesByType('resource').filter(e => e.name.includes('return-to-campaigns')).map(e => ({name:e.name, initiatorType:e.initiatorType, duration:e.duration, transferSize:e.transferSize}))"),
+                                "active_campaign_id": app.state.active_campaign.campaign_id if app.state.active_campaign else None,
+                                "suspended_campaigns": sorted(app.state.suspended_campaigns),
+                                "webview_responses": list(webview_responses),
+                            }
+                            save_progress()
+                            raise RuntimeError("the native WebView did not return to the campaign manager")
+                        if not wait_for_dom("document.querySelector('#campaign-list-title') !== null"):
+                            raise RuntimeError("campaign manager DOM was not restored after returning")
+                        result["returned_to_menu"] = True
+                        result["manager_restored"] = True
+                        save_progress()
+                        if app.state.active_campaign is not None or result["campaign_id"] not in app.state.suspended_campaigns:
+                            raise RuntimeError("campaign lifecycle state did not match the returned campaign menu")
+                        result["health_url"] = app.state.desktop_allowed_origin + "/desktop/health"
+                    except BaseException:
+                        result["error"] = traceback.format_exc()
+                        if pywebview_log.exists():
+                            result["pywebview_log_tail"] = "\n".join(pywebview_log.read_text(encoding="utf-8", errors="replace").splitlines()[-40:])
+                    finally:
+                        result["window_close_requested"] = True
+                        save_progress()
+                        window.confirm_close = False
+                        window.destroy()
+                        result["window_closed"] = window_closed.wait(15)
+                        if not result["window_closed"] and "error" not in result:
+                            result["error"] = "pywebview did not emit its closed event after window.destroy()"
+                        save_progress()
+
+                def start_with_lifecycle_probe(*args, **kwargs):
+                    window = webview.windows[0]
+                    window.events.closed += window_closed.set
+                    window.events.response_received += lambda response: webview_responses.append(repr(response))
+                    kwargs["func"] = smoke_window_lifecycle
+                    return original_start(*args, **kwargs)
+
+                webview.start = start_with_lifecycle_probe
+                run()
+                '''
+            )
+            environment = os.environ.copy()
+            environment["APP_MODE"] = "desktop"
+            environment["LOCALAPPDATA"] = str(root)
+            environment["GIM_RUNTIME_SMOKE_MARKER"] = str(marker_path)
+            environment["GIM_TEST_DIRECT_NAVIGATE"] = os.environ.get("GIM_TEST_DIRECT_NAVIGATE", "0")
+            environment["GIM_CAPTURE_WEBVIEW_DIAGNOSTICS"] = os.environ.get("GIM_CAPTURE_WEBVIEW_DIAGNOSTICS", "1")
+            pythonw = Path(sys.executable).with_name("pythonw.exe")
+            process = subprocess.Popen(
+                [str(pythonw), "-c", child_script],
+                cwd=Path(__file__).resolve().parents[1],
+                env=environment,
+            )
+            try:
+                stdout, stderr = process.communicate(timeout=90)
+            except subprocess.TimeoutExpired:
+                progress = marker_path.read_text(encoding="utf-8") if marker_path.exists() else "no lifecycle callback marker was written"
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True,
+                    check=False,
+                )
+                process.kill()
+                stdout, stderr = process.communicate(timeout=10)
+                self.fail(f"desktop runtime smoke timed out at {progress}\n{stdout}\n{stderr}")
+
+            self.assertTrue(marker_path.exists(), (stdout or "") + (stderr or ""))
+            result = json.loads(marker_path.read_text(encoding="utf-8"))
+            if "error" in result:
+                import shutil
+                preserved = Path(tempfile.gettempdir()) / f"gim-desktop-runtime-failure-{int(time.time())}"
+                shutil.copytree(root, preserved)
+                result["preserved_artifacts"] = str(preserved)
+                self.fail(json.dumps(result, ensure_ascii=False, indent=2))
+            self.assertNotIn("error", result, result.get("error", "") + result.get("pywebview_log_tail", ""))
+            self.assertTrue(result["window_shown"])
+            self.assertTrue(result["webview_page_loaded"])
+            self.assertTrue(result["manager_dom_visible"])
+            self.assertTrue(result["bridge_api_visible"])
+            self.assertTrue(result["dashboard_dom_visible"])
+            self.assertTrue(result["tutorial_invitation_dismissed"])
+            self.assertTrue(result["campaign_created_and_opened"])
+            self.assertTrue(result["returned_to_menu"])
+            self.assertTrue(result["manager_restored"])
+            self.assertTrue(result["window_closed"])
+            self.assertEqual(process.returncode, 0, (stdout or "") + (stderr or ""))
+
+            database_path = root / "GuildIdleManager" / "saves" / f"{result['campaign_id']}.db"
+            with closing(sqlite3.connect(database_path)) as connection:
+                state, closed_at = connection.execute(
+                    "SELECT last_session_state, last_clean_shutdown_utc FROM campaign_metadata WHERE campaign_id = ?",
+                    (result["campaign_id"],),
+                ).fetchone()
+            self.assertEqual(state, "closed")
+            self.assertIsNotNone(closed_at)
+
+            server_stopped = False
+            for _ in range(25):
+                try:
+                    with urlopen(result["health_url"], timeout=0.5):
+                        time.sleep(0.1)
+                except (OSError, URLError):
+                    server_stopped = True
+                    break
+            self.assertTrue(server_stopped, "loopback server still answered after the window process exited")
+
+
+if __name__ == "__main__":
+    unittest.main()

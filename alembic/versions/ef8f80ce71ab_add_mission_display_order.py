@@ -23,7 +23,8 @@ def upgrade() -> None:
         sa.Column('display_order', sa.Integer(), nullable=False, server_default='0'),
     )
     op.execute('UPDATE mission_templates SET display_order = id')
-    op.alter_column('mission_templates', 'display_order', server_default=None)
+    with op.batch_alter_table('mission_templates') as batch_op:
+        batch_op.alter_column('display_order', existing_type=sa.Integer(), server_default=None)
     op.create_index(op.f('ix_mission_templates_display_order'), 'mission_templates', ['display_order'], unique=False)
 
 

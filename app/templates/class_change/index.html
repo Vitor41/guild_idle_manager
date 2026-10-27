@@ -172,10 +172,10 @@
                       {{ run.to_class.display_name or run.to_class.name }}
                     </span>
                   </td>
-                  <td><strong class="countdown" data-ends-at="{{ run.ends_at.isoformat() }}">calculando...</strong></td>
+                  <td><strong class="countdown" data-ends-at="{{ run.ends_at_iso }}">calculando...</strong></td>
                   <td>
                     <form method="post" action="/class-change/{{ run.id }}/claim">
-                      <button type="submit" {% if now < run.ends_at %}disabled{% endif %}>Concluir</button>
+                      <button type="submit" {% if not run.ready_for_loot %}disabled{% endif %}>Concluir</button>
                     </form>
                   </td>
                 </tr>

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.core.dependencies import DbSession, get_current_user
+from app.core.dependencies import DbSession, get_current_player
 from app.core.forms import read_form_fields
 from app.models.user import User
 from app.services.crafting_service import CraftingError, craft_recipe, get_blacksmith_context, refine_equipment
@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "tem
 
 
 @router.get("")
-def blacksmith_index(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+def blacksmith_index(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)
@@ -52,7 +52,7 @@ def blacksmith_index(request: Request, db: DbSession, current_user: User | None 
 
 
 @router.post("/craft")
-async def craft(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+async def craft(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)
@@ -67,7 +67,7 @@ async def craft(request: Request, db: DbSession, current_user: User | None = Dep
 
 
 @router.post("/salvage/start")
-async def salvage_start(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+async def salvage_start(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)
@@ -88,7 +88,7 @@ async def salvage_start(request: Request, db: DbSession, current_user: User | No
 
 
 @router.post("/salvage/collect")
-async def salvage_collect_route(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+async def salvage_collect_route(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, _ = get_current_guild_context(db, current_user.id)
@@ -105,7 +105,7 @@ async def salvage_collect_route(request: Request, db: DbSession, current_user: U
 
 
 @router.post("/refine")
-async def refine(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+async def refine(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)

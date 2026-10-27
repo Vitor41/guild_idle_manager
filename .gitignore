@@ -1,5 +1,6 @@
 venv/
 .venv/
+.venv-desktop/
 __pycache__/
 *.pyc
 .env*

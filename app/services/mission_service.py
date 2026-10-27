@@ -3,9 +3,10 @@ from math import floor
 from random import randint
 from urllib.parse import urlencode
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.time import as_utc, prepare_timer_context
 from app.models.guild import Guild, GuildResources
 from app.models.mission import MissionRun, MissionTemplate
 from app.repositories.mission_repository import (
@@ -353,6 +354,9 @@ def get_missions_page_context(
                     "final_chance": mission.base_success_chance, "bonus_chance": 0, "class_bonus_chance": 0,
                     "skill_bonus_chance": 0, "rarity_bonus_chance": 0,
                 })
+    in_progress_runs = [run for run in runs if run.status == "in_progress"]
+    for run in in_progress_runs:
+        prepare_timer_context(run, now)
     finished_runs = [run for run in runs if run.status in {"completed", "failed"}][:10]
     for run in finished_runs:
         run.result_view = parse_result_details(run.result_details)
@@ -367,10 +371,10 @@ def get_missions_page_context(
         "available_mercenaries": available_mercenaries,
         "mission_mercenaries": mission_mercenaries,
         "mission_chances": mission_chances,
-        "in_progress_runs": [run for run in runs if run.status == "in_progress"],
+        "in_progress_runs": in_progress_runs,
         "finished_runs": finished_runs,
         "awaiting_loot_count": sum(
-            1 for run in runs if run.status == "in_progress" and run.ends_at <= now
+            1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
         "max_allowed_party_size": get_max_allowed_mission_party_size(db, guild.id),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
@@ -472,7 +476,11 @@ def start_mission(
     if mission_template.mission_type == "long_idle":
         if parsed_multiplier != 1:
             raise MissionError("Missões longas não aceitam multiplicador.")
-        db.execute(select(func.pg_advisory_xact_lock(guild.id, 350044)))
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            db.execute(select(func.pg_advisory_xact_lock(guild.id, 350044)))
+        elif db.bind is not None and db.bind.dialect.name == "sqlite":
+            # SQLite has no advisory locks; a no-op write serializes competing starts per DB.
+            db.execute(text("UPDATE guilds SET id = id WHERE id = :guild_id"), {"guild_id": guild.id})
         if not can_start_long_idle_mission(count_active_long_idle_runs(db, guild.id)):
             raise MissionError("O limite de 3 missões longas ativas foi atingido.")
 
@@ -526,7 +534,7 @@ def claim_mission_loot(
         raise MissionError("Esta missão já foi resolvida.")
 
     now = utc_now()
-    if now < mission_run.ends_at:
+    if now < as_utc(mission_run.ends_at):
         raise MissionError("A missão ainda não foi concluída.")
 
     mercenaries = [member.mercenary for member in mission_run.members]
@@ -636,7 +644,7 @@ def claim_all_ready_mission_loot(
     now = utc_now()
     ready_runs = [
         run for run in list_mission_runs_by_guild(db, guild.id)
-        if run.status == "in_progress" and run.ends_at <= now
+        if run.status == "in_progress" and as_utc(run.ends_at) <= now
     ]
     if not ready_runs:
         raise MissionError("Nenhuma recompensa de missão está pronta para coleta.")

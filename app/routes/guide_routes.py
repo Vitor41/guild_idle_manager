@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.core.dependencies import DbSession, get_current_user
+from app.core.dependencies import DbSession, get_current_player
 from app.core.game_balance import OFFLINE_CAP_SECONDS, OFFLINE_MINIMUM_SECONDS
 from app.models.user import User
 from app.services.building_service import get_building_bonus_summary
@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "tem
 def game_guide(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)

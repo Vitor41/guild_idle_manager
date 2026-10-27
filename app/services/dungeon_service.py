@@ -3,9 +3,10 @@ from math import floor
 from random import randint
 from urllib.parse import urlencode
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.time import as_utc, prepare_timer_context
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild, GuildResources
 from app.repositories.dungeon_repository import (
@@ -353,6 +354,9 @@ def get_dungeons_page_context(
         }
         for dungeon in templates
     }
+    in_progress_runs = [run for run in runs if run.status == "in_progress"]
+    for run in in_progress_runs:
+        prepare_timer_context(run, now)
     finished_runs = [run for run in runs if run.status in {"completed", "failed"}][:10]
     for run in finished_runs:
         run.result_view = parse_result_details(run.result_details)
@@ -364,13 +368,13 @@ def get_dungeons_page_context(
         "dungeon_templates": templates,
         "available_mercenaries": available_mercenaries,
         "dungeon_chances": dungeon_chances,
-        "in_progress_runs": [run for run in runs if run.status == "in_progress"],
+        "in_progress_runs": in_progress_runs,
         "locked_dungeon_ids": {
             run.dungeon_template_id for run in runs if run.status == "in_progress"
         },
         "finished_runs": finished_runs,
         "awaiting_loot_count": sum(
-            1 for run in runs if run.status == "in_progress" and run.ends_at <= now
+            1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
         "dungeons_available": are_dungeons_available(db, guild.id),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
@@ -423,7 +427,11 @@ def start_dungeon(
     if dungeon_template is None:
         raise DungeonError("Masmorra indisponível.")
     validate_dungeon_requirements(db, guild, dungeon_template)
-    db.execute(select(func.pg_advisory_xact_lock(guild.id, dungeon_template.id)))
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        db.execute(select(func.pg_advisory_xact_lock(guild.id, dungeon_template.id)))
+    elif db.bind is not None and db.bind.dialect.name == "sqlite":
+        # SQLite has no advisory locks; serialize starts through the campaign's guild row.
+        db.execute(text("UPDATE guilds SET id = id WHERE id = :guild_id"), {"guild_id": guild.id})
     if get_active_dungeon_run_for_template(db, guild.id, dungeon_template.id) is not None:
         raise DungeonError("Esta masmorra está fechada enquanto outro grupo da guilda está em exploração.")
 
@@ -476,7 +484,7 @@ def claim_dungeon_loot(
         raise DungeonError("Esta masmorra já foi resolvida.")
 
     now = utc_now()
-    if now < dungeon_run.ends_at:
+    if now < as_utc(dungeon_run.ends_at):
         raise DungeonError("A masmorra ainda não foi concluída.")
 
     mercenaries = [member.mercenary for member in dungeon_run.members]
@@ -570,7 +578,7 @@ def claim_all_ready_dungeon_loot(
     now = utc_now()
     ready_runs = [
         run for run in list_dungeon_runs_by_guild(db, guild.id)
-        if run.status == "in_progress" and run.ends_at <= now
+        if run.status == "in_progress" and as_utc(run.ends_at) <= now
     ]
     if not ready_runs:
         raise DungeonError("Nenhuma recompensa de masmorra ou chefe está pronta para coleta.")

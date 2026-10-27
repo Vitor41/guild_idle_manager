@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+from app.core.time import as_utc, prepare_timer_context
+
 from sqlalchemy.orm import Session
 
 from app.models.class_change import ClassChangeRun
@@ -93,14 +95,18 @@ def get_class_change_page_context(db: Session, guild: Guild) -> dict[str, object
             transition.to_class.icon_path = get_class_icon_path(transition.to_class)
     for run in runs:
         run.to_class.icon_path = get_class_icon_path(run.to_class)
+    now = utc_now()
+    in_progress_runs = [run for run in runs if run.status == "in_progress"]
+    for run in in_progress_runs:
+        prepare_timer_context(run, now)
     return {
         "mercenaries": mercenaries,
         "transitions_by_mercenary": transitions_by_mercenary,
-        "in_progress_runs": [run for run in runs if run.status == "in_progress"],
+        "in_progress_runs": in_progress_runs,
         "finished_runs": [run for run in runs if run.status == "completed"][:10],
         "training_ground_level": training_ground_level,
         "requirement_steps": _transition_requirement_steps(db),
-        "now": utc_now(),
+        "now": now,
         "format_duration": format_duration_seconds,
     }
 
@@ -169,7 +175,7 @@ def claim_class_change(db: Session, guild: Guild, run_id: int) -> ClassChangeRun
     if run.status != "in_progress":
         raise ClassChangeError("Esta troca ja foi concluida.")
     now = utc_now()
-    if now < run.ends_at:
+    if now < as_utc(run.ends_at):
         raise ClassChangeError("A troca de classe ainda nao terminou.")
 
     run.status = "completed"

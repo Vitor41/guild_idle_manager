@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+
+from app.core.time import prepare_timer_context
 from random import SystemRandom
 
 from sqlalchemy import select
@@ -104,6 +106,8 @@ def get_salvage_context(db: Session, guild: Guild, blacksmith_level: int) -> dic
     now = utc_now()
     jobs = list_salvage_jobs_by_guild(db, guild.id)
     active_by_slot = {job.slot_number: job for job in jobs if job.status == "in_progress"}
+    for job in active_by_slot.values():
+        prepare_timer_context(job, now)
     groups: dict[int, dict[str, object]] = {}
     for item in list_available_item_instances_by_guild(db, guild.id):
         if item.equipped_to_mercenary_id is not None:

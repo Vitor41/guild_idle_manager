@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.time import as_utc, prepare_timer_context
 from app.models.content import ProfessionTemplate, ProfessionTraining
 from app.models.guild import Guild, GuildResources
 from app.models.mercenary import Mercenary
@@ -42,7 +43,10 @@ def get_professions_context(db: Session, guild: Guild) -> dict[str, object]:
     ).order_by(Mercenary.name)))
     trainings = list(db.scalars(select(ProfessionTraining).options(joinedload(ProfessionTraining.mercenary), joinedload(ProfessionTraining.profession)).where(
         ProfessionTraining.guild_id == guild.id, ProfessionTraining.status == "in_progress").order_by(ProfessionTraining.ends_at)))
-    return {"professions": professions, "mercenaries": mercenaries, "trainings": trainings, "now": utc_now()}
+    now = utc_now()
+    for training in trainings:
+        prepare_timer_context(training, now)
+    return {"professions": professions, "mercenaries": mercenaries, "trainings": trainings, "now": now}
 
 
 def start_profession_training(db: Session, guild: Guild, resources: GuildResources, mercenary_id: int, profession_id: int) -> ProfessionTraining:
@@ -74,7 +78,7 @@ def complete_profession_training(db: Session, guild: Guild, training_id: int) ->
     if training is None or training.status != "in_progress":
         raise ProfessionError("Treinamento indisponível.")
     now = utc_now()
-    if now < training.ends_at:
+    if now < as_utc(training.ends_at):
         raise ProfessionError("O treinamento ainda não terminou.")
     training.status = "completed"
     training.completed_at = now

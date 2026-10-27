@@ -6,11 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20260623-1">
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261027-1">{% endif %}
   </head>
-  <body>
+  <body data-app-mode="{{ request.app.state.app_mode }}" data-route="{{ request.url.path }}">
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
     {% if has_app_shell %}
-      <div class="app-frame" data-session-started-at="{{ request.session.get('session_started_at', 0) }}" data-session-global-seconds="{{ request.session.get('session_global_seconds', 18000) }}" data-session-idle-seconds="{{ request.session.get('session_idle_seconds', 3600) }}" data-confirmation-preferences='{{ current_user.confirmation_preferences or "{}" }}'>
+      <div class="app-frame" {% if request.app.state.app_mode != 'desktop' %}data-session-started-at="{{ request.scope.get('session', {}).get('session_started_at', 0) }}" data-session-global-seconds="{{ request.scope.get('session', {}).get('session_global_seconds', 18000) }}" data-session-idle-seconds="{{ request.scope.get('session', {}).get('session_idle_seconds', 3600) }}"{% endif %} data-confirmation-preferences='{{ current_user.confirmation_preferences or "{}" }}'>
         <aside class="sidebar" aria-label="Navegacao principal">
           <a class="brand-mark" href="/dashboard">
             <span class="brand-sigil">G</span>
@@ -19,13 +21,15 @@
               <small>Manager</small>
             </span>
           </a>
-          <nav class="sidebar-nav">
+          <details class="compact-navigation" open>
+          <summary aria-label="Abrir navegação principal"><span aria-hidden="true">☰</span><span>Navegação</span></summary>
+          <nav class="sidebar-nav" aria-label="Navegação principal">
             <a href="/dashboard"><span class="nav-icon">⌂</span><span>Visão geral</span></a>
             <a href="/tavern"><span class="nav-icon">♜</span><span>Taverna</span></a>
             <a href="/mercenaries"><span class="nav-icon">⚔</span><span>Mercenários</span></a>
-            <a href="/professions"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
             <a href="/missions"><span class="nav-icon">✦</span><span>Missões</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
+            {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
             <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
             <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
@@ -33,6 +37,7 @@
             <a href="/buildings"><span class="nav-icon">▣</span><span>Construções</span></a>
             <a href="/class-change"><span class="nav-icon">✧</span><span>Troca de Classe</span></a>
             <a href="/guild/progress"><span class="nav-icon">&#9733;</span><span>Progresso da Guilda</span></a>
+            <a href="/professions"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
             <span class="nav-section-label">Guias e registros</span>
             <a href="/classes"><span class="nav-icon">✧</span><span>Guia de Classes</span></a>
             <a href="/tiers"><span class="nav-icon">◇</span><span>Guia de Tiers</span></a>
@@ -42,6 +47,13 @@
               <a href="/admin"><span class="nav-icon">⚙</span><span>Admin</span></a>
             {% endif %}
           </nav>
+          </details>
+          {% if request.app.state.app_mode == 'desktop' %}
+            <div class="desktop-save-state">
+              <span class="desktop-save-state__light" aria-hidden="true"></span>
+              <span><small>Campanha local</small><strong>Gravada a cada ação concluída</strong></span>
+            </div>
+          {% endif %}
         </aside>
 
         <div class="main-column">
@@ -57,17 +69,32 @@
               </div>
             </div>
             <div class="topbar-stats">
-              <span><small>Usuário</small>{{ current_user.username }}</span>
+              <span><small>{% if request.app.state.app_mode == 'desktop' %}Campanha{% else %}Usuário{% endif %}</small>{{ current_user.username }}</span>
               <span><small>Nível</small>{{ guild.level if guild is defined and guild else '-' }}</span>
               <span><small>XP</small>{{ guild.xp if guild is defined and guild and guild.xp is defined else 0 }}</span>
               {% if resources is defined and resources %}{{ treasury(resources) }}{% endif %}
             </div>
-            <a class="topbar-power-button" href="/logout" title="Sair" aria-label="Sair"><span aria-hidden="true">&#x23FB;</span></a>
+            {% if request.app.state.app_mode == 'desktop' %}<form method="post" action="/desktop/return-to-campaigns"><button class="topbar-back-button" type="submit" title="Suspender esta campanha e voltar ao menu">Campanhas</button></form>{% endif %}
+            {% if request.app.state.app_mode != 'desktop' %}<a class="topbar-power-button" href="/logout" title="Sair" aria-label="Sair"><span aria-hidden="true">&#x23FB;</span></a>{% endif %}
           </header>
           <main class="page-shell game-shell">
     {% else %}
       <main class="page-shell public-shell">
     {% endif %}
+      {% set migration = request.state._state.get('save_migration_notice') if request is defined else none %}
+      {% if has_app_shell and migration %}
+        <aside class="save-migration-notice" role="status" aria-live="polite">
+          <strong>Dados da campanha atualizados.</strong>
+          <span>
+            {% if migration.previous_revision != migration.current_revision %}
+              Revisão {{ migration.previous_revision }} → {{ migration.current_revision }}.
+            {% else %}
+              Versão {{ migration.previous_save_version }} → {{ migration.current_save_version }}.
+            {% endif %}
+            Uma cópia de segurança foi criada antes da atualização.
+          </span>
+        </aside>
+      {% endif %}
       {% block content %}{% endblock %}
     {% if has_app_shell %}
           </main>
@@ -125,5 +152,7 @@
       </dialog>
     {% endif %}
     <script src="{{ url_for('static', path='/js/main.js') }}?v=20260622-4"></script>
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
   </body>
 </html>
