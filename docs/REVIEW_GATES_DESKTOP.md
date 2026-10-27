@@ -101,3 +101,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - Verificação independente: `design/build_sprite_manifest.py` gerou 92 sprites e 214 mapeamentos com zero códigos conhecidos ausentes. O manifesto referencia 282 arquivos únicos, todos presentes e não vazios; os 92 masters também existem. `design/preview/nav.js` passou em checagem de sintaxe, `git diff --check` passou e não restaram perfis temporários de captura.
 - Prévias desktop/estreitas e pranchas de legibilidade foram inspecionadas. O usuário recebeu os caminhos da prévia e do catálogo. O pacote usa bitmaps originais e fontes locais; a procedência dos assets web legados permanece separada.
 - Decisão: aceitar o pacote fonte de sprites para integração, **não** o Gate DA completo. Os últimos ajustes de nomes/KPI/menu compacto ainda carecem de conferência visual atualizada; aplicação real em templates, navegação, WebView2 e build offline permanece no Gate 3.
+
+### 2026-10-26 — Runtime nativo ainda sem aceite
+
+- Commit DEV revisado: `300eeff`. A CSP desktop permite `unsafe-eval`, necessário ao `new Function` da bridge pywebview; o smoke exige a API de exportação. Não há hooks de diagnóstico no commit nem mudança de backend de produção.
+- Verificação independente: `APP_MODE=desktop` com `tests.test_desktop_bridge tests.test_desktop_security -q` passou (4/4). `GIM_RUN_DESKTOP_RUNTIME_SMOKE=1` com `tests.test_desktop_runtime -v` falhou: janela `shown=True`, mas `loaded=False`, bridge indisponível e nenhuma resposta capturada; a janela fechou. O smoke durou 39,634 s e não tocou saves reais.
+- Diagnóstico DEV separado observou `ExecuteScriptAsync` com `CoreWebView2 is uninitialized` antes de fechar a janela. Teste alternativo Qt também não concluiu carregamento/bridge, portanto nenhum dos dois backends foi aceito como solução.
+- Decisão: Gate 2 **aberto**. Prosseguir apenas com integração visual, QA transacional e empacotamento como trabalho em andamento; o instalador não será declarado testável até comprovar `loaded`, DOM, criação/retorno de campanha e encerramento limpo em janela nativa.
