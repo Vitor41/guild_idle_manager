@@ -20,14 +20,14 @@ Base: `GDD_DESKTOP_OFFLINE.md`, principalmente as seções 3 a 9 e 13. Esta matr
 | Idle somente com app fechado; mínimo, teto, duplicidade | Comprovado | `tests/test_clock_guard.py` cobre sessão aberta, saída limpa, mínimo, teto de 8h e crédito único. |
 | Rollback/salto de relógio, crash e âncora corrompida | Comprovado por testes | `tests/test_clock_guard.py` injeta relógio, testa high-water mark, monotônico, rollback, salto e recuperação sem crédito retroativo. |
 | Limite honesto da proteção local documentado | Comprovado | Seção 6.2 do GDD e `docs/DEV_DESKTOP.md`; não se promete anti-cheat inviolável. |
-| Regressão web e transações SQLite | Comprovado neste host | Suíte independente: 70 testes executados, 69 aprovados e um opt-in nativo ignorado; smoke nativo elevado passou separadamente. Smoke web `/`, `/docs`, CSS; matriz de serviços em `WORK3_QA_DESKTOP.md`. |
+| Regressão web e transações SQLite | Comprovado neste host | Suíte independente após `4cb24af`: 72 testes executados, 71 aprovados e um opt-in nativo ignorado; smoke nativo elevado passou separadamente. Smoke web `/`, `/docs`, CSS; matriz de serviços em `WORK3_QA_DESKTOP.md`. |
 | Instalador limpo sem Python/PostgreSQL/rede | Parcial | ZIP/Setup e smoke offline congelado passaram em perfil local temporário, sem `.env` e com `PATH` limitado. Falta instalação e inicialização em outro Windows limpo, sem Python/PostgreSQL e com rede desligada. |
 | Pacote sem segredos, contas de teste, saves ou logs | Comprovado por inspeção | Entradas do ZIP examinadas; não há `.env`, saves, logs, testes, `.git` ou `.aws`. Perfis de QA são temporários e não fazem parte do pacote. |
 | QA declara lacunas e branch permanece aberta | Comprovado | `WORK3_QA_DESKTOP.md`, `REVIEW_GATES_DESKTOP.md`; branch `feature/desktop-offline`, sem merge. |
 
 ## Gates pendentes
 
-1. O usuário fará a validação visual em tela do pacote final posteriormente. Não usar capturas de builds anteriores como prova da instalação atual.
+1. O usuário fará a validação visual em tela do pacote final posteriormente. Por sua decisão, isso não bloqueia a conclusão da implementação. Não usar capturas de builds anteriores como prova da instalação atual.
 2. Instalação e smoke em outro Windows 10/11 x64 limpo, sem Python/PostgreSQL e sem rede, incluindo abertura de campanha e persistência após reinício.
 
 Até esses gates passarem, o GDD não está aceito integralmente. Não fechar nem integrar a branch.

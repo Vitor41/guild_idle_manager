@@ -46,7 +46,7 @@ $env:DATABASE_URL = 'sqlite:///:memory:'
 .\.venv-desktop\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-O resultado integral mais recente registrou 70 testes executados, com 69 aprovados e um smoke nativo opt-in ignorado pela descoberta normal. O smoke nativo foi executado separadamente no contexto Windows normal e passou; veja a tabela de execução em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md).
+O resultado integral mais recente registrou 72 testes executados, com 71 aprovados e um smoke nativo opt-in ignorado pela descoberta normal. O smoke nativo foi executado separadamente no contexto Windows normal e passou; veja a tabela de execução em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md).
 
 O smoke nativo de janela é opt-in porque precisa abrir uma janela Windows real. Ele usa uma pasta temporária, espera `shown` e `loaded` do pywebview, confere o DOM do gerente e do dashboard, cria uma campanha pelo formulário nativo, retorna ao gerente, destrói a janela pelo próprio objeto pywebview e verifica evento `closed`, encerramento do servidor e metadados da campanha:
 

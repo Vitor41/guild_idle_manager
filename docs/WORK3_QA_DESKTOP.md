@@ -126,8 +126,8 @@ No final visual-review screenshots were captured per the user's direction. The u
 
 | Check | Result |
 | --- | --- |
-| Full regression suite | 70 tests ran; 69 passed and one opt-in native runtime test was skipped. |
+| Full regression suite | Independent rerun after `4cb24af`: 72 tests ran; 71 passed and one opt-in native runtime test was skipped. |
 | Restricted-context source native smoke | Failed before page load: the WebView core was unavailable (`webview_page_loaded=false`, `bridge_ready=false`); no application flow ran. |
 | Elevated source native smoke, diagnostics disabled | Passed; campaign create, return flow, and clean close completed (`Ran 1 test in 24.917s`). |
 | Final Setup and installed package smoke | Setup installed in a disposable profile; installed file hashes matched the final package. The packaged offline smoke result file reports `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`. |
-| Final installed visual interaction | Blocked because the elevated app window did not accept UI input. No page-specific screenshot is claimed for this final package. |
+| Final installed visual interaction | Deferred to the user by agreement. The elevated app window did not accept UI input; no page-specific screenshot is claimed for this final package. This does not block completion of the implementation work. |
