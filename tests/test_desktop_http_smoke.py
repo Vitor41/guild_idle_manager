@@ -13,14 +13,19 @@ class DesktopHttpSmokeTests(unittest.TestCase):
 import gc, http.client, json, os, re, socket, sqlite3, tempfile, threading, time
 from contextlib import closing
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 os.environ["APP_MODE"] = "desktop"
 from app.main import app
 from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
 from app.desktop.lifecycle import open_campaign
 from app.services.campaign_service import CampaignService
 from app.database.connection import SessionLocal, configure_database
-from app.models import CampaignMetadata, Guild, GuildInventoryItem, ItemTemplate, MercenaryClass
+from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRunMember, Guild, GuildBuilding,
+    GuildInventoryItem, GuildSalvageJob, ItemTemplate, MarketSale, MercenaryClass, MissionRun,
+    MissionRunMember, ProfessionTemplate, ProfessionTraining)
+from app.models.dungeon import DungeonTemplate
+from app.models.mission import MissionTemplate
+from app.models.building import BuildingTemplate
 from app.repositories.mercenary_repository import create_mercenary
 from sqlalchemy import select
 import uvicorn
@@ -57,6 +62,34 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=item_template.id, quantity=1))
         db.flush()
         mercenary_id = mercenary.id
+        now = datetime.now(timezone.utc)
+        later = now + timedelta(hours=1)
+        mission_template = db.query(MissionTemplate).filter(MissionTemplate.is_active.is_(True)).first()
+        dungeon_template = db.query(DungeonTemplate).filter(DungeonTemplate.is_active.is_(True)).first()
+        profession = db.query(ProfessionTemplate).filter(ProfessionTemplate.is_active.is_(True)).first()
+        target_class = db.query(MercenaryClass).filter(MercenaryClass.id != mercenary.class_id).first()
+        assert mission_template and dungeon_template and profession and target_class
+        db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="scouts").one().id, level=1))
+        db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="market").one().id, level=1))
+        db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="blacksmith").one().id, level=1))
+        db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="tavern").one().id, level=1))
+        db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="docks").one().id, level=1))
+        mission_run = MissionRun(guild_id=guild.id, mission_template_id=mission_template.id, started_at=now, ends_at=later)
+        dungeon_run = DungeonRun(guild_id=guild.id, dungeon_template_id=dungeon_template.id, started_at=now, ends_at=later)
+        db.add_all([mission_run, dungeon_run])
+        db.flush()
+        db.add_all([MissionRunMember(mission_run_id=mission_run.id, mercenary_id=mercenary.id),
+            DungeonRunMember(dungeon_run_id=dungeon_run.id, mercenary_id=mercenary.id)])
+        db.add(MarketSale(guild_id=guild.id, item_template_id=item_template.id, quantity=1, unit_value=1,
+            total_value=1, started_at=now, ends_at=later))
+        db.add(ProfessionTraining(guild_id=guild.id, mercenary_id=mercenary.id, profession_id=profession.id,
+            started_at=now, ends_at=later))
+        db.add(ClassChangeRun(guild_id=guild.id, mercenary_id=mercenary.id, from_class_id=mercenary.class_id,
+            to_class_id=target_class.id, gold_cost=1, started_at=now, ends_at=later))
+        material = db.query(ItemTemplate).filter(ItemTemplate.item_type == "material").first()
+        assert material
+        db.add(GuildSalvageJob(guild_id=guild.id, slot_number=1, item_template_id=item_template.id,
+            material_template_id=material.id, quantity=1, gold_cost=1, started_at=now, ends_at=later))
         db.commit()
 
     def request(path, method="GET", body=None):
@@ -73,12 +106,20 @@ with tempfile.TemporaryDirectory() as data_dir:
 
     try:
         rendered_pages = {}
-        for path in ("/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/dungeons", "/inventory", "/buildings", "/market", "/blacksmith", "/tutorial"):
+        for path in ("/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/dungeons", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/tutorial"):
             status, _location, body = request(path)
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
+        assert b"Chance base" in rendered_pages["/missions"]
+        assert b"chance final m\xc3\xa1xima de 95%" in rendered_pages["/missions"]
+        assert b"Chance base" in rendered_pages["/dungeons"]
+        assert b"limitada a 95%" in rendered_pages["/dungeons"]
+        for timer_page in ("/missions", "/dungeons", "/market", "/professions", "/class-change", "/blacksmith"):
+            assert re.search(rb'data-ends-at="[^\"]+\+00:00"', rendered_pages[timer_page]), timer_page
+        for timer_page in ("/dashboard", "/tavern", "/docks"):
+            assert re.search(rb'data-ends-at="[^\"]+\+00:00"', rendered_pages[timer_page]), timer_page
         assert b'data-desktop-resource="gold"' in rendered_pages["/dashboard"]
         assert b'data-desktop-building="' in rendered_pages["/buildings"]
         assert b'data-desktop-class="' in rendered_pages["/mercenaries"]

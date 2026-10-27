@@ -14,7 +14,7 @@
         <div><dt>Nível do Ferreiro</dt><dd>{{ blacksmith_level }}</dd></div>
         <div><dt>Receitas disponíveis</dt><dd>{{ recipes|length }}/{{ rotation.slots }}</dd></div>
         <div><dt>Raridade máxima</dt><dd>{{ rarity_label(rotation.max_rarity) }}</dd></div>
-        <div><dt>Próxima rotação</dt><dd data-ends-at="{{ rotation.ends_at.isoformat() }}">Calculando...</dd></div>
+        <div><dt>Próxima rotação</dt><dd data-ends-at="{{ rotation.ends_at_iso }}">Calculando...</dd></div>
         <div><dt>Ouro</dt><dd>{{ resources.gold }}</dd></div>
         <div><dt>Minério</dt><dd>{{ resources.ore }}</dd></div>
       </dl>
@@ -43,8 +43,8 @@
                 <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ slot.job.item_template.icon_group or '' }}" data-desktop-item-slot="{{ slot.job.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ slot.job.item_template.material_family or '' }}">{% if slot.job.icon_path %}<img class="asset-icon" src="{{ url_for('static', path=slot.job.icon_path) }}" alt="">{% else %}&#9874;{% endif %}</div>
                 <div><strong>{{ slot.job.quantity }}x {{ slot.job.item_display_name }}</strong><p class="note">Resultado: {{ slot.job.material_display_name }} · 1–3 por item</p></div>
               </div>
-              <dl class="inline-stats"><div><dt>Custo pago</dt><dd>{{ slot.job.gold_cost }}</dd></div><div><dt>Tempo</dt><dd data-ends-at="{{ slot.job.ends_at.isoformat() }}">Calculando...</dd></div></dl>
-              <form method="post" action="/blacksmith/salvage/collect"><input type="hidden" name="job_id" value="{{ slot.job.id }}"><button data-ends-at="{{ slot.job.ends_at.isoformat() }}" {% if salvage_now < slot.job.ends_at %}disabled{% endif %}>Coletar materiais</button></form>
+              <dl class="inline-stats"><div><dt>Custo pago</dt><dd>{{ slot.job.gold_cost }}</dd></div><div><dt>Tempo</dt><dd data-ends-at="{{ slot.job.ends_at_iso }}">Calculando...</dd></div></dl>
+              <form method="post" action="/blacksmith/salvage/collect"><input type="hidden" name="job_id" value="{{ slot.job.id }}"><button data-ends-at="{{ slot.job.ends_at_iso }}" {% if not slot.job.ready_for_loot %}disabled{% endif %}>Coletar materiais</button></form>
             {% elif salvage_equipment_groups %}
               <form class="salvage-form" method="post" action="/blacksmith/salvage/start" data-salvage-form data-unit-cost="{{ slot.unit_cost }}" data-confirm-title="Desmontar equipamentos?" data-confirm-message="Os equipamentos selecionados serão consumidos imediatamente e não poderão ser recuperados." data-confirm-key="salvage_equipment">
                 <input type="hidden" name="slot_number" value="{{ slot.number }}">

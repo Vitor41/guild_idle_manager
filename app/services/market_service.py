@@ -21,6 +21,7 @@ from app.services.building_service import ensure_guild_buildings, get_building_l
 from app.services.guild_progression_service import add_guild_xp
 from app.services.inventory_service import get_equipment_for_guild, get_inventory_for_guild
 from app.core.game_balance import MARKET_RARITY_SECONDS
+from app.core.time import prepare_timer_context
 from app.services.building_balance_service import market_values
 from app.services.achievement_service import record_guild_stat
 
@@ -66,6 +67,8 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
         }
     sales = list_market_sales_by_guild(db, guild.id)
     active_sales = [sale for sale in sales if sale.status == "in_progress"]
+    for sale in active_sales:
+        prepare_timer_context(sale, now)
     completed_sales = [sale for sale in sales if sale.status == "completed"][:10]
     return {
         "market": market,
@@ -75,10 +78,7 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
             if item.equipped_to_mercenary_id is None and item.market_sale is None
         ],
         "active_sales": active_sales,
-        "ready_sales_count": sum(
-            1 for sale in active_sales
-            if now >= (sale.ends_at if sale.ends_at.tzinfo else sale.ends_at.replace(tzinfo=timezone.utc))
-        ),
+        "ready_sales_count": sum(1 for sale in active_sales if sale.ready_for_loot),
         "completed_sales": completed_sales,
         "now": now,
     }

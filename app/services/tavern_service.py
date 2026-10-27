@@ -326,6 +326,8 @@ def get_tavern_page_context(db: Session, guild: Guild, resources: GuildResources
         "tavern_level": tavern_level,
         "mercenary_count": count_mercenaries_by_guild(db, guild.id),
         "mercenary_limit": get_mercenary_limit(db, guild.id),
+        "active_offer_until_iso": as_utc(active_offer.available_until).isoformat() if active_offer else None,
+        "next_special_check_at_iso": as_utc(state.next_special_check_at).isoformat(),
         "bulk_hire_count": bulk_count,
         "bulk_hire_cost": bulk_costs["final"],
         "bulk_hire_base_cost": bulk_costs["base"],
@@ -598,4 +600,6 @@ def tavern_summary(db: Session, guild: Guild) -> dict[str, object]:
         "special_offer_rarity": offer.rarity if offer else None,
         "special_offer_rarity_label": offer.rarity_label if offer else None,
         "special_offer_until": offer.available_until if offer else None,
+        "special_offer_until_iso": as_utc(offer.available_until).isoformat() if offer else None,
+        "next_special_check_at_iso": as_utc(state.next_special_check_at).isoformat(),
     }

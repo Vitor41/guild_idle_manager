@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.core.time import as_utc
+from app.core.time import as_utc, prepare_timer_context
 from app.models.guild import Guild, GuildResources
 from app.models.mission import MissionRun, MissionTemplate
 from app.repositories.mission_repository import (
@@ -354,6 +354,9 @@ def get_missions_page_context(
                     "final_chance": mission.base_success_chance, "bonus_chance": 0, "class_bonus_chance": 0,
                     "skill_bonus_chance": 0, "rarity_bonus_chance": 0,
                 })
+    in_progress_runs = [run for run in runs if run.status == "in_progress"]
+    for run in in_progress_runs:
+        prepare_timer_context(run, now)
     finished_runs = [run for run in runs if run.status in {"completed", "failed"}][:10]
     for run in finished_runs:
         run.result_view = parse_result_details(run.result_details)
@@ -368,7 +371,7 @@ def get_missions_page_context(
         "available_mercenaries": available_mercenaries,
         "mission_mercenaries": mission_mercenaries,
         "mission_chances": mission_chances,
-        "in_progress_runs": [run for run in runs if run.status == "in_progress"],
+        "in_progress_runs": in_progress_runs,
         "finished_runs": finished_runs,
         "awaiting_loot_count": sum(
             1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now

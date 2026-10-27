@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.time import as_utc
+from app.core.time import prepare_timer_context
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.guild import Guild, GuildResources
 from app.repositories.item_repository import add_inventory_quantity
@@ -91,6 +92,7 @@ def get_docks_context(db: Session, guild: Guild) -> dict[str, object]:
             rotation = create_dock_rotation(db, guild, level)
         else:
             rotation = _load_rotation(db, rotation.id)
+        prepare_timer_context(rotation, utc_now())
     return {"dock_level": level, "rotation": rotation, "now": utc_now(), "offer_slots": _offer_count(level) if level else 0}
 
 

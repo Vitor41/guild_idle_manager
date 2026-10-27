@@ -42,6 +42,7 @@
       <nav class="filter-tabs" aria-label="Tipo de desafio"><a href="/dungeons?{{ type_queries.dungeon }}" class="{% if selected_content_type == 'dungeon' %}active{% endif %}">Masmorras</a><a href="/dungeons?{{ type_queries.boss }}" class="{% if selected_content_type == 'boss' %}active{% endif %}">Chefes</a><a href="/dungeons?{{ type_queries.all }}" class="{% if selected_content_type == 'all' %}active{% endif %}">Todos</a></nav>
       <nav class="filter-tabs" aria-label="Faixas de nível">{% for band in level_bands %}<a href="/dungeons?{{ band_queries[band] }}" class="{% if selected_band == band %}active{% endif %}">Nível {{ band }}</a>{% endfor %}</nav>
       <div class="section-heading"><h2 id="available-dungeons-title">Desafios disponíveis</h2><span>{{ total_templates }} opções nesta faixa</span></div>
+      <p class="note">A chance exibida é a base. O grupo e os bônus alteram a chance final, limitada a 95%.</p>
       {% if dungeon_templates %}
         <div class="mission-list">
           {% for dungeon in dungeon_templates %}
@@ -54,7 +55,7 @@
                   <div><dt>Duração</dt><dd>{{ format_duration(dungeon.duration_seconds) }}</dd></div>
                   <div><dt>Ouro</dt><dd>{{ dungeon.base_gold_reward }}</dd></div>
                   <div><dt>XP</dt><dd>{{ dungeon.base_xp_reward }}</dd></div>
-                  <div><dt>Chance</dt><dd>{{ dungeon.base_success_chance }}%</dd></div>
+                  <div><dt>Chance base</dt><dd>{{ dungeon.base_success_chance }}%</dd></div>
                   <div><dt>Grupo</dt><dd>{{ dungeon.min_party_size }}-{{ dungeon.max_party_size }}</dd></div>
                   <div><dt>Nível merc.</dt><dd>{{ dungeon.required_min_mercenary_level }}+</dd></div>
                 </dl>
@@ -133,15 +134,15 @@
       {% if in_progress_runs %}
         <div class="mission-list">
           {% for run in in_progress_runs %}
-            <article class="mission-card dungeon-card {% if run.ends_at <= now %}ready-card{% endif %}">
+            <article class="mission-card dungeon-card {% if run.ready_for_loot %}ready-card{% endif %}">
               <div>
                 <h3>{{ run.dungeon_template.name }}</h3>
                 <p class="note">Grupo: {{ run.members|map(attribute='mercenary.name')|join(', ') if run.members else 'Indisponível' }}</p>
                 <p class="note">Multiplicador: {{ run.run_multiplier }}x</p>
                 <p class="note">
                   Tempo restante:
-                  <strong class="mission-timer" data-ends-at="{{ run.ends_at.isoformat() }}">
-                    {% if run.ends_at <= now %}Concluída{% else %}Calculando...{% endif %}
+                  <strong class="mission-timer" data-ends-at="{{ run.ends_at_iso }}">
+                    {% if run.ready_for_loot %}Concluída{% else %}Calculando...{% endif %}
                   </strong>
                 </p>
               </div>
@@ -149,8 +150,8 @@
                 <button
                   type="submit"
                   class="claim-button"
-                  data-ends-at="{{ run.ends_at.isoformat() }}"
-                  {% if run.ends_at > now %}disabled{% endif %}
+                  data-ends-at="{{ run.ends_at_iso }}"
+                  {% if not run.ready_for_loot %}disabled{% endif %}
                 >
                   Receber Loot
                 </button>

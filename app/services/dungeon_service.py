@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.core.time import as_utc
+from app.core.time import as_utc, prepare_timer_context
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild, GuildResources
 from app.repositories.dungeon_repository import (
@@ -354,6 +354,9 @@ def get_dungeons_page_context(
         }
         for dungeon in templates
     }
+    in_progress_runs = [run for run in runs if run.status == "in_progress"]
+    for run in in_progress_runs:
+        prepare_timer_context(run, now)
     finished_runs = [run for run in runs if run.status in {"completed", "failed"}][:10]
     for run in finished_runs:
         run.result_view = parse_result_details(run.result_details)
@@ -365,7 +368,7 @@ def get_dungeons_page_context(
         "dungeon_templates": templates,
         "available_mercenaries": available_mercenaries,
         "dungeon_chances": dungeon_chances,
-        "in_progress_runs": [run for run in runs if run.status == "in_progress"],
+        "in_progress_runs": in_progress_runs,
         "locked_dungeon_ids": {
             run.dungeon_template_id for run in runs if run.status == "in_progress"
         },

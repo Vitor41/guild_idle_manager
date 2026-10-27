@@ -117,7 +117,7 @@
             <div><dt>Poder Total</dt><dd>{{ active_offer.power_score }}</dd></div>
             <div><dt>Custo</dt><dd>{{ active_offer.gold_cost }}</dd></div>
           </dl>
-          <p class="note">Expira em: <strong class="countdown" data-ends-at="{{ active_offer.available_until.isoformat() }}">calculando...</strong></p>
+          <p class="note">Expira em: <strong class="countdown" data-ends-at="{{ active_offer_until_iso }}">calculando...</strong></p>
           <div class="bonus-list">
             {% if active_offer.power > 0 %}<span class="bonus-pill" title="Força">FOR {{ active_offer.power }}</span>{% endif %}
             {% if active_offer.vitality > 0 %}<span class="bonus-pill" title="Vitalidade">VIT {{ active_offer.vitality }}</span>{% endif %}
@@ -140,7 +140,7 @@
         {% else %}
           <div class="empty-state">
             <strong>Nenhum mercenário especial disponível.</strong>
-            <p>Próxima tentativa em: <span class="countdown" data-ends-at="{{ state.next_special_check_at.isoformat() }}">calculando...</span></p>
+            <p>Próxima tentativa em: <span class="countdown" data-ends-at="{{ next_special_check_at_iso }}">calculando...</span></p>
           </div>
         {% endif %}
         {% if active_offer %}<form

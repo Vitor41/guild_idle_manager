@@ -38,16 +38,16 @@ from app.repositories.item_repository import add_inventory_quantity
 from app.repositories.building_repository import get_guild_building_by_effect
 from app.services.building_service import ensure_guild_buildings, upgrade_guild_building
 from app.services.campaign_service import CampaignService
-from app.services.dungeon_service import claim_dungeon_loot, start_dungeon
+from app.services.dungeon_service import claim_dungeon_loot, get_advanced_dungeon_chance, get_dungeons_page_context, start_dungeon
 from app.services.achievement_service import evaluate_achievements, get_codex_context, sync_codex
 from app.services.crafting_service import craft_recipe, get_blacksmith_context
-from app.services.dock_service import buy_dock_offer, create_dock_rotation
+from app.services.dock_service import buy_dock_offer, create_dock_rotation, get_docks_context
 from app.services.equipment_service import create_equipment_instance_from_template, equip_item
 from app.services.guild_service import get_current_guild_context
-from app.services.market_service import collect_market_sale, start_material_sale
-from app.services.mission_service import claim_mission_loot, start_mission
-from app.services.profession_service import complete_profession_training, start_profession_training
-from app.services.tavern_service import generate_apprentice_preview, get_tavern_page_context, hire_apprentice
+from app.services.market_service import collect_market_sale, get_market_page_context, start_material_sale
+from app.services.mission_service import claim_mission_loot, get_missions_page_context, start_mission
+from app.services.profession_service import complete_profession_training, get_professions_context, start_profession_training
+from app.services.tavern_service import generate_apprentice_preview, get_tavern_page_context, hire_apprentice, tavern_summary
 from app.routes.tavern_routes import _get_apprentice_preview
 
 
@@ -517,6 +517,8 @@ asyncio.run(main())
         self.assertEqual(tavern.level, 1)
 
         tavern_context = get_tavern_page_context(db, guild, resources)
+        self.assertTrue(tavern_context["next_special_check_at_iso"].endswith("+00:00"))
+        self.assertTrue(tavern_summary(db, guild)["next_special_check_at_iso"].endswith("+00:00"))
         campaign = db.scalar(select(CampaignMetadata).where(CampaignMetadata.campaign_id == guild.campaign_id))
         desktop_app = FastAPI()
         desktop_app.state.app_mode = "desktop"
@@ -571,6 +573,10 @@ asyncio.run(main())
         ))
         db.commit()
         mission_run = start_mission(db, guild, str(mission_template.id), [str(mercenaries[0].id)])
+        mission_context = get_missions_page_context(db, guild)
+        rendered_mission_run = mission_context["in_progress_runs"][0]
+        self.assertTrue(rendered_mission_run.ends_at_iso.endswith("+00:00"))
+        self.assertFalse(rendered_mission_run.ready_for_loot)
         with self.assertRaisesRegex(ValueError, "ainda não foi concluída"):
             claim_mission_loot(db, guild, resources, mission_run.id)
         mission_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
@@ -608,17 +614,39 @@ asyncio.run(main())
             .order_by(DungeonTemplate.required_total_power, DungeonTemplate.id)
         )
         self.assertIsNotNone(dungeon_template)
+        dungeon_template.base_success_chance = 100
+        db.add(dungeon_template)
+        db.flush()
+        self.assertEqual(
+            get_advanced_dungeon_chance(db, guild.id, dungeon_template, mercenaries[:2])["final_chance"],
+            95,
+        )
         dungeon_run = start_dungeon(
             db,
             guild,
             str(dungeon_template.id),
             [str(mercenaries[0].id), str(mercenaries[1].id)],
         )
+        dungeon_context = get_dungeons_page_context(db, guild)
+        rendered_dungeon_run = dungeon_context["in_progress_runs"][0]
+        self.assertTrue(rendered_dungeon_run.ends_at_iso.endswith("+00:00"))
+        self.assertFalse(rendered_dungeon_run.ready_for_loot)
         dungeon_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         db.flush()
         with patch("app.services.dungeon_service.randint", return_value=1):
             completed_dungeon = claim_dungeon_loot(db, guild, resources, dungeon_run.id)
         self.assertEqual(completed_dungeon.status, "completed")
+
+        capped_dungeon_run = start_dungeon(
+            db,
+            guild,
+            str(dungeon_template.id),
+            [str(mercenaries[0].id), str(mercenaries[1].id)],
+        )
+        capped_dungeon_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        with patch("app.services.dungeon_service.randint", return_value=100):
+            capped_dungeon = claim_dungeon_loot(db, guild, resources, capped_dungeon_run.id)
+        self.assertEqual(capped_dungeon.status, "failed")
 
         introductory_boss = db.scalar(select(DungeonTemplate).where(
             DungeonTemplate.is_active.is_(True),
@@ -658,6 +686,10 @@ asyncio.run(main())
         ))
         self.assertIsNotNone(material_stock)
         sale = start_material_sale(db, guild, str(material.id), "1")
+        sale_context = get_market_page_context(db, guild)
+        rendered_sale = sale_context["active_sales"][0]
+        self.assertTrue(rendered_sale.ends_at_iso.endswith("+00:00"))
+        self.assertFalse(rendered_sale.ready_for_loot)
         with self.assertRaisesRegex(ValueError, "ainda nao foi concluida"):
             collect_market_sale(db, guild, resources, sale.id)
         sale.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
@@ -668,6 +700,10 @@ asyncio.run(main())
         profession = db.scalar(select(ProfessionTemplate).where(ProfessionTemplate.is_active.is_(True)).order_by(ProfessionTemplate.id))
         self.assertIsNotNone(profession)
         training = start_profession_training(db, guild, resources, mercenaries[0].id, profession.id)
+        profession_context = get_professions_context(db, guild)
+        rendered_training = profession_context["trainings"][0]
+        self.assertTrue(rendered_training.ends_at_iso.endswith("+00:00"))
+        self.assertFalse(rendered_training.ready_for_loot)
         with self.assertRaisesRegex(ValueError, "ainda não terminou"):
             complete_profession_training(db, guild, training.id)
         training.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
@@ -677,6 +713,8 @@ asyncio.run(main())
         docks = get_guild_building_by_effect(db, guild.id, "docks")
         docks = upgrade_guild_building(db, guild, resources, docks.id)
         rotation = create_dock_rotation(db, guild, docks.level)
+        dock_context = get_docks_context(db, guild)
+        self.assertTrue(dock_context["rotation"].ends_at_iso.endswith("+00:00"))
         dock_merchant_ids = [merchant.id for merchant in rotation.merchants]
         dock_offer = db.scalar(select(DockOffer).where(
             DockOffer.dock_rotation_merchant_id.in_(dock_merchant_ids)
@@ -689,6 +727,7 @@ asyncio.run(main())
         blacksmith = get_guild_building_by_effect(db, guild.id, "blacksmith")
         blacksmith = upgrade_guild_building(db, guild, resources, blacksmith.id)
         blacksmith_context = get_blacksmith_context(db, guild)
+        self.assertTrue(blacksmith_context["rotation"]["ends_at_iso"].endswith("+00:00"))
         recipe = next((entry for entry in blacksmith_context["recipes"] if entry.materials), None)
         if recipe is None:
             recipe = db.scalar(select(CraftingRecipe).where(CraftingRecipe.is_active.is_(True)).order_by(CraftingRecipe.id))

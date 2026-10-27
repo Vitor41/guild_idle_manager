@@ -24,8 +24,8 @@
     {% if active_sales %}<div class="market-grid">
       {% for sale in active_sales %}<article class="market-sale-card rarity-{{ sale.item_template.rarity }}">
         <div><h3>{{ sale.item_template.name }}</h3><p class="note">{{ sale.quantity }} unidade(s) por {{ sale.unit_value }} ouro</p></div>
-        <dl class="inline-stats"><div><dt>Valor total</dt><dd>{{ sale.total_value }}</dd></div><div><dt>Tempo</dt><dd class="mission-timer" data-ends-at="{{ sale.ends_at.isoformat() }}">Calculando...</dd></div></dl>
-        <form method="post" action="/market/{{ sale.id }}/collect"><button class="claim-button" data-ends-at="{{ sale.ends_at.isoformat() }}" {% if sale.ends_at > now %}disabled{% endif %}>Coletar venda</button></form>
+        <dl class="inline-stats"><div><dt>Valor total</dt><dd>{{ sale.total_value }}</dd></div><div><dt>Tempo</dt><dd class="mission-timer" data-ends-at="{{ sale.ends_at_iso }}">Calculando...</dd></div></dl>
+        <form method="post" action="/market/{{ sale.id }}/collect"><button class="claim-button" data-ends-at="{{ sale.ends_at_iso }}" {% if not sale.ready_for_loot %}disabled{% endif %}>Coletar venda</button></form>
       </article>{% endfor %}
     </div>{% else %}<p class="note">Nenhum item anunciado.</p>{% endif %}
   </section>
