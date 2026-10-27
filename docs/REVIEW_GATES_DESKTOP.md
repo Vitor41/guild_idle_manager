@@ -14,14 +14,14 @@ Este documento é o checklist independente da conversa principal. A fonte do esc
 ## Gate DA — Identidade visual
 
 - [ ] Guia de identidade define paleta variada, tipografia local/licenciada, grid, espaçamento, estados, raridade e acessibilidade.
-- [ ] Uso real da skill `imagegen` comprovado por assets bitmap entregues, não apenas por briefing ou mockup.
-- [ ] Assets cobrem as superfícies prioritárias do jogo e possuem nomes, dimensões, manifesto e fallback.
+- [x] Uso real da skill `imagegen` comprovado por assets bitmap entregues, não apenas por briefing ou mockup.
+- [x] Assets cobrem as superfícies prioritárias do jogo e possuem nomes, dimensões, manifesto e fallback.
 - [ ] Preview desktop e janela estreita podem ser abertos localmente e mostram interface legível, sem sobreposição.
 - [ ] Assets funcionam offline, sem CDN, têm pesos razoáveis e licença/proveniência registrada.
 - [ ] A substituição visual não causa regressão na identificação de classe, item ou construção.
-- [ ] A iconografia nova cobre menu, ações, classes/evoluções, mercenários, equipamentos por grupo/slot, materiais/recursos, construções e demais sistemas; manifesto/fallback não deixam grupos com placeholder genérico.
-- [ ] Ícones legados sem procedência confirmada não são dependência do pacote distribuído; sprites novos têm autoria e permissões de uso registradas.
-- [ ] A conversa principal visualizou os previews e informou ao usuário os caminhos exatos para vê-los.
+- [x] A iconografia nova cobre menu, ações, classes/evoluções, mercenários, equipamentos por grupo/slot, materiais/recursos, construções e demais sistemas; manifesto/fallback não deixam grupos com placeholder genérico.
+- [x] Ícones legados sem procedência confirmada não são dependência do pacote distribuído; sprites novos têm autoria e permissões de uso registradas.
+- [x] A conversa principal visualizou os previews e informou ao usuário os caminhos exatos para vê-los.
 
 ## Gate 1 — Core offline e campanhas
 
@@ -94,3 +94,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - No ambiente isolado `.venv-desktop`, com `APP_MODE=desktop`, a bateria `tests.test_campaign_service`, `tests.test_clock_guard`, `tests.test_desktop_bridge`, `tests.test_desktop_http_smoke` e `tests.test_desktop_security` passou: 27 testes em 218,239 s.
 - Um lançamento adicional com `LOCALAPPDATA` temporário respondeu ao healthcheck em loopback. O processo Python criou uma janela intitulada `Guild Idle Manager` (handle nativo observado), mas ela não apareceu no inventário da automação visual desta sessão. O processo de diagnóstico foi encerrado; nenhum save do usuário foi aberto.
 - Decisão: ainda não aprovar Gate 2. Falta evidência visual/interativa da janela, fechamento limpo com a campanha ativa e revisão do fluxo completo do menu no runtime nativo. Prosseguir com a integração de arte e o QA de empacotamento sem tratar essa lacuna como resolvida.
+
+### 2026-10-26 — Pacote DA registrado, gate visual parcial
+
+- Commit examinado: `f4cbf86`, limitado a `app/static/assets/desktop/`, `design/` e `docs/art_direction/`; alterações em andamento do DEV ficaram fora dele.
+- Verificação independente: `design/build_sprite_manifest.py` gerou 92 sprites e 214 mapeamentos com zero códigos conhecidos ausentes. O manifesto referencia 282 arquivos únicos, todos presentes e não vazios; os 92 masters também existem. `design/preview/nav.js` passou em checagem de sintaxe, `git diff --check` passou e não restaram perfis temporários de captura.
+- Prévias desktop/estreitas e pranchas de legibilidade foram inspecionadas. O usuário recebeu os caminhos da prévia e do catálogo. O pacote usa bitmaps originais e fontes locais; a procedência dos assets web legados permanece separada.
+- Decisão: aceitar o pacote fonte de sprites para integração, **não** o Gate DA completo. Os últimos ajustes de nomes/KPI/menu compacto ainda carecem de conferência visual atualizada; aplicação real em templates, navegação, WebView2 e build offline permanece no Gate 3.
