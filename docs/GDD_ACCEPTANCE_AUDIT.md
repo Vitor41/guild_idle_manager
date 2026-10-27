@@ -21,12 +21,13 @@ Base: `GDD_DESKTOP_OFFLINE.md`, principalmente as seções 3 a 9 e 13. Esta matr
 | Rollback/salto de relógio, crash e âncora corrompida | Comprovado por testes | `tests/test_clock_guard.py` injeta relógio, testa high-water mark, monotônico, rollback, salto e recuperação sem crédito retroativo. |
 | Limite honesto da proteção local documentado | Comprovado | Seção 6.2 do GDD e `docs/DEV_DESKTOP.md`; não se promete anti-cheat inviolável. |
 | Regressão web e transações SQLite | Comprovado neste host | Suíte independente após `4cb24af`: 72 testes executados, 71 aprovados e um opt-in nativo ignorado; smoke nativo elevado passou separadamente. Smoke web `/`, `/docs`, CSS; matriz de serviços em `WORK3_QA_DESKTOP.md`. |
-| Instalador limpo sem Python/PostgreSQL/rede | Parcial | ZIP/Setup e smoke offline congelado passaram em perfil local temporário, sem `.env` e com `PATH` limitado. Falta instalação e inicialização em outro Windows limpo, sem Python/PostgreSQL e com rede desligada. |
+| Instalador limpo sem Python/PostgreSQL/rede | Validado parcialmente neste host; teste externo dispensado pelo usuário | ZIP/Setup e smoke offline congelado passaram em perfil local temporário, sem `.env` e com `PATH` limitado. O usuário informou não ter outro Windows disponível e autorizou concluir sem esse teste. |
 | Pacote sem segredos, contas de teste, saves ou logs | Comprovado por inspeção | Entradas do ZIP examinadas; não há `.env`, saves, logs, testes, `.git` ou `.aws`. Perfis de QA são temporários e não fazem parte do pacote. |
 | QA declara lacunas e branch permanece aberta | Comprovado | `WORK3_QA_DESKTOP.md`, `REVIEW_GATES_DESKTOP.md`; branch `feature/desktop-offline`, sem merge. |
 
-## Gates pendentes
+## Decisão de aceite
 
-1. Instalação e smoke em outro Windows 10/11 x64 limpo, sem Python/PostgreSQL e sem rede, incluindo abertura de campanha e persistência após reinício.
-
-O aceite visual foi confirmado pelo usuário; o GDD ainda aguarda o teste de distribuição em outro Windows limpo. Não fechar nem integrar a branch antes desse gate.
+- O usuário concluiu a validação visual do pacote e informou que está tudo certo até então.
+- O usuário dispensou a instalação em outro Windows por não ter essa máquina disponível e autorizou concluir a entrega.
+- Os ajustes dos guias descritos em `USER_FEEDBACK_BACKLOG.md` ficam para uma próxima rodada e não fazem parte do aceite desta migração.
+- O smoke independente do executável empacotado passou neste host; o teste em outro Windows continua sem evidência, registrado como limitação conhecida e dispensada pelo usuário.

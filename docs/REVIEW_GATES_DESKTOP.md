@@ -200,3 +200,9 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - O usuário confirmou ter concluído a validação visual do pacote atual e informou que está tudo certo até então. O aceite é registrado como validação manual do usuário, não como inspeção visual independente minha.
 - As duas observações dos guias ficam para a próxima rodada: navegação/identidade visual do índice do Guia de Classes e tiers de equipamento incorretos no Guia de Tiers. Estão detalhadas em `docs/USER_FEEDBACK_BACKLOG.md` e não bloqueiam o aceite visual desta entrega.
 - Resta como gate de distribuição a instalação e smoke em outro Windows limpo, sem Python/PostgreSQL e sem rede. A branch permanece aberta até esse teste, conforme o GDD.
+
+### 2026-10-27 — Aceite final e dispensa do teste externo
+
+- O usuário confirmou a validação visual e autorizou concluir a entrega sem teste em outro Windows, pois não dispõe de uma segunda máquina.
+- O teste externo permanece como limitação conhecida, não como gate aberto. Os ajustes dos guias ficam anotados para uma próxima rodada e não bloqueiam este aceite.
+- A suíte independente passou com 72 testes (71 aprovados e 1 opt-in ignorado); o executável empacotado passou no smoke isolado com `PATH` limitado ao Windows. Branch pronta para integração local.
