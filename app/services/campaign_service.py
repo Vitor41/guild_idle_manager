@@ -41,6 +41,24 @@ class CampaignInfo:
     confirmation_preferences: str = "{}"
 
 
+@dataclass(frozen=True)
+class CampaignMigration:
+    previous_revision: str
+    current_revision: str
+    previous_save_version: int
+    current_save_version: int
+    backup_created: bool = True
+
+    def notice_payload(self) -> dict[str, object]:
+        return {
+            "previous_revision": self.previous_revision,
+            "current_revision": self.current_revision,
+            "previous_save_version": self.previous_save_version,
+            "current_save_version": self.current_save_version,
+            "backup_created": self.backup_created,
+        }
+
+
 class CampaignListing(list):
     """Valid campaigns plus visible recovery entries for detected save files."""
 
@@ -103,7 +121,7 @@ class CampaignService:
             raise ValueError("Arquivos de save, backup e exportacao devem ficar fora da pasta do aplicativo.")
         return target
 
-    def _ensure_schema(self, database_path: Path, campaign_id: str) -> None:
+    def _ensure_schema(self, database_path: Path, campaign_id: str) -> CampaignMigration | None:
         config = self._alembic_config(database_path)
         script = ScriptDirectory.from_config(config)
         head = script.get_current_head()
@@ -111,7 +129,7 @@ class CampaignService:
             raise RuntimeError("A cadeia Alembic local nao possui uma revisao head.")
         if not database_path.exists():
             command.upgrade(config, head)
-            return
+            return None
         with closing(sqlite3.connect(database_path)) as connection:
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not tables:
@@ -126,11 +144,29 @@ class CampaignService:
                 if len(revisions) != 1 or not revisions[0]:
                     raise ValueError("Save sem uma revisao Alembic valida; arquivo preservado.")
                 current = revisions[0]
+                has_campaign_metadata = "campaign_metadata" in tables
+                previous_save_version = CURRENT_SCHEMA_VERSION
+                if has_campaign_metadata:
+                    row = connection.execute(
+                        "SELECT schema_version FROM campaign_metadata WHERE campaign_id = ?",
+                        (campaign_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise ValueError("Metadados da campanha ausentes; save preservado e nao migrado.")
+                    previous_save_version = int(row[0])
         self._validate_revision_ancestry(script, current, head)
-        if current != head:
+        if current != head or previous_save_version != CURRENT_SCHEMA_VERSION:
             backup_path = self._backup_before_schema_change(database_path, campaign_id, current)
             try:
-                command.upgrade(config, head)
+                if current != head:
+                    command.upgrade(config, head)
+                if has_campaign_metadata:
+                    with closing(sqlite3.connect(database_path)) as connection:
+                        connection.execute(
+                            "UPDATE campaign_metadata SET schema_version = ? WHERE campaign_id = ?",
+                            (CURRENT_SCHEMA_VERSION, campaign_id),
+                        )
+                        connection.commit()
             except Exception as migration_error:
                 try:
                     self._restore_sqlite_backup(backup_path, database_path)
@@ -143,12 +179,13 @@ class CampaignService:
                     f"A atualizacao do save falhou. O arquivo original foi restaurado; "
                     f"backup de recuperacao: {backup_path}"
                 ) from migration_error
-            with closing(sqlite3.connect(database_path)) as connection:
-                connection.execute(
-                    "UPDATE campaign_metadata SET schema_version = ? WHERE campaign_id = ?",
-                    (CURRENT_SCHEMA_VERSION, campaign_id),
-                )
-                connection.commit()
+            return CampaignMigration(
+                previous_revision=current,
+                current_revision=head,
+                previous_save_version=previous_save_version,
+                current_save_version=CURRENT_SCHEMA_VERSION,
+            )
+        return None
 
     def _validate_campaign_before_open(self, database_path: Path, campaign_id: str) -> None:
         """Validate an existing save completely before any migration can modify it."""
@@ -471,11 +508,17 @@ class CampaignService:
         return self.inspect_campaign(campaign_id)
 
     def activate_campaign(self, campaign_id: str, mark_active: bool = True) -> CampaignInfo:
+        info, _migration = self.activate_campaign_with_migration(campaign_id, mark_active)
+        return info
+
+    def activate_campaign_with_migration(
+        self, campaign_id: str, mark_active: bool = True
+    ) -> tuple[CampaignInfo, CampaignMigration | None]:
         path = self._path_for(campaign_id)
         if not path.is_file():
             raise FileNotFoundError("Save da campanha nao encontrado.")
         self._validate_campaign_before_open(path, str(UUID(campaign_id)))
-        self._ensure_schema(path, str(UUID(campaign_id)))
+        migration = self._ensure_schema(path, str(UUID(campaign_id)))
         info = self.inspect_campaign(campaign_id)
         with _activation_lock:
             configure_database(f"sqlite:///{info.database_path.as_posix()}")
@@ -487,7 +530,7 @@ class CampaignService:
                     metadata.last_session_state = "active"
                     metadata.updated_at_utc = datetime.now(timezone.utc)
                     db.commit()
-        return info
+        return info, migration
 
     def close_active_campaign(self, campaign_id: str, closed_at_utc: datetime | None = None) -> None:
         with _activation_lock:

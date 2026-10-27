@@ -73,6 +73,20 @@
     {% else %}
       <main class="page-shell public-shell">
     {% endif %}
+      {% set migration = request.state._state.get('save_migration_notice') if request is defined else none %}
+      {% if has_app_shell and migration %}
+        <aside class="save-migration-notice" role="status" aria-live="polite">
+          <strong>Save atualizado.</strong>
+          <span>
+            {% if migration.previous_revision != migration.current_revision %}
+              Revisão {{ migration.previous_revision }} → {{ migration.current_revision }}.
+            {% else %}
+              Versão {{ migration.previous_save_version }} → {{ migration.current_save_version }}.
+            {% endif %}
+            Um backup de segurança foi criado antes da atualização.
+          </span>
+        </aside>
+      {% endif %}
       {% block content %}{% endblock %}
     {% if has_app_shell %}
           </main>

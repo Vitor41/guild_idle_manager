@@ -87,6 +87,10 @@ def get_current_player(request: Request, db: DbSession) -> User | CampaignPlayer
     campaign = get_current_campaign(request, db)
     if campaign is None:
         return None
+    pending_migration = getattr(request.app.state, "pending_campaign_migration", None)
+    if pending_migration and pending_migration.get("campaign_id") == campaign.campaign_id:
+        request.state.save_migration_notice = pending_migration["notice"]
+        request.app.state.pending_campaign_migration = None
     return CampaignPlayer(
         id=campaign.campaign_id,
         username=campaign.campaign_name,

@@ -5,17 +5,22 @@ from app.services.campaign_service import CampaignService
 
 
 def open_campaign(app, campaigns: CampaignService, clock_guard: ClockGuard, campaign_id: str):
+    info, summary, _migration = open_campaign_with_migration(app, campaigns, clock_guard, campaign_id)
+    return info, summary
+
+
+def open_campaign_with_migration(app, campaigns: CampaignService, clock_guard: ClockGuard, campaign_id: str):
     active = getattr(app.state, "active_campaign", None)
     if active is not None and active.campaign_id != campaign_id:
         raise ValueError("Retorne ao menu de campanhas e feche a campanha atual antes de abrir outra.")
     if active is not None:
-        return campaigns.inspect_campaign(campaign_id), None
-    info = campaigns.activate_campaign(campaign_id, mark_active=False)
+        return campaigns.inspect_campaign(campaign_id), None, None
+    info, migration = campaigns.activate_campaign_with_migration(campaign_id, mark_active=False)
     summary = clock_guard.activate_campaign(info.campaign_id)
     info = campaigns.inspect_campaign(info.campaign_id)
     app.state.active_campaign = info
     getattr(app.state, "suspended_campaigns", set()).discard(info.campaign_id)
-    return info, summary
+    return info, summary, migration
 
 
 def close_campaign(app, campaigns: CampaignService, clock_guard: ClockGuard) -> None:

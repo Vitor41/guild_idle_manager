@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from app.desktop.lifecycle import open_campaign, suspend_campaign
+from app.desktop.lifecycle import open_campaign, open_campaign_with_migration, suspend_campaign
 
 
 router = APIRouter(prefix="/desktop")
@@ -65,8 +65,21 @@ def create_campaign(payload: CampaignCreate, request: Request):
 def open_existing_campaign(campaign_id: str, request: Request):
     campaigns, clock_guard = _services(request)
     try:
-        info, summary = open_campaign(request.app, campaigns, clock_guard, campaign_id)
-        return {"campaign_id": info.campaign_id, "redirect": "/dashboard", "offline_summary": summary}
+        info, summary, migration = open_campaign_with_migration(
+            request.app, campaigns, clock_guard, campaign_id
+        )
+        notice = migration.notice_payload() if migration else None
+        if notice:
+            request.app.state.pending_campaign_migration = {
+                "campaign_id": info.campaign_id,
+                "notice": notice,
+            }
+        return {
+            "campaign_id": info.campaign_id,
+            "redirect": "/dashboard",
+            "offline_summary": summary,
+            "migration_notice": notice,
+        }
     except (ValueError, FileNotFoundError, OSError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

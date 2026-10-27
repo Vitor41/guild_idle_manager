@@ -28,8 +28,8 @@ Installer regression tests cover refusal of a foreign install directory and a ju
 
 Current artifacts from the final build:
 
-- `dist/GuildIdleManager-DEV.zip` — SHA-256 `88D69551535A8A16688D57A9DBB7FF2D4F8EE84B665095027997F8ECD84F883F`.
-- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `865ADE6AB3F4B9AC98F4479EB826EAFB19E2F04B8B1858BD2B63B3FC8EE644BE`.
+- `dist/GuildIdleManager-DEV.zip` — SHA-256 `7D7EAD1DF4AA64AC014449B851533E8199853188F795E8C987CD4F72E83560C8`.
+- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `DF24AE8B601472633F86345D47EFDFBFAAE0B1C32743A9442C753997C3ED2001`.
 
 IExpress returned exit code 0 before the Setup file appeared; the build script now waits up to 90 seconds for a stable output and verifies its PE header before moving it into `dist`. The final Setup passed isolated first install and managed update (`Start-Process -Wait`: exit 0 for both) with a temporary `%LOCALAPPDATA%`. The saves sentinel remained unchanged, the marker identified the DEV install, and a planted obsolete app file was removed. All 856 installed app files had hashes identical to the current packaged bundle. The Setup now matches the final ZIP used by the build script.
 
@@ -100,3 +100,9 @@ The source/dist/install hashes matched for the template during packaging verific
 Final Work 3 package hashes are recorded above. The mission template SHA-256 is `BFC22E3C54CB9A59E1B6D66BE5957A28B19973C6DCC3A90D327F4CBCC2DF3ACF` in source, `dist`, and the fresh final QA installation. The packaged offline smoke wrote `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local` to its result file. The updated native installation displayed both **Chance base** labels and the 95% cap explanations.
 
 Final regression run: 67 tests passed, one optional native-runtime test skipped. The loopback HTTP smoke, campaign isolation/chance-cap test, installer first-install/update tests, and three SQLite timestamp normalization tests passed.
+
+### Save-version migration notice
+
+The desktop open flow now carries a migration report separately from offline progress. In an isolated campaign with save version 1, opening it created a pre-migration backup, advanced the save to version 2, and returned the previous/current revisions without a filesystem path. The following dashboard response rendered an accessible `role="status"` notice with the version change and backup confirmation; the notice appeared once and remained separate from the idle-progress dialog. The loopback smoke verifies the API response, the saved pre-migration version, the rendered notice, and that no backup path is exposed.
+
+The rebuilt Setup installed successfully in a fresh temporary profile. The frozen executable smoke again reported `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`. Current package hashes are listed above.

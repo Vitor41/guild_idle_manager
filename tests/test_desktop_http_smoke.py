@@ -155,6 +155,56 @@ with tempfile.TemporaryDirectory() as data_dir:
                 (campaign.campaign_id,),
             ).fetchone()
         assert session_state == "suspended" and closed_at is None, (session_state, closed_at)
+
+        previous_campaign = saves.create_campaign("Save de versao anterior")
+        with closing(sqlite3.connect(previous_campaign.database_path)) as connection:
+            connection.execute(
+                "UPDATE campaign_metadata SET schema_version = 1 WHERE campaign_id = ?",
+                (previous_campaign.campaign_id,),
+            )
+            connection.commit()
+        status, _location, migration_body = request(
+            f"/desktop/api/campaigns/{previous_campaign.campaign_id}/open",
+            method="POST",
+            body="{}",
+        )
+        assert status == 200, migration_body
+        migration_response = json.loads(migration_body)
+        notice = migration_response["migration_notice"]
+        assert notice == {
+            "previous_revision": notice["previous_revision"],
+            "current_revision": notice["current_revision"],
+            "previous_save_version": 1,
+            "current_save_version": 2,
+            "backup_created": True,
+        }, notice
+        backup_files = list(
+            (Path(data_dir) / "backups" / previous_campaign.campaign_id).glob("pre-migration-*.db")
+        )
+        assert len(backup_files) == 1, backup_files
+        with closing(sqlite3.connect(backup_files[0])) as connection:
+            backup_version, backup_revision = connection.execute(
+                "SELECT campaign_metadata.schema_version, alembic_version.version_num "
+                "FROM campaign_metadata CROSS JOIN alembic_version WHERE campaign_id = ?",
+                (previous_campaign.campaign_id,),
+            ).fetchone()
+        assert backup_version == 1, backup_version
+        with closing(sqlite3.connect(previous_campaign.database_path)) as connection:
+            current_revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+        assert notice["previous_revision"] == backup_revision, notice
+        assert notice["current_revision"] == current_revision, notice
+        status, _location, dashboard_body = request("/dashboard")
+        assert status == 200
+        assert b'role="status" aria-live="polite"' in dashboard_body
+        assert b"Save atualizado." in dashboard_body
+        assert "Versão 1 → 2".encode("utf-8") in dashboard_body
+        assert "backup de segurança foi criado antes da atualização".encode("utf-8") in dashboard_body
+        assert str(backup_files[0]).encode("utf-8") not in dashboard_body
+        assert str(backup_files[0]).encode("utf-8") not in migration_body
+        assert b"offline-dialog" not in dashboard_body
+        status, _location, next_dashboard_body = request("/dashboard")
+        assert status == 200
+        assert b"save-migration-notice" not in next_dashboard_body
     finally:
         from app.desktop.lifecycle import close_campaign
         close_campaign(app, saves, guard)
