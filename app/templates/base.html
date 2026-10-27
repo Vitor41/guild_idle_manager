@@ -20,7 +20,9 @@
               <small>Manager</small>
             </span>
           </a>
-          <nav class="sidebar-nav">
+          <details class="compact-navigation" open>
+          <summary aria-label="Abrir navegação principal"><span aria-hidden="true">☰</span><span>Navegação</span></summary>
+          <nav class="sidebar-nav" aria-label="Navegação principal">
             <a href="/dashboard"><span class="nav-icon">⌂</span><span>Visão geral</span></a>
             <a href="/tavern"><span class="nav-icon">♜</span><span>Taverna</span></a>
             <a href="/mercenaries"><span class="nav-icon">⚔</span><span>Mercenários</span></a>
@@ -43,6 +45,7 @@
               <a href="/admin"><span class="nav-icon">⚙</span><span>Admin</span></a>
             {% endif %}
           </nav>
+          </details>
         </aside>
 
         <div class="main-column">

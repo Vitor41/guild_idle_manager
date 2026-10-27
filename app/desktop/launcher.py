@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import ctypes
+import http.client
 import logging
 from logging.handlers import RotatingFileHandler
 import os
 import socket
 import threading
 import time
-from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.parse import urlsplit
 
 import uvicorn
 
@@ -30,20 +30,35 @@ def _configure_logging() -> None:
 
 def _wait_for_health(url: str, server: uvicorn.Server, timeout_seconds: float = 15) -> None:
     deadline = time.monotonic() + timeout_seconds
+    target = urlsplit(url)
+    if target.scheme != "http" or not target.hostname or target.port is None:
+        raise ValueError("O healthcheck desktop deve apontar para o servidor HTTP local.")
+    request_target = target.path or "/"
+    if target.query:
+        request_target += f"?{target.query}"
+    last_error: OSError | http.client.HTTPException | None = None
     while time.monotonic() < deadline:
         if server.started:
+            connection = http.client.HTTPConnection(target.hostname, target.port, timeout=0.5)
             try:
-                with urlopen(url, timeout=0.5) as response:
-                    if response.status == 200:
-                        logging.info("Local healthcheck passed at %s", url)
-                        return
-            except (OSError, URLError):
-                pass
+                connection.request("GET", request_target, headers={"Host": target.netloc})
+                response = connection.getresponse()
+                if response.status == 200:
+                    logging.info("Local healthcheck passed at %s", url)
+                    return
+                last_error = OSError(f"healthcheck returned HTTP {response.status}")
+            except (OSError, http.client.HTTPException) as exc:
+                last_error = exc
+            finally:
+                connection.close()
         if not server.started and not getattr(server, "_started", False):
             time.sleep(0.05)
         else:
             time.sleep(0.1)
-    raise RuntimeError("O servidor local nao respondeu ao healthcheck dentro do prazo.")
+    message = "O servidor local nao respondeu ao healthcheck dentro do prazo."
+    if last_error is not None:
+        message = f"{message} Ultimo erro: {last_error!r}"
+    raise RuntimeError(message) from last_error
 
 
 def _show_startup_error(message: str) -> None:

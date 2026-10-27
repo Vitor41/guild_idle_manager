@@ -10,7 +10,8 @@ class DesktopHttpSmokeTests(unittest.TestCase):
     def test_gameplay_pages_and_mutations_work_through_loopback_without_http_sessions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             script = r'''
-import gc, http.client, json, os, re, socket, tempfile, threading, time
+import gc, http.client, json, os, re, socket, sqlite3, tempfile, threading, time
+from contextlib import closing
 from pathlib import Path
 from datetime import datetime, timezone
 os.environ["APP_MODE"] = "desktop"
@@ -103,6 +104,16 @@ with tempfile.TemporaryDirectory() as data_dir:
         with SessionLocal() as db:
             metadata = db.get(CampaignMetadata, campaign.campaign_id)
             assert '"desktop_smoke":false' in metadata.confirmation_preferences
+        status, location, _body = request("/desktop/return-to-campaigns", method="POST")
+        assert status == 303 and location == "/desktop/campaigns", (status, location)
+        assert app.state.active_campaign is None
+        assert campaign.campaign_id in app.state.suspended_campaigns
+        with closing(sqlite3.connect(campaign.database_path)) as connection:
+            session_state, closed_at = connection.execute(
+                "SELECT last_session_state, last_clean_shutdown_utc FROM campaign_metadata WHERE campaign_id = ?",
+                (campaign.campaign_id,),
+            ).fetchone()
+        assert session_state == "suspended" and closed_at is None, (session_state, closed_at)
     finally:
         from app.desktop.lifecycle import close_campaign
         close_campaign(app, saves, guard)

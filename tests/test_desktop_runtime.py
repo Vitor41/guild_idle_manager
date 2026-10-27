@@ -144,6 +144,7 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                         "webview_page_loaded": False,
                         "manager_dom_visible": False,
                         "dashboard_dom_visible": False,
+                        "tutorial_invitation_dismissed": False,
                         "campaign_created_and_opened": False,
                         "returned_to_menu": False,
                         "manager_restored": False,
@@ -229,6 +230,11 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                             time.sleep(0.1)
                         else:
                             raise RuntimeError("the native WebView did not navigate to the new campaign dashboard")
+                        if window.evaluate_js("document.querySelector('#tutorial-invite form[action=\"/tutorial/decline\"] button') !== null") is True:
+                            window.evaluate_js("document.querySelector('#tutorial-invite form[action=\"/tutorial/decline\"] button').click(); true")
+                            if not wait_for_dom("document.querySelector('#tutorial-invite') === null"):
+                                raise RuntimeError("the native WebView did not dismiss the first-run tutorial invitation")
+                            result["tutorial_invitation_dismissed"] = True
                         if not wait_for_dom("document.querySelector('form[action=\"/desktop/return-to-campaigns\"]') !== null"):
                             raise RuntimeError("campaign dashboard did not show the return-to-campaigns action")
                         result["dashboard_dom_visible"] = True
@@ -236,6 +242,7 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                         result["campaign_created_and_opened"] = True
                         save_progress()
 
+                        window.evaluate_js("window.__gimSubmitEvents = []; document.addEventListener('submit', event => window.__gimSubmitEvents.push({action: event.target.action, method: event.target.method, defaultPrevented: event.defaultPrevented}), true); true")
                         window.evaluate_js("document.querySelector('form[action=\"/desktop/return-to-campaigns\"]').requestSubmit(); true")
                         deadline = time.monotonic() + 35
                         while time.monotonic() < deadline:
@@ -243,6 +250,18 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                                 break
                             time.sleep(0.1)
                         else:
+                            result["return_diagnostics"] = {
+                                "url": window.evaluate_js("window.location.href"),
+                                "title": window.evaluate_js("document.title"),
+                                "body_text": window.evaluate_js("document.body.innerText.slice(0, 2000)"),
+                                "form": window.evaluate_js("(() => { const f = document.querySelector('form[action=\"/desktop/return-to-campaigns\"]'); return f && {action:f.action, method:f.method, connected:f.isConnected}; })()"),
+                                "submit_events": window.evaluate_js("window.__gimSubmitEvents"),
+                                "resource_requests": window.evaluate_js("performance.getEntriesByType('resource').filter(e => e.name.includes('return-to-campaigns')).map(e => ({name:e.name, initiatorType:e.initiatorType, duration:e.duration, transferSize:e.transferSize}))"),
+                                "active_campaign_id": app.state.active_campaign.campaign_id if app.state.active_campaign else None,
+                                "suspended_campaigns": sorted(app.state.suspended_campaigns),
+                                "webview_responses": list(webview_responses),
+                            }
+                            save_progress()
                             raise RuntimeError("the native WebView did not return to the campaign manager")
                         if not wait_for_dom("document.querySelector('#campaign-list-title') !== null"):
                             raise RuntimeError("campaign manager DOM was not restored after returning")
@@ -304,12 +323,19 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
 
             self.assertTrue(marker_path.exists(), (stdout or "") + (stderr or ""))
             result = json.loads(marker_path.read_text(encoding="utf-8"))
+            if "error" in result:
+                import shutil
+                preserved = Path(tempfile.gettempdir()) / f"gim-desktop-runtime-failure-{int(time.time())}"
+                shutil.copytree(root, preserved)
+                result["preserved_artifacts"] = str(preserved)
+                self.fail(json.dumps(result, ensure_ascii=False, indent=2))
             self.assertNotIn("error", result, result.get("error", "") + result.get("pywebview_log_tail", ""))
             self.assertTrue(result["window_shown"])
             self.assertTrue(result["webview_page_loaded"])
             self.assertTrue(result["manager_dom_visible"])
             self.assertTrue(result["bridge_api_visible"])
             self.assertTrue(result["dashboard_dom_visible"])
+            self.assertTrue(result["tutorial_invitation_dismissed"])
             self.assertTrue(result["campaign_created_and_opened"])
             self.assertTrue(result["returned_to_menu"])
             self.assertTrue(result["manager_restored"])
