@@ -147,3 +147,9 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - O smoke opt-in `tests.test_desktop_runtime` foi executado com `APP_MODE=desktop`, `GIM_RUN_DESKTOP_RUNTIME_SMOKE=1`, diagnósticos desligados e permissão elevada para sair do ambiente restrito de execução. Após a correção do retorno ao menu em andamento, duas execuções independentes passaram em 22,086 s e 20,186 s: janela, DOM do gerente, ponte JS/Python, criação de campanha, dashboard, retorno ao gerente, fechamento da janela, persistência e encerramento do servidor. Somente saves temporários foram usados.
 - A mesma prova em execução restrita ainda ficou sem `loaded` e sem processo WebView2 visível; essa diferença de contexto explica por que os testes anteriores não sustentavam uma conclusão sobre a janela real. O primeiro ensaio fora do ambiente restrito chegou ao dashboard, mas falhou no retorno; o ajuste de submissão da rota desktop permitiu as duas execuções completas seguintes.
 - Decisão: evidência positiva para o ciclo nativo do código-fonte; **Gate 2/3 ainda abertos** até commit da correção, regressão final, execução da janela no bundle instalado e conferência visual nas dimensões exigidas.
+
+### 2026-10-27 — Inspeção visual da instalação temporária
+
+- O executável reconstruído passou pelo healthcheck local e abriu a janela. A captura `docs/qa/desktop-dashboard.jpg` mostra a campanha renomeada e o dashboard com sprites reais, navegação e textos legíveis em largura ampla.
+- A captura `docs/qa/desktop-minimum.jpg` revela rolagem horizontal no topo e cabeçalho excessivamente alto a 760 x 600; a navegação não está claramente acessível nessa largura. Este achado foi devolvido ao DEV para correção e nova captura.
+- A escolha inicial do tutorial expôs outro POST fora do fluxo AJAX. A correção e o smoke nativo ampliado estão em andamento. **Gate visual e pacote instalado permanecem abertos.**
