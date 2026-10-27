@@ -28,7 +28,7 @@
           {% for card in class_cards if card.class.tier == tier %}
             <article class="class-guide-card">
               <div class="mercenary-head">
-                <div class="class-emblem {% if card.icon_path and '/assets/extended/' in card.icon_path %}extended-emblem{% endif %}">
+                <div class="class-emblem {% if card.icon_path and '/assets/extended/' in card.icon_path %}extended-emblem{% endif %}" data-desktop-class="{{ card.class.code or card.class.name }}">
                   {% if card.icon_path %}
                     <img class="asset-icon class-emblem-img {% if '/assets/extended/' in card.icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=card.icon_path) }}" alt="{{ card.class.view_label }}" loading="lazy">
                   {% else %}

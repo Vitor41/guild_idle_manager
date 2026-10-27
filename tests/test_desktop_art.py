@@ -38,6 +38,33 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn('data-app-mode="desktop"', campaigns)
         self.assertIn("/js/desktop-art.js", campaigns)
 
+    def test_semantic_entity_maps_have_matching_art_and_keep_names_in_templates(self):
+        manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
+        script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
+        required_keys = {
+            "class-warrior", "class-archer", "class-rogue", "class-mage", "class-cleric",
+            "building-housing", "building-tavern", "building-blacksmith", "building-market", "building-docks",
+            "item-sword", "item-shield", "item-ring", "material-wood", "material-ore", "resource-gold",
+            "resource-crystal", "status-ready", "status-progress", "status-locked", "status-failed",
+        }
+        self.assertTrue(required_keys.issubset(manifest["sprites"]))
+        for marker in ("data-desktop-class", "data-desktop-building", "data-desktop-item-group", "data-desktop-item-slot", "data-desktop-resource", ".status-badge"):
+            self.assertIn(marker, script)
+
+        template_requirements = {
+            "mercenaries/index.html": ("data-desktop-class=", "{{ mercenary.class_label }}"),
+            "mercenaries/detail.html": ("data-desktop-class=", "{{ mercenary.name }}"),
+            "classes/index.html": ("data-desktop-class=", "{{ card.class.view_label }}"),
+            "buildings/index.html": ("data-desktop-building=", "{{ building.building_template.name }}"),
+            "inventory/index.html": ("data-desktop-item-group=", "{{ inventory_item.display_name }}"),
+            "market/index.html": ("data-desktop-item-group=", "{{ item.item_template.name }}"),
+        }
+        for relative_path, markers in template_requirements.items():
+            with self.subTest(template=relative_path):
+                source = (ROOT / "app" / "templates" / relative_path).read_text(encoding="utf-8")
+                for marker in markers:
+                    self.assertIn(marker, source)
+
 
 if __name__ == "__main__":
     unittest.main()

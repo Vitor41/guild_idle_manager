@@ -34,7 +34,7 @@
     <section class="panel"><h2>Materiais e acumulaveis</h2>
       {% if inventory_items %}<div class="market-catalog">{% for item in inventory_items %}
         <article class="market-item-row rarity-{{ item.item_template.rarity }}">
-          <div class="asset-placeholder item-icon-frame">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
+          <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ item.item_template.icon_group or '' }}" data-desktop-item-slot="{{ item.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ item.item_template.material_family or '' }}">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
           <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Disponivel: {{ item.quantity }} | {{ item.item_template.base_sell_value }} ouro/un.</small></div>
           <form class="inline-form" method="post" action="/market/sell/material"><input type="hidden" name="item_template_id" value="{{ item.item_template_id }}"><input type="number" name="quantity" min="1" max="{{ item.quantity }}" value="1" aria-label="Quantidade"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button></form>
         </article>
@@ -43,7 +43,7 @@
     <section class="panel"><h2>Equipamentos livres</h2>
       {% if equipment_items %}<div class="market-catalog">{% for item in equipment_items %}
         <article class="market-item-row rarity-{{ item.item_template.rarity }}">
-          <div class="asset-placeholder item-icon-frame">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
+          <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ item.item_template.icon_group or '' }}" data-desktop-item-slot="{{ item.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ item.item_template.material_family or '' }}">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
           <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Tier {{ item.item_template.tier }} | {{ item.item_template.base_sell_value }} ouro</small></div>
           <form method="post" action="/market/sell/equipment" data-confirm-title="Anunciar equipamento?" data-confirm-message="O equipamento ficara reservado ate a conclusao da venda." data-confirm-action="Anunciar"><input type="hidden" name="item_instance_id" value="{{ item.id }}"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button></form>
         </article>

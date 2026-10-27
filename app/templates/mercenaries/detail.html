@@ -5,6 +5,7 @@
 {% block content %}
   <section class="dashboard" aria-labelledby="mercenary-title">
     <header class="topbar">
+      {% if request.app.state.app_mode == 'desktop' %}<span class="desktop-detail-class-mark" data-desktop-class="{{ mercenary.mercenary_class.code or mercenary.mercenary_class.name }}" aria-hidden="true"></span>{% endif %}
       <div>
         <p class="eyebrow">{{ guild.name }}</p>
         <h1 id="mercenary-title">{{ mercenary.name }}</h1>
@@ -113,7 +114,7 @@
         ] %}
           {% set equipped = slots[slot_key][index] if slots.get(slot_key) and slots[slot_key]|length > index else none %}
           <div class="equipment-slot {{ slot_class }} {{ 'filled' if equipped else '' }}">
-            <span class="slot-icon">
+            <span class="slot-icon" data-desktop-item-slot="{{ slot_key }}" data-desktop-item-group="{{ equipped.item_template.icon_group if equipped else '' }}" data-desktop-item-family="{{ equipped.item_template.material_family if equipped else '' }}">
               {% if equipped and equipped.icon_path %}
                 <img class="asset-icon item-icon-img slot-item-icon" src="{{ url_for('static', path=equipped.icon_path) }}" alt="{{ equipped.item_template.name }}" loading="lazy">
               {% else %}

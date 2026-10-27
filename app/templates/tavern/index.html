@@ -95,7 +95,7 @@
         <h2>Oferta especial</h2>
         {% if active_offer %}
           <div class="mercenary-head">
-            <div class="avatar-placeholder avatar-class-icon">
+            <div class="avatar-placeholder avatar-class-icon" data-desktop-class="{{ active_offer.class_label }}">
               {% if active_offer.class_icon_path %}
                 <img class="asset-icon class-icon-img" src="{{ url_for('static', path=active_offer.class_icon_path) }}" alt="{{ active_offer.class_label }}" loading="lazy">
               {% else %}

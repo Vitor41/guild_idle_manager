@@ -27,10 +27,10 @@
     <section class="panel">
       <h2>Recursos</h2>
       <dl class="inline-stats">
-        <div><dt>Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
-        <div><dt>Madeira</dt><dd>{{ resources.wood if resources else 0 }}</dd></div>
-        <div><dt>Minerio</dt><dd>{{ resources.ore if resources else 0 }}</dd></div>
-        <div><dt>Cristais</dt><dd>{{ resources.crystals if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="gold">Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="wood">Madeira</dt><dd>{{ resources.wood if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="ore">Minério</dt><dd>{{ resources.ore if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="crystal">Cristais</dt><dd>{{ resources.crystals if resources else 0 }}</dd></div>
       </dl>
     </section>
 
@@ -42,7 +42,7 @@
           {% set icon = building.view_icon if building.view_icon is defined else '□' %}
           <article class="panel building-card">
             <div class="building-icon-row">
-              <div class="asset-placeholder building-icon"><span aria-hidden="true">{{ icon }}</span></div>
+              <div class="asset-placeholder building-icon" data-desktop-building="{{ effect }}"><span aria-hidden="true">{{ icon }}</span></div>
               <span class="status-badge {{ 'status-active' if building.building_template.is_active else 'status-expired' }}">{{ 'Ativa' if building.building_template.is_active else 'Inativa' }}</span>
             </div>
             <div class="building-body">
