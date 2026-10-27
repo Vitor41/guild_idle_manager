@@ -30,10 +30,13 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                 import os
                 import logging
                 from pathlib import Path
+                import subprocess
                 import threading
                 import time
                 import traceback
                 import webview
+                from webview.platforms.edgechromium import EdgeChrome
+                from System.Threading import Thread
                 from app.desktop.launcher import run
 
                 marker = Path(os.environ["GIM_RUNTIME_SMOKE_MARKER"])
@@ -44,6 +47,63 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                 pywebview_logger = logging.getLogger("pywebview")
                 pywebview_logger.setLevel(logging.DEBUG)
                 pywebview_logger.addHandler(pywebview_handler)
+                initialization_results = []
+                original_webview_ready = EdgeChrome.on_webview_ready
+                original_navigation_completed = EdgeChrome.on_navigation_completed
+                original_load_url = EdgeChrome.load_url
+                original_edge_init = EdgeChrome.__init__
+                edge_instances = []
+                navigation_events = []
+                edge_actions = []
+
+                def capture_edge_initialization(self, *args, **kwargs):
+                    original_edge_init(self, *args, **kwargs)
+                    try:
+                        task = self.webview.EnsureCoreWebView2Async(None)
+                        edge_instances.append((self, task))
+                    except BaseException as error:
+                        edge_instances.append((self, error))
+
+                EdgeChrome.__init__ = capture_edge_initialization
+
+                def capture_webview_initialization(self, sender, args):
+                    try:
+                        event_result = {
+                            "is_success": bool(args.IsSuccess),
+                            "exception": str(args.InitializationException) if args.InitializationException else None,
+                            "thread_apartment": str(Thread.CurrentThread.GetApartmentState()),
+                            "real_url": str(self.pywebview_window.real_url) if self.pywebview_window.real_url else None,
+                        }
+                    except BaseException as error:
+                        event_result = {"capture_error": repr(error)}
+                    initialization_results.append(event_result)
+                    try:
+                        return original_webview_ready(self, sender, args)
+                    except BaseException as error:
+                        event_result["handler_exception"] = traceback.format_exc()
+                        raise
+
+                def capture_navigation_completed(self, sender, args):
+                    navigation_events.append({
+                        "source": str(sender.Source) if sender.Source else None,
+                        "is_success": bool(args.IsSuccess),
+                        "web_error_status": str(args.WebErrorStatus),
+                    })
+                    return original_navigation_completed(self, sender, args)
+
+                def capture_load_url(self, url):
+                    edge_actions.append({"action": "load_url", "url": str(url)})
+                    result = original_load_url(self, url)
+                    edge_actions.append({
+                        "action": "load_url_returned",
+                        "source": str(self.webview.Source) if self.webview.Source else None,
+                        "core_source": str(self.webview.CoreWebView2.Source) if self.webview.CoreWebView2 else None,
+                    })
+                    return result
+
+                EdgeChrome.on_webview_ready = capture_webview_initialization
+                EdgeChrome.on_navigation_completed = capture_navigation_completed
+                EdgeChrome.load_url = capture_load_url
                 original_start = webview.start
                 window_closed = threading.Event()
                 webview_responses = []
@@ -84,6 +144,39 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                         if not result["webview_page_loaded"]:
                             result["bridge_ready"] = window.events._pywebviewready.is_set()
                             result["webview_responses"] = list(webview_responses)
+                            result["webview_initialization"] = list(initialization_results)
+                            result["navigation_events"] = list(navigation_events)
+                            result["webview_actions"] = list(edge_actions)
+                            result["webview_task"] = [
+                                {
+                                    "status": str(task_or_error.Status) if hasattr(task_or_error, "Status") else None,
+                                    "exception": str(task_or_error.Exception) if hasattr(task_or_error, "Exception") and task_or_error.Exception else None,
+                                    "capture_error": repr(task_or_error) if isinstance(task_or_error, BaseException) else None,
+                                    "is_handle_created": bool(getattr(instance.webview, "IsHandleCreated", False)),
+                                }
+                                for instance, task_or_error in edge_instances
+                            ]
+                            result["webview_runtime_processes"] = subprocess.run(
+                                ["tasklist", "/FI", "IMAGENAME eq msedgewebview2.exe", "/FO", "CSV", "/NH"],
+                                capture_output=True,
+                                text=True,
+                                check=False,
+                            ).stdout.strip()
+                            result["webview_user_data"] = [
+                                {
+                                    "path": str(instance.user_data_folder),
+                                    "exists": Path(str(instance.user_data_folder)).exists(),
+                                    "entries": [path.name for path in Path(str(instance.user_data_folder)).glob("*")][:10],
+                                }
+                                for instance, task_or_error in edge_instances
+                            ]
+                            result["webview_source"] = [
+                                {
+                                    "source": str(instance.webview.Source) if instance.webview.Source else None,
+                                    "core_source": str(instance.webview.CoreWebView2.Source) if instance.webview.CoreWebView2 else None,
+                                }
+                                for instance, task_or_error in edge_instances
+                            ]
                             raise RuntimeError(f"campaign manager did not load in pywebview; bridge_ready={result['bridge_ready']}, responses={result['webview_responses']!r}")
                         if window.evaluate_js("document.querySelector('#create-campaign-form') !== null") is not True:
                             raise RuntimeError("campaign manager DOM was not present in the native WebView")

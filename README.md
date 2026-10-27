@@ -14,6 +14,10 @@ Projeto web idle/manager de guilda e mercenarios. O estado atual possui bootstra
 - python-dotenv
 - HTML, CSS e JavaScript simples
 
+## Launcher desktop DEV (Windows)
+
+O launcher desktop usa SQLite por campanha, funciona sem PostgreSQL e não baixa conteúdo ao abrir. A preparação, os testes, a geração do pacote offline e a instalação DEV ficam descritos em [docs/DEV_DESKTOP.md](docs/DEV_DESKTOP.md). Saves, backups e logs são guardados em `%LOCALAPPDATA%\GuildIdleManager`, fora da pasta do aplicativo.
+
 ## Pre-requisitos
 
 - Python 3.11 ou superior
