@@ -1,17 +1,92 @@
 import gc
+from contextlib import closing
+import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
+from datetime import timedelta, timezone, datetime
 from pathlib import Path
+from uuid import uuid4
+from unittest.mock import patch
 
+from alembic import command
+from fastapi import FastAPI, Request
+import sqlite3
 from sqlalchemy import func, select, text
 
 from app.database.connection import SessionLocal, configure_database
-from app.models import CampaignMetadata, MissionTemplate, User
+from app.core.dependencies import CampaignPlayer
+from app.models import (
+    CampaignMetadata,
+    DungeonTemplate,
+    GuildItemInstance,
+    GuildInventoryItem,
+    ItemTemplate,
+    MissionTemplate,
+    MissionTemplateItemDrop,
+    User,
+)
+from app.repositories.building_repository import get_guild_building_by_effect
+from app.services.building_service import ensure_guild_buildings, upgrade_guild_building
 from app.services.campaign_service import CampaignService
+from app.services.dungeon_service import claim_dungeon_loot, start_dungeon
 from app.services.guild_service import get_current_guild_context
+from app.services.mission_service import claim_mission_loot, start_mission
+from app.services.tavern_service import generate_apprentice_preview, get_tavern_page_context, hire_apprentice
+from app.routes.tavern_routes import _get_apprentice_preview
 
 
 class CampaignServiceTests(unittest.TestCase):
+    def test_desktop_home_without_campaign_uses_asgi_and_omits_session_expiry(self):
+        script = r'''
+import asyncio
+from app.main import app
+
+async def main():
+    sent = []
+    first_receive = True
+    async def receive():
+        nonlocal first_receive
+        if first_receive:
+            first_receive = False
+            return {"type": "http.request", "body": b"", "more_body": False}
+        return {"type": "http.disconnect"}
+    async def send(message):
+        sent.append(message)
+    scope = {
+        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1", "method": "GET", "scheme": "http",
+        "path": "/", "raw_path": b"/", "query_string": b"",
+        "headers": [(b"host", b"localhost")], "server": ("127.0.0.1", 8000),
+        "client": ("127.0.0.1", 12345),
+    }
+    await app(scope, receive, send)
+    status = sent[0]["status"]
+    body = b"".join(message.get("body", b"") for message in sent if message["type"] == "http.response.body")
+    paths = set(app.openapi()["paths"])
+    assert status == 200, status
+    assert b"Nenhuma campanha esta selecionada" in body
+    assert b"/login" not in body and b"/register" not in body
+    assert "/login" not in paths and "/register" not in paths
+    assert not any(middleware.cls.__name__ == "SessionMiddleware" for middleware in app.user_middleware)
+    assert b"data-session-started-at" not in body
+
+asyncio.run(main())
+'''
+        environment = os.environ.copy()
+        environment["APP_MODE"] = "desktop"
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[1],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_two_campaigns_create_open_and_persist_in_isolation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
@@ -28,6 +103,8 @@ class CampaignServiceTests(unittest.TestCase):
         self.assertNotEqual(first.campaign_id, second.campaign_id)
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
+        with closing(sqlite3.connect(first.database_path)) as connection:
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "a1b2c3d4e5f6")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -59,6 +136,11 @@ class CampaignServiceTests(unittest.TestCase):
             self.assertIsNotNone(resources)
             self.assertEqual(resources.gold, 321)
             self.assertEqual(db.scalar(select(func.count(MissionTemplate.id))), content_count)
+            self._exercise_gameplay(db, guild, resources)
+            preferences = db.get(CampaignMetadata, first.campaign_id)
+            preferences.tutorial_status = "completed"
+            preferences.confirmation_preferences = '{"dismiss_mercenary":false}'
+            db.commit()
 
         reopened = CampaignService(temp_path / "saves").inspect_campaign(first.campaign_id)
         self.assertEqual(reopened.campaign_id, first.campaign_id)
@@ -67,6 +149,190 @@ class CampaignServiceTests(unittest.TestCase):
         closed = campaigns.inspect_campaign(first.campaign_id)
         self.assertEqual(closed.last_session_state, "closed")
         self.assertIsNotNone(closed.last_clean_shutdown_utc)
+        campaigns.activate_campaign(first.campaign_id)
+        with SessionLocal() as db:
+            preferences = db.get(CampaignMetadata, first.campaign_id)
+            self.assertEqual(preferences.tutorial_status, "completed")
+            self.assertEqual(preferences.confirmation_preferences, '{"dismiss_mercenary":false}')
+
+    def test_upgrade_from_previous_alembic_revision_keeps_data_and_makes_backup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaigns = CampaignService(saves)
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            config = campaigns._alembic_config(database_path)
+            command.upgrade(config, "c9d0e1f2a3b4")
+
+            with closing(sqlite3.connect(database_path)) as connection:
+                self._insert_legacy_row(connection, "users", {
+                    "id": 7,
+                    "username": "usuario-legado",
+                    "email": None,
+                    "password_hash": "isolated-test-hash",
+                    "is_active": 1,
+                    "is_admin": 0,
+                    "tutorial_status": "pending",
+                    "confirmation_preferences": "{}",
+                })
+                self._insert_legacy_row(connection, "guilds", {
+                    "id": 11,
+                    "user_id": 7,
+                    "name": "Guilda preservada",
+                    "level": 1,
+                    "xp": 0,
+                    "reputation": 0,
+                })
+                connection.commit()
+
+            campaigns._ensure_schema(database_path, campaign_id)
+            with closing(sqlite3.connect(database_path)) as connection:
+                revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+                guild = connection.execute(
+                    "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
+                ).fetchone()
+                columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
+                self.assertEqual(revision, "a1b2c3d4e5f6")
+                self.assertEqual(guild, (7, "Guilda preservada", None))
+                self.assertEqual(columns["user_id"][3], 0)
+                self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
+                self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    @staticmethod
+    def _insert_legacy_row(connection, table: str, values: dict[str, object]) -> None:
+        column_info = list(connection.execute(f"PRAGMA table_info({table})"))
+        row_values = {}
+        for column in column_info:
+            name, type_name, not_null, default, primary_key = column[1], column[2].upper(), column[3], column[4], column[5]
+            if name in values:
+                row_values[name] = values[name]
+            elif primary_key:
+                continue
+            elif not not_null or default is not None:
+                continue
+            elif "DATE" in type_name or "TIME" in type_name:
+                row_values[name] = "2026-10-26 12:00:00"
+            elif "INT" in type_name or "BOOL" in type_name:
+                row_values[name] = 0
+            else:
+                row_values[name] = ""
+        names = list(row_values)
+        placeholders = ", ".join("?" for _ in names)
+        connection.execute(
+            f"INSERT INTO {table} ({', '.join(names)}) VALUES ({placeholders})",
+            [row_values[name] for name in names],
+        )
+
+    def _exercise_gameplay(self, db, guild, resources) -> None:
+        ensure_guild_buildings(db, guild.id)
+        housing = get_guild_building_by_effect(db, guild.id, "housing")
+        tavern = get_guild_building_by_effect(db, guild.id, "tavern")
+        self.assertIsNotNone(housing)
+        self.assertIsNotNone(tavern)
+        housing = upgrade_guild_building(db, guild, resources, housing.id)
+        self.assertEqual(housing.level, 1)
+        housing.level = 2  # provide a two-person test roster without provisioning materials
+        db.commit()
+        tavern = upgrade_guild_building(db, guild, resources, tavern.id)
+        self.assertEqual(tavern.level, 1)
+
+        tavern_context = get_tavern_page_context(db, guild, resources)
+        campaign = db.scalar(select(CampaignMetadata).where(CampaignMetadata.campaign_id == guild.campaign_id))
+        desktop_app = FastAPI()
+        desktop_app.state.app_mode = "desktop"
+        request = Request({"type": "http", "app": desktop_app})
+        player = CampaignPlayer(campaign.campaign_id, campaign.campaign_name)
+        saved_preview = _get_apprentice_preview(
+            request, db, player, tavern_context["config"], tavern_context["tavern_level"]
+        )
+        self.assertEqual(json.loads(campaign.apprentice_preview), saved_preview)
+        self.assertEqual(
+            _get_apprentice_preview(request, db, player, tavern_context["config"], tavern_context["tavern_level"]),
+            saved_preview,
+        )
+        for name, preview in (("Aprendiz de teste", saved_preview), ("Segundo aprendiz", None)):
+            if preview is None:
+                preview = generate_apprentice_preview(tavern_context["config"], tavern_context["tavern_level"])
+            hire_apprentice(db, guild, resources, name, preview)
+        mercenaries = list(guild.mercenaries)
+        self.assertEqual(len(mercenaries), 2)
+
+        mission_template = MissionTemplate(
+            name="Missao de integracao SQLite",
+            description="Cenario temporario isolado para validar transacao de missao.",
+            display_order=999999,
+            difficulty="normal",
+            level_band="1-20",
+            mission_type="standard",
+            recommended_level=1,
+            recommended_power=1,
+            duration_seconds=1,
+            base_gold_reward=10,
+            base_xp_reward=5,
+            base_success_chance=100,
+            min_party_size=1,
+            max_party_size=1,
+            required_guild_level=1,
+            required_min_mercenary_level=1,
+            required_building_level=0,
+            is_active=True,
+        )
+        db.add(mission_template)
+        db.flush()
+        material = db.scalar(select(ItemTemplate).where(ItemTemplate.item_type == "material"))
+        self.assertIsNotNone(material)
+        db.add(MissionTemplateItemDrop(
+            mission_template_id=mission_template.id,
+            item_template_id=material.id,
+            drop_chance=100,
+            min_quantity=1,
+            max_quantity=1,
+            is_active=True,
+        ))
+        db.commit()
+        mission_run = start_mission(db, guild, str(mission_template.id), [str(mercenaries[0].id)])
+        mission_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.flush()
+        with patch("app.services.mission_service.randint", return_value=1):
+            completed_mission = claim_mission_loot(db, guild, resources, mission_run.id)
+        self.assertEqual(completed_mission.status, "completed")
+        self.assertGreater(
+            db.scalar(select(func.count(GuildInventoryItem.id)).where(GuildInventoryItem.guild_id == guild.id))
+            + db.scalar(select(func.count(GuildItemInstance.id)).where(GuildItemInstance.guild_id == guild.id)),
+            0,
+        )
+
+        scouts = get_guild_building_by_effect(db, guild.id, "scouts")
+        scouts.level = 1
+        db.add(scouts)
+        mercenaries[0].power = mercenaries[1].power = 500
+        mercenaries[0].vitality = mercenaries[1].vitality = 500
+        db.add_all(mercenaries)
+        db.commit()
+        dungeon_template = db.scalar(
+            select(DungeonTemplate)
+            .where(
+                DungeonTemplate.is_active.is_(True),
+                DungeonTemplate.content_type == "dungeon",
+                DungeonTemplate.required_min_mercenary_level <= 1,
+                DungeonTemplate.min_party_size <= 2,
+                DungeonTemplate.required_class_code.is_(None),
+            )
+            .order_by(DungeonTemplate.required_total_power, DungeonTemplate.id)
+        )
+        self.assertIsNotNone(dungeon_template)
+        dungeon_run = start_dungeon(
+            db,
+            guild,
+            str(dungeon_template.id),
+            [str(mercenaries[0].id), str(mercenaries[1].id)],
+        )
+        dungeon_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.flush()
+        with patch("app.services.dungeon_service.randint", return_value=1):
+            completed_dungeon = claim_dungeon_loot(db, guild, resources, dungeon_run.id)
+        self.assertEqual(completed_dungeon.status, "completed")
 
 
 if __name__ == "__main__":

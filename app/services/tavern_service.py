@@ -4,6 +4,7 @@ from random import choice, randint
 
 from sqlalchemy.orm import Session
 
+from app.core.time import as_utc
 from app.models.guild import Guild, GuildResources
 from app.models.mercenary import MercenaryClass
 from app.models.tavern import GuildTavernState, TavernConfig, TavernSpecialOffer
@@ -237,13 +238,13 @@ def refresh_special_offer(db: Session, guild: Guild, state: GuildTavernState, co
 
     expired_offers = [
         offer for offer in list_special_offers_by_guild(db, guild.id)
-        if offer.status == "active" and offer.available_until <= now
+        if offer.status == "active" and as_utc(offer.available_until) <= now
     ]
     for offer in expired_offers:
         offer.status = "expired"
         db.add(offer)
 
-    if state.next_special_check_at > now:
+    if as_utc(state.next_special_check_at) > now:
         if expired_offers:
             db.commit()
         return None
@@ -538,7 +539,7 @@ def hire_special_offer(
     offer = refresh_special_offer(db, guild, state, config)
     if offer is None or offer.id != parsed_offer_id or offer.status != "active":
         raise TavernError("Oferta especial indisponivel.")
-    if offer.available_until <= utc_now():
+    if as_utc(offer.available_until) <= utc_now():
         offer.status = "expired"
         db.add(offer)
         db.commit()

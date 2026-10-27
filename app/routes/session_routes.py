@@ -13,7 +13,9 @@ router = APIRouter(prefix="/session")
 
 
 @router.post("/heartbeat", status_code=204)
-def heartbeat(current_user: User | None = Depends(get_current_user)) -> Response:
+def heartbeat(request: Request, current_user: User | None = Depends(get_current_user)) -> Response:
+    if request.app.state.app_mode == "desktop":
+        return Response(status_code=404)
     if current_user is None:
         return Response(status_code=401)
     return Response(status_code=204)

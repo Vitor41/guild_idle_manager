@@ -138,7 +138,10 @@ def upgrade() -> None:
     op.add_column('mercenary_classes', sa.Column('allowed_weapon_profile', sa.String(length=80), server_default='any', nullable=False))
     op.add_column('mercenary_classes', sa.Column('role_type', sa.String(length=80), server_default='balanced', nullable=False))
     op.create_index(op.f('ix_mercenary_classes_code'), 'mercenary_classes', ['code'], unique=True)
-    op.create_foreign_key('fk_mercenary_classes_parent_class_id', 'mercenary_classes', 'mercenary_classes', ['parent_class_id'], ['id'])
+    with op.batch_alter_table('mercenary_classes') as batch_op:
+        batch_op.create_foreign_key(
+            'fk_mercenary_classes_parent_class_id', 'mercenary_classes', ['parent_class_id'], ['id']
+        )
     # ### end Alembic commands ###
 
 

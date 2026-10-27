@@ -10,7 +10,7 @@
   <body>
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
     {% if has_app_shell %}
-      <div class="app-frame" data-session-started-at="{{ request.scope.get('session', {}).get('session_started_at', 0) }}" data-session-global-seconds="{{ request.scope.get('session', {}).get('session_global_seconds', 18000) }}" data-session-idle-seconds="{{ request.scope.get('session', {}).get('session_idle_seconds', 3600) }}" data-confirmation-preferences='{{ current_user.confirmation_preferences or "{}" }}'>
+      <div class="app-frame" {% if request.app.state.app_mode != 'desktop' %}data-session-started-at="{{ request.scope.get('session', {}).get('session_started_at', 0) }}" data-session-global-seconds="{{ request.scope.get('session', {}).get('session_global_seconds', 18000) }}" data-session-idle-seconds="{{ request.scope.get('session', {}).get('session_idle_seconds', 3600) }}"{% endif %} data-confirmation-preferences='{{ current_user.confirmation_preferences or "{}" }}'>
         <aside class="sidebar" aria-label="Navegacao principal">
           <a class="brand-mark" href="/dashboard">
             <span class="brand-sigil">G</span>

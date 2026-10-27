@@ -24,7 +24,7 @@ def upgrade() -> None:
         sa.Column("campaign_name", sa.String(length=120), nullable=False),
         sa.Column("created_at_utc", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at_utc", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("schema_version", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column("schema_version", sa.Integer(), nullable=False, server_default="2"),
         sa.Column("content_version", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("last_clean_shutdown_utc", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_session_state", sa.String(length=30), nullable=False, server_default="created"),
@@ -34,21 +34,22 @@ def upgrade() -> None:
         sa.Column("apprentice_preview", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("campaign_id"),
     )
-    op.alter_column("guilds", "user_id", existing_type=sa.Integer(), nullable=True)
-    op.add_column("guilds", sa.Column("campaign_id", sa.String(length=36), nullable=True))
-    op.create_index(op.f("ix_guilds_campaign_id"), "guilds", ["campaign_id"], unique=True)
-    op.create_foreign_key(
-        "fk_guilds_campaign_id_campaign_metadata",
-        "guilds",
-        "campaign_metadata",
-        ["campaign_id"],
-        ["campaign_id"],
-    )
+    with op.batch_alter_table("guilds") as batch_op:
+        batch_op.alter_column("user_id", existing_type=sa.Integer(), nullable=True)
+        batch_op.add_column(sa.Column("campaign_id", sa.String(length=36), nullable=True))
+        batch_op.create_index(op.f("ix_guilds_campaign_id"), ["campaign_id"], unique=True)
+        batch_op.create_foreign_key(
+            "fk_guilds_campaign_id_campaign_metadata",
+            "campaign_metadata",
+            ["campaign_id"],
+            ["campaign_id"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_guilds_campaign_id_campaign_metadata", "guilds", type_="foreignkey")
-    op.drop_index(op.f("ix_guilds_campaign_id"), table_name="guilds")
-    op.drop_column("guilds", "campaign_id")
-    op.alter_column("guilds", "user_id", existing_type=sa.Integer(), nullable=False)
+    with op.batch_alter_table("guilds") as batch_op:
+        batch_op.drop_constraint("fk_guilds_campaign_id_campaign_metadata", type_="foreignkey")
+        batch_op.drop_index(op.f("ix_guilds_campaign_id"))
+        batch_op.drop_column("campaign_id")
+        batch_op.alter_column("user_id", existing_type=sa.Integer(), nullable=False)
     op.drop_table("campaign_metadata")

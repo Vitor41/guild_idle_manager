@@ -69,7 +69,8 @@ def upgrade() -> None:
     op.create_index(op.f('ix_mission_run_members_mercenary_id'), 'mission_run_members', ['mercenary_id'], unique=False)
     op.create_index(op.f('ix_mission_run_members_mission_run_id'), 'mission_run_members', ['mission_run_id'], unique=False)
     op.add_column('users', sa.Column('is_admin', sa.Boolean(), nullable=False, server_default=sa.false()))
-    op.alter_column('users', 'is_admin', server_default=None)
+    with op.batch_alter_table('users') as batch_op:
+        batch_op.alter_column('is_admin', existing_type=sa.Boolean(), server_default=None)
     # ### end Alembic commands ###
 
 

@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.time import as_utc
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild, GuildResources
 from app.repositories.dungeon_repository import (
@@ -370,7 +371,7 @@ def get_dungeons_page_context(
         },
         "finished_runs": finished_runs,
         "awaiting_loot_count": sum(
-            1 for run in runs if run.status == "in_progress" and run.ends_at <= now
+            1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
         "dungeons_available": are_dungeons_available(db, guild.id),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
@@ -480,7 +481,7 @@ def claim_dungeon_loot(
         raise DungeonError("Esta masmorra já foi resolvida.")
 
     now = utc_now()
-    if now < dungeon_run.ends_at:
+    if now < as_utc(dungeon_run.ends_at):
         raise DungeonError("A masmorra ainda não foi concluída.")
 
     mercenaries = [member.mercenary for member in dungeon_run.members]
@@ -574,7 +575,7 @@ def claim_all_ready_dungeon_loot(
     now = utc_now()
     ready_runs = [
         run for run in list_dungeon_runs_by_guild(db, guild.id)
-        if run.status == "in_progress" and run.ends_at <= now
+        if run.status == "in_progress" and as_utc(run.ends_at) <= now
     ]
     if not ready_runs:
         raise DungeonError("Nenhuma recompensa de masmorra ou chefe está pronta para coleta.")

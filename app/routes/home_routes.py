@@ -27,5 +27,9 @@ def home(
     return templates.TemplateResponse(
         request=request,
         name="home.html",
-        context={"app_env": settings.app_env, "current_user": current_user},
+        context={
+            "app_env": settings.app_env,
+            "current_user": current_user,
+            "desktop_mode": settings.app_mode == "desktop",
+        },
     )

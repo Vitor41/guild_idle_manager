@@ -58,18 +58,22 @@ def upgrade() -> None:
                           updated_at = CURRENT_TIMESTAMP
         """)
         connection.exec_driver_sql(f"""
-            UPDATE guild_resources gr
-            SET {resource_column} = totals.quantity,
+            UPDATE guild_resources
+            SET {resource_column} = (
+                    SELECT COALESCE(SUM(gi.quantity), 0)
+                    FROM guild_inventory_items gi
+                    JOIN item_templates it ON it.id = gi.item_template_id
+                    WHERE gi.guild_id = guild_resources.guild_id
+                      AND it.item_type = 'material' AND it.material_family IN ({family_list})
+                ),
                 updated_at = CURRENT_TIMESTAMP
-            FROM (
-                SELECT gi.guild_id, COALESCE(SUM(gi.quantity), 0) AS quantity
-                FROM guild_inventory_items gi
-                JOIN item_templates it ON it.id = gi.item_template_id
-                WHERE it.item_type = 'material' AND it.material_family IN ({family_list})
-                GROUP BY gi.guild_id
-            ) totals
-            WHERE totals.guild_id = gr.guild_id
-              AND gr.{resource_column} <> totals.quantity
+            WHERE {resource_column} <> (
+                    SELECT COALESCE(SUM(gi.quantity), 0)
+                    FROM guild_inventory_items gi
+                    JOIN item_templates it ON it.id = gi.item_template_id
+                    WHERE gi.guild_id = guild_resources.guild_id
+                      AND it.item_type = 'material' AND it.material_family IN ({family_list})
+                )
         """)
 
 

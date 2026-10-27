@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.time import as_utc
 from app.models.guild import Guild, GuildResources
 from app.models.mission import MissionRun, MissionTemplate
 from app.repositories.mission_repository import (
@@ -370,7 +371,7 @@ def get_missions_page_context(
         "in_progress_runs": [run for run in runs if run.status == "in_progress"],
         "finished_runs": finished_runs,
         "awaiting_loot_count": sum(
-            1 for run in runs if run.status == "in_progress" and run.ends_at <= now
+            1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
         "max_allowed_party_size": get_max_allowed_mission_party_size(db, guild.id),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
@@ -530,7 +531,7 @@ def claim_mission_loot(
         raise MissionError("Esta missão já foi resolvida.")
 
     now = utc_now()
-    if now < mission_run.ends_at:
+    if now < as_utc(mission_run.ends_at):
         raise MissionError("A missão ainda não foi concluída.")
 
     mercenaries = [member.mercenary for member in mission_run.members]
@@ -640,7 +641,7 @@ def claim_all_ready_mission_loot(
     now = utc_now()
     ready_runs = [
         run for run in list_mission_runs_by_guild(db, guild.id)
-        if run.status == "in_progress" and run.ends_at <= now
+        if run.status == "in_progress" and as_utc(run.ends_at) <= now
     ]
     if not ready_runs:
         raise MissionError("Nenhuma recompensa de missão está pronta para coleta.")

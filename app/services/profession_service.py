@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.time import as_utc
 from app.models.content import ProfessionTemplate, ProfessionTraining
 from app.models.guild import Guild, GuildResources
 from app.models.mercenary import Mercenary
@@ -74,7 +75,7 @@ def complete_profession_training(db: Session, guild: Guild, training_id: int) ->
     if training is None or training.status != "in_progress":
         raise ProfessionError("Treinamento indisponível.")
     now = utc_now()
-    if now < training.ends_at:
+    if now < as_utc(training.ends_at):
         raise ProfessionError("O treinamento ainda não terminou.")
     training.status = "completed"
     training.completed_at = now

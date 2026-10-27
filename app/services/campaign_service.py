@@ -1,6 +1,7 @@
 """Campaign save discovery, creation, validation, and activation."""
 
 from dataclasses import dataclass
+from contextlib import closing
 from datetime import datetime, timezone
 import os
 from pathlib import Path
@@ -8,14 +9,17 @@ import sqlite3
 from threading import RLock
 from uuid import UUID, uuid4
 
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from app.database.connection import Base, SessionLocal, configure_database, create_database_engine
+from app.database.connection import SessionLocal, configure_database, create_database_engine
 from app.models import CampaignMetadata, Guild, GuildResources
 
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 INITIAL_CONTENT_VERSION = 1
 _activation_lock = RLock()
 
@@ -53,6 +57,76 @@ class CampaignService:
             raise ValueError("Identificador de campanha invalido.") from exc
         return self.saves_directory / f"{canonical_id}.db"
 
+    def _alembic_config(self, database_path: Path) -> Config:
+        project_root = Path(__file__).resolve().parents[2]
+        config = Config(str(project_root / "alembic.ini"))
+        config.set_main_option("script_location", str(project_root / "alembic"))
+        database_url = f"sqlite:///{database_path.resolve().as_posix()}"
+        config.attributes["database_url"] = database_url
+        config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+        return config
+
+    def _backup_before_schema_change(self, database_path: Path, campaign_id: str, revision: str) -> Path:
+        backup_dir = self.saves_directory.parent / "backups" / campaign_id
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        backup_path = backup_dir / f"pre-migration-{revision}-{timestamp}.db"
+        with closing(sqlite3.connect(database_path)) as source, closing(sqlite3.connect(backup_path)) as destination:
+            source.backup(destination)
+        backups = sorted(backup_dir.glob("pre-migration-*.db"), key=lambda path: path.stat().st_mtime, reverse=True)
+        for stale_backup in backups[3:]:
+            stale_backup.unlink()
+        return backup_path
+
+    def _ensure_schema(self, database_path: Path, campaign_id: str) -> None:
+        config = self._alembic_config(database_path)
+        head = ScriptDirectory.from_config(config).get_current_head()
+        if head is None:
+            raise RuntimeError("A cadeia Alembic local nao possui uma revisao head.")
+        with closing(sqlite3.connect(database_path)) as connection:
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not tables:
+                current = "__empty__"
+            elif "alembic_version" not in tables:
+                # Saves created by the first desktop prototype already used the current ORM schema.
+                campaign_columns = {
+                    row[1] for row in connection.execute("PRAGMA table_info(campaign_metadata)")
+                }
+                guild_columns = {row[1] for row in connection.execute("PRAGMA table_info(guilds)")}
+                required_campaign_columns = {
+                    "campaign_id", "campaign_name", "schema_version", "content_version", "save_format_version"
+                }
+                if not required_campaign_columns.issubset(campaign_columns) or "campaign_id" not in guild_columns:
+                    raise ValueError("Save sem versao Alembic e sem baseline de campanha reconhecido.")
+                current = None
+            else:
+                row = connection.execute("SELECT version_num FROM alembic_version").fetchone()
+                current = row[0] if row else "__missing__"
+        if current == "__empty__":
+            command.upgrade(config, head)
+            return
+        if current is None:
+            self._backup_before_schema_change(database_path, campaign_id, head)
+            command.stamp(config, head)
+            with closing(sqlite3.connect(database_path)) as connection:
+                connection.execute(
+                    "UPDATE campaign_metadata SET schema_version = ? WHERE campaign_id = ?",
+                    (CURRENT_SCHEMA_VERSION, campaign_id),
+                )
+                connection.commit()
+            return
+        if current == "__missing__":
+            raise ValueError("A tabela de versao Alembic do save esta vazia.")
+        if current != head:
+            self._backup_before_schema_change(database_path, campaign_id, current)
+            command.upgrade(config, head)
+            with closing(sqlite3.connect(database_path)) as connection:
+                connection.execute(
+                    "UPDATE campaign_metadata SET schema_version = ? WHERE campaign_id = ?",
+                    (CURRENT_SCHEMA_VERSION, campaign_id),
+                )
+                connection.commit()
+
     def create_campaign(self, campaign_name: str, guild_name: str | None = None) -> CampaignInfo:
         name = campaign_name.strip()
         guild_name = (guild_name or name).strip()
@@ -66,7 +140,7 @@ class CampaignService:
         database_path = self._path_for(campaign_id)
         engine = create_database_engine(f"sqlite:///{database_path.as_posix()}")
         try:
-            Base.metadata.create_all(engine)
+            self._ensure_schema(database_path, campaign_id)
             factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
             with factory() as db:
                 metadata = CampaignMetadata(
@@ -106,13 +180,14 @@ class CampaignService:
         path = self._path_for(campaign_id)
         if not path.is_file():
             raise FileNotFoundError("Save da campanha nao encontrado.")
-        with sqlite3.connect(path) as connection:
+        with closing(sqlite3.connect(path)) as connection:
             integrity = connection.execute("PRAGMA integrity_check").fetchone()
             if not integrity or integrity[0] != "ok":
                 raise ValueError("O save da campanha esta corrompido.")
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if "campaign_metadata" not in tables:
                 raise ValueError("O arquivo nao e um save de campanha reconhecido.")
+        self._ensure_schema(path, str(UUID(campaign_id)))
         engine = create_database_engine(f"sqlite:///{path.as_posix()}")
         try:
             factory = sessionmaker(bind=engine, expire_on_commit=False)

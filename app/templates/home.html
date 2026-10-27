@@ -6,11 +6,16 @@
   <section class="status-panel" aria-labelledby="page-title">
     <p class="eyebrow">Ambiente {{ app_env }}</p>
     <h1 id="page-title">Guild Idle Manager</h1>
-    <p class="lead">Aplicacao local em execucao.</p>
-    <p class="note">Crie uma conta, entre e funde sua primeira guilda para iniciar a base do jogo.</p>
-    <div class="action-row">
-      <a class="button-link" href="/login">Entrar</a>
-      <a class="button-link secondary" href="/register">Criar conta</a>
-    </div>
+    {% if desktop_mode %}
+      <p class="lead">Nenhuma campanha esta selecionada.</p>
+      <p class="note">O seletor de campanhas sera integrado ao launcher desktop no Trabalho 2. O jogo ainda nao esta pronto para iniciar nesta tela.</p>
+    {% else %}
+      <p class="lead">Aplicacao local em execucao.</p>
+      <p class="note">Crie uma conta, entre e funde sua primeira guilda para iniciar a base do jogo.</p>
+      <div class="action-row">
+        <a class="button-link" href="/login">Entrar</a>
+        <a class="button-link secondary" href="/register">Criar conta</a>
+      </div>
+    {% endif %}
   </section>
 {% endblock %}
