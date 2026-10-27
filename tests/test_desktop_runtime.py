@@ -48,91 +48,90 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                 pywebview_logger.setLevel(logging.DEBUG)
                 pywebview_logger.addHandler(pywebview_handler)
                 initialization_results = []
-                original_webview_ready = EdgeChrome.on_webview_ready
-                original_navigation_start = EdgeChrome.on_navigation_start
-                original_navigation_completed = EdgeChrome.on_navigation_completed
-                original_load_url = EdgeChrome.load_url
-                original_edge_init = EdgeChrome.__init__
                 edge_instances = []
                 navigation_events = []
                 edge_actions = []
+                capture_diagnostics = os.environ.get("GIM_CAPTURE_WEBVIEW_DIAGNOSTICS", "1") == "1"
 
-                def capture_edge_initialization(self, *args, **kwargs):
-                    original_edge_init(self, *args, **kwargs)
-                    try:
-                        task = self.webview.EnsureCoreWebView2Async(None)
-                        edge_instances.append((self, task))
-                    except BaseException as error:
-                        edge_instances.append((self, error))
+                if capture_diagnostics:
+                    original_webview_ready = EdgeChrome.on_webview_ready
+                    original_navigation_start = EdgeChrome.on_navigation_start
+                    original_navigation_completed = EdgeChrome.on_navigation_completed
+                    original_load_url = EdgeChrome.load_url
+                    original_edge_init = EdgeChrome.__init__
 
-                EdgeChrome.__init__ = capture_edge_initialization
+                    def capture_edge_initialization(self, *args, **kwargs):
+                        original_edge_init(self, *args, **kwargs)
+                        edge_instances.append(self)
 
-                def capture_webview_initialization(self, sender, args):
-                    try:
-                        event_result = {
+                    EdgeChrome.__init__ = capture_edge_initialization
+
+                    def capture_webview_initialization(self, sender, args):
+                        try:
+                            event_result = {
+                                "is_success": bool(args.IsSuccess),
+                                "exception": str(args.InitializationException) if args.InitializationException else None,
+                                "thread_apartment": str(Thread.CurrentThread.GetApartmentState()),
+                                "real_url": str(self.pywebview_window.real_url) if self.pywebview_window.real_url else None,
+                            }
+                        except BaseException as error:
+                            event_result = {"capture_error": repr(error)}
+                        initialization_results.append(event_result)
+                        try:
+                            handler_result = original_webview_ready(self, sender, args)
+                            if os.environ.get("GIM_TEST_DIRECT_NAVIGATE") == "1" and self.pywebview_window.real_url:
+                                try:
+                                    sender.CoreWebView2.Navigate(self.pywebview_window.real_url)
+                                    edge_actions.append({
+                                        "action": "direct_core_navigate_returned",
+                                        "url": str(self.pywebview_window.real_url),
+                                        "core_source": str(sender.CoreWebView2.Source),
+                                    })
+                                except BaseException as error:
+                                    edge_actions.append({
+                                        "action": "direct_core_navigate_exception",
+                                        "error": repr(error),
+                                        "traceback": traceback.format_exc(),
+                                    })
+                            return handler_result
+                        except BaseException as error:
+                            event_result["handler_exception"] = traceback.format_exc()
+                            raise
+
+                    def capture_navigation_completed(self, sender, args):
+                        navigation_events.append({
+                            "source": str(sender.Source) if sender.Source else None,
                             "is_success": bool(args.IsSuccess),
-                            "exception": str(args.InitializationException) if args.InitializationException else None,
-                            "thread_apartment": str(Thread.CurrentThread.GetApartmentState()),
-                            "real_url": str(self.pywebview_window.real_url) if self.pywebview_window.real_url else None,
-                        }
-                    except BaseException as error:
-                        event_result = {"capture_error": repr(error)}
-                    initialization_results.append(event_result)
-                    try:
-                        handler_result = original_webview_ready(self, sender, args)
-                        if os.environ.get("GIM_TEST_DIRECT_NAVIGATE") == "1" and self.pywebview_window.real_url:
-                            try:
-                                sender.CoreWebView2.Navigate(self.pywebview_window.real_url)
-                                edge_actions.append({
-                                    "action": "direct_core_navigate_returned",
-                                    "url": str(self.pywebview_window.real_url),
-                                    "core_source": str(sender.CoreWebView2.Source),
-                                })
-                            except BaseException as error:
-                                edge_actions.append({
-                                    "action": "direct_core_navigate_exception",
-                                    "error": repr(error),
-                                    "traceback": traceback.format_exc(),
-                                })
-                        return handler_result
-                    except BaseException as error:
-                        event_result["handler_exception"] = traceback.format_exc()
-                        raise
-
-                def capture_navigation_completed(self, sender, args):
-                    navigation_events.append({
-                        "source": str(sender.Source) if sender.Source else None,
-                        "is_success": bool(args.IsSuccess),
-                        "web_error_status": str(args.WebErrorStatus),
-                    })
-                    return original_navigation_completed(self, sender, args)
-
-                def capture_navigation_start(self, sender, args):
-                    navigation_events.append({
-                        "event": "starting",
-                        "uri": str(args.Uri),
-                    })
-                    return original_navigation_start(self, sender, args)
-
-                def capture_load_url(self, url):
-                    edge_actions.append({"action": "load_url", "url": str(url)})
-                    try:
-                        result = original_load_url(self, url)
-                        edge_actions.append({
-                            "action": "load_url_returned",
-                            "return": repr(result),
-                            "source": str(self.webview.Source) if self.webview.Source else None,
-                            "core_source": str(self.webview.CoreWebView2.Source) if self.webview.CoreWebView2 else None,
+                            "web_error_status": str(args.WebErrorStatus),
                         })
-                        return result
-                    except BaseException as error:
-                        edge_actions.append({"action": "load_url_exception", "error": repr(error), "traceback": traceback.format_exc()})
-                        raise
+                        return original_navigation_completed(self, sender, args)
 
-                EdgeChrome.on_webview_ready = capture_webview_initialization
-                EdgeChrome.on_navigation_start = capture_navigation_start
-                EdgeChrome.on_navigation_completed = capture_navigation_completed
-                EdgeChrome.load_url = capture_load_url
+                    def capture_navigation_start(self, sender, args):
+                        navigation_events.append({
+                            "event": "starting",
+                            "uri": str(args.Uri),
+                        })
+                        return original_navigation_start(self, sender, args)
+
+                    def capture_load_url(self, url):
+                        edge_actions.append({"action": "load_url", "url": str(url)})
+                        try:
+                            result = original_load_url(self, url)
+                            edge_actions.append({
+                                "action": "load_url_returned",
+                                "return": repr(result),
+                                "source": str(self.webview.Source) if self.webview.Source else None,
+                                "core_source": str(self.webview.CoreWebView2.Source) if self.webview.CoreWebView2 else None,
+                            })
+                            return result
+                        except BaseException as error:
+                            edge_actions.append({"action": "load_url_exception", "error": repr(error), "traceback": traceback.format_exc()})
+                            raise
+
+                    EdgeChrome.on_webview_ready = capture_webview_initialization
+                    EdgeChrome.on_navigation_start = capture_navigation_start
+                    EdgeChrome.on_navigation_completed = capture_navigation_completed
+                    EdgeChrome.load_url = capture_load_url
                 original_start = webview.start
                 window_closed = threading.Event()
                 webview_responses = []
@@ -176,14 +175,12 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                             result["webview_initialization"] = list(initialization_results)
                             result["navigation_events"] = list(navigation_events)
                             result["webview_actions"] = list(edge_actions)
-                            result["webview_task"] = [
+                            result["webview_control"] = [
                                 {
-                                    "status": str(task_or_error.Status) if hasattr(task_or_error, "Status") else None,
-                                    "exception": str(task_or_error.Exception) if hasattr(task_or_error, "Exception") and task_or_error.Exception else None,
-                                    "capture_error": repr(task_or_error) if isinstance(task_or_error, BaseException) else None,
                                     "is_handle_created": bool(getattr(instance.webview, "IsHandleCreated", False)),
+                                    "core_available": instance.webview.CoreWebView2 is not None,
                                 }
-                                for instance, task_or_error in edge_instances
+                                for instance in edge_instances
                             ]
                             result["webview_runtime_processes"] = subprocess.run(
                                 ["tasklist", "/FI", "IMAGENAME eq msedgewebview2.exe", "/FO", "CSV", "/NH"],
@@ -197,14 +194,14 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                                     "exists": Path(str(instance.user_data_folder)).exists(),
                                     "entries": [path.name for path in Path(str(instance.user_data_folder)).glob("*")][:10],
                                 }
-                                for instance, task_or_error in edge_instances
+                                for instance in edge_instances
                             ]
                             result["webview_source"] = [
                                 {
                                     "source": str(instance.webview.Source) if instance.webview.Source else None,
                                     "core_source": str(instance.webview.CoreWebView2.Source) if instance.webview.CoreWebView2 else None,
                                 }
-                                for instance, task_or_error in edge_instances
+                                for instance in edge_instances
                             ]
                             raise RuntimeError(f"campaign manager did not load in pywebview; bridge_ready={result['bridge_ready']}, responses={result['webview_responses']!r}")
                         if window.evaluate_js("document.querySelector('#create-campaign-form') !== null") is not True:
@@ -285,6 +282,7 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
             environment["LOCALAPPDATA"] = str(root)
             environment["GIM_RUNTIME_SMOKE_MARKER"] = str(marker_path)
             environment["GIM_TEST_DIRECT_NAVIGATE"] = os.environ.get("GIM_TEST_DIRECT_NAVIGATE", "0")
+            environment["GIM_CAPTURE_WEBVIEW_DIAGNOSTICS"] = os.environ.get("GIM_CAPTURE_WEBVIEW_DIAGNOSTICS", "1")
             pythonw = Path(sys.executable).with_name("pythonw.exe")
             process = subprocess.Popen(
                 [str(pythonw), "-c", child_script],
