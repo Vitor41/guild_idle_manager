@@ -80,3 +80,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - Evidência: criação de duas campanhas SQLite, cadeia Alembic completa, dados de guilda e gameplay isolados, reabertura persistente, migração de revisão anterior com backup, rejeição sem modificação de arquivos vazios, parciais, com revisão desconhecida ou UUID interno divergente.
 - Decisão: Trabalho 2 liberado. Este aceite não declara o aplicativo jogável nem a recuperação de falha de migration pronta.
 - Pendências obrigatórias: restauração automática/testada após falha de migration (Gate 2); janela/launcher, ClockGuard, idle e menus de campanha (Gate 2); regressão de todos os sistemas, modo web e build limpa (Gate 3).
+
+### 2026-10-26 — Revisão parcial do Gate 2 (não aprovado)
+
+- Verificação independente no checkout compartilhado: `python -m unittest tests.test_desktop_bridge tests.test_desktop_security -q` passou (3/3) com o interpretador local disponível; `python -m unittest tests.test_clock_guard -q` passou (4/4) no Windows após correção da limpeza do SQLite.
+- A prancha `design/preview/class-readability-26.png` foi inspecionada: os 26 códigos de `CLASS_TREE` têm um sprite correspondente, sem faltas ou sobras. Em 24 px, os emblemas requerem nome adjacente e fundo sólido para identificação.
+- Achados devolvidos ao DEV durante a implementação: encerrar corretamente campanhas suspensas quando o aplicativo fecha, impedir caminho arbitrário no bridge de exportação e provar navegação/formulários com a proteção de origem ativa. Os testes isolados acima não aprovam o Gate 2.
+- Ainda faltam avaliação da janela real, suite completa, cenários de falha/recuperação e pacote final de sprites integrado antes de qualquer aceite.
