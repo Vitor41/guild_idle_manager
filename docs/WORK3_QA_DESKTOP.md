@@ -28,10 +28,10 @@ Installer regression tests cover refusal of a foreign install directory and a ju
 
 Current artifacts from the final build:
 
-- `dist/GuildIdleManager-DEV.zip` — SHA-256 `728E307C6BD7ACAA1106C9D047E914413BA70E2ECD79E93C5994DDE88A8F2198`.
-- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `6684FF82326017A33EF1D55BEC99E5ACC601385F30304DCDD390E7A285C45CC9`.
+- `dist/GuildIdleManager-DEV.zip` — SHA-256 `A568641FC0D237E84EC7CB072193C401E08985C307535842F63A9FF6777F9948`.
+- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `9C2514C4EE860FC46879EFCCB4FD30248D535460AF1044D8C93E33B5C58F4B52`.
 
-IExpress returned exit code 0 before the Setup file appeared; the build script now waits up to 90 seconds for a stable output and verifies its PE header before moving it into `dist`. The final Setup passed isolated first install and managed update (`Start-Process -Wait`: exit 0 for both) with a temporary `%LOCALAPPDATA%`. The saves sentinel remained unchanged, the marker identified the DEV install, and a planted obsolete app file was removed. All 856 installed app files had hashes identical to the current packaged bundle. The Setup now matches the final ZIP used by the build script.
+IExpress returned exit code 0 before the Setup file appeared; the build script now waits up to 90 seconds for a stable output and verifies its PE header before moving it into `dist`. The earlier isolated installer regression passed first install and managed update (`Start-Process -Wait`: exit 0 for both) with a temporary `%LOCALAPPDATA%`; that run preserved a saves sentinel, verified the DEV marker, replaced a planted obsolete app file, and matched all 856 installed app files against its bundle. The current rebuilt Setup and its app/CSS hashes are recorded under the visual identity validation below.
 
 ## Native window, return flow and visual QA
 
@@ -111,19 +111,16 @@ The rebuilt Setup installed successfully in a fresh temporary profile. The froze
 
 The GDD §7.1 visual system is implemented for the real desktop pages through `app/static/css/desktop-theme.css`, loaded only in desktop mode. The dashboard leads with the operation queue and keeps resource totals in one place; Missions and Dungeons use compact page introductions so the first operation is visible sooner. At narrow widths, the teal navigation remains a compact menu. The save label describes local campaign storage without implying a live autosave state. Gameplay rules and saves were not changed. `tests/test_desktop_art.py` checks that the desktop theme and markup do not leak into web mode; the HTTP smoke checks the stylesheet and compact introductions on real routes.
 
-The final Setup was installed into disposable `%LOCALAPPDATA%` profiles. The installed executable, stylesheet, dashboard, Missions, and Dungeons templates match the corresponding final build files by SHA-256. The packaged `--smoke` result file reports `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`.
+After commits `1771540` and `e4a7fa3` corrected primary/secondary/destructive/navigation button hover and focus styles, the final bundle and Setup were rebuilt with `scripts/build_desktop_dev.ps1`. The bundle smoke returned `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`. The Setup installed successfully into a disposable profile with shortcut creation disabled; the installed executable matches the rebuilt executable. The SHA-256 of `desktop-theme.css` matches in source, the extracted ZIP, and the Setup-installed app. No installed screenshots were captured again; the user will validate the final visual result on screen.
 
 | Final artifact | SHA-256 |
 | --- | --- |
-| `dist/GuildIdleManager-DEV.zip` | `728E307C6BD7ACAA1106C9D047E914413BA70E2ECD79E93C5994DDE88A8F2198` |
-| `dist/GuildIdleManager-DEV-Setup.exe` | `6684FF82326017A33EF1D55BEC99E5ACC601385F30304DCDD390E7A285C45CC9` |
-| Installed and packaged `GuildIdleManager.exe` | `4AEC56FE956209328796B97E4B3BC4CF9E1EE3FA8C8E55AB773958A5235DDB2A` |
-| Installed and packaged `desktop-theme.css` | `093D29F79CB0F13150225370E9DCC99C61961D54C5A86FC7387ABB8A916D3F12` |
-| Installed and packaged `dashboard.html` | `5ECC16C089BFE092B400C43C1ED92AA17D038AAD19FE47ADD7E1BA91E2365008` |
-| Installed and packaged `missions/index.html` | `30DBD8ECD82D48F55238FF91E60A8B77F928D7A7B78BAEDD0A6CBC34ED0286EB` |
-| Installed and packaged `dungeons/index.html` | `AE11B649BDDEBA379FC33078C508ACD39017CDC02BF139711096A10D0B02B2C0` |
+| `dist/GuildIdleManager-DEV.zip` | `A568641FC0D237E84EC7CB072193C401E08985C307535842F63A9FF6777F9948` |
+| `dist/GuildIdleManager-DEV-Setup.exe` | `9C2514C4EE860FC46879EFCCB4FD30248D535460AF1044D8C93E33B5C58F4B52` |
+| Rebuilt and Setup-installed `GuildIdleManager.exe` | `CDEAFC8F3D718FF41E8019E63205F301DE41F715B8EC0801AFD496B436032B93` |
+| Source, ZIP, and Setup-installed `desktop-theme.css` | `C0FCCCAFDA855DC87469D44C694B50DA3C271070A512F83D54B8B5E0CFD05666` |
 
-The final visual-review screenshots are **not yet available**. After updating the disposable install, the app opened only in the elevated session, and the UI controller could not deliver clicks or keyboard input to that window. Per instruction, screenshots from an earlier process/package were not used as proof. This blocked capture of the installed dashboard, Missions, and Dungeons with an unlocked challenge, as well as Taverna, Mercenaries, and Inventory. The DA visual review remains pending until these final pages can be captured in an interactive elevated session.
+No final visual-review screenshots were captured per the user's direction. The user will validate the installed appearance on screen; the existing earlier captures are not evidence for this rebuilt package.
 
 ### Final validation — 2026-10-27
 
