@@ -80,6 +80,8 @@ The frozen DEV Setup was installed under a fresh `%TEMP%` profile and opened wit
 
 The forge and dismantling flows also passed through the native UI after seeding two recipe materials into the copied QA save only. The app crafted an Elmo Reforçado da Fortaleza for 80 gold, then started the first dismantling bench for 50 gold. Its 10-second timer reached “Pronto”; collecting returned 2 Minério de Mithril and showed the completion message. The fixture used no user save.
 
+Equipment refinement also passed through the native UI in the same disposable save. The Forge level was set to 10 in the QA fixture to unlock the panel; refining the seeded Martelo Afiado da Fortaleza consumed 100 gold and 5 ore, raised its power from 5 to 6, and displayed the next cost as 200 gold and 10 ore. This check used the normal UI confirmation and transaction flow.
+
 Selected native evidence:
 
 - Mission [success](qa/work3-mission_success.jpg), [timer ready](qa/work3-mission_timer_ready.jpg), and [failure](qa/work3-mission_failure.jpg).
@@ -90,6 +92,7 @@ Selected native evidence:
 - [Progression](qa/work3-progression.jpg), Codex [claimable](qa/work3-codex_claimable.jpg) and [claimed](qa/work3-codex_claims.jpg).
 - Market sale [started](qa/work3-market_sale_started.jpg), [ready](qa/work3-market_sale_ready.jpg), and [collected](qa/work3-market_sale_collected.jpg).
 - Forge and dismantling [timer running](qa/work3-salvage_started.jpg), [ready](qa/work3-salvage_ready.jpg), and [materials collected](qa/work3-salvage_collected.jpg).
+- Refinement [completed](qa/work3-refine_completed.jpg); the item shows +1 and power 6 after consuming the displayed first-level cost.
 - Installed dungeon [chance base and 95% cap note](qa/work3-dungeon_chance_base_installed.jpg).
 
 The source/dist/install hashes matched for the template during packaging verification. An earlier app instance retained its old template in memory; restarting from a fresh isolated Setup resolved this cache issue. The DEV Setup itself uses staged installation with rollback on failure. No active-updater scenario exists in this DEV flow, so no updater behavior was introduced or evaluated.
