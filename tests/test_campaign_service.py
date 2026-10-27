@@ -231,7 +231,7 @@ asyncio.run(main())
             self.assertEqual(listing, [])
             self.assertEqual(len(listing.unavailable), 1)
             self.assertEqual(listing.unavailable[0]["filename"], f"{campaign_id}.db")
-            with self.assertRaisesRegex(ValueError, "Metadados incompletos"):
+            with self.assertRaisesRegex(ValueError, "dados da campanha estão incompletos"):
                 campaigns.activate_campaign(campaign_id)
             self.assertEqual(database_path.read_bytes(), before)
 
@@ -260,7 +260,7 @@ asyncio.run(main())
             listing = campaigns.list_campaigns()
 
             self.assertEqual(listing, [])
-            self.assertIn("revisao", listing.unavailable[0]["reason"].lower())
+            self.assertIn("versão", listing.unavailable[0]["reason"].lower())
 
     def test_corrupt_campaign_can_be_restored_from_matching_backup(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -312,7 +312,7 @@ asyncio.run(main())
             before = database_path.read_bytes()
             campaigns = CampaignService(saves)
 
-            with self.assertRaisesRegex(ValueError, "nao e um save de campanha reconhecido"):
+            with self.assertRaisesRegex(ValueError, "não é uma campanha reconhecida"):
                 campaigns.activate_campaign(campaign_id)
             self.assertEqual(database_path.read_bytes(), before)
             self.assertFalse((Path(temp_dir) / "backups").exists())
@@ -330,7 +330,7 @@ asyncio.run(main())
                 connection.commit()
             before = campaign.database_path.read_bytes()
 
-            with self.assertRaisesRegex(ValueError, "identificador interno"):
+            with self.assertRaisesRegex(ValueError, "identificador da campanha não corresponde"):
                 campaigns.activate_campaign(campaign.campaign_id)
             self.assertEqual(campaign.database_path.read_bytes(), before)
             self.assertFalse((Path(temp_dir) / "backups").exists())
@@ -348,7 +348,7 @@ asyncio.run(main())
                 connection.commit()
             before = database_path.read_bytes()
 
-            with self.assertRaisesRegex(ValueError, "revisao Alembic desconhecida"):
+            with self.assertRaisesRegex(ValueError, "versão desconhecida"):
                 campaigns._ensure_schema(database_path, campaign_id)
             self.assertEqual(database_path.read_bytes(), before)
             self.assertFalse((Path(temp_dir) / "backups").exists())

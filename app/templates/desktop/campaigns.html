@@ -35,8 +35,8 @@
       <section class="campaign-section" aria-labelledby="campaign-list-title">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Arquivo local</p>
-            <h2 id="campaign-list-title">Campanhas salvas</h2>
+            <p class="eyebrow">Neste dispositivo</p>
+            <h2 id="campaign-list-title">Suas campanhas</h2>
           </div>
           <button id="import-campaign" class="button quiet" type="button">Importar campanha</button>
         </div>
@@ -53,9 +53,9 @@
                 <div class="campaign-actions">
                   <button class="button primary open-campaign" type="button">Continuar</button>
                   <button class="button quiet rename-campaign" type="button">Renomear</button>
-                  <button class="button quiet backup-campaign" type="button">Criar backup</button>
+                  <button class="button quiet backup-campaign" type="button">Criar cópia de segurança</button>
                   <button class="button quiet export-campaign" type="button">Exportar</button>
-                  <button class="button quiet restore-campaign" type="button">Restaurar backup</button>
+                  <button class="button quiet restore-campaign" type="button">Restaurar cópia</button>
                   <button class="button danger delete-campaign" type="button">Excluir</button>
                 </div>
               </article>
@@ -72,11 +72,11 @@
       {% if unavailable_campaigns %}
         <section class="recovery-panel" aria-labelledby="recovery-title">
           <h2 id="recovery-title">Arquivos que precisam de recuperação</h2>
-          <p>Estes arquivos foram preservados, mas não puderam ser abertos. Confira o arquivo listado e restaure um backup compatível da campanha.</p>
+          <p>Estes arquivos foram preservados, mas não puderam ser abertos. Confira o arquivo listado e restaure uma cópia de segurança compatível.</p>
           <ul>
             {% for entry in unavailable_campaigns %}
               <li><strong>{{ entry.filename }}</strong><span>{{ entry.reason }}</span>
-                {% if entry.campaign_id %}<button class="button quiet restore-unavailable" type="button" data-campaign-id="{{ entry.campaign_id }}">Restaurar backup</button>{% endif %}
+                {% if entry.campaign_id %}<button class="button quiet restore-unavailable" type="button" data-campaign-id="{{ entry.campaign_id }}">Restaurar cópia</button>{% endif %}
               </li>
             {% endfor %}
           </ul>

@@ -55,9 +55,7 @@ def _wait_for_health(url: str, server: uvicorn.Server, timeout_seconds: float = 
             time.sleep(0.05)
         else:
             time.sleep(0.1)
-    message = "O servidor local nao respondeu ao healthcheck dentro do prazo."
-    if last_error is not None:
-        message = f"{message} Ultimo erro: {last_error!r}"
+    message = "O servidor local não respondeu dentro do tempo esperado."
     raise RuntimeError(message) from last_error
 
 
@@ -69,7 +67,7 @@ def _show_startup_error(message: str) -> None:
 
 def run() -> None:
     if os.name != "nt":
-        raise RuntimeError("O launcher de desenvolvimento desktop desta etapa exige Windows.")
+        raise RuntimeError("O aplicativo desktop exige o Windows.")
     os.environ["APP_MODE"] = "desktop"
     _configure_logging()
 
@@ -131,7 +129,7 @@ def run() -> None:
             if server_thread.is_alive():
                 logging.error("O servidor local nao encerrou dentro do prazo.")
     except Exception as exc:
-        _show_startup_error(f"Nao foi possivel iniciar o Guild Idle Manager: {exc}")
+        _show_startup_error(f"Não foi possível iniciar o Guild Idle Manager: {exc}")
         raise
     finally:
         listener.close()

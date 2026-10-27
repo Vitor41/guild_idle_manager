@@ -20,7 +20,7 @@ class DesktopBridge:
         import webview
 
         if self._window is None:
-            raise RuntimeError("A janela desktop ainda nao esta pronta.")
+            raise RuntimeError("A janela do aplicativo ainda está iniciando. Tente novamente em instantes.")
         return webview
 
     def export_campaign(self, campaign_id: str):
@@ -52,13 +52,13 @@ class DesktopBridge:
     def confirm_export(self, confirmation_token: str, overwrite: bool):
         pending = self._pending_exports.pop(confirmation_token, None)
         if pending is None or pending[2] < monotonic():
-            return {"error": "A confirmacao da exportacao expirou. Tente novamente."}
+            return {"error": "A confirmação da exportação expirou. Tente novamente."}
         campaign_id, destination, _expires = pending
         if not overwrite:
             return {"cancelled": True}
         try:
             self._campaigns.export_campaign(campaign_id, destination, overwrite=True)
-            return {"ok": True, "message": "Arquivo substituido e campanha exportada com sucesso."}
+            return {"ok": True, "message": "Arquivo substituído e campanha exportada com sucesso."}
         except Exception as exc:
             return {"error": str(exc)}
 
@@ -74,7 +74,7 @@ class DesktopBridge:
                 return {"cancelled": True}
             info = self._campaigns.import_campaign(result[0])
             self._clock_guard.initialize_campaign(info.campaign_id)
-            return {"ok": True, "message": "Campanha importada. A ancora local foi iniciada agora."}
+            return {"ok": True, "message": "Campanha importada. O controle local de progresso foi iniciado."}
         except Exception as exc:
             return {"error": str(exc)}
 
@@ -86,11 +86,11 @@ class DesktopBridge:
                 webview.OPEN_DIALOG,
                 directory=str(backup_dir),
                 allow_multiple=False,
-                file_types=("Backups SQLite (*.db)",),
+                file_types=("Cópias de segurança SQLite (*.db)",),
             )
             if not result:
                 return {"cancelled": True}
             self._campaigns.restore_backup(campaign_id, result[0])
-            return {"ok": True, "message": "Backup restaurado. Abra a campanha para continuar."}
+            return {"ok": True, "message": "Cópia de segurança restaurada. Abra a campanha para continuar."}
         except Exception as exc:
             return {"error": str(exc)}

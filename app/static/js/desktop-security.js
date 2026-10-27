@@ -40,7 +40,7 @@ document.addEventListener("submit", async (event) => {
       ? "/desktop/campaigns"
       : destination.pathname === "/tutorial/start" ? "/tutorial" : "/dashboard";
     if (!response.ok || result.origin !== window.location.origin || result.pathname !== expectedPath) {
-      throw new Error("O servidor nao confirmou a acao local.");
+      throw new Error("O servidor não confirmou a ação local.");
     }
     window.location.assign(result.href);
   } catch (error) {
@@ -48,7 +48,7 @@ document.addEventListener("submit", async (event) => {
     const notice = document.createElement("p");
     notice.className = "desktop-clock-warning";
     notice.setAttribute("role", "alert");
-    notice.textContent = error.message || "Nao foi possivel retornar ao menu de campanhas.";
+    notice.textContent = error.message || "Não foi possível voltar ao menu de campanhas.";
     document.querySelector(".page-shell")?.prepend(notice);
   }
 });

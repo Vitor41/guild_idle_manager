@@ -77,9 +77,15 @@ class DesktopBridgeTests(unittest.TestCase):
                 pending = bridge.export_campaign("campaign-1")
                 result = bridge.confirm_export(pending["confirmation_token"], True)
             self.assertTrue(result["ok"])
+            self.assertEqual(result["message"], "Arquivo substituído e campanha exportada com sucesso.")
             self.assertEqual(campaigns.exports, [("campaign-1", existing, True)])
             with self.assertRaises(TypeError):
                 bridge.export_campaign("campaign-1", str(existing), True)
+
+    def test_expired_export_confirmation_has_a_clear_localized_message(self):
+        bridge, _campaigns, _patched = self._bridge(None)
+        result = bridge.confirm_export("expired-token", True)
+        self.assertEqual(result, {"error": "A confirmação da exportação expirou. Tente novamente."})
 
 
 if __name__ == "__main__":

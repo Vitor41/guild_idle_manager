@@ -46,7 +46,7 @@ class DpapiProtector:
     @classmethod
     def _transform(cls, value: bytes, decrypt: bool) -> bytes:
         if os.name != "nt":
-            raise ClockAnchorError("A protecao DPAPI esta disponivel apenas no Windows.")
+            raise ClockAnchorError("A proteção de horário só está disponível no Windows.")
         input_buffer = ctypes.create_string_buffer(value)
         input_blob = cls._Blob(len(value), ctypes.cast(input_buffer, ctypes.POINTER(ctypes.c_ubyte)))
         output_blob = cls._Blob()
@@ -62,7 +62,7 @@ class DpapiProtector:
                 ctypes.byref(input_blob), description, None, None, None, 0, ctypes.byref(output_blob)
             )
         if not ok:
-            raise ClockAnchorError("Nao foi possivel validar a ancora protegida pelo Windows.")
+            raise ClockAnchorError("Não foi possível verificar a proteção local de horário do aplicativo.")
         try:
             return ctypes.string_at(output_blob.pbData, output_blob.cbData)
         finally:
@@ -111,7 +111,7 @@ class DpapiAnchorStore:
             datetime.fromisoformat(value["high_water_utc"])
             return value
         except Exception as exc:
-            raise ClockAnchorError("A ancora de tempo da campanha esta ausente ou corrompida.") from exc
+            raise ClockAnchorError("A referência de horário da campanha está ausente ou corrompida.") from exc
 
     def save(self, campaign_id: str, high_water_utc: datetime) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -128,7 +128,7 @@ class DpapiAnchorStore:
 def default_anchor_store() -> DpapiAnchorStore:
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
-        raise ClockAnchorError("LOCALAPPDATA nao esta definido para armazenar a ancora de tempo.")
+        raise ClockAnchorError("A pasta de dados local não está disponível para verificar o horário da campanha.")
     return DpapiAnchorStore(Path(local_app_data) / "GuildIdleManager" / "clock-guard")
 
 
@@ -166,20 +166,20 @@ class ClockGuard:
         if session_state in {"created", "initializing", "suspended"}:
             return ClockDecision()
         if session_state != "closed" or closed_at_utc is None:
-            return ClockDecision(warning="A sessao anterior nao teve encerramento limpo; progresso retroativo ignorado.")
+            return ClockDecision(warning="A sessão anterior não foi encerrada corretamente; o progresso retroativo foi ignorado.")
         try:
             anchor = self.anchor_store.load(campaign_id)
         except ClockAnchorError:
-            return ClockDecision(warning="A ancora de tempo esta corrompida; nenhum progresso retroativo foi concedido.")
+            return ClockDecision(warning="A referência de horário da campanha está corrompida; nenhum progresso retroativo foi concedido.")
         if anchor is None:
-            return ClockDecision(warning="A ancora de tempo nao existe; nenhum progresso retroativo foi concedido.")
+            return ClockDecision(warning="A referência de horário da campanha não foi encontrada; nenhum progresso retroativo foi concedido.")
         try:
             high_water = _as_utc(datetime.fromisoformat(anchor["high_water_utc"]))
         except (KeyError, ValueError, TypeError):
-            return ClockDecision(warning="A ancora de tempo esta invalida; nenhum progresso retroativo foi concedido.")
+            return ClockDecision(warning="A referência de horário da campanha é inválida; nenhum progresso retroativo foi concedido.")
         closed_at = _as_utc(closed_at_utc)
         if now < high_water or now < closed_at:
-            return ClockDecision(warning="O relogio voltou antes do ultimo marco confiavel; progresso pausado.")
+            return ClockDecision(warning="O relógio voltou para antes do último horário confiável; o progresso foi pausado.")
         interval_start = max(closed_at, high_water)
         elapsed = max(0, floor((now - interval_start).total_seconds()))
         if elapsed < OFFLINE_MINIMUM_SECONDS:
@@ -187,7 +187,7 @@ class ClockGuard:
         return ClockDecision(
             elapsed_seconds=elapsed,
             credited_seconds=min(elapsed, OFFLINE_CAP_SECONDS),
-            warning="O tempo offline foi limitado ao teto configurado." if elapsed > OFFLINE_CAP_SECONDS else None,
+            warning="O progresso offline foi limitado ao máximo permitido." if elapsed > OFFLINE_CAP_SECONDS else None,
         )
 
     def activate_campaign(self, campaign_id: str) -> dict[str, object] | None:
@@ -196,7 +196,7 @@ class ClockGuard:
             metadata = db.get(CampaignMetadata, campaign_id)
             guild = db.scalar(select(Guild).where(Guild.campaign_id == campaign_id))
             if metadata is None or guild is None:
-                raise ValueError("A campanha nao possui uma guilda valida para abrir.")
+                raise ValueError("A campanha não contém dados válidos de uma guilda para abrir.")
             previous_state = metadata.last_session_state
             closed_at = metadata.last_clean_shutdown_utc
             decision = self.evaluate_return(campaign_id, previous_state, closed_at, now)

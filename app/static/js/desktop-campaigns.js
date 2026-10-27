@@ -12,12 +12,12 @@
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || "A operacao nao foi concluida.");
+    if (!response.ok) throw new Error(result.detail || "A operação não foi concluída.");
     return result;
   }
 
   async function nativeCall(name, ...args) {
-    if (!window.pywebview?.api?.[name]) throw new Error("Esta acao exige a janela desktop do Guild Idle Manager.");
+    if (!window.pywebview?.api?.[name]) throw new Error("Esta ação exige a janela desktop do Guild Idle Manager.");
     const result = await window.pywebview.api[name](...args);
     if (result?.error) throw new Error(result.error);
     if (result?.cancelled) return result;
@@ -104,17 +104,17 @@
       } catch (error) { showMessage(error.message, true); }
     });
     card.querySelector(".restore-campaign").addEventListener("click", async () => {
-      if (!await ask({ title: "Restaurar backup", message: "O progresso atual será substituído. Um backup de segurança será criado antes da restauração. Continuar?", confirmText: "Restaurar" })) return;
+      if (!await ask({ title: "Restaurar cópia de segurança", message: "O progresso atual será substituído. Uma cópia de segurança será criada antes da restauração. Continuar?", confirmText: "Restaurar" })) return;
       try {
         const result = await nativeCall("restore_backup", id);
-        if (!result.cancelled) showMessage(result.message || "Backup restaurado.");
+        if (!result.cancelled) showMessage(result.message || "Cópia de segurança restaurada.");
       } catch (error) { showMessage(error.message, true); }
     });
     card.querySelector(".delete-campaign").addEventListener("click", async () => {
-      if (!await ask({ title: "Excluir campanha", message: "Um backup de recuperação será mantido fora da pasta do aplicativo. Deseja excluir esta campanha?", confirmText: "Excluir", danger: true })) return;
+      if (!await ask({ title: "Excluir campanha", message: "Uma cópia de segurança será mantida fora da pasta do aplicativo. Deseja excluir esta campanha?", confirmText: "Excluir", danger: true })) return;
       try {
         const result = await request(`/desktop/api/campaigns/${id}`, { method: "DELETE" });
-        showMessage(`${result.message} ${result.backup_name}`);
+        showMessage(`${result.message} Cópia: ${result.backup_name}`);
         card.remove();
       } catch (error) { showMessage(error.message, true); }
     });
@@ -122,7 +122,7 @@
 
   document.querySelectorAll(".restore-unavailable").forEach((button) => {
     button.addEventListener("click", async () => {
-      const confirmed = await ask({ title: "Recuperar campanha", message: "O arquivo atual será preservado para diagnóstico e substituído pelo backup selecionado, se ele pertencer a esta campanha.", confirmText: "Selecionar backup" });
+      const confirmed = await ask({ title: "Recuperar campanha", message: "O arquivo atual será preservado para diagnóstico e substituído pela cópia de segurança selecionada, se ela pertencer a esta campanha.", confirmText: "Selecionar cópia" });
       if (!confirmed) return;
       try {
         const result = await nativeCall("restore_backup", button.dataset.campaignId);

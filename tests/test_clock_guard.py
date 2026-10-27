@@ -144,14 +144,14 @@ class ClockGuardTests(unittest.TestCase):
 
             missing = guard.evaluate_return(campaign.campaign_id, "closed", now - timedelta(days=2), now)
             self.assertEqual(missing.credited_seconds, 0)
-            self.assertIn("nao existe", missing.warning.lower())
+            self.assertIn("não foi encontrada", missing.warning.lower())
             store.values[campaign.campaign_id] = {"campaign_id": campaign.campaign_id, "high_water_utc": "invalid"}
             corrupt = guard.evaluate_return(campaign.campaign_id, "closed", now - timedelta(days=2), now)
             self.assertEqual(corrupt.credited_seconds, 0)
-            self.assertIn("invalida", corrupt.warning.lower())
+            self.assertIn("inválida", corrupt.warning.lower())
             interrupted = guard.evaluate_return(campaign.campaign_id, "active", now - timedelta(days=2), now)
             self.assertEqual(interrupted.credited_seconds, 0)
-            self.assertIn("encerramento limpo", interrupted.warning.lower())
+            self.assertIn("não foi encerrada corretamente", interrupted.warning.lower())
             self.assertEqual(campaign.database_path.read_bytes(), before)
 
     def test_active_duration_uses_monotonic_clock_when_wall_clock_moves(self):

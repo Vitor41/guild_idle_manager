@@ -27,7 +27,7 @@ def _services(request: Request):
     campaigns = getattr(request.app.state, "campaign_service", None)
     clock_guard = getattr(request.app.state, "clock_guard", None)
     if campaigns is None or clock_guard is None:
-        raise HTTPException(status_code=503, detail="O gerenciador de campanhas ainda nao foi iniciado.")
+        raise HTTPException(status_code=503, detail="O gerenciador de campanhas ainda não está pronto.")
     return campaigns, clock_guard
 
 
@@ -51,7 +51,7 @@ def campaigns_page(request: Request):
 def create_campaign(payload: CampaignCreate, request: Request):
     campaigns, clock_guard = _services(request)
     if getattr(request.app.state, "active_campaign", None) is not None:
-        raise HTTPException(status_code=409, detail="Retorne ao menu de campanhas antes de criar outra.")
+        raise HTTPException(status_code=409, detail="Volte ao menu de campanhas antes de criar outra.")
     try:
         info = campaigns.create_campaign(payload.campaign_name, payload.guild_name)
         clock_guard.initialize_campaign(info.campaign_id)
@@ -112,7 +112,7 @@ def backup_campaign(campaign_id: str, request: Request):
     campaigns, _ = _services(request)
     try:
         path = campaigns.create_manual_backup(campaign_id)
-        return {"message": "Backup criado com sucesso.", "backup_name": path.name}
+        return {"message": "Cópia de segurança criada com sucesso.", "backup_name": path.name}
     except (ValueError, FileNotFoundError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -123,6 +123,6 @@ def delete_campaign(campaign_id: str, request: Request):
     active = getattr(request.app.state, "active_campaign", None)
     try:
         backup_path = campaigns.delete_campaign(campaign_id, active.campaign_id if active else None)
-        return {"message": "Campanha excluida. Um backup de recuperacao foi mantido.", "backup_name": backup_path.name}
+        return {"message": "Campanha excluída. Uma cópia de segurança foi mantida.", "backup_name": backup_path.name}
     except (ValueError, FileNotFoundError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

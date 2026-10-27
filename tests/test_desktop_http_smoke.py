@@ -141,6 +141,11 @@ with tempfile.TemporaryDirectory() as data_dir:
         manifest = json.loads(manifest_body)
         assert "class-warrior" in manifest["sprites"] and "building-tavern" in manifest["sprites"]
         assert not any(item.cls.__name__ == "SessionMiddleware" for item in app.user_middleware)
+        backup_status, _location, backup_body = request(
+            f"/desktop/api/campaigns/{campaign.campaign_id}/backup", method="POST"
+        )
+        assert backup_status == 200, backup_body
+        assert json.loads(backup_body)["message"] == "Cópia de segurança criada com sucesso."
         status, location, _body = request("/tutorial/start", method="POST")
         assert status == 303 and location == "/tutorial?step=1", (status, location)
         status, _location, _body = request(
@@ -201,9 +206,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         status, _location, dashboard_body = request("/dashboard")
         assert status == 200
         assert b'role="status" aria-live="polite"' in dashboard_body
-        assert b"Save atualizado." in dashboard_body
+        assert "Dados da campanha atualizados.".encode("utf-8") in dashboard_body
         assert "Versão 1 → 2".encode("utf-8") in dashboard_body
-        assert "backup de segurança foi criado antes da atualização".encode("utf-8") in dashboard_body
+        assert "cópia de segurança foi criada antes da atualização".encode("utf-8") in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in migration_body
         assert b"offline-dialog" not in dashboard_body

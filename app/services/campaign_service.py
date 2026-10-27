@@ -70,7 +70,7 @@ class CampaignListing(list):
 def default_saves_directory() -> Path:
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
-        raise RuntimeError("LOCALAPPDATA nao esta definido; informe o diretorio de saves explicitamente.")
+        raise RuntimeError("A pasta de dados local não está disponível. Não foi possível localizar as campanhas.")
     return Path(local_app_data) / "GuildIdleManager" / "saves"
 
 
@@ -82,7 +82,7 @@ class CampaignService:
         try:
             canonical_id = str(UUID(campaign_id))
         except (ValueError, AttributeError) as exc:
-            raise ValueError("Identificador de campanha invalido.") from exc
+            raise ValueError("O identificador da campanha é inválido.") from exc
         return self.saves_directory / f"{canonical_id}.db"
 
     def _alembic_config(self, database_path: Path) -> Config:
@@ -118,7 +118,7 @@ class CampaignService:
         target = path.expanduser().resolve()
         checkout = Path(__file__).resolve().parents[2]
         if target == checkout or checkout in target.parents:
-            raise ValueError("Arquivos de save, backup e exportacao devem ficar fora da pasta do aplicativo.")
+            raise ValueError("Os arquivos da campanha, cópias de segurança e exportações devem ficar fora da pasta do aplicativo.")
         return target
 
     def _ensure_schema(self, database_path: Path, campaign_id: str) -> CampaignMigration | None:
@@ -126,23 +126,23 @@ class CampaignService:
         script = ScriptDirectory.from_config(config)
         head = script.get_current_head()
         if head is None:
-            raise RuntimeError("A cadeia Alembic local nao possui uma revisao head.")
+            raise RuntimeError("Não foi possível verificar a versão dos dados da campanha.")
         if not database_path.exists():
             command.upgrade(config, head)
             return None
         with closing(sqlite3.connect(database_path)) as connection:
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not tables:
-                raise ValueError("Save SQLite vazio; arquivo preservado e nao migrado.")
+                raise ValueError("O arquivo da campanha está vazio; ele foi preservado e não foi alterado.")
             elif "alembic_version" not in tables:
-                raise ValueError("Save sem revisao Alembic; arquivo preservado e nao migrado.")
+                raise ValueError("O arquivo da campanha não tem uma versão reconhecida; ele foi preservado e não foi alterado.")
             else:
                 try:
                     revisions = [row[0] for row in connection.execute("SELECT version_num FROM alembic_version")]
                 except sqlite3.DatabaseError as exc:
-                    raise ValueError("Tabela de revisao Alembic invalida; arquivo preservado.") from exc
+                    raise ValueError("Não foi possível ler a versão do arquivo da campanha; ele foi preservado.") from exc
                 if len(revisions) != 1 or not revisions[0]:
-                    raise ValueError("Save sem uma revisao Alembic valida; arquivo preservado.")
+                    raise ValueError("O arquivo da campanha não tem uma versão válida; ele foi preservado.")
                 current = revisions[0]
                 has_campaign_metadata = "campaign_metadata" in tables
                 previous_save_version = CURRENT_SCHEMA_VERSION
@@ -152,7 +152,7 @@ class CampaignService:
                         (campaign_id,),
                     ).fetchone()
                     if row is None:
-                        raise ValueError("Metadados da campanha ausentes; save preservado e nao migrado.")
+                        raise ValueError("Os dados de identificação da campanha estão ausentes; o arquivo foi preservado.")
                     previous_save_version = int(row[0])
         self._validate_revision_ancestry(script, current, head)
         if current != head or previous_save_version != CURRENT_SCHEMA_VERSION:
@@ -172,12 +172,12 @@ class CampaignService:
                     self._restore_sqlite_backup(backup_path, database_path)
                 except Exception as restore_error:
                     raise RuntimeError(
-                        f"A atualizacao falhou e a restauracao automatica nao foi concluida. "
-                        f"Preserve o save e use este backup para recuperacao: {backup_path}"
+                        f"A atualização falhou e não foi possível restaurar os dados automaticamente. "
+                        f"Preserve o arquivo da campanha e use esta cópia de segurança para recuperá-lo: {backup_path}"
                     ) from restore_error
                 raise RuntimeError(
-                    f"A atualizacao do save falhou. O arquivo original foi restaurado; "
-                    f"backup de recuperacao: {backup_path}"
+                    f"A atualização dos dados da campanha falhou. O arquivo original foi restaurado; "
+                    f"cópia de segurança para recuperação: {backup_path}"
                 ) from migration_error
             return CampaignMigration(
                 previous_revision=current,
@@ -192,40 +192,40 @@ class CampaignService:
         with closing(sqlite3.connect(database_path)) as connection:
             integrity = connection.execute("PRAGMA integrity_check").fetchone()
             if not integrity or integrity[0] != "ok":
-                raise ValueError("O save da campanha esta corrompido; arquivo preservado.")
+                raise ValueError("O arquivo da campanha está corrompido; ele foi preservado.")
             tables = {
                 row[0]
                 for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
             }
             if "campaign_metadata" not in tables:
-                raise ValueError("O arquivo nao e um save de campanha reconhecido; arquivo preservado.")
+                raise ValueError("O arquivo selecionado não é uma campanha reconhecida; ele foi preservado.")
             columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(campaign_metadata)")
             }
             required = {"campaign_id", "save_format_version", "schema_version"}
             if not required.issubset(columns):
-                raise ValueError("Metadados incompletos; arquivo preservado e nao migrado.")
+                raise ValueError("Os dados da campanha estão incompletos; o arquivo foi preservado e não foi alterado.")
             rows = connection.execute(
                 "SELECT campaign_id, save_format_version, schema_version FROM campaign_metadata"
             ).fetchall()
             if len(rows) != 1 or rows[0][0] != campaign_id:
-                raise ValueError("O identificador interno do save nao corresponde ao arquivo.")
+                raise ValueError("O identificador da campanha não corresponde ao arquivo selecionado.")
             if rows[0][1] != 1:
-                raise ValueError("Formato do save da campanha nao suportado; arquivo preservado.")
+                raise ValueError("Este formato de campanha não é compatível com o aplicativo; o arquivo foi preservado.")
             if rows[0][2] > CURRENT_SCHEMA_VERSION:
-                raise ValueError("O save foi criado por uma versao mais recente do aplicativo.")
+                raise ValueError("A campanha foi criada por uma versão mais recente do aplicativo.")
             if "alembic_version" not in tables:
-                raise ValueError("Save sem revisao Alembic; arquivo preservado e nao migrado.")
+                raise ValueError("O arquivo da campanha não tem uma versão reconhecida; ele foi preservado e não foi alterado.")
             revision_rows = connection.execute(
                 "SELECT version_num FROM alembic_version"
             ).fetchall()
             if len(revision_rows) != 1 or not revision_rows[0][0]:
-                raise ValueError("Save sem uma revisao Alembic valida; arquivo preservado.")
+                raise ValueError("O arquivo da campanha não tem uma versão válida; ele foi preservado.")
             config = self._alembic_config(database_path)
             script = ScriptDirectory.from_config(config)
             head = script.get_current_head()
             if head is None:
-                raise RuntimeError("A cadeia Alembic local nao possui uma revisao head.")
+                raise RuntimeError("Não foi possível verificar a versão dos dados da campanha.")
             self._validate_revision_ancestry(script, revision_rows[0][0], head)
 
     @staticmethod
@@ -233,9 +233,9 @@ class CampaignService:
         try:
             current_script = script.get_revision(current)
         except Exception as exc:
-            raise ValueError(f"Save usa revisao Alembic desconhecida ({current}); arquivo preservado.") from exc
+            raise ValueError(f"O arquivo da campanha tem uma versão desconhecida ({current}); ele foi preservado.") from exc
         if current_script is None:
-            raise ValueError(f"Save usa revisao Alembic desconhecida ({current}); arquivo preservado.")
+            raise ValueError(f"O arquivo da campanha tem uma versão desconhecida ({current}); ele foi preservado.")
         ancestors = set()
         pending = [head]
         while pending:
@@ -250,7 +250,7 @@ class CampaignService:
                     pending.extend(down_revisions if isinstance(down_revisions, tuple) else (down_revisions,))
         if current not in ancestors:
             raise ValueError(
-                f"Revisao Alembic do save ({current}) nao pertence a cadeia suportada; arquivo preservado."
+                f"A versão dos dados da campanha ({current}) não é compatível com este aplicativo; o arquivo foi preservado."
             )
 
     def create_campaign(self, campaign_name: str, guild_name: str | None = None) -> CampaignInfo:
@@ -307,22 +307,22 @@ class CampaignService:
     def inspect_campaign(self, campaign_id: str) -> CampaignInfo:
         path = self._path_for(campaign_id)
         if not path.is_file():
-            raise FileNotFoundError("Save da campanha nao encontrado.")
+            raise FileNotFoundError("Arquivo da campanha não encontrado.")
         with closing(sqlite3.connect(path)) as connection:
             integrity = connection.execute("PRAGMA integrity_check").fetchone()
             if not integrity or integrity[0] != "ok":
-                raise ValueError("O save da campanha esta corrompido.")
+                raise ValueError("O arquivo da campanha está corrompido.")
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if "campaign_metadata" not in tables:
-                raise ValueError("O arquivo nao e um save de campanha reconhecido.")
+                raise ValueError("O arquivo selecionado não é uma campanha reconhecida.")
             if "alembic_version" not in tables:
-                raise ValueError("Save sem revisao Alembic; arquivo preservado e nao migrado.")
+                raise ValueError("O arquivo da campanha não tem uma versão reconhecida; ele foi preservado e não foi alterado.")
             config = self._alembic_config(path)
             script = ScriptDirectory.from_config(config)
             head = script.get_current_head()
             revision_rows = connection.execute("SELECT version_num FROM alembic_version").fetchall()
             if not head or len(revision_rows) != 1 or not revision_rows[0][0]:
-                raise ValueError("Save sem uma revisao Alembic valida; arquivo preservado.")
+                raise ValueError("O arquivo da campanha não tem uma versão válida; ele foi preservado.")
             self._validate_revision_ancestry(script, revision_rows[0][0], head)
         engine = create_database_engine(f"sqlite:///{path.as_posix()}")
         try:
@@ -330,9 +330,9 @@ class CampaignService:
             with factory() as db:
                 metadata = db.get(CampaignMetadata, str(UUID(campaign_id)))
                 if metadata is None or metadata.save_format_version != 1:
-                    raise ValueError("Formato do save da campanha nao suportado.")
+                    raise ValueError("Este formato de campanha não é compatível com o aplicativo.")
                 if metadata.schema_version > CURRENT_SCHEMA_VERSION:
-                    raise ValueError("O save foi criado por uma versao mais recente do aplicativo.")
+                    raise ValueError("A campanha foi criada por uma versão mais recente do aplicativo.")
                 return self._to_info(metadata, path)
         finally:
             engine.dispose()
@@ -349,7 +349,7 @@ class CampaignService:
                 if isinstance(exc, sqlite3.DatabaseError):
                     reason = "O arquivo está corrompido ou não é um banco SQLite válido."
                 elif isinstance(exc, SQLAlchemyError):
-                    reason = "O save não pôde ser validado pelo sistema. O arquivo foi preservado; tente restaurar um backup compatível."
+                    reason = "Não foi possível verificar os dados da campanha. O arquivo foi preservado; tente restaurar uma cópia de segurança compatível."
                 else:
                     reason = str(exc).strip() or "O arquivo não pôde ser validado."
                 try:
@@ -383,13 +383,13 @@ class CampaignService:
     def restore_backup(self, campaign_id: str, backup_path: str | Path) -> CampaignInfo:
         database_path = self._path_for(campaign_id)
         if not database_path.is_file():
-            raise FileNotFoundError("Save da campanha nao encontrado.")
+            raise FileNotFoundError("Arquivo da campanha não encontrado.")
         engine_database = get_engine().url.database
         if engine_database and Path(engine_database).resolve() == database_path.resolve():
-            raise ValueError("Feche a campanha antes de restaurar um backup.")
+            raise ValueError("Feche a campanha antes de restaurar uma cópia de segurança.")
         source_path = Path(backup_path).expanduser().resolve()
         if not source_path.is_file():
-            raise FileNotFoundError("Backup selecionado nao foi encontrado.")
+            raise FileNotFoundError("A cópia de segurança selecionada não foi encontrada.")
         canonical_id = str(UUID(campaign_id))
         self._validate_campaign_before_open(source_path, canonical_id)
         diagnostic_dir = self.saves_directory.parent / "backups" / canonical_id
@@ -428,10 +428,10 @@ class CampaignService:
     def delete_campaign(self, campaign_id: str, active_campaign_id: str | None = None) -> Path:
         info = self.inspect_campaign(campaign_id)
         if active_campaign_id and info.campaign_id == str(UUID(active_campaign_id)):
-            raise ValueError("Feche a campanha antes de exclui-la.")
+            raise ValueError("Feche a campanha antes de excluí-la.")
         engine_database = get_engine().url.database
         if engine_database and Path(engine_database).resolve() == info.database_path.resolve():
-            raise ValueError("Feche a campanha antes de exclui-la.")
+            raise ValueError("Feche a campanha antes de excluí-la.")
         backup_path = self.create_manual_backup(info.campaign_id)
         info.database_path.unlink()
         for suffix in ("-wal", "-shm"):
@@ -444,9 +444,9 @@ class CampaignService:
         info = self.inspect_campaign(campaign_id)
         target = self._assert_outside_checkout(Path(destination))
         if target == info.database_path.resolve():
-            raise ValueError("Escolha um arquivo diferente do save original.")
+            raise ValueError("Escolha um arquivo diferente do arquivo original da campanha.")
         if target.exists() and not overwrite:
-            raise FileExistsError("O arquivo de exportacao ja existe; confirme a substituicao antes de continuar.")
+            raise FileExistsError("Já existe um arquivo neste local. Confirme a substituição antes de continuar.")
         target.parent.mkdir(parents=True, exist_ok=True)
         staged_path = target.with_name(f".{target.name}.{uuid4().hex}.tmp")
         try:
@@ -454,7 +454,7 @@ class CampaignService:
             with closing(sqlite3.connect(staged_path)) as connection:
                 integrity = connection.execute("PRAGMA integrity_check").fetchone()
                 if not integrity or integrity[0] != "ok":
-                    raise ValueError("A exportacao falhou na validacao de integridade.")
+                    raise ValueError("Não foi possível verificar a integridade do arquivo exportado.")
             staged_path.replace(target)
             return target
         finally:
@@ -463,18 +463,18 @@ class CampaignService:
     def import_campaign(self, source: str | Path) -> CampaignInfo:
         source_path = Path(source).expanduser().resolve()
         if not source_path.is_file():
-            raise FileNotFoundError("Arquivo de campanha nao encontrado.")
+            raise FileNotFoundError("Arquivo da campanha não encontrado.")
         self._assert_outside_checkout(source_path)
         with closing(sqlite3.connect(source_path)) as connection:
             integrity = connection.execute("PRAGMA integrity_check").fetchone()
             if not integrity or integrity[0] != "ok":
-                raise ValueError("O arquivo selecionado esta corrompido.")
+                raise ValueError("O arquivo selecionado está corrompido.")
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if "campaign_metadata" not in tables:
-                raise ValueError("O arquivo selecionado nao e um save de campanha.")
+                raise ValueError("O arquivo selecionado não contém uma campanha reconhecida.")
             rows = connection.execute("SELECT campaign_id FROM campaign_metadata").fetchall()
             if len(rows) != 1 or not rows[0][0]:
-                raise ValueError("O arquivo selecionado nao possui uma campanha valida.")
+                raise ValueError("O arquivo selecionado não contém dados válidos da campanha.")
             source_campaign_id = str(UUID(rows[0][0]))
         self._validate_campaign_before_open(source_path, source_campaign_id)
 
@@ -500,7 +500,7 @@ class CampaignService:
                 connection.commit()
                 violations = connection.execute("PRAGMA foreign_key_check").fetchall()
                 if violations:
-                    raise ValueError(f"O save importado tem referencias invalidas: {violations[:5]}")
+                    raise ValueError("A campanha importada contém dados relacionados inválidos. Tente exportá-la novamente a partir do aplicativo.")
             self._validate_campaign_before_open(staged_path, campaign_id)
             staged_path.replace(final_path)
         finally:
@@ -516,7 +516,7 @@ class CampaignService:
     ) -> tuple[CampaignInfo, CampaignMigration | None]:
         path = self._path_for(campaign_id)
         if not path.is_file():
-            raise FileNotFoundError("Save da campanha nao encontrado.")
+            raise FileNotFoundError("Arquivo da campanha não encontrado.")
         self._validate_campaign_before_open(path, str(UUID(campaign_id)))
         migration = self._ensure_schema(path, str(UUID(campaign_id)))
         info = self.inspect_campaign(campaign_id)
@@ -526,7 +526,7 @@ class CampaignService:
                 with SessionLocal() as db:
                     metadata = db.get(CampaignMetadata, info.campaign_id)
                     if metadata is None:
-                        raise ValueError("O save desapareceu durante a abertura.")
+                        raise ValueError("O arquivo da campanha não foi encontrado durante a abertura.")
                     metadata.last_session_state = "active"
                     metadata.updated_at_utc = datetime.now(timezone.utc)
                     db.commit()
@@ -537,7 +537,7 @@ class CampaignService:
             with SessionLocal() as db:
                 metadata = db.get(CampaignMetadata, str(UUID(campaign_id)))
                 if metadata is None:
-                    raise FileNotFoundError("Save da campanha ativa nao encontrado.")
+                    raise FileNotFoundError("Arquivo da campanha ativa não encontrado.")
                 now = closed_at_utc or datetime.now(timezone.utc)
                 metadata.last_clean_shutdown_utc = now
                 metadata.last_session_state = "closed"
@@ -550,7 +550,7 @@ class CampaignService:
             with SessionLocal() as db:
                 metadata = db.get(CampaignMetadata, str(UUID(campaign_id)))
                 if metadata is None:
-                    raise FileNotFoundError("Save da campanha ativa nao encontrado.")
+                    raise FileNotFoundError("Arquivo da campanha ativa não encontrado.")
                 metadata.last_session_state = "suspended"
                 metadata.last_clean_shutdown_utc = None
                 metadata.updated_at_utc = datetime.now(timezone.utc)

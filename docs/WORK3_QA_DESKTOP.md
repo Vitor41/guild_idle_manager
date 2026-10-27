@@ -28,8 +28,8 @@ Installer regression tests cover refusal of a foreign install directory and a ju
 
 Current artifacts from the final build:
 
-- `dist/GuildIdleManager-DEV.zip` — SHA-256 `A568641FC0D237E84EC7CB072193C401E08985C307535842F63A9FF6777F9948`.
-- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `9C2514C4EE860FC46879EFCCB4FD30248D535460AF1044D8C93E33B5C58F4B52`.
+- `dist/GuildIdleManager-DEV.zip` — SHA-256 `E0755A8050F1677844EC177C0F3FCE5CC19939934F0BCC5BD4FDFB6372B1DD6E`.
+- `dist/GuildIdleManager-DEV-Setup.exe` — SHA-256 `BC4D70FAFFF3B880A28CB45CFE061541CAB56889898EC39818AFCC9987572080`.
 
 IExpress returned exit code 0 before the Setup file appeared; the build script now waits up to 90 seconds for a stable output and verifies its PE header before moving it into `dist`. The earlier isolated installer regression passed first install and managed update (`Start-Process -Wait`: exit 0 for both) with a temporary `%LOCALAPPDATA%`; that run preserved a saves sentinel, verified the DEV marker, replaced a planted obsolete app file, and matched all 856 installed app files against its bundle. The current rebuilt Setup and its app/CSS hashes are recorded under the visual identity validation below.
 
@@ -111,13 +111,13 @@ The rebuilt Setup installed successfully in a fresh temporary profile. The froze
 
 The GDD §7.1 visual system is implemented for the real desktop pages through `app/static/css/desktop-theme.css`, loaded only in desktop mode. The dashboard leads with the operation queue and keeps resource totals in one place; Missions and Dungeons use compact page introductions so the first operation is visible sooner. At narrow widths, the teal navigation remains a compact menu. The save label describes local campaign storage without implying a live autosave state. Gameplay rules and saves were not changed. `tests/test_desktop_art.py` checks that the desktop theme and markup do not leak into web mode; the HTTP smoke checks the stylesheet and compact introductions on real routes.
 
-After commits `1771540` and `e4a7fa3` corrected primary/secondary/destructive/navigation button hover and focus styles, the final bundle and Setup were rebuilt with `scripts/build_desktop_dev.ps1`. The bundle smoke returned `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`. The Setup installed successfully into a disposable profile with shortcut creation disabled; the installed executable matches the rebuilt executable. The SHA-256 of `desktop-theme.css` matches in source, the extracted ZIP, and the Setup-installed app. No installed screenshots were captured again; the user will validate the final visual result on screen.
+After commits `1771540` and `e4a7fa3` corrected button states, the campaign and backup messages were reviewed for clear PT-BR and accentuation across the campaign service, manager screen, local API, bridge, offline progress warnings, startup errors, and return flow. These were copy-only changes; gameplay, backup behavior, and path handling were left intact. The focused campaign/clock/API/bridge/security/art regression passed 38 tests. The final bundle and Setup were rebuilt with `scripts/build_desktop_dev.ps1`; bundle smoke returned `PASS: SQLite, Alembic, conteúdo inicial, nomes e manifesto local`. The Setup installed successfully into a disposable profile with shortcut creation disabled; its installed executable matches the rebuilt executable. The SHA-256 of `desktop-theme.css` matches in source, the extracted ZIP, and the Setup-installed app. No installed screenshots were captured again; the user will validate the final visual result on screen.
 
 | Final artifact | SHA-256 |
 | --- | --- |
-| `dist/GuildIdleManager-DEV.zip` | `A568641FC0D237E84EC7CB072193C401E08985C307535842F63A9FF6777F9948` |
-| `dist/GuildIdleManager-DEV-Setup.exe` | `9C2514C4EE860FC46879EFCCB4FD30248D535460AF1044D8C93E33B5C58F4B52` |
-| Rebuilt and Setup-installed `GuildIdleManager.exe` | `CDEAFC8F3D718FF41E8019E63205F301DE41F715B8EC0801AFD496B436032B93` |
+| `dist/GuildIdleManager-DEV.zip` | `E0755A8050F1677844EC177C0F3FCE5CC19939934F0BCC5BD4FDFB6372B1DD6E` |
+| `dist/GuildIdleManager-DEV-Setup.exe` | `BC4D70FAFFF3B880A28CB45CFE061541CAB56889898EC39818AFCC9987572080` |
+| Rebuilt and Setup-installed `GuildIdleManager.exe` | `6D4B5ADF6336773924EEFF993912B1E85DA66E110E92A8632B5A9DD69770719F` |
 | Source, ZIP, and Setup-installed `desktop-theme.css` | `C0FCCCAFDA855DC87469D44C694B50DA3C271070A512F83D54B8B5E0CFD05666` |
 
 No final visual-review screenshots were captured per the user's direction. The user will validate the installed appearance on screen; the existing earlier captures are not evidence for this rebuilt package.
