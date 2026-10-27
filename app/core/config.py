@@ -9,9 +9,15 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql+psycopg2://postgres:postgres@localhost:5432/guild_idle_manager",
+    app_mode: str = os.getenv("APP_MODE", "web").lower()
+    active_campaign_id: str | None = os.getenv("ACTIVE_CAMPAIGN_ID")
+    database_url: str = (
+        "sqlite:///:memory:"
+        if os.getenv("APP_MODE", "web").lower() == "desktop"
+        else os.getenv(
+            "DATABASE_URL",
+            "postgresql+psycopg2://postgres:postgres@localhost:5432/guild_idle_manager",
+        )
     )
     secret_key: str = os.getenv("SECRET_KEY", "change-this-secret")
     app_env: str = os.getenv("APP_ENV", "local")

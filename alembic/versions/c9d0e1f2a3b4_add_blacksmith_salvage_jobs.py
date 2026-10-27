@@ -51,6 +51,7 @@ def upgrade() -> None:
         ["guild_id", "slot_number"],
         unique=True,
         postgresql_where=sa.text("status = 'in_progress'"),
+        sqlite_where=sa.text("status = 'in_progress'"),
     )
 
 

@@ -24,6 +24,7 @@ class GuildSalvageJob(Base):
             "slot_number",
             unique=True,
             postgresql_where=text("status = 'in_progress'"),
+            sqlite_where=text("status = 'in_progress'"),
         ),
     )
 
