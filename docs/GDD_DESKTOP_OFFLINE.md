@@ -247,6 +247,12 @@ Isso reduz exploração de rollback e concessões duplicadas. Um jogador determi
 - Erros de banco, migration, backup ou conteúdo devem aparecer como telas de recuperação compreensíveis em PT-BR, com logs técnicos separados.
 - Não depender de conexão, telemetria, GitHub, CDN ou fontes remotas para inicializar, jogar, renderizar ícones ou obter recompensas.
 
+### 7.1 Identidade visual e sprites
+
+A nova identidade deve ser implementada no aplicativo, não permanecer apenas em mockups. A DA deve produzir sprites bitmap originais e locais para toda categoria visual usada no jogo: navegação e ações, classes e evoluções, representação de mercenários, tipos de equipamentos e slots, materiais e recursos, construções, operações e demais sistemas. Um sprite canônico pode representar um grupo semântico de itens gerados; não é necessário desenhar cada instância procedural, mas nenhum grupo pode depender de um símbolo genérico por falta de cobertura.
+
+Um manifesto versionado associa códigos e grupos de domínio aos arquivos e define fallback acessível. Raridade, seleção, bloqueio e estado continuam expressos também por texto/estrutura, não apenas por cor ou imagem. Os sprites devem permanecer legíveis nos tamanhos reais da interface, ter masters e exportações otimizadas e estar disponíveis offline. A distribuição não deve depender de ícones legados cuja procedência de uso e redistribuição não foi confirmada.
+
 ## 8. Desenvolvimento sem reinstalar a cada mudança
 
 ### 8.1 Decisão

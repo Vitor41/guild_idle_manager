@@ -18,7 +18,9 @@ Este documento é o checklist independente da conversa principal. A fonte do esc
 - [ ] Assets cobrem as superfícies prioritárias do jogo e possuem nomes, dimensões, manifesto e fallback.
 - [ ] Preview desktop e janela estreita podem ser abertos localmente e mostram interface legível, sem sobreposição.
 - [ ] Assets funcionam offline, sem CDN, têm pesos razoáveis e licença/proveniência registrada.
-- [ ] A direção preserva os ícones existentes que ainda servem e melhora o que for necessário; não há regressão de identificação de classe, item ou construção.
+- [ ] A substituição visual não causa regressão na identificação de classe, item ou construção.
+- [ ] A iconografia nova cobre menu, ações, classes/evoluções, mercenários, equipamentos por grupo/slot, materiais/recursos, construções e demais sistemas; manifesto/fallback não deixam grupos com placeholder genérico.
+- [ ] Ícones legados sem procedência confirmada não são dependência do pacote distribuído; sprites novos têm autoria e permissões de uso registradas.
 - [ ] A conversa principal visualizou os previews e informou ao usuário os caminhos exatos para vê-los.
 
 ## Gate 1 — Core offline e campanhas
