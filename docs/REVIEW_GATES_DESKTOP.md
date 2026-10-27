@@ -72,3 +72,11 @@ Para cada retorno de DA ou DEV, registrar na conversa principal:
 6. Decisão: aprovado, devolver para correção, ou bloqueado com motivo verificável.
 
 Este checklist não substitui o GDD nem os testes de regressão; serve para tornar explícito o padrão de aprovação.
+
+### 2026-10-26 — Gate 1 autorizado para avançar
+
+- Commits revisados: `aa6398f`, `2dc7596`, `e28c973`, `9fb9db4`, `e80b501` e `235903e`.
+- Verificação independente: `C:\Users\vitor\Guild Idle Manager\.venv\Scripts\python.exe -m unittest discover -s tests -q` em `App GIM`: 35 testes passaram.
+- Evidência: criação de duas campanhas SQLite, cadeia Alembic completa, dados de guilda e gameplay isolados, reabertura persistente, migração de revisão anterior com backup, rejeição sem modificação de arquivos vazios, parciais, com revisão desconhecida ou UUID interno divergente.
+- Decisão: Trabalho 2 liberado. Este aceite não declara o aplicativo jogável nem a recuperação de falha de migration pronta.
+- Pendências obrigatórias: restauração automática/testada após falha de migration (Gate 2); janela/launcher, ClockGuard, idle e menus de campanha (Gate 2); regressão de todos os sistemas, modo web e build limpa (Gate 3).
