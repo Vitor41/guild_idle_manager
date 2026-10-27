@@ -13,6 +13,8 @@ O jogador inicia uma campanha local, administra uma guilda, salva automaticament
 
 Este GDD orienta uma implementação em até três fatias de trabalho. A prioridade é preservar o conteúdo e as regras existentes; balanceamento e refinamento do jogo são trabalho separado, exceto quando uma incompatibilidade bloqueia a versão desktop.
 
+**Checkout de implementação:** `C:\Users\vitor\Guild Idle Manager\App GIM`. O projeto web na pasta-pai é referência histórica e não deve receber alterações desta entrega. Todos os comandos abaixo são executados dentro de `App GIM`.
+
 ## 2. Referência e auditoria do projeto existente
 
 O levantamento foi feito na raiz `C:\Users\vitor\Guild Idle Manager`. A pasta contém a aplicação em `app/`, documentação e roteiros em `app/docs/`, migrations em `alembic/`, ferramentas e relatórios de QA, assets, testes e o inicializador web `Iniciando_venv.bat`.
@@ -254,7 +256,7 @@ Durante DEV, executar diretamente a cópia do projeto e abrir a mesma aplicaçã
 Fluxo de desenvolvimento esperado:
 
 ```powershell
-cd "C:\Users\vitor\Guild Idle Manager"
+cd "C:\Users\vitor\Guild Idle Manager\App GIM"
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-desktop-dev.txt
 .\.venv\Scripts\python.exe -m app.desktop
@@ -330,6 +332,7 @@ Trabalhos 1 e 2 podem ser combinados se o agente conseguir manter os testes clar
 ### Uma vez por checkout
 
 ```powershell
+cd "C:\Users\vitor\Guild Idle Manager\App GIM"
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements-desktop-dev.txt
