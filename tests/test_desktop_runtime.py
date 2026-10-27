@@ -49,6 +49,7 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                 pywebview_logger.addHandler(pywebview_handler)
                 initialization_results = []
                 original_webview_ready = EdgeChrome.on_webview_ready
+                original_navigation_start = EdgeChrome.on_navigation_start
                 original_navigation_completed = EdgeChrome.on_navigation_completed
                 original_load_url = EdgeChrome.load_url
                 original_edge_init = EdgeChrome.__init__
@@ -78,7 +79,22 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                         event_result = {"capture_error": repr(error)}
                     initialization_results.append(event_result)
                     try:
-                        return original_webview_ready(self, sender, args)
+                        handler_result = original_webview_ready(self, sender, args)
+                        if os.environ.get("GIM_TEST_DIRECT_NAVIGATE") == "1" and self.pywebview_window.real_url:
+                            try:
+                                sender.CoreWebView2.Navigate(self.pywebview_window.real_url)
+                                edge_actions.append({
+                                    "action": "direct_core_navigate_returned",
+                                    "url": str(self.pywebview_window.real_url),
+                                    "core_source": str(sender.CoreWebView2.Source),
+                                })
+                            except BaseException as error:
+                                edge_actions.append({
+                                    "action": "direct_core_navigate_exception",
+                                    "error": repr(error),
+                                    "traceback": traceback.format_exc(),
+                                })
+                        return handler_result
                     except BaseException as error:
                         event_result["handler_exception"] = traceback.format_exc()
                         raise
@@ -91,17 +107,30 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                     })
                     return original_navigation_completed(self, sender, args)
 
+                def capture_navigation_start(self, sender, args):
+                    navigation_events.append({
+                        "event": "starting",
+                        "uri": str(args.Uri),
+                    })
+                    return original_navigation_start(self, sender, args)
+
                 def capture_load_url(self, url):
                     edge_actions.append({"action": "load_url", "url": str(url)})
-                    result = original_load_url(self, url)
-                    edge_actions.append({
-                        "action": "load_url_returned",
-                        "source": str(self.webview.Source) if self.webview.Source else None,
-                        "core_source": str(self.webview.CoreWebView2.Source) if self.webview.CoreWebView2 else None,
-                    })
-                    return result
+                    try:
+                        result = original_load_url(self, url)
+                        edge_actions.append({
+                            "action": "load_url_returned",
+                            "return": repr(result),
+                            "source": str(self.webview.Source) if self.webview.Source else None,
+                            "core_source": str(self.webview.CoreWebView2.Source) if self.webview.CoreWebView2 else None,
+                        })
+                        return result
+                    except BaseException as error:
+                        edge_actions.append({"action": "load_url_exception", "error": repr(error), "traceback": traceback.format_exc()})
+                        raise
 
                 EdgeChrome.on_webview_ready = capture_webview_initialization
+                EdgeChrome.on_navigation_start = capture_navigation_start
                 EdgeChrome.on_navigation_completed = capture_navigation_completed
                 EdgeChrome.load_url = capture_load_url
                 original_start = webview.start
@@ -255,6 +284,7 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
             environment["APP_MODE"] = "desktop"
             environment["LOCALAPPDATA"] = str(root)
             environment["GIM_RUNTIME_SMOKE_MARKER"] = str(marker_path)
+            environment["GIM_TEST_DIRECT_NAVIGATE"] = os.environ.get("GIM_TEST_DIRECT_NAVIGATE", "0")
             pythonw = Path(sys.executable).with_name("pythonw.exe")
             process = subprocess.Popen(
                 [str(pythonw), "-c", child_script],
