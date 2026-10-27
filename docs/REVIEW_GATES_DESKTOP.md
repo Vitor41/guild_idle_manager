@@ -108,3 +108,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - Verificação independente: `APP_MODE=desktop` com `tests.test_desktop_bridge tests.test_desktop_security -q` passou (4/4). `GIM_RUN_DESKTOP_RUNTIME_SMOKE=1` com `tests.test_desktop_runtime -v` falhou: janela `shown=True`, mas `loaded=False`, bridge indisponível e nenhuma resposta capturada; a janela fechou. O smoke durou 39,634 s e não tocou saves reais.
 - Diagnóstico DEV separado observou `ExecuteScriptAsync` com `CoreWebView2 is uninitialized` antes de fechar a janela. Teste alternativo Qt também não concluiu carregamento/bridge, portanto nenhum dos dois backends foi aceito como solução.
 - Decisão: Gate 2 **aberto**. Prosseguir apenas com integração visual, QA transacional e empacotamento como trabalho em andamento; o instalador não será declarado testável até comprovar `loaded`, DOM, criação/retorno de campanha e encerramento limpo em janela nativa.
+
+### 2026-10-27 — Revisão parcial do instalador DEV
+
+- No checkout compartilhado, `.venv-desktop\Scripts\python.exe -m unittest tests.test_desktop_art tests.test_desktop_installer -v` passou (7/7). Os testes de segurança recusaram uma pasta alheia e um junction sem alterar arquivos sentinela.
+- O executável congelado em `dist/GuildIdleManager/GuildIdleManager.exe --smoke` retornou código 0 e confirmou SQLite, Alembic, conteúdo inicial, catálogo de nomes e manifesto local de arte. Foi usado um arquivo de resultado temporário, fora dos saves reais.
+- Em `%LOCALAPPDATA%` e `%TEMP%` isolados, o script distribuído em `dist/GuildIdleManager-DEV/Install-Desktop-Dev.ps1` instalou o pacote, repetiu a atualização gerenciada e preservou um save sentinela em `%LOCALAPPDATA%/GuildIdleManager/saves/`.
+- Decisão: aceitar essas evidências do caminho de instalação por pasta; não aceitar ainda o arquivo único IExpress, o smoke sem Python/rede em máquina limpa, nem a janela nativa. Gate 2 e Gate 3 permanecem abertos.
