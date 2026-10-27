@@ -46,7 +46,7 @@ $env:DATABASE_URL = 'sqlite:///:memory:'
 .\.venv-desktop\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-O último resultado registrado foi de 64 testes aprovados e um smoke nativo opt-in ignorado pela descoberta normal. O smoke nativo foi executado separadamente duas vezes e passou; veja a tabela de execução em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md).
+O resultado integral mais recente registrou 70 testes executados, com 69 aprovados e um smoke nativo opt-in ignorado pela descoberta normal. O smoke nativo foi executado separadamente no contexto Windows normal e passou; veja a tabela de execução em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md).
 
 O smoke nativo de janela é opt-in porque precisa abrir uma janela Windows real. Ele usa uma pasta temporária, espera `shown` e `loaded` do pywebview, confere o DOM do gerente e do dashboard, cria uma campanha pelo formulário nativo, retorna ao gerente, destrói a janela pelo próprio objeto pywebview e verifica evento `closed`, encerramento do servidor e metadados da campanha:
 
@@ -56,7 +56,7 @@ $env:GIM_RUN_DESKTOP_RUNTIME_SMOKE = '1'
 .\.venv-desktop\Scripts\python.exe -m unittest tests.test_desktop_runtime -v
 ```
 
-O smoke HTTP local e os testes de campanha cobrem persistência SQLite, abertura e fechamento de saves, migração Alembic, recuperação por backup, exportação e importação. O smoke nativo também confirmou o carregamento do WebView, DOM, bridge e retorno ao menu. A inspeção visual do aplicativo instalado, incluindo janela estreita, está registrada em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md).
+O smoke HTTP local e os testes de campanha cobrem persistência SQLite, abertura e fechamento de saves, migração Alembic, recuperação por backup, exportação e importação. O smoke nativo também confirmou o carregamento do WebView, DOM, bridge e retorno ao menu. As capturas em [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md) pertencem a builds anteriores; a validação visual do Setup atual em tela será feita pelo usuário.
 
 ## Abrir
 
