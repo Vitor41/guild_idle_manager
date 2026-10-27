@@ -10,7 +10,7 @@
 | Classes finais em `app/static/assets/extended/classes/final_classes/ui_128/` | 10 | mesmos arquivos do conjunto extended | Não verificada para distribuição |
 | Construções em `app/static/assets/extended/buildings/ui_128/` | 7 | mesmos arquivos do conjunto extended | Não verificada para distribuição |
 
-As prévias usam apenas algumas amostras desses conjuntos. O manifesto do pacote novo lista os padrões de caminho como **reuso proposto**, não como atestado de licença. Até a verificação, manter fallback textual/geométrico para cada ícone legado e evitar que o layout dependa dele para nome, raridade, estado ou ação.
+Este inventário é histórico. As cinco prévias e o manifesto do pacote desktop em `app/static/assets/desktop/` não dependem dos arquivos acima; usam sprites originais com masters locais. A licença dos arquivos legados continua não verificada para eventual distribuição separada do aplicativo web.
 
 ## Registro necessário antes do build de distribuição
 

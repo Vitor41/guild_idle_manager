@@ -12,3 +12,50 @@
 @media(max-width:900px){.ops-layout{grid-template-columns:1fr}.ops-list{grid-template-columns:repeat(3,minmax(0,1fr))}.ops-list-card{min-height:170px}.ops-list-card-head{align-items:start;flex-direction:column}.detail-columns{gap:20px}.dungeon-grid{grid-template-columns:1fr}.inventory-layout{grid-template-columns:1fr}.item-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.item-detail{max-width:none}}
 @media(max-width:760px){.brand-sprite{width:30px;height:30px;flex-basis:30px}.dense-intro{padding:16px;gap:8px}.dense-intro>img{width:58px;height:58px;flex-basis:58px}.dense-intro h2,.tavern-strip h2{font-size:25px}.compact-counters{display:none}.ops-list{grid-template-columns:1fr}.ops-list-card{min-height:132px}.ops-list-card-head{align-items:center;flex-direction:row}.detail-head{display:block}.detail-head .state{display:inline-block;margin-top:10px}.detail-columns{grid-template-columns:1fr}.detail-actions{align-items:start;flex-direction:column}.dungeon-panel{min-height:172px}.prepare-panel{grid-template-columns:1fr}.party-total{grid-column:auto}.tavern-strip{min-height:180px;padding:17px}.capacity-pill{display:none}.special-offer{grid-template-columns:1fr}.offer-portrait{height:230px}.offer-portrait img{object-position:50% 23%}.offer-info{padding:18px}.offer-info h3{font-size:29px}.recruit-grid{grid-template-columns:1fr}.recruit-card{min-height:205px}.cooldown-note{display:block}.cooldown-note strong{display:block;margin-bottom:4px}.inventory-summary{grid-template-columns:repeat(2,1fr)}.inventory-summary div:nth-child(3){border-left:0;border-top:1px solid var(--line)}.inventory-summary div:nth-child(4){border-top:1px solid var(--line)}.inventory-toolbar{display:block}.inventory-search{margin-top:10px}.item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.item-section .section-head{align-items:start}.section-meta{max-width:95px;text-align:right}}
 @media(max-width:520px){.dense-intro>img{display:none}.dense-intro{min-height:130px}.ops-list-card{min-height:140px}.dungeon-panel{display:block}.dungeon-art{flex-direction:row;justify-content:start;width:100%;min-height:70px;padding:5px 14px}.dungeon-art img{width:52px;height:52px}.dungeon-content{padding:14px}.prepare-panel fieldset label{flex-wrap:wrap}.offer-stats{gap:4px}.offer-stats div{padding:8px}.offer-stats strong{font-size:12px}.offer-purchase{align-items:start;flex-direction:column}.item-grid{grid-template-columns:1fr}.item-card{min-height:64px}.item-card img{width:40px;height:40px;flex-basis:40px}.item-detail{padding:17px}.inventory-summary div{padding:12px}.inventory-summary strong{font-size:23px}.inventory-summary small{font-size:9px}}
+.nav-sprite{width:19px;height:19px;flex:0 0 19px;object-fit:contain}.top-gold-sprite{width:16px;height:16px;object-fit:contain;vertical-align:-3px;margin-right:5px}.state-sprite{width:15px;height:15px;object-fit:contain;vertical-align:-3px;margin-right:3px}.availability,.state{white-space:nowrap}
+
+
+/* Readable labels in the real desktop window and at the narrow preview width. */
+.nav-label,.rail-foot,.crumb,.world-time,.gold-chip small,
+.eyebrow,.demo,.chapter,.type,.state,.section-meta,
+.resource-row small,.hero-meta>span,.hero-meta>small,
+.inventory-summary small,.inventory-search,
+.operation-foot>span,.detail-actions span,.dungeon-progress,
+.party-total span,.party-total small,.item-count,
+.inventory-hint,.item-flavor,.slot-row,.item-warning,
+footer { font-size: 12px; }
+.button,.text-link,.section-link,.quiet-link,.item-actions button,
+.inventory-search input { font-size: 13px; }
+.operation p,.dense-intro p:not(.eyebrow),
+.ops-list-card p,.detail-head p:not(.eyebrow),
+.dungeon-content p,.item-stats div { font-size: 13px; }
+.party-member,.loot-item { font-size: 13px; }
+.party-member small,.party-member strong,.item-card small { font-size: 12px; }
+.item-card strong { font-size: 13px; }
+.nav-item { font-size: 13px; }
+.nav-item img { vertical-align: middle; }
+
+/* Native, keyboard-operable menu for narrow windows. The original nav remains
+   horizontally scrollable if JavaScript is unavailable. */
+.mobile-menu { display: none; }
+@media (max-width: 760px) {
+  .mobile-menu { display: block; position: relative; }
+  .mobile-menu > summary { display: flex; align-items: center; justify-content: space-between; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: #203035; color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer; }
+  .mobile-menu > summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--gold); border-bottom: 2px solid var(--gold); transform: rotate(45deg); }
+  .mobile-menu[open] > summary::after { transform: rotate(225deg); }
+  .mobile-menu > summary:focus-visible { outline: 3px solid var(--gold-soft); outline-offset: 2px; }
+  .mobile-menu > nav { display: grid; gap: 3px; max-height: min(65vh, 540px); overflow-y: auto; margin-top: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: #142226; }
+  .mobile-menu .nav-label { display: block; margin: 9px 8px 3px; font-size: 12px; }
+  .mobile-menu .nav-item { display: flex; width: 100%; min-height: 39px; padding: 7px 9px; font-size: 13px; }
+  html.has-mobile-menu .rail > nav { display: none; }
+}
+.chapter .chapter-separator { display: inline-block; width: 6px; height: 6px; margin: 0 8px 1px; padding: 0; background: var(--gold); transform: rotate(45deg); }
+.offer-timer { font-size: 12px; }
+.compact-counters span,.mini-result,.prepare-panel legend,
+.prepare-panel label,.prepare-panel label small,.requirement,
+.recruit-price,.offer-purchase small { font-size: 12px; }
+.prepare-panel p:not(.eyebrow),.recruit-card > p { font-size: 13px; }
+.dungeon-panel { min-height: 214px; }
+.item-card { min-height: 86px; }
+.item-card strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-height: 2.5em; line-height: 1.25; white-space: normal; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 520px) { .item-card { min-height: 76px; } }

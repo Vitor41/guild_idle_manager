@@ -2,24 +2,1077 @@
   "package": "guild-idle-desktop-art-v1",
   "version": "1.0.0",
   "base": "/static/assets/desktop/",
+  "app_icon": {
+    "path": "app-icon.ico",
+    "sizes": [
+      16,
+      24,
+      32,
+      48,
+      64,
+      128,
+      256
+    ],
+    "role": "Windows application and launcher icon",
+    "source_sprite": "guild_sigil"
+  },
   "source": "Original bitmap illustrations and transparent campaign sprites generated with Codex imagegen on 2026-10-26; illustrations encoded as WebP and sprites as optimized PNG for local use.",
   "assets": {
-    "guild_hall": {"path": "illustrations/guild-hall.webp", "width": 1440, "height": 680, "role": "dashboard and campaign hero", "fallback": "solid surface plus live HTML heading", "alt": "Salão da guilda com mesa de planejamento e vista da fortaleza ao entardecer"},
-    "tavern": {"path": "illustrations/tavern.webp", "width": 960, "height": 440, "role": "tavern banner", "fallback": "solid surface with the existing tavern medallion", "alt": "Interior iluminado da taverna, com mural de recrutamento"},
-    "dungeon": {"path": "illustrations/dungeon.webp", "width": 960, "height": 440, "role": "dungeon mission background", "fallback": "solid surface with text status", "alt": "Ruínas subterrâneas com runas e escadaria"},
-    "ranger_portrait": {"path": "illustrations/ranger-portrait.webp", "width": 448, "height": 560, "role": "illustrative sample portrait, not a canonical class image", "fallback": "existing class emblem or initials", "alt": "Retrato de mercenária arqueira"}
+    "guild_hall": {
+      "path": "illustrations/guild-hall.webp",
+      "width": 1440,
+      "height": 680,
+      "role": "dashboard and campaign hero",
+      "fallback": "solid surface plus live HTML heading",
+      "alt": "Salão da guilda com mesa de planejamento e vista da fortaleza ao entardecer"
+    },
+    "tavern": {
+      "path": "illustrations/tavern.webp",
+      "width": 960,
+      "height": 440,
+      "role": "tavern banner",
+      "fallback": "solid surface with the existing tavern medallion",
+      "alt": "Interior iluminado da taverna, com mural de recrutamento"
+    },
+    "dungeon": {
+      "path": "illustrations/dungeon.webp",
+      "width": 960,
+      "height": 440,
+      "role": "dungeon mission background",
+      "fallback": "solid surface with text status",
+      "alt": "Ruínas subterrâneas com runas e escadaria"
+    },
+    "ranger_portrait": {
+      "path": "illustrations/ranger-portrait.webp",
+      "width": 448,
+      "height": 560,
+      "role": "illustrative sample portrait, not a canonical class image",
+      "fallback": "existing class emblem or initials",
+      "alt": "Retrato de mercenária arqueira"
+    }
   },
   "sprites": {
-    "guild_sigil": {"paths": {"128": "sprites/128/guild-sigil.png", "64": "sprites/64/guild-sigil.png"}, "role": "campaign crest and shell identifier", "fallback": "text initials GIM inside a bordered seal", "alt": "Brasão da guilda"},
-    "expedition_map": {"paths": {"128": "sprites/128/expedition-map.png", "64": "sprites/64/expedition-map.png"}, "role": "operation board marker", "fallback": "existing mission glyph plus text label", "alt": "Mapa de expedição"},
-    "dungeon_gate": {"paths": {"128": "sprites/128/dungeon-gate.png", "64": "sprites/64/dungeon-gate.png"}, "role": "dungeon board marker", "fallback": "existing dungeon glyph plus text label", "alt": "Porta de masmorra"}
+    "biome-cave": {
+      "paths": {
+        "64": "sprites/64/biome-cave.png",
+        "128": "sprites/128/biome-cave.png",
+        "512": "sprites/master_512/biome-cave.png"
+      },
+      "master_project_path": "design/masters/biome-cave.webp"
+    },
+    "biome-forest": {
+      "paths": {
+        "64": "sprites/64/biome-forest.png",
+        "128": "sprites/128/biome-forest.png",
+        "512": "sprites/master_512/biome-forest.png"
+      },
+      "master_project_path": "design/masters/biome-forest.webp"
+    },
+    "biome-fortress": {
+      "paths": {
+        "64": "sprites/64/biome-fortress.png",
+        "128": "sprites/128/biome-fortress.png",
+        "512": "sprites/master_512/biome-fortress.png"
+      },
+      "master_project_path": "design/masters/biome-fortress.webp"
+    },
+    "biome-portal": {
+      "paths": {
+        "64": "sprites/64/biome-portal.png",
+        "128": "sprites/128/biome-portal.png",
+        "512": "sprites/master_512/biome-portal.png"
+      },
+      "master_project_path": "design/masters/biome-portal.webp"
+    },
+    "boss-crown": {
+      "paths": {
+        "64": "sprites/64/boss-crown.png",
+        "128": "sprites/128/boss-crown.png",
+        "512": "sprites/master_512/boss-crown.png"
+      },
+      "master_project_path": "design/masters/boss-crown.webp"
+    },
+    "building-blacksmith": {
+      "paths": {
+        "64": "sprites/64/building-blacksmith.png",
+        "128": "sprites/128/building-blacksmith.png",
+        "512": "sprites/master_512/building-blacksmith.png"
+      },
+      "master_project_path": "design/masters/building-blacksmith.webp"
+    },
+    "building-contract_office": {
+      "paths": {
+        "64": "sprites/64/building-contract_office.png",
+        "128": "sprites/128/building-contract_office.png",
+        "512": "sprites/master_512/building-contract_office.png"
+      },
+      "master_project_path": "design/masters/building-contract_office.webp"
+    },
+    "building-docks": {
+      "paths": {
+        "64": "sprites/64/building-docks.png",
+        "128": "sprites/128/building-docks.png",
+        "512": "sprites/master_512/building-docks.png"
+      },
+      "master_project_path": "design/masters/building-docks.webp"
+    },
+    "building-housing": {
+      "paths": {
+        "64": "sprites/64/building-housing.png",
+        "128": "sprites/128/building-housing.png",
+        "512": "sprites/master_512/building-housing.png"
+      },
+      "master_project_path": "design/masters/building-housing.webp"
+    },
+    "building-market": {
+      "paths": {
+        "64": "sprites/64/building-market.png",
+        "128": "sprites/128/building-market.png",
+        "512": "sprites/master_512/building-market.png"
+      },
+      "master_project_path": "design/masters/building-market.webp"
+    },
+    "building-scouts": {
+      "paths": {
+        "64": "sprites/64/building-scouts.png",
+        "128": "sprites/128/building-scouts.png",
+        "512": "sprites/master_512/building-scouts.png"
+      },
+      "master_project_path": "design/masters/building-scouts.webp"
+    },
+    "building-tavern": {
+      "paths": {
+        "64": "sprites/64/building-tavern.png",
+        "128": "sprites/128/building-tavern.png",
+        "512": "sprites/master_512/building-tavern.png"
+      },
+      "master_project_path": "design/masters/building-tavern.webp"
+    },
+    "building-training_ground": {
+      "paths": {
+        "64": "sprites/64/building-training_ground.png",
+        "128": "sprites/128/building-training_ground.png",
+        "512": "sprites/master_512/building-training_ground.png"
+      },
+      "master_project_path": "design/masters/building-training_ground.webp"
+    },
+    "building-warehouse": {
+      "paths": {
+        "64": "sprites/64/building-warehouse.png",
+        "128": "sprites/128/building-warehouse.png",
+        "512": "sprites/master_512/building-warehouse.png"
+      },
+      "master_project_path": "design/masters/building-warehouse.webp"
+    },
+    "class-apprentice": {
+      "paths": {
+        "64": "sprites/64/class-apprentice.png",
+        "128": "sprites/128/class-apprentice.png",
+        "512": "sprites/master_512/class-apprentice.png"
+      },
+      "master_project_path": "design/masters/class-apprentice.webp"
+    },
+    "class-arcane": {
+      "paths": {
+        "64": "sprites/64/class-arcane.png",
+        "128": "sprites/128/class-arcane.png",
+        "512": "sprites/master_512/class-arcane.png"
+      },
+      "master_project_path": "design/masters/class-arcane.webp"
+    },
+    "class-archer": {
+      "paths": {
+        "64": "sprites/64/class-archer.png",
+        "128": "sprites/128/class-archer.png",
+        "512": "sprites/master_512/class-archer.png"
+      },
+      "master_project_path": "design/masters/class-archer.webp"
+    },
+    "class-assassin": {
+      "paths": {
+        "64": "sprites/64/class-assassin.png",
+        "128": "sprites/128/class-assassin.png",
+        "512": "sprites/master_512/class-assassin.png"
+      },
+      "master_project_path": "design/masters/class-assassin.webp"
+    },
+    "class-blade": {
+      "paths": {
+        "64": "sprites/64/class-blade.png",
+        "128": "sprites/128/class-blade.png",
+        "512": "sprites/master_512/class-blade.png"
+      },
+      "master_project_path": "design/masters/class-blade.webp"
+    },
+    "class-cleric": {
+      "paths": {
+        "64": "sprites/64/class-cleric.png",
+        "128": "sprites/128/class-cleric.png",
+        "512": "sprites/master_512/class-cleric.png"
+      },
+      "master_project_path": "design/masters/class-cleric.webp"
+    },
+    "class-high_priest": {
+      "paths": {
+        "64": "sprites/64/class-high_priest.png",
+        "128": "sprites/128/class-high_priest.png",
+        "512": "sprites/master_512/class-high_priest.png"
+      },
+      "master_project_path": "design/masters/class-high_priest.webp"
+    },
+    "class-knight": {
+      "paths": {
+        "64": "sprites/64/class-knight.png",
+        "128": "sprites/128/class-knight.png",
+        "512": "sprites/master_512/class-knight.png"
+      },
+      "master_project_path": "design/masters/class-knight.webp"
+    },
+    "class-mage": {
+      "paths": {
+        "64": "sprites/64/class-mage.png",
+        "128": "sprites/128/class-mage.png",
+        "512": "sprites/master_512/class-mage.png"
+      },
+      "master_project_path": "design/masters/class-mage.webp"
+    },
+    "class-mentalist": {
+      "paths": {
+        "64": "sprites/64/class-mentalist.png",
+        "128": "sprites/128/class-mentalist.png",
+        "512": "sprites/master_512/class-mentalist.png"
+      },
+      "master_project_path": "design/masters/class-mentalist.webp"
+    },
+    "class-ninja": {
+      "paths": {
+        "64": "sprites/64/class-ninja.png",
+        "128": "sprites/128/class-ninja.png",
+        "512": "sprites/master_512/class-ninja.png"
+      },
+      "master_project_path": "design/masters/class-ninja.webp"
+    },
+    "class-paladin": {
+      "paths": {
+        "64": "sprites/64/class-paladin.png",
+        "128": "sprites/128/class-paladin.png",
+        "512": "sprites/master_512/class-paladin.png"
+      },
+      "master_project_path": "design/masters/class-paladin.webp"
+    },
+    "class-patroller": {
+      "paths": {
+        "64": "sprites/64/class-patroller.png",
+        "128": "sprites/128/class-patroller.png",
+        "512": "sprites/master_512/class-patroller.png"
+      },
+      "master_project_path": "design/masters/class-patroller.webp"
+    },
+    "class-predator": {
+      "paths": {
+        "64": "sprites/64/class-predator.png",
+        "128": "sprites/128/class-predator.png",
+        "512": "sprites/master_512/class-predator.png"
+      },
+      "master_project_path": "design/masters/class-predator.webp"
+    },
+    "class-priest": {
+      "paths": {
+        "64": "sprites/64/class-priest.png",
+        "128": "sprites/128/class-priest.png",
+        "512": "sprites/master_512/class-priest.png"
+      },
+      "master_project_path": "design/masters/class-priest.webp"
+    },
+    "class-ranger": {
+      "paths": {
+        "64": "sprites/64/class-ranger.png",
+        "128": "sprites/128/class-ranger.png",
+        "512": "sprites/master_512/class-ranger.png"
+      },
+      "master_project_path": "design/masters/class-ranger.webp"
+    },
+    "class-reaper": {
+      "paths": {
+        "64": "sprites/64/class-reaper.png",
+        "128": "sprites/128/class-reaper.png",
+        "512": "sprites/master_512/class-reaper.png"
+      },
+      "master_project_path": "design/masters/class-reaper.webp"
+    },
+    "class-renegade": {
+      "paths": {
+        "64": "sprites/64/class-renegade.png",
+        "128": "sprites/128/class-renegade.png",
+        "512": "sprites/master_512/class-renegade.png"
+      },
+      "master_project_path": "design/masters/class-renegade.webp"
+    },
+    "class-rogue": {
+      "paths": {
+        "64": "sprites/64/class-rogue.png",
+        "128": "sprites/128/class-rogue.png",
+        "512": "sprites/master_512/class-rogue.png"
+      },
+      "master_project_path": "design/masters/class-rogue.webp"
+    },
+    "class-sentinel": {
+      "paths": {
+        "64": "sprites/64/class-sentinel.png",
+        "128": "sprites/128/class-sentinel.png",
+        "512": "sprites/master_512/class-sentinel.png"
+      },
+      "master_project_path": "design/masters/class-sentinel.webp"
+    },
+    "class-shinobi": {
+      "paths": {
+        "64": "sprites/64/class-shinobi.png",
+        "128": "sprites/128/class-shinobi.png",
+        "512": "sprites/master_512/class-shinobi.png"
+      },
+      "master_project_path": "design/masters/class-shinobi.webp"
+    },
+    "class-shooter": {
+      "paths": {
+        "64": "sprites/64/class-shooter.png",
+        "128": "sprites/128/class-shooter.png",
+        "512": "sprites/master_512/class-shooter.png"
+      },
+      "master_project_path": "design/masters/class-shooter.webp"
+    },
+    "class-templar": {
+      "paths": {
+        "64": "sprites/64/class-templar.png",
+        "128": "sprites/128/class-templar.png",
+        "512": "sprites/master_512/class-templar.png"
+      },
+      "master_project_path": "design/masters/class-templar.webp"
+    },
+    "class-warlock": {
+      "paths": {
+        "64": "sprites/64/class-warlock.png",
+        "128": "sprites/128/class-warlock.png",
+        "512": "sprites/master_512/class-warlock.png"
+      },
+      "master_project_path": "design/masters/class-warlock.webp"
+    },
+    "class-warrior": {
+      "paths": {
+        "64": "sprites/64/class-warrior.png",
+        "128": "sprites/128/class-warrior.png",
+        "512": "sprites/master_512/class-warrior.png"
+      },
+      "master_project_path": "design/masters/class-warrior.webp"
+    },
+    "class-wizard": {
+      "paths": {
+        "64": "sprites/64/class-wizard.png",
+        "128": "sprites/128/class-wizard.png",
+        "512": "sprites/master_512/class-wizard.png"
+      },
+      "master_project_path": "design/masters/class-wizard.webp"
+    },
+    "dungeon-gate": {
+      "paths": {
+        "64": "sprites/64/dungeon-gate.png",
+        "128": "sprites/128/dungeon-gate.png",
+        "512": "sprites/master_512/dungeon-gate.png"
+      },
+      "master_project_path": "design/masters/dungeon-gate.webp"
+    },
+    "expedition-map": {
+      "paths": {
+        "64": "sprites/64/expedition-map.png",
+        "128": "sprites/128/expedition-map.png",
+        "512": "sprites/master_512/expedition-map.png"
+      },
+      "master_project_path": "design/masters/expedition-map.webp"
+    },
+    "guild-sigil": {
+      "paths": {
+        "64": "sprites/64/guild-sigil.png",
+        "128": "sprites/128/guild-sigil.png",
+        "512": "sprites/master_512/guild-sigil.png"
+      },
+      "master_project_path": "design/masters/guild-sigil.webp"
+    },
+    "item-axe": {
+      "paths": {
+        "64": "sprites/64/item-axe.png",
+        "128": "sprites/128/item-axe.png",
+        "512": "sprites/master_512/item-axe.png"
+      },
+      "master_project_path": "design/masters/item-axe.webp"
+    },
+    "item-belt": {
+      "paths": {
+        "64": "sprites/64/item-belt.png",
+        "128": "sprites/128/item-belt.png",
+        "512": "sprites/master_512/item-belt.png"
+      },
+      "master_project_path": "design/masters/item-belt.webp"
+    },
+    "item-book": {
+      "paths": {
+        "64": "sprites/64/item-book.png",
+        "128": "sprites/128/item-book.png",
+        "512": "sprites/master_512/item-book.png"
+      },
+      "master_project_path": "design/masters/item-book.webp"
+    },
+    "item-boots": {
+      "paths": {
+        "64": "sprites/64/item-boots.png",
+        "128": "sprites/128/item-boots.png",
+        "512": "sprites/master_512/item-boots.png"
+      },
+      "master_project_path": "design/masters/item-boots.webp"
+    },
+    "item-bow": {
+      "paths": {
+        "64": "sprites/64/item-bow.png",
+        "128": "sprites/128/item-bow.png",
+        "512": "sprites/master_512/item-bow.png"
+      },
+      "master_project_path": "design/masters/item-bow.webp"
+    },
+    "item-chest": {
+      "paths": {
+        "64": "sprites/64/item-chest.png",
+        "128": "sprites/128/item-chest.png",
+        "512": "sprites/master_512/item-chest.png"
+      },
+      "master_project_path": "design/masters/item-chest.webp"
+    },
+    "item-dagger": {
+      "paths": {
+        "64": "sprites/64/item-dagger.png",
+        "128": "sprites/128/item-dagger.png",
+        "512": "sprites/master_512/item-dagger.png"
+      },
+      "master_project_path": "design/masters/item-dagger.webp"
+    },
+    "item-earring": {
+      "paths": {
+        "64": "sprites/64/item-earring.png",
+        "128": "sprites/128/item-earring.png",
+        "512": "sprites/master_512/item-earring.png"
+      },
+      "master_project_path": "design/masters/item-earring.webp"
+    },
+    "item-gloves": {
+      "paths": {
+        "64": "sprites/64/item-gloves.png",
+        "128": "sprites/128/item-gloves.png",
+        "512": "sprites/master_512/item-gloves.png"
+      },
+      "master_project_path": "design/masters/item-gloves.webp"
+    },
+    "item-hammer": {
+      "paths": {
+        "64": "sprites/64/item-hammer.png",
+        "128": "sprites/128/item-hammer.png",
+        "512": "sprites/master_512/item-hammer.png"
+      },
+      "master_project_path": "design/masters/item-hammer.webp"
+    },
+    "item-helmet": {
+      "paths": {
+        "64": "sprites/64/item-helmet.png",
+        "128": "sprites/128/item-helmet.png",
+        "512": "sprites/master_512/item-helmet.png"
+      },
+      "master_project_path": "design/masters/item-helmet.webp"
+    },
+    "item-mace": {
+      "paths": {
+        "64": "sprites/64/item-mace.png",
+        "128": "sprites/128/item-mace.png",
+        "512": "sprites/master_512/item-mace.png"
+      },
+      "master_project_path": "design/masters/item-mace.webp"
+    },
+    "item-necklace": {
+      "paths": {
+        "64": "sprites/64/item-necklace.png",
+        "128": "sprites/128/item-necklace.png",
+        "512": "sprites/master_512/item-necklace.png"
+      },
+      "master_project_path": "design/masters/item-necklace.webp"
+    },
+    "item-pistol": {
+      "paths": {
+        "64": "sprites/64/item-pistol.png",
+        "128": "sprites/128/item-pistol.png",
+        "512": "sprites/master_512/item-pistol.png"
+      },
+      "master_project_path": "design/masters/item-pistol.webp"
+    },
+    "item-potion": {
+      "paths": {
+        "64": "sprites/64/item-potion.png",
+        "128": "sprites/128/item-potion.png",
+        "512": "sprites/master_512/item-potion.png"
+      },
+      "master_project_path": "design/masters/item-potion.webp"
+    },
+    "item-quest-scroll": {
+      "paths": {
+        "64": "sprites/64/item-quest-scroll.png",
+        "128": "sprites/128/item-quest-scroll.png",
+        "512": "sprites/master_512/item-quest-scroll.png"
+      },
+      "master_project_path": "design/masters/item-quest-scroll.webp"
+    },
+    "item-ring": {
+      "paths": {
+        "64": "sprites/64/item-ring.png",
+        "128": "sprites/128/item-ring.png",
+        "512": "sprites/master_512/item-ring.png"
+      },
+      "master_project_path": "design/masters/item-ring.webp"
+    },
+    "item-robe": {
+      "paths": {
+        "64": "sprites/64/item-robe.png",
+        "128": "sprites/128/item-robe.png",
+        "512": "sprites/master_512/item-robe.png"
+      },
+      "master_project_path": "design/masters/item-robe.webp"
+    },
+    "item-shield": {
+      "paths": {
+        "64": "sprites/64/item-shield.png",
+        "128": "sprites/128/item-shield.png",
+        "512": "sprites/master_512/item-shield.png"
+      },
+      "master_project_path": "design/masters/item-shield.webp"
+    },
+    "item-spear": {
+      "paths": {
+        "64": "sprites/64/item-spear.png",
+        "128": "sprites/128/item-spear.png",
+        "512": "sprites/master_512/item-spear.png"
+      },
+      "master_project_path": "design/masters/item-spear.webp"
+    },
+    "item-staff": {
+      "paths": {
+        "64": "sprites/64/item-staff.png",
+        "128": "sprites/128/item-staff.png",
+        "512": "sprites/master_512/item-staff.png"
+      },
+      "master_project_path": "design/masters/item-staff.webp"
+    },
+    "item-sword": {
+      "paths": {
+        "64": "sprites/64/item-sword.png",
+        "128": "sprites/128/item-sword.png",
+        "512": "sprites/master_512/item-sword.png"
+      },
+      "master_project_path": "design/masters/item-sword.webp"
+    },
+    "material-beast": {
+      "paths": {
+        "64": "sprites/64/material-beast.png",
+        "128": "sprites/128/material-beast.png",
+        "512": "sprites/master_512/material-beast.png"
+      },
+      "master_project_path": "design/masters/material-beast.webp"
+    },
+    "material-catalyst": {
+      "paths": {
+        "64": "sprites/64/material-catalyst.png",
+        "128": "sprites/128/material-catalyst.png",
+        "512": "sprites/master_512/material-catalyst.png"
+      },
+      "master_project_path": "design/masters/material-catalyst.webp"
+    },
+    "material-cloth": {
+      "paths": {
+        "64": "sprites/64/material-cloth.png",
+        "128": "sprites/128/material-cloth.png",
+        "512": "sprites/master_512/material-cloth.png"
+      },
+      "master_project_path": "design/masters/material-cloth.webp"
+    },
+    "material-essence": {
+      "paths": {
+        "64": "sprites/64/material-essence.png",
+        "128": "sprites/128/material-essence.png",
+        "512": "sprites/master_512/material-essence.png"
+      },
+      "master_project_path": "design/masters/material-essence.webp"
+    },
+    "material-gem": {
+      "paths": {
+        "64": "sprites/64/material-gem.png",
+        "128": "sprites/128/material-gem.png",
+        "512": "sprites/master_512/material-gem.png"
+      },
+      "master_project_path": "design/masters/material-gem.webp"
+    },
+    "material-herb": {
+      "paths": {
+        "64": "sprites/64/material-herb.png",
+        "128": "sprites/128/material-herb.png",
+        "512": "sprites/master_512/material-herb.png"
+      },
+      "master_project_path": "design/masters/material-herb.webp"
+    },
+    "material-insignia": {
+      "paths": {
+        "64": "sprites/64/material-insignia.png",
+        "128": "sprites/128/material-insignia.png",
+        "512": "sprites/master_512/material-insignia.png"
+      },
+      "master_project_path": "design/masters/material-insignia.webp"
+    },
+    "material-leather": {
+      "paths": {
+        "64": "sprites/64/material-leather.png",
+        "128": "sprites/128/material-leather.png",
+        "512": "sprites/master_512/material-leather.png"
+      },
+      "master_project_path": "design/masters/material-leather.webp"
+    },
+    "material-ore": {
+      "paths": {
+        "64": "sprites/64/material-ore.png",
+        "128": "sprites/128/material-ore.png",
+        "512": "sprites/master_512/material-ore.png"
+      },
+      "master_project_path": "design/masters/material-ore.webp"
+    },
+    "material-relic": {
+      "paths": {
+        "64": "sprites/64/material-relic.png",
+        "128": "sprites/128/material-relic.png",
+        "512": "sprites/master_512/material-relic.png"
+      },
+      "master_project_path": "design/masters/material-relic.webp"
+    },
+    "material-stone": {
+      "paths": {
+        "64": "sprites/64/material-stone.png",
+        "128": "sprites/128/material-stone.png",
+        "512": "sprites/master_512/material-stone.png"
+      },
+      "master_project_path": "design/masters/material-stone.webp"
+    },
+    "material-wood": {
+      "paths": {
+        "64": "sprites/64/material-wood.png",
+        "128": "sprites/128/material-wood.png",
+        "512": "sprites/master_512/material-wood.png"
+      },
+      "master_project_path": "design/masters/material-wood.webp"
+    },
+    "resource-crystal": {
+      "paths": {
+        "64": "sprites/64/resource-crystal.png",
+        "128": "sprites/128/resource-crystal.png",
+        "512": "sprites/master_512/resource-crystal.png"
+      },
+      "master_project_path": "design/masters/resource-crystal.webp"
+    },
+    "resource-dungeon-key": {
+      "paths": {
+        "64": "sprites/64/resource-dungeon-key.png",
+        "128": "sprites/128/resource-dungeon-key.png",
+        "512": "sprites/master_512/resource-dungeon-key.png"
+      },
+      "master_project_path": "design/masters/resource-dungeon-key.webp"
+    },
+    "resource-gold": {
+      "paths": {
+        "64": "sprites/64/resource-gold.png",
+        "128": "sprites/128/resource-gold.png",
+        "512": "sprites/master_512/resource-gold.png"
+      },
+      "master_project_path": "design/masters/resource-gold.webp"
+    },
+    "resource-honor-mark": {
+      "paths": {
+        "64": "sprites/64/resource-honor-mark.png",
+        "128": "sprites/128/resource-honor-mark.png",
+        "512": "sprites/master_512/resource-honor-mark.png"
+      },
+      "master_project_path": "design/masters/resource-honor-mark.webp"
+    },
+    "resource-merchant-token": {
+      "paths": {
+        "64": "sprites/64/resource-merchant-token.png",
+        "128": "sprites/128/resource-merchant-token.png",
+        "512": "sprites/master_512/resource-merchant-token.png"
+      },
+      "master_project_path": "design/masters/resource-merchant-token.webp"
+    },
+    "resource-provisions": {
+      "paths": {
+        "64": "sprites/64/resource-provisions.png",
+        "128": "sprites/128/resource-provisions.png",
+        "512": "sprites/master_512/resource-provisions.png"
+      },
+      "master_project_path": "design/masters/resource-provisions.webp"
+    },
+    "resource-tavern-ticket": {
+      "paths": {
+        "64": "sprites/64/resource-tavern-ticket.png",
+        "128": "sprites/128/resource-tavern-ticket.png",
+        "512": "sprites/master_512/resource-tavern-ticket.png"
+      },
+      "master_project_path": "design/masters/resource-tavern-ticket.webp"
+    },
+    "resource-training-token": {
+      "paths": {
+        "64": "sprites/64/resource-training-token.png",
+        "128": "sprites/128/resource-training-token.png",
+        "512": "sprites/master_512/resource-training-token.png"
+      },
+      "master_project_path": "design/masters/resource-training-token.webp"
+    },
+    "resource-xp": {
+      "paths": {
+        "64": "sprites/64/resource-xp.png",
+        "128": "sprites/128/resource-xp.png",
+        "512": "sprites/master_512/resource-xp.png"
+      },
+      "master_project_path": "design/masters/resource-xp.webp"
+    },
+    "status-failed": {
+      "paths": {
+        "64": "sprites/64/status-failed.png",
+        "128": "sprites/128/status-failed.png",
+        "512": "sprites/master_512/status-failed.png"
+      },
+      "master_project_path": "design/masters/status-failed.webp"
+    },
+    "status-locked": {
+      "paths": {
+        "64": "sprites/64/status-locked.png",
+        "128": "sprites/128/status-locked.png",
+        "512": "sprites/master_512/status-locked.png"
+      },
+      "master_project_path": "design/masters/status-locked.webp"
+    },
+    "status-progress": {
+      "paths": {
+        "64": "sprites/64/status-progress.png",
+        "128": "sprites/128/status-progress.png",
+        "512": "sprites/master_512/status-progress.png"
+      },
+      "master_project_path": "design/masters/status-progress.webp"
+    },
+    "status-ready": {
+      "paths": {
+        "64": "sprites/64/status-ready.png",
+        "128": "sprites/128/status-ready.png",
+        "512": "sprites/master_512/status-ready.png"
+      },
+      "master_project_path": "design/masters/status-ready.webp"
+    },
+    "status-saved": {
+      "paths": {
+        "64": "sprites/64/status-saved.png",
+        "128": "sprites/128/status-saved.png",
+        "512": "sprites/master_512/status-saved.png"
+      },
+      "master_project_path": "design/masters/status-saved.webp"
+    },
+    "status-warning": {
+      "paths": {
+        "64": "sprites/64/status-warning.png",
+        "128": "sprites/128/status-warning.png",
+        "512": "sprites/master_512/status-warning.png"
+      },
+      "master_project_path": "design/masters/status-warning.webp"
+    }
   },
-  "reuse": {
-    "base_classes": "/static/img/classes/128/class_{code}.png",
-    "specializations": "/static/assets/extended/classes/specializations/ui_128/specialization_{code}.png",
-    "final_classes": "/static/assets/extended/classes/final_classes/ui_128/final_class_{code}.png",
-    "buildings": "/static/assets/extended/buildings/ui_128/building_{code}.png",
-    "items": "/static/img/items/128/{category}/{slug}.png"
+  "accessibility": "Meaningful content and status must be live HTML text; background illustrations and repeated sprites are decorative and should be hidden from assistive technology.",
+  "icon_maps": {
+    "classes": {
+      "apprentice": "class-apprentice",
+      "warrior": "class-warrior",
+      "rogue": "class-rogue",
+      "mage": "class-mage",
+      "cleric": "class-cleric",
+      "archer": "class-archer",
+      "knight": "class-knight",
+      "blade": "class-blade",
+      "templar": "class-templar",
+      "reaper": "class-reaper",
+      "assassin": "class-assassin",
+      "ninja": "class-ninja",
+      "predator": "class-predator",
+      "shinobi": "class-shinobi",
+      "wizard": "class-wizard",
+      "mentalist": "class-mentalist",
+      "arcane": "class-arcane",
+      "warlock": "class-warlock",
+      "priest": "class-priest",
+      "paladin": "class-paladin",
+      "high_priest": "class-high_priest",
+      "sentinel": "class-sentinel",
+      "ranger": "class-ranger",
+      "shooter": "class-shooter",
+      "patroller": "class-patroller",
+      "renegade": "class-renegade"
+    },
+    "buildings": {
+      "housing": "building-housing",
+      "training_ground": "building-training_ground",
+      "blacksmith": "building-blacksmith",
+      "warehouse": "building-warehouse",
+      "contract_office": "building-contract_office",
+      "scouts": "building-scouts",
+      "tavern": "building-tavern",
+      "market": "building-market",
+      "docks": "building-docks"
+    },
+    "material_families": {
+      "wood": "material-wood",
+      "ore": "material-ore",
+      "stone": "material-stone",
+      "leather": "material-leather",
+      "cloth": "material-cloth",
+      "herb": "material-herb",
+      "essence": "material-essence",
+      "gem": "material-gem",
+      "beast": "material-beast",
+      "relic": "material-relic",
+      "catalyst": "material-catalyst",
+      "insignia": "material-insignia"
+    },
+    "item_icon_groups": {
+      "sword": "item-sword",
+      "axe": "item-axe",
+      "mace": "item-mace",
+      "spear": "item-spear",
+      "dagger": "item-dagger",
+      "bow": "item-bow",
+      "staff": "item-staff",
+      "wand": "item-staff",
+      "book": "item-book",
+      "orb": "item-staff",
+      "pistol": "item-pistol",
+      "crossbow": "item-bow",
+      "shield": "item-shield",
+      "helmet": "item-helmet",
+      "chest": "item-chest",
+      "heavy_armor": "item-chest",
+      "medium_armor": "item-chest",
+      "light_armor": "item-chest",
+      "robe": "item-robe",
+      "gloves": "item-gloves",
+      "boots": "item-boots",
+      "ring": "item-ring",
+      "necklace": "item-necklace",
+      "earring": "item-earring",
+      "belt": "item-belt",
+      "wood": "material-wood",
+      "ore": "material-ore",
+      "stone": "material-stone",
+      "leather": "material-leather",
+      "hide": "material-leather",
+      "cloth": "material-cloth",
+      "herb": "material-herb",
+      "essence": "material-essence",
+      "gem": "material-gem",
+      "crystal": "resource-crystal",
+      "beast": "material-beast",
+      "relic": "material-relic",
+      "catalyst": "material-catalyst",
+      "insignia": "material-insignia",
+      "material": "material-relic",
+      "consumable": "item-potion",
+      "misc": "material-relic",
+      "ancient_relic": "material-relic",
+      "dungeon_key": "resource-dungeon-key",
+      "gold": "resource-gold",
+      "guild_xp": "resource-xp",
+      "xp": "resource-xp",
+      "hammer": "item-hammer",
+      "honor_mark": "resource-honor-mark",
+      "medal": "resource-honor-mark",
+      "merchant_token": "resource-merchant-token",
+      "provisions": "resource-provisions",
+      "quest_scroll": "item-quest-scroll",
+      "tavern_ticket": "resource-tavern-ticket",
+      "training_token": "resource-training-token"
+    },
+    "equipment_slots": {
+      "main_hand": "item-sword",
+      "off_hand": "item-dagger",
+      "shield": "item-shield",
+      "helmet": "item-helmet",
+      "chest": "item-chest",
+      "gloves": "item-gloves",
+      "boots": "item-boots",
+      "earring": "item-earring",
+      "ring": "item-ring",
+      "belt": "item-belt",
+      "necklace": "item-necklace",
+      "weapon": "item-sword",
+      "armor": "item-chest",
+      "accessory": "item-ring"
+    },
+    "menu": {
+      "dashboard": "guild-sigil",
+      "mercenaries": "class-warrior",
+      "tavern": "building-tavern",
+      "professions": "building-training_ground",
+      "missions": "expedition-map",
+      "dungeons": "dungeon-gate",
+      "inventory": "building-warehouse",
+      "blacksmith": "building-blacksmith",
+      "market": "building-market",
+      "docks": "building-docks",
+      "buildings": "building-housing",
+      "class_change": "class-apprentice",
+      "guild_progress": "guild-sigil",
+      "classes": "class-apprentice",
+      "tiers": "material-gem",
+      "codex": "material-relic",
+      "guide": "item-book",
+      "campaigns": "guild-sigil",
+      "tutorial": "item-book",
+      "skills": "class-mage",
+      "achievements": "material-insignia"
+    },
+    "resources": {
+      "gold": "resource-gold",
+      "wood": "material-wood",
+      "ore": "material-ore",
+      "crystals": "resource-crystal",
+      "xp": "resource-xp",
+      "reputation": "guild-sigil"
+    },
+    "mission_types": {
+      "standard": "expedition-map",
+      "combat": "class-warrior",
+      "patrol": "expedition-map",
+      "escort": "class-knight",
+      "hunt": "class-ranger",
+      "exploration": "expedition-map",
+      "investigation": "expedition-map",
+      "defense": "class-sentinel",
+      "rescue": "class-paladin",
+      "contract": "building-contract_office",
+      "story": "item-book",
+      "elite": "boss-crown",
+      "gathering": "material-wood",
+      "long_idle": "status-progress"
+    },
+    "gathering_professions": {
+      "woodcutter": "material-wood",
+      "miner": "material-ore",
+      "herbalist": "material-herb",
+      "leatherworker": "material-leather",
+      "weaver": "material-cloth",
+      "prospector": "material-gem",
+      "reliquary": "material-relic",
+      "alchemist": "material-essence"
+    },
+    "dungeon_biomes": {
+      "mines": "biome-cave",
+      "woods": "biome-forest",
+      "catacombs": "biome-cave",
+      "ruins": "biome-fortress",
+      "fortress": "biome-fortress",
+      "tower": "biome-fortress",
+      "caves": "biome-cave",
+      "swamp": "biome-forest",
+      "sanctuary": "biome-fortress",
+      "portal": "biome-portal",
+      "abyss": "biome-cave",
+      "lost_city": "biome-fortress"
+    },
+    "dungeon_content_types": {
+      "dungeon": "dungeon-gate",
+      "boss": "boss-crown"
+    },
+    "statuses": {
+      "available": "status-ready",
+      "busy": "status-progress",
+      "in_progress": "status-progress",
+      "completed": "status-ready",
+      "ready_to_collect": "status-ready",
+      "failed": "status-failed",
+      "active": "status-ready",
+      "expired": "status-warning",
+      "hired": "status-ready",
+      "dismissed": "status-failed",
+      "locked": "status-locked",
+      "saved": "status-saved",
+      "saving": "status-progress",
+      "save_error": "status-warning"
+    },
+    "actions": {
+      "continue_campaign": "guild-sigil",
+      "new_campaign": "guild-sigil",
+      "recruit": "building-tavern",
+      "start_mission": "expedition-map",
+      "enter_dungeon": "dungeon-gate",
+      "collect": "status-ready",
+      "equip": "item-shield",
+      "upgrade_building": "building-training_ground",
+      "craft": "building-blacksmith",
+      "refine": "building-blacksmith",
+      "salvage": "item-axe",
+      "sell": "building-market",
+      "buy": "building-docks",
+      "class_change": "class-apprentice",
+      "confirm": "status-ready",
+      "cancel": "status-warning",
+      "dismiss": "status-failed",
+      "open_guide": "item-book",
+      "export_save": "status-saved",
+      "import_save": "guild-sigil",
+      "restore_backup": "status-warning"
+    }
   },
-  "accessibility": "Meaningful content and status must be live HTML text; background illustrations and repeated sprites are decorative and should be hidden from assistive technology."
+  "portraits": {
+    "apprentice": "portraits/portrait-apprentice.webp",
+    "warrior": "portraits/portrait-warrior.webp",
+    "rogue": "portraits/portrait-rogue.webp",
+    "mage": "portraits/portrait-mage.webp",
+    "cleric": "portraits/portrait-cleric.webp",
+    "archer": "portraits/portrait-archer.webp",
+    "knight": "portraits/portrait-warrior.webp",
+    "blade": "portraits/portrait-warrior.webp",
+    "templar": "portraits/portrait-warrior.webp",
+    "reaper": "portraits/portrait-warrior.webp",
+    "assassin": "portraits/portrait-rogue.webp",
+    "ninja": "portraits/portrait-rogue.webp",
+    "predator": "portraits/portrait-rogue.webp",
+    "shinobi": "portraits/portrait-rogue.webp",
+    "wizard": "portraits/portrait-mage.webp",
+    "mentalist": "portraits/portrait-mage.webp",
+    "arcane": "portraits/portrait-mage.webp",
+    "warlock": "portraits/portrait-mage.webp",
+    "priest": "portraits/portrait-cleric.webp",
+    "paladin": "portraits/portrait-cleric.webp",
+    "high_priest": "portraits/portrait-cleric.webp",
+    "sentinel": "portraits/portrait-cleric.webp",
+    "ranger": "portraits/portrait-archer.webp",
+    "shooter": "portraits/portrait-archer.webp",
+    "patroller": "portraits/portrait-archer.webp",
+    "renegade": "portraits/portrait-archer.webp"
+  },
+  "fallbacks": {
+    "unknown_class_code": "class-apprentice",
+    "unknown_equipment_group": "item-sword",
+    "unknown_material_family": "material-relic",
+    "unknown_building_effect": "building-housing",
+    "unknown_mission_type": "expedition-map",
+    "unknown_dungeon_biome": "dungeon-gate",
+    "unknown_status": "status-warning",
+    "portrait_missing": "class emblem for the same class code",
+    "rule": "Unknown future content keeps its live localized name and semantic family fallback; never show a broken image or a text-only placeholder for known content."
+  },
+  "license_review": {
+    "new_assets": "Original imagegen output; no third-party visual sources.",
+    "legacy_assets": "Excluded from this desktop sprite mapping; provenance not verified for distribution."
+  }
 }
