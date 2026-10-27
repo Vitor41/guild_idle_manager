@@ -12,7 +12,7 @@ Base: `GDD_DESKTOP_OFFLINE.md`, principalmente as seções 3 a 9 e 13. Esta matr
 | Gameplay end-to-end da seção 13 | Comprovado neste host | `WORK3_QA_DESKTOP.md` e capturas `qa/work3-*.jpg`: mercenário, missão e loot de sucesso/falha, equipamento, construção, Masmorra/Chefe, Mercado, Docas, profissão, forja/desmontagem/refino, progresso, conquista e Codex. |
 | Timers e backend como fonte de verdade | Comprovado | Matriz transacional `tests/test_campaign_service.py`; HTTP com timers ativos em `tests/test_desktop_http_smoke.py`; correção UTC em `app/core/time.py` e serviços. |
 | Conteúdo versionado, sem re-seed em cada abertura | Comprovado | `app/services/campaign_service.py` aplica `apply_initial_campaign_content` apenas ao criar; teste de reabertura e conteúdo em SQLite. |
-| Interface PT-BR e arte offline | Parcial | DA integrada e screenshots nativas; `tests/test_desktop_art.py` verifica manifesto/sprite. Falta revisão textual exaustiva de todas as telas, inclusive conteúdo gerado. |
+| Interface PT-BR e nova identidade visual offline | Parcial; gate visual reprovado pela DA | Sprites e ilustrações locais aparecem nas capturas nativas; `tests/test_desktop_art.py` verifica manifesto/sprite. Porém `app/static/css/main.css` ainda usa a paleta marrom e a tipografia anteriores. A DA comparou capturas instaladas com `docs/art_direction/DESKTOP_VISUAL_SYSTEM.md` e `design/preview/operations-desktop.png`: faltam paleta teal, hierarquia do salão, tratamento das Masmorras e revisão da janela mínima. A iconografia sozinha não cumpre o GDD §7.1. |
 | Backup, exportação, importação e integridade | Comprovado por testes | `tests/test_campaign_service.py` cobre ciclo de vida, `PRAGMA integrity_check`, restauração e saves incompatíveis; diálogos da bridge ficam fora do HTTP. A passagem manual nativa dessas operações é menos extensa que a de gameplay. |
 | Migração de save antigo com backup, mensagem e recuperação | Pendente | Testes cobrem backup antes de migration e restauração automática ao falhar. Falta aviso de sucesso ao jogador na abertura; ajuste solicitado ao DEV. |
 | Atualização/reinstalação preserva saves | Comprovado neste host | `tests/test_desktop_installer.py` e Setup em `%LOCALAPPDATA%` temporário: update gerenciado preserva sentinela de saves. Falta segundo Windows. |
@@ -28,7 +28,7 @@ Base: `GDD_DESKTOP_OFFLINE.md`, principalmente as seções 3 a 9 e 13. Esta matr
 ## Gates pendentes
 
 1. Aviso visível e testado de migração bem-sucedida de save antigo, com pacote reconstruído.
-2. Revisão textual PT-BR de todas as telas e descrições geradas, corrigindo qualquer resíduo em inglês que apareça.
+2. Integração da nova identidade visual nas telas reais, com prioridade para tokens de cor, tipografia/hierarquia do salão, Masmorras e responsividade mínima; depois, nova aprovação da DA e revisão textual PT-BR das telas e descrições geradas.
 3. Instalação e smoke em outro Windows 10/11 x64 limpo, sem Python/PostgreSQL e sem rede, incluindo abertura de campanha e persistência após reinício.
 
 Até esses gates passarem, o GDD não está aceito integralmente. Não fechar nem integrar a branch.
