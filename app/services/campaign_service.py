@@ -85,10 +85,13 @@ class CampaignService:
         head = script.get_current_head()
         if head is None:
             raise RuntimeError("A cadeia Alembic local nao possui uma revisao head.")
+        if not database_path.exists():
+            command.upgrade(config, head)
+            return
         with closing(sqlite3.connect(database_path)) as connection:
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not tables:
-                current = "__empty__"
+                raise ValueError("Save SQLite vazio; arquivo preservado e nao migrado.")
             elif "alembic_version" not in tables:
                 raise ValueError("Save sem revisao Alembic; arquivo preservado e nao migrado.")
             else:
@@ -99,9 +102,6 @@ class CampaignService:
                 if len(revisions) != 1 or not revisions[0]:
                     raise ValueError("Save sem uma revisao Alembic valida; arquivo preservado.")
                 current = revisions[0]
-        if current == "__empty__":
-            command.upgrade(config, head)
-            return
         self._validate_revision_ancestry(script, current, head)
         if current != head:
             self._backup_before_schema_change(database_path, campaign_id, current)
@@ -112,6 +112,47 @@ class CampaignService:
                     (CURRENT_SCHEMA_VERSION, campaign_id),
                 )
                 connection.commit()
+
+    def _validate_campaign_before_open(self, database_path: Path, campaign_id: str) -> None:
+        """Validate an existing save completely before any migration can modify it."""
+        with closing(sqlite3.connect(database_path)) as connection:
+            integrity = connection.execute("PRAGMA integrity_check").fetchone()
+            if not integrity or integrity[0] != "ok":
+                raise ValueError("O save da campanha esta corrompido; arquivo preservado.")
+            tables = {
+                row[0]
+                for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            if "campaign_metadata" not in tables:
+                raise ValueError("O arquivo nao e um save de campanha reconhecido; arquivo preservado.")
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(campaign_metadata)")
+            }
+            required = {"campaign_id", "save_format_version", "schema_version"}
+            if not required.issubset(columns):
+                raise ValueError("Metadados incompletos; arquivo preservado e nao migrado.")
+            rows = connection.execute(
+                "SELECT campaign_id, save_format_version, schema_version FROM campaign_metadata"
+            ).fetchall()
+            if len(rows) != 1 or rows[0][0] != campaign_id:
+                raise ValueError("O identificador interno do save nao corresponde ao arquivo.")
+            if rows[0][1] != 1:
+                raise ValueError("Formato do save da campanha nao suportado; arquivo preservado.")
+            if rows[0][2] > CURRENT_SCHEMA_VERSION:
+                raise ValueError("O save foi criado por uma versao mais recente do aplicativo.")
+            if "alembic_version" not in tables:
+                raise ValueError("Save sem revisao Alembic; arquivo preservado e nao migrado.")
+            revision_rows = connection.execute(
+                "SELECT version_num FROM alembic_version"
+            ).fetchall()
+            if len(revision_rows) != 1 or not revision_rows[0][0]:
+                raise ValueError("Save sem uma revisao Alembic valida; arquivo preservado.")
+            config = self._alembic_config(database_path)
+            script = ScriptDirectory.from_config(config)
+            head = script.get_current_head()
+            if head is None:
+                raise RuntimeError("A cadeia Alembic local nao possui uma revisao head.")
+            self._validate_revision_ancestry(script, revision_rows[0][0], head)
 
     @staticmethod
     def _validate_revision_ancestry(script: ScriptDirectory, current: str, head: str) -> None:
@@ -149,9 +190,10 @@ class CampaignService:
         campaign_id = str(uuid4())
         self.saves_directory.mkdir(parents=True, exist_ok=True)
         database_path = self._path_for(campaign_id)
-        engine = create_database_engine(f"sqlite:///{database_path.as_posix()}")
+        engine = None
         try:
             self._ensure_schema(database_path, campaign_id)
+            engine = create_database_engine(f"sqlite:///{database_path.as_posix()}")
             factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
             with factory() as db:
                 metadata = CampaignMetadata(
@@ -178,14 +220,16 @@ class CampaignService:
                 db.commit()
                 return self._to_info(metadata, database_path)
         except Exception:
-            engine.dispose()
+            if engine is not None:
+                engine.dispose()
             for suffix in ("", "-wal", "-shm"):
                 candidate = Path(f"{database_path}{suffix}")
                 if candidate.exists():
                     candidate.unlink()
             raise
         finally:
-            engine.dispose()
+            if engine is not None:
+                engine.dispose()
 
     def inspect_campaign(self, campaign_id: str) -> CampaignInfo:
         path = self._path_for(campaign_id)
@@ -236,6 +280,7 @@ class CampaignService:
         path = self._path_for(campaign_id)
         if not path.is_file():
             raise FileNotFoundError("Save da campanha nao encontrado.")
+        self._validate_campaign_before_open(path, str(UUID(campaign_id)))
         self._ensure_schema(path, str(UUID(campaign_id)))
         info = self.inspect_campaign(campaign_id)
         with _activation_lock:

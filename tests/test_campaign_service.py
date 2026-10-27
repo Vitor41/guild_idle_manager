@@ -212,9 +212,42 @@ asyncio.run(main())
             campaigns = CampaignService(saves)
 
             self.assertEqual(campaigns.list_campaigns(), [])
-            with self.assertRaisesRegex(ValueError, "sem revisao Alembic"):
+            with self.assertRaisesRegex(ValueError, "Metadados incompletos"):
                 campaigns.activate_campaign(campaign_id)
             self.assertEqual(database_path.read_bytes(), before)
+            self.assertFalse((Path(temp_dir) / "backups").exists())
+
+    def test_empty_sqlite_file_is_rejected_before_migration_without_changes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            database_path.touch()
+            before = database_path.read_bytes()
+            campaigns = CampaignService(saves)
+
+            with self.assertRaisesRegex(ValueError, "nao e um save de campanha reconhecido"):
+                campaigns.activate_campaign(campaign_id)
+            self.assertEqual(database_path.read_bytes(), before)
+            self.assertFalse((Path(temp_dir) / "backups").exists())
+
+    def test_mismatched_internal_campaign_id_is_rejected_without_changes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Campanha valida")
+            different_id = str(uuid4())
+            with closing(sqlite3.connect(campaign.database_path)) as connection:
+                connection.execute(
+                    "UPDATE campaign_metadata SET campaign_id = ? WHERE campaign_id = ?",
+                    (different_id, campaign.campaign_id),
+                )
+                connection.commit()
+            before = campaign.database_path.read_bytes()
+
+            with self.assertRaisesRegex(ValueError, "identificador interno"):
+                campaigns.activate_campaign(campaign.campaign_id)
+            self.assertEqual(campaign.database_path.read_bytes(), before)
             self.assertFalse((Path(temp_dir) / "backups").exists())
 
     def test_unknown_future_revision_is_rejected_before_backup_or_upgrade(self):
