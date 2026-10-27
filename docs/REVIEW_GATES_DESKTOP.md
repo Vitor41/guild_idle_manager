@@ -115,3 +115,9 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - O executável congelado em `dist/GuildIdleManager/GuildIdleManager.exe --smoke` retornou código 0 e confirmou SQLite, Alembic, conteúdo inicial, catálogo de nomes e manifesto local de arte. Foi usado um arquivo de resultado temporário, fora dos saves reais.
 - Em `%LOCALAPPDATA%` e `%TEMP%` isolados, o script distribuído em `dist/GuildIdleManager-DEV/Install-Desktop-Dev.ps1` instalou o pacote, repetiu a atualização gerenciada e preservou um save sentinela em `%LOCALAPPDATA%/GuildIdleManager/saves/`.
 - Decisão: aceitar essas evidências do caminho de instalação por pasta; não aceitar ainda o arquivo único IExpress, o smoke sem Python/rede em máquina limpa, nem a janela nativa. Gate 2 e Gate 3 permanecem abertos.
+
+### 2026-10-27 — Suíte desktop e lacuna de gameplay
+
+- Revisão independente no checkout compartilhado: `APP_MODE=desktop .venv-desktop\Scripts\python.exe -m unittest discover -s tests -q` terminou com 63 testes em 179,501 s, sem falhas e com um teste ignorado. O runtime nativo permanece opt-in; o resultado da suíte não prova que a janela carregou.
+- `tests/test_desktop_http_smoke.py` verifica GET de telas, referências de sprites e somente duas mutações auxiliares (tutorial e preferência de confirmação). Ainda não cobre os fluxos end-to-end de gameplay enumerados na seção 13 do GDD.
+- Decisão: regressão automatizada atual verde, mas Gate 3 aberto até haver evidência isolada de cada sistema, loot manual e timers, além do runtime nativo e do instalador final.
