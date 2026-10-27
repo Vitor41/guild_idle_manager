@@ -20,12 +20,15 @@ from app.database.connection import SessionLocal, configure_database
 from app.core.dependencies import CampaignPlayer
 from app.models import (
     CampaignMetadata,
+    DungeonRun,
     DungeonTemplate,
     GuildItemInstance,
     GuildInventoryItem,
     ItemTemplate,
+    Mercenary,
     MissionTemplate,
     MissionTemplateItemDrop,
+    MissionRun,
     User,
 )
 from app.repositories.building_repository import get_guild_building_by_effect
@@ -127,6 +130,11 @@ asyncio.run(main())
             self.assertEqual(guild.name, "Guilda Sul")
             self.assertIsNotNone(resources)
             self.assertEqual(resources.gold, 100)
+            self.assertEqual(db.scalar(select(func.count(Mercenary.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(GuildInventoryItem.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(GuildItemInstance.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(MissionRun.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(DungeonRun.id))), 0)
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -142,9 +150,22 @@ asyncio.run(main())
             preferences.confirmation_preferences = '{"dismiss_mercenary":false}'
             db.commit()
 
-        reopened = CampaignService(temp_path / "saves").inspect_campaign(first.campaign_id)
+        campaigns.activate_campaign(second.campaign_id)
+        with SessionLocal() as db:
+            self.assertEqual(db.scalar(select(func.count(Mercenary.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(GuildInventoryItem.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(GuildItemInstance.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(MissionRun.id))), 0)
+            self.assertEqual(db.scalar(select(func.count(DungeonRun.id))), 0)
+
+        reopened = campaigns.activate_campaign(first.campaign_id)
         self.assertEqual(reopened.campaign_id, first.campaign_id)
         self.assertEqual(reopened.campaign_name, "Campanha Norte")
+        with SessionLocal() as db:
+            self.assertEqual(db.scalar(select(func.count(Mercenary.id))), 2)
+            self.assertGreater(db.scalar(select(func.count(GuildInventoryItem.id))), 0)
+            self.assertGreater(db.scalar(select(func.count(MissionRun.id))), 0)
+            self.assertGreater(db.scalar(select(func.count(DungeonRun.id))), 0)
         campaigns.close_active_campaign(first.campaign_id)
         closed = campaigns.inspect_campaign(first.campaign_id)
         self.assertEqual(closed.last_session_state, "closed")
@@ -154,6 +175,65 @@ asyncio.run(main())
             preferences = db.get(CampaignMetadata, first.campaign_id)
             self.assertEqual(preferences.tutorial_status, "completed")
             self.assertEqual(preferences.confirmation_preferences, '{"dismiss_mercenary":false}')
+            self.assertEqual(db.scalar(select(func.count(Mercenary.id))), 2)
+            self.assertGreater(db.scalar(select(func.count(GuildInventoryItem.id))), 0)
+            self.assertGreater(db.scalar(select(func.count(MissionRun.id))), 0)
+            self.assertGreater(db.scalar(select(func.count(DungeonRun.id))), 0)
+
+    def test_listing_campaigns_does_not_migrate_or_back_up_saves(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            campaigns = CampaignService(saves)
+            command.upgrade(campaigns._alembic_config(database_path), "c9d0e1f2a3b4")
+            before = database_path.read_bytes()
+
+            self.assertEqual(campaigns.list_campaigns(), [])
+            self.assertEqual(database_path.read_bytes(), before)
+            self.assertFalse((Path(temp_dir) / "backups").exists())
+
+    def test_partial_unversioned_save_is_rejected_without_stamping_or_changes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            with closing(sqlite3.connect(database_path)) as connection:
+                connection.execute(
+                    "CREATE TABLE campaign_metadata "
+                    "(campaign_id TEXT PRIMARY KEY, campaign_name TEXT, schema_version INTEGER, content_version INTEGER)"
+                )
+                connection.execute("INSERT INTO campaign_metadata VALUES (?, ?, ?, ?)", (campaign_id, "Parcial", 1, 0))
+                connection.execute("CREATE TABLE guilds (id INTEGER PRIMARY KEY, campaign_id TEXT)")
+                connection.commit()
+            before = database_path.read_bytes()
+            campaigns = CampaignService(saves)
+
+            self.assertEqual(campaigns.list_campaigns(), [])
+            with self.assertRaisesRegex(ValueError, "sem revisao Alembic"):
+                campaigns.activate_campaign(campaign_id)
+            self.assertEqual(database_path.read_bytes(), before)
+            self.assertFalse((Path(temp_dir) / "backups").exists())
+
+    def test_unknown_future_revision_is_rejected_before_backup_or_upgrade(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            campaigns = CampaignService(saves)
+            command.upgrade(campaigns._alembic_config(database_path), "c9d0e1f2a3b4")
+            with closing(sqlite3.connect(database_path)) as connection:
+                connection.execute("UPDATE alembic_version SET version_num = 'future_revision_000000000000'")
+                connection.commit()
+            before = database_path.read_bytes()
+
+            with self.assertRaisesRegex(ValueError, "revisao Alembic desconhecida"):
+                campaigns._ensure_schema(database_path, campaign_id)
+            self.assertEqual(database_path.read_bytes(), before)
+            self.assertFalse((Path(temp_dir) / "backups").exists())
 
     def test_upgrade_from_previous_alembic_revision_keeps_data_and_makes_backup(self):
         with tempfile.TemporaryDirectory() as temp_dir:

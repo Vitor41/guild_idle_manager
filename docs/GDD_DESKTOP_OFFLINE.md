@@ -148,6 +148,8 @@ Preferências que hoje pertencem ao usuário, como estado do tutorial e escolhas
 - Atualização do aplicativo não apaga saves. Atualização de schema deve ser transacional, com backup restaurável.
 - Toda mensagem de sucesso de uma ação deve vir depois do commit; erro deve reverter a transação.
 
+**Pendência explícita para o Trabalho 2:** o Gate 1 cria um backup antes da migração de schema, mas ainda não testa nem garante restauração automática do arquivo original quando uma migration falha. Até concluir rollback/restauração e seu teste de falha, o backup é apenas uma cópia preventiva; não declarar recovery de migration como pronto.
+
 ### 4.4 Conteúdo e seeds
 
 Hoje `app/main.py` executa no startup seeds globais, conteúdo massivo, refinamentos e balance passes. Essa execução recorrente é acoplamento importante: não deve continuar reescrevendo conteúdo em cada abertura do aplicativo.
@@ -318,7 +320,7 @@ Steam, auto-update e versão online não são requisitos da DEV offline.
 ### Trabalho 2 — Janela desktop, ciclo de vida e saves
 
 - Criar launcher pywebview + FastAPI local em loopback, healthcheck, tratamento de encerramento e janela de campanhas.
-- Implementar backup/export/import, migração/restauração de saves e diretórios de usuário.
+- Implementar backup/export/import, migração/restauração de saves e diretórios de usuário, incluindo rollback automático validado quando uma migration falhar.
 - Implementar `ClockGuard`, regra idle, recuperação após crash e matriz de relógio da seção 6.
 - Ajustar base route/menu e telas essenciais para fluxo sem login.
 - Criar launcher DEV que executa do código-fonte sem reinstalação e sem PostgreSQL.
