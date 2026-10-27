@@ -265,9 +265,9 @@ Fluxo de desenvolvimento esperado:
 
 ```powershell
 cd "C:\Users\vitor\Guild Idle Manager\App GIM"
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-desktop-dev.txt
-.\.venv\Scripts\python.exe -m app.desktop
+& 'C:\Users\vitor\Guild Idle Manager\.venv\Scripts\python.exe' -m venv .venv-desktop
+.\.venv-desktop\Scripts\python.exe -m pip install -r requirements-desktop-dev.txt
+.\.venv-desktop\Scripts\python.exe -m app.desktop
 ```
 
 O agente deve criar `requirements-desktop-dev.txt` (ou equivalente) para incluir dependências desktop/dev sem forçar instalação de PostgreSQL. Criar `Iniciando_jogo_dev.bat` para ativar o ambiente existente e iniciar a janela. O script deve **não** executar `pip install` nem migration Postgres a cada abertura.
@@ -341,25 +341,24 @@ Trabalhos 1 e 2 podem ser combinados se o agente conseguir manter os testes clar
 
 ```powershell
 cd "C:\Users\vitor\Guild Idle Manager\App GIM"
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements-desktop-dev.txt
+& 'C:\Users\vitor\Guild Idle Manager\.venv\Scripts\python.exe' -m venv .venv-desktop
+.\.venv-desktop\Scripts\python.exe -m pip install -r requirements-desktop-dev.txt
 ```
 
 ### Rodar direto do código
 
 ```powershell
-.\.venv\Scripts\python.exe -m app.desktop
+.\.venv-desktop\Scripts\python.exe -m app.desktop
 ```
 
 ### Testes
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe scripts\balance\validate_content.py
-.\.venv\Scripts\python.exe scripts\prd_qa.py
-.\.venv\Scripts\python.exe scripts\prd2_progression_qa.py
-.\.venv\Scripts\python.exe scripts\prd3_dungeons_bosses_qa.py
+.\.venv-desktop\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv-desktop\Scripts\python.exe scripts\balance\validate_content.py
+.\.venv-desktop\Scripts\python.exe scripts\prd_qa.py
+.\.venv-desktop\Scripts\python.exe scripts\prd2_progression_qa.py
+.\.venv-desktop\Scripts\python.exe scripts\prd3_dungeons_bosses_qa.py
 ```
 
 O agente deve conferir os nomes reais dos scripts antes de copiar comandos para README/CI. QA que atualmente exige PostgreSQL deverá receber modo SQLite ou fixture isolada; testes de gameplay não podem depender de dados da guilda real do usuário.
@@ -367,7 +366,7 @@ O agente deve conferir os nomes reais dos scripts antes de copiar comandos para 
 ### Build de desenvolvimento
 
 ```powershell
-.\.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm packaging\GuildIdleManager.spec
+.\.venv-desktop\Scripts\python.exe -m PyInstaller --clean --noconfirm packaging\GuildIdleManager.spec
 ```
 
 O caminho/spec final fica a cargo da implementação e deve ser documentado. O instalador só é aceitável após testar em ambiente limpo; durante desenvolvimento diário, rodar diretamente da pasta do código.
