@@ -3,7 +3,7 @@ from math import floor
 from random import randint
 from urllib.parse import urlencode
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.guild import Guild, GuildResources
@@ -472,7 +472,11 @@ def start_mission(
     if mission_template.mission_type == "long_idle":
         if parsed_multiplier != 1:
             raise MissionError("Missões longas não aceitam multiplicador.")
-        db.execute(select(func.pg_advisory_xact_lock(guild.id, 350044)))
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            db.execute(select(func.pg_advisory_xact_lock(guild.id, 350044)))
+        elif db.bind is not None and db.bind.dialect.name == "sqlite":
+            # SQLite has no advisory locks; a no-op write serializes competing starts per DB.
+            db.execute(text("UPDATE guilds SET id = id WHERE id = :guild_id"), {"guild_id": guild.id})
         if not can_start_long_idle_mission(count_active_long_idle_runs(db, guild.id)):
             raise MissionError("O limite de 3 missões longas ativas foi atingido.")
 

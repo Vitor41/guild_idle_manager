@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.dependencies import DbSession, get_current_user
+from app.models.campaign import CampaignMetadata
 from app.models.user import User
 from app.services.guild_service import get_current_guild_context
 
@@ -30,6 +31,12 @@ TUTORIAL_STEPS = (
 
 
 def _set_status(db: DbSession, user: User, status: str) -> None:
+    if isinstance(user.id, str):
+        campaign = db.get(CampaignMetadata, user.id)
+        if campaign is not None:
+            campaign.tutorial_status = status
+            db.commit()
+        return
     user.tutorial_status = status
     db.add(user)
     db.commit()
@@ -39,9 +46,7 @@ def _set_status(db: DbSession, user: User, status: str) -> None:
 def start(db: DbSession, current_user: User | None = Depends(get_current_user)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
-    current_user.tutorial_status = "in_progress"
-    db.add(current_user)
-    db.commit()
+    _set_status(db, current_user, "in_progress")
     return RedirectResponse("/tutorial?step=1", status_code=303)
 
 

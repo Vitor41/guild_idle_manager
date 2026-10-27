@@ -3,7 +3,7 @@ from math import floor
 from random import randint
 from urllib.parse import urlencode
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.dungeon import DungeonRun, DungeonTemplate
@@ -423,7 +423,11 @@ def start_dungeon(
     if dungeon_template is None:
         raise DungeonError("Masmorra indisponível.")
     validate_dungeon_requirements(db, guild, dungeon_template)
-    db.execute(select(func.pg_advisory_xact_lock(guild.id, dungeon_template.id)))
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        db.execute(select(func.pg_advisory_xact_lock(guild.id, dungeon_template.id)))
+    elif db.bind is not None and db.bind.dialect.name == "sqlite":
+        # SQLite has no advisory locks; serialize starts through the campaign's guild row.
+        db.execute(text("UPDATE guilds SET id = id WHERE id = :guild_id"), {"guild_id": guild.id})
     if get_active_dungeon_run_for_template(db, guild.id, dungeon_template.id) is not None:
         raise DungeonError("Esta masmorra está fechada enquanto outro grupo da guilda está em exploração.")
 

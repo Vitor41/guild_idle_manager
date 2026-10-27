@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -5,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.models.guild import Guild
+from app.models.campaign import CampaignMetadata
 from app.models.user import User
 from app.repositories.guild_repository import get_guild_by_user_id
 from app.repositories.user_repository import get_user_by_id
@@ -23,7 +25,29 @@ from app.services.session_service import (
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-def get_current_user(request: Request, db: DbSession) -> User | None:
+@dataclass(frozen=True)
+class CampaignPlayer:
+    id: str
+    username: str
+    is_admin: bool = False
+    tutorial_status: str = "pending"
+    confirmation_preferences: str = "{}"
+
+
+def get_current_user(request: Request, db: DbSession) -> User | CampaignPlayer | None:
+    if getattr(request.app.state, "app_mode", "web") == "desktop":
+        campaign = getattr(request.app.state, "active_campaign", None)
+        if campaign is None:
+            return None
+        metadata = db.get(CampaignMetadata, campaign.campaign_id)
+        if metadata is None:
+            return None
+        return CampaignPlayer(
+            id=metadata.campaign_id,
+            username=metadata.campaign_name,
+            tutorial_status=metadata.tutorial_status,
+            confirmation_preferences=metadata.confirmation_preferences,
+        )
     request.state.offline_summary = request.session.pop("offline_summary", None)
     user_id = request.session.get("user_id")
     if user_id is None:
@@ -59,5 +83,9 @@ def get_current_user(request: Request, db: DbSession) -> User | None:
     return user
 
 
-def get_current_guild(db: Session, current_user: User) -> Guild | None:
+def get_current_guild(db: Session, current_user: User | CampaignPlayer) -> Guild | None:
+    if isinstance(current_user, CampaignPlayer):
+        from sqlalchemy import select
+
+        return db.scalar(select(Guild).where(Guild.campaign_id == current_user.id))
     return get_guild_by_user_id(db, current_user.id)

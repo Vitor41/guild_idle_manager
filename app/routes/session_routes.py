@@ -6,6 +6,7 @@ from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.core.dependencies import DbSession
 from app.core.forms import read_form_fields
+from app.models.campaign import CampaignMetadata
 
 
 router = APIRouter(prefix="/session")
@@ -35,7 +36,14 @@ async def confirmation_preference(
     except (TypeError, json.JSONDecodeError):
         preferences = {}
     preferences[key] = False
-    current_user.confirmation_preferences = json.dumps(preferences, separators=(",", ":"))
-    db.add(current_user)
+    serialized = json.dumps(preferences, separators=(",", ":"))
+    if isinstance(current_user.id, str):
+        campaign = db.get(CampaignMetadata, current_user.id)
+        if campaign is None:
+            return Response(status_code=404)
+        campaign.confirmation_preferences = serialized
+    else:
+        current_user.confirmation_preferences = serialized
+        db.add(current_user)
     db.commit()
     return Response(status_code=204)
