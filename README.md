@@ -26,14 +26,17 @@ Execute os comandos na raiz do projeto, a pasta App GIM onde este README está. 
 ./Iniciando_jogo_dev.bat
 ```
 
-Rode a suíte completa e gere o ZIP portátil e o instalador offline:
+Rode a suíte completa:
 
 ```powershell
 $env:APP_MODE = 'desktop'
 $env:DATABASE_URL = 'sqlite:///:memory:'
 ./.venv-desktop/Scripts/python.exe -m unittest discover -s tests -v
-Remove-Item Env:DATABASE_URL
-Remove-Item Env:APP_MODE
+```
+
+Para gerar o ZIP portátil e o instalador offline, abra uma nova sessão do PowerShell na raiz do projeto:
+
+```powershell
 ./scripts/build_desktop_dev.ps1
 ./dist/GuildIdleManager-DEV-Setup.exe
 ```
