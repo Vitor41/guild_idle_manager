@@ -128,3 +128,9 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - Verificação independente dos commits: `APP_MODE=desktop .venv-desktop\Scripts\python.exe -m unittest tests.test_desktop_art tests.test_desktop_http_smoke tests.test_desktop_installer -q` passou (9/9, 48,312 s). O teste ampliado de duas campanhas e transações de gameplay também passou isoladamente (22,825 s).
 - O executável congelado `dist/GuildIdleManager/GuildIdleManager.exe --smoke` passou com diretório de trabalho e `%LOCALAPPDATA%` temporários e `PATH` limitado ao Windows/System32: código 0; confirmou SQLite, Alembic, conteúdo, nomes e manifesto. Isso não equivale a uma máquina limpa nem valida a janela.
 - O ZIP atual não possui Setup IExpress correspondente: a geração atual saiu com código 1. O smoke nativo chega a `shown` e inicializa WebView2 em STA, mas a página fica em `about:blank`, sem `loaded`, DOM ou bridge. Decisão: aceitar evidências parciais dos commits; Gate 2 e Gate 3 continuam abertos.
+
+### 2026-10-27 — Regressão integral após Work 3
+
+- Verificação independente: `APP_MODE=desktop .venv-desktop\Scripts\python.exe -m unittest discover -s tests -p 'test_*.py' -q` passou: 64 testes em 204,466 s, sem falhas, com 1 teste ignorado (smoke da janela nativa opt-in).
+- A instrumentação provisória do smoke nativo chama `EnsureCoreWebView2Async` após o construtor do `EdgeChrome`, que já chama essa função. DEV foi orientado a repetir o diagnóstico sem essa segunda chamada e com uma execução sem monkey patch antes de concluir causa raiz.
+- Esta evidência sustenta a regressão automatizada, não o carregamento da janela, a interação visual, o Setup atual ou a instalação em máquina limpa. Gate 2 e Gate 3 permanecem abertos.
