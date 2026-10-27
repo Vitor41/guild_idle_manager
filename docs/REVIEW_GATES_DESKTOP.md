@@ -134,3 +134,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - Verificação independente: `APP_MODE=desktop .venv-desktop\Scripts\python.exe -m unittest discover -s tests -p 'test_*.py' -q` passou: 64 testes em 204,466 s, sem falhas, com 1 teste ignorado (smoke da janela nativa opt-in).
 - A instrumentação provisória do smoke nativo chama `EnsureCoreWebView2Async` após o construtor do `EdgeChrome`, que já chama essa função. DEV foi orientado a repetir o diagnóstico sem essa segunda chamada e com uma execução sem monkey patch antes de concluir causa raiz.
 - Esta evidência sustenta a regressão automatizada, não o carregamento da janela, a interação visual, o Setup atual ou a instalação em máquina limpa. Gate 2 e Gate 3 permanecem abertos.
+
+### 2026-10-27 — Setup atual e isolamento do bloqueio nativo
+
+- Commits DEV revisados: `8f2ae2e` (espera pelo IExpress e relatório de instalação) e `9f1ace9` (sonda nativa com diagnóstico opt-in). O checkout permaneceu na branch `feature/desktop-offline`, sem worktree.
+- Hashes dos artefatos atuais conferidos independentemente: ZIP `7A8B728912385BACF690341E7B7939DBBAD5245F83E75763A8B36E8E528E4770`; Setup `E8E31FD998A907331474E19CFA8C7793E5271E92B08BFE80C5BCDECC0A501AB0`. O relatório DEV registra instalação e atualização isoladas, save preservado e 856 arquivos instalados idênticos ao bundle; isto não substitui a validação em outro Windows limpo.
+- A sonda nativa sem instrumentação ainda falhou antes de `loaded`. Uma janela mínima com HTTP local e outra com HTML inline também não chegaram a `loaded`; a consulta de DOM não concluiu. FastAPI, CSP e dados do jogo não explicam sozinhos a falha. A causa no caminho pywebview/WebView2 deste host permanece indeterminada.
+- Decisão: aceitar o Setup DEV como artefato reproduzível para o teste posterior, **não** aprovar o aplicativo ou o Gate 2/3 sem DOM, bridge, fluxo de campanha e evidência visual em janela própria.
