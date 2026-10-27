@@ -10,7 +10,7 @@ class DesktopHttpSmokeTests(unittest.TestCase):
     def test_gameplay_pages_and_mutations_work_through_loopback_without_http_sessions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             script = r'''
-import gc, http.client, json, os, socket, tempfile, threading, time
+import gc, http.client, json, os, re, socket, tempfile, threading, time
 from pathlib import Path
 from datetime import datetime, timezone
 os.environ["APP_MODE"] = "desktop"
@@ -84,6 +84,11 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b'data-desktop-class="' in rendered_pages[f"/mercenaries/{mercenary_id}"]
         assert b'data-desktop-item-slot="helmet"' in rendered_pages[f"/mercenaries/{mercenary_id}"]
         assert b'data-desktop-item-group="' in rendered_pages["/inventory"]
+        assert b"/static/static/" not in b"".join(rendered_pages.values())
+        sprite_refs = re.findall(rb"(/static/assets/desktop/sprites/[^\s\"'>]+)", b" ".join(rendered_pages.values()))
+        assert sprite_refs, "desktop HTML should point directly to a bundled semantic sprite"
+        sprite_status, _location, sprite_body = request(sprite_refs[0].decode("ascii"))
+        assert sprite_status == 200 and sprite_body.startswith(b"\x89PNG"), (sprite_status, sprite_refs[0])
         status, _location, manifest_body = request("/static/assets/desktop/manifest.json")
         assert status == 200
         manifest = json.loads(manifest_body)

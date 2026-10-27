@@ -81,48 +81,6 @@
     sacerdote: "high_priest",
   };
 
-  const itemAliases = {
-    wood: "material-wood",
-    ore: "material-ore",
-    stone: "material-stone",
-    leather: "material-leather",
-    hide: "material-leather",
-    cloth: "material-cloth",
-    herb: "material-herb",
-    essence: "material-essence",
-    gem: "material-gem",
-    beast: "material-beast",
-    relic: "material-relic",
-    catalyst: "material-catalyst",
-    insignia: "material-insignia",
-    crystal: "resource-crystal",
-  };
-
-  const slotAliases = {
-    main_hand: "item-sword",
-    off_hand: "item-shield",
-    helmet: "item-helmet",
-    chest: "item-chest",
-    gloves: "item-gloves",
-    boots: "item-boots",
-    shield: "item-shield",
-    necklace: "item-necklace",
-    earring: "item-earring",
-    ring: "item-ring",
-    belt: "item-belt",
-  };
-
-  const statusAliases = {
-    active: "status-ready",
-    available: "status-ready",
-    saved: "status-saved",
-    busy: "status-progress",
-    locked: "status-locked",
-    expired: "status-warning",
-    failed: "status-failed",
-    warning: "status-warning",
-  };
-
   function installEntityIcon(element, key, spriteUrl) {
     const url = spriteUrl(key);
     if (!url || element.querySelector(".desktop-entity-art")) return;
@@ -145,17 +103,18 @@
         const path = manifest.assets?.[key]?.path;
         return path ? new URL(path, base).href : null;
       };
+      const iconMaps = manifest.icon_maps || {};
 
       for (const element of document.querySelectorAll("[data-desktop-class]")) {
         const code = normalizeKey(element.dataset.desktopClass);
         const canonical = classAliases[code] || code;
-        const key = `class-${canonical}`;
+        const key = iconMaps.classes?.[canonical] || `class-${canonical}`;
         if (manifest.sprites?.[key]) installEntityIcon(element, key, spriteUrl);
       }
 
       for (const element of document.querySelectorAll("[data-desktop-building]")) {
         const code = normalizeKey(element.dataset.desktopBuilding);
-        const key = `building-${code}`;
+        const key = iconMaps.buildings?.[code] || `building-${code}`;
         if (manifest.sprites?.[key]) installEntityIcon(element, key, spriteUrl);
       }
 
@@ -164,22 +123,17 @@
         const family = normalizeKey(element.dataset.desktopItemFamily);
         const slot = normalizeKey(element.dataset.desktopItemSlot);
         const candidates = [
-          itemAliases[group] || `item-${group}`,
-          itemAliases[family] || `material-${family}`,
-          slotAliases[slot],
+          iconMaps.item_icon_groups?.[group],
+          iconMaps.material_families?.[family],
+          iconMaps.equipment_slots?.[slot],
         ];
         const key = candidates.find((candidate) => candidate && manifest.sprites?.[candidate]);
         if (key) installEntityIcon(element, key, spriteUrl);
       }
 
-      const resourceAliases = {
-        gold: "resource-gold",
-        wood: "material-wood",
-        ore: "material-ore",
-        crystal: "resource-crystal",
-      };
       for (const element of document.querySelectorAll("[data-desktop-resource]")) {
-        const key = resourceAliases[element.dataset.desktopResource];
+        const resource = normalizeKey(element.dataset.desktopResource);
+        const key = iconMaps.resources?.[resource] || iconMaps.item_icon_groups?.[resource];
         const url = key && spriteUrl(key);
         if (url && !element.querySelector(".desktop-resource-art")) {
           element.prepend(makeImage(url, "desktop-resource-art"));
@@ -188,7 +142,7 @@
 
       for (const element of document.querySelectorAll(".status-badge")) {
         const status = [...element.classList].find((className) => className.startsWith("status-"))?.slice(7);
-        const key = statusAliases[status];
+        const key = iconMaps.statuses?.[normalizeKey(status)];
         const url = key && spriteUrl(key);
         if (url && !element.querySelector(".desktop-status-art")) {
           element.prepend(makeImage(url, "desktop-status-art"));
