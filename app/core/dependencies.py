@@ -34,20 +34,18 @@ class CampaignPlayer:
     confirmation_preferences: str = "{}"
 
 
-def get_current_user(request: Request, db: DbSession) -> User | CampaignPlayer | None:
+def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | None:
+    if getattr(request.app.state, "app_mode", "web") != "desktop":
+        return None
+    campaign = getattr(request.app.state, "active_campaign", None)
+    if campaign is None:
+        return None
+    return db.get(CampaignMetadata, campaign.campaign_id)
+
+
+def get_current_user(request: Request, db: DbSession) -> User | None:
     if getattr(request.app.state, "app_mode", "web") == "desktop":
-        campaign = getattr(request.app.state, "active_campaign", None)
-        if campaign is None:
-            return None
-        metadata = db.get(CampaignMetadata, campaign.campaign_id)
-        if metadata is None:
-            return None
-        return CampaignPlayer(
-            id=metadata.campaign_id,
-            username=metadata.campaign_name,
-            tutorial_status=metadata.tutorial_status,
-            confirmation_preferences=metadata.confirmation_preferences,
-        )
+        return None
     request.state.offline_summary = request.session.pop("offline_summary", None)
     user_id = request.session.get("user_id")
     if user_id is None:
@@ -81,6 +79,20 @@ def get_current_user(request: Request, db: DbSession) -> User | CampaignPlayer |
         request.session["session_global_seconds"] = SESSION_GLOBAL_SECONDS
         request.session["session_idle_seconds"] = SESSION_IDLE_SECONDS
     return user
+
+
+def get_current_player(request: Request, db: DbSession) -> User | CampaignPlayer | None:
+    if getattr(request.app.state, "app_mode", "web") != "desktop":
+        return get_current_user(request, db)
+    campaign = get_current_campaign(request, db)
+    if campaign is None:
+        return None
+    return CampaignPlayer(
+        id=campaign.campaign_id,
+        username=campaign.campaign_name,
+        tutorial_status=campaign.tutorial_status,
+        confirmation_preferences=campaign.confirmation_preferences,
+    )
 
 
 def get_current_guild(db: Session, current_user: User | CampaignPlayer) -> Guild | None:

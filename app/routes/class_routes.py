@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.core.dependencies import DbSession, get_current_user
+from app.core.dependencies import DbSession, get_current_player
 from app.models.user import User
 from app.services.class_service import get_class_guide_context
 from app.services.guild_service import get_current_guild_context
@@ -18,7 +18,7 @@ templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "tem
 def classes_index(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)

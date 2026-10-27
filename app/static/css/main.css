@@ -2292,3 +2292,4 @@ html { scroll-behavior: smooth; }
   .mission-card-info-footer { grid-template-columns: 1fr; }
   .salvage-preview { grid-template-columns: 1fr; }
 }
+.desktop-clock-warning { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #c6a25c; color: #f0d99f; background: #302719; }

@@ -57,11 +57,12 @@
               </div>
             </div>
             <div class="topbar-stats">
-              <span><small>Usuário</small>{{ current_user.username }}</span>
+              <span><small>{% if request.app.state.app_mode == 'desktop' %}Campanha{% else %}Usuário{% endif %}</small>{{ current_user.username }}</span>
               <span><small>Nível</small>{{ guild.level if guild is defined and guild else '-' }}</span>
               <span><small>XP</small>{{ guild.xp if guild is defined and guild and guild.xp is defined else 0 }}</span>
               {% if resources is defined and resources %}{{ treasury(resources) }}{% endif %}
             </div>
+            {% if request.app.state.app_mode == 'desktop' %}<form method="post" action="/desktop/return-to-campaigns"><button class="topbar-back-button" type="submit" title="Suspender esta campanha e voltar ao menu">Campanhas</button></form>{% endif %}
             {% if request.app.state.app_mode != 'desktop' %}<a class="topbar-power-button" href="/logout" title="Sair" aria-label="Sair"><span aria-hidden="true">&#x23FB;</span></a>{% endif %}
           </header>
           <main class="page-shell game-shell">
@@ -125,5 +126,6 @@
       </dialog>
     {% endif %}
     <script src="{{ url_for('static', path='/js/main.js') }}?v=20260622-4"></script>
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
   </body>
 </html>

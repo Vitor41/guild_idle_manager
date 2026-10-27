@@ -2,7 +2,7 @@ import json
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_player, get_current_user
 from app.models.user import User
 from app.core.dependencies import DbSession
 from app.core.forms import read_form_fields
@@ -25,7 +25,7 @@ def heartbeat(request: Request, current_user: User | None = Depends(get_current_
 async def confirmation_preference(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ) -> Response:
     if current_user is None:
         return Response(status_code=401)

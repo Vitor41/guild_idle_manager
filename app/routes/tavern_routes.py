@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.core.dependencies import DbSession, get_current_user
+from app.core.dependencies import DbSession, get_current_player
 from app.core.forms import read_form_fields
 from app.models.user import User
 from app.models.campaign import CampaignMetadata
@@ -67,7 +67,7 @@ def build_tavern_page_context(request: Request, db: DbSession, guild, resources,
 def tavern_index(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
@@ -92,7 +92,7 @@ def tavern_index(
 async def hire_apprentice_submit(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
@@ -134,7 +134,7 @@ async def hire_apprentice_submit(
 async def hire_apprentices_bulk_submit(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
@@ -164,7 +164,7 @@ async def hire_apprentices_bulk_submit(
 def refresh_special_submit(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
@@ -195,7 +195,7 @@ def refresh_special_submit(
 async def hire_special_submit(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)

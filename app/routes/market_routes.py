@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm.attributes import set_committed_value
 
-from app.core.dependencies import DbSession, get_current_user
+from app.core.dependencies import DbSession, get_current_player
 from app.core.forms import read_form_fields
 from app.models.user import User
 from app.services.display_service import clean_generated_name, rarity_label
@@ -27,7 +27,7 @@ templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "tem
 
 
 @router.get("")
-def market_index(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+def market_index(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)
@@ -47,7 +47,7 @@ def market_index(request: Request, db: DbSession, current_user: User | None = De
 
 
 @router.post("/sell/material")
-async def sell_material(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+async def sell_material(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, _ = get_current_guild_context(db, current_user.id)
@@ -62,7 +62,7 @@ async def sell_material(request: Request, db: DbSession, current_user: User | No
 
 
 @router.post("/sell/equipment")
-async def sell_equipment(request: Request, db: DbSession, current_user: User | None = Depends(get_current_user)):
+async def sell_equipment(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, _ = get_current_guild_context(db, current_user.id)
@@ -77,7 +77,7 @@ async def sell_equipment(request: Request, db: DbSession, current_user: User | N
 
 
 @router.post("/collect-all")
-def collect_all(db: DbSession, current_user: User | None = Depends(get_current_user)):
+def collect_all(db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)
@@ -92,7 +92,7 @@ def collect_all(db: DbSession, current_user: User | None = Depends(get_current_u
 
 
 @router.post("/{sale_id}/collect")
-def collect(sale_id: int, db: DbSession, current_user: User | None = Depends(get_current_user)):
+def collect(sale_id: int, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.core.dependencies import DbSession, get_current_user
+from app.core.dependencies import DbSession, get_current_player
 from app.core.forms import read_form_multi_fields
 from app.models.user import User
 from app.services.dungeon_service import (
@@ -28,7 +28,7 @@ templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "tem
 def dungeons_index(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
@@ -72,7 +72,7 @@ def dungeons_index(
 async def start(
     request: Request,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
@@ -97,7 +97,7 @@ async def start(
 
 
 @router.post("/claim-all")
-def claim_all(db: DbSession, current_user: User | None = Depends(get_current_user)):
+def claim_all(db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, resources = get_current_guild_context(db, current_user.id)
@@ -117,7 +117,7 @@ def claim_all(db: DbSession, current_user: User | None = Depends(get_current_use
 def claim(
     dungeon_run_id: int,
     db: DbSession,
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_current_player),
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
