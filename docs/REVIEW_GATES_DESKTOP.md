@@ -121,3 +121,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - Revisão independente no checkout compartilhado: `APP_MODE=desktop .venv-desktop\Scripts\python.exe -m unittest discover -s tests -q` terminou com 63 testes em 179,501 s, sem falhas e com um teste ignorado. O runtime nativo permanece opt-in; o resultado da suíte não prova que a janela carregou.
 - `tests/test_desktop_http_smoke.py` verifica GET de telas, referências de sprites e somente duas mutações auxiliares (tutorial e preferência de confirmação). Ainda não cobre os fluxos end-to-end de gameplay enumerados na seção 13 do GDD.
 - Decisão: regressão automatizada atual verde, mas Gate 3 aberto até haver evidência isolada de cada sistema, loot manual e timers, além do runtime nativo e do instalador final.
+
+### 2026-10-27 — Revisão dos commits do Trabalho 3
+
+- Commits DEV examinados: `a5a601a` (manifesto de ícones), `d90737a` (transações de gameplay) e `e80f694` (pacote DEV). A matriz em `docs/WORK3_QA_DESKTOP.md` distingue o ZIP atual do Setup IExpress antigo.
+- Verificação independente dos commits: `APP_MODE=desktop .venv-desktop\Scripts\python.exe -m unittest tests.test_desktop_art tests.test_desktop_http_smoke tests.test_desktop_installer -q` passou (9/9, 48,312 s). O teste ampliado de duas campanhas e transações de gameplay também passou isoladamente (22,825 s).
+- O executável congelado `dist/GuildIdleManager/GuildIdleManager.exe --smoke` passou com diretório de trabalho e `%LOCALAPPDATA%` temporários e `PATH` limitado ao Windows/System32: código 0; confirmou SQLite, Alembic, conteúdo, nomes e manifesto. Isso não equivale a uma máquina limpa nem valida a janela.
+- O ZIP atual não possui Setup IExpress correspondente: a geração atual saiu com código 1. O smoke nativo chega a `shown` e inicializa WebView2 em STA, mas a página fica em `about:blank`, sem `loaded`, DOM ou bridge. Decisão: aceitar evidências parciais dos commits; Gate 2 e Gate 3 continuam abertos.
