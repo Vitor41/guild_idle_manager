@@ -106,7 +106,7 @@ def run() -> None:
             confirm_close=True,
             text_select=True,
         )
-        bridge.window = window
+        bridge._window = window
         window.events.closed += lambda: setattr(server, "should_exit", True)
         try:
             webview.start(gui="edgechromium")

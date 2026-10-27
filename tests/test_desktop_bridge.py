@@ -30,7 +30,7 @@ class DesktopBridgeTests(unittest.TestCase):
     def _bridge(self, selected):
         campaigns = FakeCampaignService()
         bridge = DesktopBridge(campaigns, object())
-        bridge.window = FakeWindow(selected)
+        bridge._window = FakeWindow(selected)
         webview_api = SimpleNamespace(SAVE_DIALOG=1)
         return bridge, campaigns, patch.object(bridge, "_webview", return_value=webview_api)
 
@@ -42,6 +42,23 @@ class DesktopBridgeTests(unittest.TestCase):
             result = bridge.export_campaign("campaign-1")
         self.assertEqual(result, {"cancelled": True})
         self.assertEqual(campaigns.exports, [])
+
+    def test_pywebview_exports_only_the_bridge_methods(self):
+        import inspect
+
+        bridge, _campaigns, _patched = self._bridge(None)
+        exposed = {
+            name for name in dir(bridge)
+            if not name.startswith("_") and not callable(getattr(bridge, name))
+        }
+        methods = {
+            name for name in dir(bridge)
+            if not name.startswith("_") and inspect.ismethod(getattr(bridge, name))
+        }
+        self.assertEqual(
+            exposed | methods,
+            {"export_campaign", "confirm_export", "import_campaign", "restore_backup"},
+        )
 
     def test_existing_export_requires_token_confirmation_without_exposing_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -20,6 +20,14 @@ $env:APP_MODE = 'desktop'
 .\.venv-desktop\Scripts\python.exe -m unittest tests.test_clock_guard tests.test_desktop_bridge tests.test_desktop_security tests.test_desktop_http_smoke tests.test_campaign_service -q
 ```
 
+O smoke nativo de janela é opt-in porque precisa abrir uma janela Windows real. Ele usa uma pasta temporária, espera `shown` e `loaded` do pywebview, confere o DOM do gerente e do dashboard, cria uma campanha pelo formulário nativo, retorna ao gerente, destrói a janela pelo próprio objeto pywebview e verifica evento `closed`, encerramento do servidor e metadados da campanha:
+
+```powershell
+$env:APP_MODE = 'desktop'
+$env:GIM_RUN_DESKTOP_RUNTIME_SMOKE = '1'
+.\.venv-desktop\Scripts\python.exe -m unittest tests.test_desktop_runtime -v
+```
+
 ## Abrir
 
 ```powershell
