@@ -66,8 +66,8 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
 
         primary_states = re.search(
-            r'body\[data-app-mode="desktop"\] button:not\(\.secondary-button\):not\(\.danger-button\):hover:not\(:disabled\),'
-            r'\s*body\[data-app-mode="desktop"\] button:not\(\.secondary-button\):not\(\.danger-button\):focus-visible,',
+            r'body\[data-app-mode="desktop"\] button:not\(\.secondary-button\):not\(\.danger-button\):not\(\.topbar-back-button\):not\(\.text-button\):hover:not\(:disabled\),'
+            r'\s*body\[data-app-mode="desktop"\] button:not\(\.secondary-button\):not\(\.danger-button\):not\(\.topbar-back-button\):not\(\.text-button\):focus-visible,',
             theme,
         )
         self.assertIsNotNone(primary_states)
@@ -78,6 +78,10 @@ class DesktopArtIntegrationTests(unittest.TestCase):
             '.secondary-button:focus-visible',
             '.danger-button:hover:not(:disabled)',
             '.danger-button:focus-visible',
+            '.topbar-back-button:hover',
+            '.topbar-back-button:focus-visible',
+            'button.text-button:hover:not(:disabled)',
+            'button.text-button:focus-visible',
         ):
             with self.subTest(selector=selector):
                 self.assertIn(selector, theme)
@@ -85,6 +89,8 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn('background: #653a35; color: #fff0e9; filter: none;', theme)
         self.assertIn('outline-color: var(--teal, #68c3b5)', theme)
         self.assertIn('outline-color: #d17669', theme)
+        tutorial = (ROOT / "app" / "templates" / "tutorial" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="text-button"', tutorial)
 
     def test_visual_markup_preserves_web_dashboard_order_and_hides_desktop_panels(self):
         dashboard = (ROOT / "app" / "templates" / "dashboard.html").read_text(encoding="utf-8")

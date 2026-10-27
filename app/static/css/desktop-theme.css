@@ -120,7 +120,9 @@ body[data-app-mode="desktop"] .topbar-back-button {
   min-height: 40px; border-color: #3b5a5d; border-radius: 7px;
   background: #17272a; color: var(--text); font-weight: 650;
 }
-body[data-app-mode="desktop"] .topbar-back-button:hover { border-color: var(--teal, #68c3b5); background: #1d3538; }
+body[data-app-mode="desktop"] .topbar-back-button:hover,
+body[data-app-mode="desktop"] .topbar-back-button:focus-visible { border-color: var(--teal, #68c3b5); background: #1d3538; filter: none; }
+body[data-app-mode="desktop"] .topbar-back-button:focus-visible { outline: 2px solid var(--teal, #68c3b5); outline-offset: 2px; }
 body[data-app-mode="desktop"] .crest-placeholder {
   border-color: #4b6867; background: #1a2c30; box-shadow: none;
 }
@@ -226,8 +228,8 @@ body[data-app-mode="desktop"] .button-link:not(.secondary) {
   background: var(--gold); color: #152025; font-family: "Segoe UI", Tahoma, sans-serif;
   font-weight: 750; box-shadow: none;
 }
-body[data-app-mode="desktop"] button:not(.secondary-button):not(.danger-button):hover:not(:disabled),
-body[data-app-mode="desktop"] button:not(.secondary-button):not(.danger-button):focus-visible,
+body[data-app-mode="desktop"] button:not(.secondary-button):not(.danger-button):not(.topbar-back-button):not(.text-button):hover:not(:disabled),
+body[data-app-mode="desktop"] button:not(.secondary-button):not(.danger-button):not(.topbar-back-button):not(.text-button):focus-visible,
 body[data-app-mode="desktop"] .button-link:not(.secondary):hover,
 body[data-app-mode="desktop"] .button-link:not(.secondary):focus-visible {
   border-color: #f5d798; background: #f0c878; color: #101a1d;
@@ -249,6 +251,15 @@ body[data-app-mode="desktop"] .danger-button:hover:not(:disabled),
 body[data-app-mode="desktop"] .danger-button:focus-visible {
   border-color: #d17669; background: #653a35; color: #fff0e9; filter: none;
 }
+body[data-app-mode="desktop"] button.text-button {
+  min-height: 36px; padding: 6px 10px; border-color: transparent; border-radius: 6px;
+  background: transparent; color: var(--muted); font-weight: 700; box-shadow: none;
+}
+body[data-app-mode="desktop"] button.text-button:hover:not(:disabled),
+body[data-app-mode="desktop"] button.text-button:focus-visible {
+  border-color: #355157; background: #17272b; color: var(--teal, #68c3b5); filter: none;
+}
+body[data-app-mode="desktop"] button.text-button:focus-visible { outline: 2px solid var(--teal, #68c3b5); outline-offset: 2px; }
 body[data-app-mode="desktop"] button:focus-visible,
 body[data-app-mode="desktop"] .button-link:focus-visible,
 body[data-app-mode="desktop"] .secondary-button:focus-visible { outline: 2px solid #f5d798; outline-offset: 2px; }
