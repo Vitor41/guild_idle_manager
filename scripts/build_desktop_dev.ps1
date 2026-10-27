@@ -104,7 +104,12 @@ SourceFiles0=$iexpressSource
 %FILE1%=
 "@
 Set-Content -LiteralPath $sedPath -Value $sed -Encoding ASCII
-$iexpressProcess = Start-Process -FilePath (Join-Path $env:WINDIR 'System32\iexpress.exe') -ArgumentList @('/N', '/Q', ('"{0}"' -f $sedPath)) -PassThru -WindowStyle Hidden
+$iexpress = Join-Path $env:WINDIR 'System32\iexpress.exe'
+& $iexpress /N /Q $sedPath
+$iexpressExitCode = $LASTEXITCODE
+if ($iexpressExitCode -ne 0) {
+    throw "IExpress terminou com codigo $iexpressExitCode. ZIP e diagnosticos preservados em $iexpressSource."
+}
 $installerCreated = $false
 $stableLengthSamples = 0
 $previousLength = 0L
@@ -117,17 +122,15 @@ for ($attempt = 0; $attempt -lt 90; $attempt++) {
             $stableLengthSamples = 0
         }
         $previousLength = $fileInfo.Length
-        if ($iexpressProcess.HasExited -and $iexpressProcess.ExitCode -eq 0 -and $stableLengthSamples -ge 5) {
+        if ($stableLengthSamples -ge 5) {
             $installerCreated = $true
             break
         }
     }
-    if ($iexpressProcess.HasExited -and $iexpressProcess.ExitCode -ne 0) { break }
     Start-Sleep -Seconds 1
 }
-$iexpressExitCode = if ($iexpressProcess.HasExited) { $iexpressProcess.ExitCode } else { 'still running' }
 if (-not $installerCreated) {
-    throw "IExpress nao materializou o Setup (codigo $iexpressExitCode). ZIP e diagnosticos preservados em $iexpressSource."
+    throw "IExpress terminou com codigo zero, mas nao materializou um Setup estavel. ZIP e diagnosticos preservados em $iexpressSource."
 }
 $signature = [System.IO.File]::ReadAllBytes($installerTemp)
 if ($signature.Length -lt 2 -or $signature[0] -ne 0x4D -or $signature[1] -ne 0x5A) {

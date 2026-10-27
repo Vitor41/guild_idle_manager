@@ -11,7 +11,7 @@ Set-Location 'C:\Users\vitor\Guild Idle Manager\App GIM'
 .\scripts\build_desktop_dev.ps1
 ```
 
-Consulte [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md) para o estado dos gates. A geração atual do Setup IExpress não está aprovada; distribua apenas um executável Setup que tenha sido criado a partir do ZIP atual e passe os testes de primeira instalação e atualização.
+Consulte [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md) para os hashes dos artefatos e o estado dos gates. O ZIP e o Setup atuais passaram na validação isolada de instalação; mantenha o gate de release nativo aberto até a janela pywebview carregar o gerente e expor o bridge.
 
 O instalador inclui o executável e arquivos locais de templates, imagens, estilos, JavaScript, migrations Alembic e catálogo de nomes. Para instalar sem PostgreSQL ou conexão de rede, execute o Setup; ele valida a cópia temporária offline antes de trocar a instalação em `%LOCALAPPDATA%\Programs\GuildIdleManager` e cria um atalho na área de trabalho. Os saves continuam em `%LOCALAPPDATA%\GuildIdleManager\saves`, fora da pasta do aplicativo.
 
