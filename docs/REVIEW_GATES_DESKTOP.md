@@ -153,3 +153,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - O executável reconstruído passou pelo healthcheck local e abriu a janela. A captura `docs/qa/desktop-dashboard.jpg` mostra a campanha renomeada e o dashboard com sprites reais, navegação e textos legíveis em largura ampla.
 - A captura `docs/qa/desktop-minimum.jpg` revela rolagem horizontal no topo e cabeçalho excessivamente alto a 760 x 600; a navegação não está claramente acessível nessa largura. Este achado foi devolvido ao DEV para correção e nova captura.
 - A escolha inicial do tutorial expôs outro POST fora do fluxo AJAX. A correção e o smoke nativo ampliado estão em andamento. **Gate visual e pacote instalado permanecem abertos.**
+
+### 2026-10-27 — Revisão independente do pacote e commit `d7d85c7`
+
+- O commit corrigiu os dois POSTs locais, o healthcheck do launcher congelado e a navegação compacta. Árvore de trabalho limpa na revisão. O ZIP e o Setup atuais têm SHA-256 `9B5AACC55E0EC5556B5DEAFE314D704F4174251A79700318593A649F0D2ACF67` e `531A2E6D1A1367C94F0B1D8537865C4FF337C86BF241B30B5722FDDC23569D7A`, respectivamente; ambos conferidos novamente.
+- Suíte independente após o commit: `APP_MODE=desktop`, SQLite em memória, 64 testes em 198,888 s, zero falhas, um skip opt-in. O smoke nativo opt-in passou separadamente em 21,041 s: janela, DOM, bridge, criação, tutorial, retorno, fechamento e servidor. Somente perfil temporário foi usado.
+- Capturas da instalação final em `docs/qa/` foram revisadas: dashboard amplo, mínimo 747 x 593, menu compacto aberto, Missões e gerenciador de campanhas. Não há rolagem horizontal no mínimo; o botão Campanhas e a navegação estão visíveis e operáveis. Aceite visual para essas superfícies e dimensões.
+- Inspeção das entradas do ZIP não encontrou `.env`, `venv`, saves, logs, testes, `.git` ou `.aws`. O instalador foi validado em perfil local temporário; a instalação em **outro Windows limpo** ainda não foi executada. A documentação técnica de DEV estava desatualizada e foi devolvida para ajuste. A branch permanece aberta até a auditoria completa do GDD e o teste externo quando disponível.
