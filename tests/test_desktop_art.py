@@ -62,6 +62,30 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn("desktop-operations-intro", missions)
         self.assertIn("desktop-operations-intro", dungeons)
 
+    def test_desktop_button_hover_and_focus_keep_secondary_and_danger_roles(self):
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+
+        primary_states = re.search(
+            r'body\[data-app-mode="desktop"\] button:not\(\.secondary-button\):not\(\.danger-button\):hover:not\(:disabled\),'
+            r'\s*body\[data-app-mode="desktop"\] button:not\(\.secondary-button\):not\(\.danger-button\):focus-visible,',
+            theme,
+        )
+        self.assertIsNotNone(primary_states)
+        for selector in (
+            '.button-link.secondary:hover',
+            '.button-link.secondary:focus-visible',
+            '.secondary-button:hover:not(:disabled)',
+            '.secondary-button:focus-visible',
+            '.danger-button:hover:not(:disabled)',
+            '.danger-button:focus-visible',
+        ):
+            with self.subTest(selector=selector):
+                self.assertIn(selector, theme)
+        self.assertIn('background: #21383b; color: var(--text); filter: none;', theme)
+        self.assertIn('background: #653a35; color: #fff0e9; filter: none;', theme)
+        self.assertIn('outline-color: var(--teal, #68c3b5)', theme)
+        self.assertIn('outline-color: #d17669', theme)
+
     def test_visual_markup_preserves_web_dashboard_order_and_hides_desktop_panels(self):
         dashboard = (ROOT / "app" / "templates" / "dashboard.html").read_text(encoding="utf-8")
         missions = (ROOT / "app" / "templates" / "missions" / "index.html").read_text(encoding="utf-8")
