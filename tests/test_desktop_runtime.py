@@ -88,6 +88,11 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                         if window.evaluate_js("document.querySelector('#create-campaign-form') !== null") is not True:
                             raise RuntimeError("campaign manager DOM was not present in the native WebView")
                         result["manager_dom_visible"] = True
+                        result["bridge_api_visible"] = window.evaluate_js(
+                            "typeof window.pywebview?.api?.export_campaign === 'function'"
+                        ) is True
+                        if not result["bridge_api_visible"]:
+                            raise RuntimeError("desktop bridge API was not present in the native WebView")
                         save_progress()
 
                         from app.main import app
@@ -147,7 +152,6 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
                     window.events.closed += window_closed.set
                     window.events.response_received += lambda response: webview_responses.append(repr(response))
                     kwargs["func"] = smoke_window_lifecycle
-                    kwargs["debug"] = True
                     return original_start(*args, **kwargs)
 
                 webview.start = start_with_lifecycle_probe
@@ -183,6 +187,7 @@ class DesktopRuntimeSmokeTests(unittest.TestCase):
             self.assertTrue(result["window_shown"])
             self.assertTrue(result["webview_page_loaded"])
             self.assertTrue(result["manager_dom_visible"])
+            self.assertTrue(result["bridge_api_visible"])
             self.assertTrue(result["dashboard_dom_visible"])
             self.assertTrue(result["campaign_created_and_opened"])
             self.assertTrue(result["returned_to_menu"])

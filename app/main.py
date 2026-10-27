@@ -48,7 +48,9 @@ async def protect_desktop_loopback(request: Request, call_next):
     if request.app.state.app_mode == "desktop":
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            # pywebview builds the JS API with `new Function`, which CSP blocks without unsafe-eval.
+            # This policy is desktop-only and the renderer serves only this local application.
+            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
             "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
             "connect-src 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
         )

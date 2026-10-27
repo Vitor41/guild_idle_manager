@@ -27,16 +27,19 @@ async def invoke(path, method="GET", host="127.0.0.1:8123", origin=None, fetch_s
     async def receive(): return {"type": "http.request", "body": b"{}", "more_body": False}
     async def send(message): sent.append(message)
     await app(scope, receive, send)
-    return sent[0]["status"]
+    response = sent[0]
+    return response["status"], {key.decode(): value.decode() for key, value in response["headers"]}
 
 async def main():
-    assert await invoke("/desktop/health") == 200
-    assert await invoke("/desktop/health", host="evil.example") == 403
-    assert await invoke("/desktop/health", fetch_site="cross-site") == 403
-    assert await invoke("/desktop/api/campaigns", method="POST") == 403
-    assert await invoke("/desktop/api/campaigns", method="POST", origin="http://127.0.0.1:8123") != 403
+    status, headers = await invoke("/desktop/health")
+    assert status == 200
+    assert "'unsafe-eval'" in headers[b"content-security-policy".decode()]
+    assert (await invoke("/desktop/health", host="evil.example"))[0] == 403
+    assert (await invoke("/desktop/health", fetch_site="cross-site"))[0] == 403
+    assert (await invoke("/desktop/api/campaigns", method="POST"))[0] == 403
+    assert (await invoke("/desktop/api/campaigns", method="POST", origin="http://127.0.0.1:8123"))[0] != 403
     app.state.desktop_allowed_host = None
-    assert await invoke("/desktop/health") == 503
+    assert (await invoke("/desktop/health"))[0] == 503
 
 asyncio.run(main())
 '''
