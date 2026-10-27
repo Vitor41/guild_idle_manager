@@ -193,4 +193,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 
 - Revisei o commit `4cb24af`: ajustes de texto PT-BR na campanha, recuperação, progresso offline e avisos de inicialização, sem alteração intencional de regras. `git diff HEAD~1..HEAD --check` não apontou erros.
 - A suíte completa independente após esse commit passou: 72 testes executados, 71 aprovados e 1 smoke nativo opt-in ignorado na descoberta normal. Os hashes do ZIP (`E0755A8050F1677844EC177C0F3FCE5CC19939934F0BCC5BD4FDFB6372B1DD6E`), Setup (`BC4D70FAFFF3B880A28CB45CFE061541CAB56889898EC39818AFCC9987572080`) e executável (`6D4B5ADF6336773924EEFF993912B1E85DA66E110E92A8632B5A9DD69770719F`) foram conferidos.
-- Por decisão do usuário, a implementação está concluída nesta etapa. A validação visual **não** foi realizada por mim no pacote final; será conduzida pelo usuário posteriormente e não é apresentada como teste passado. A instalação em outro Windows limpo também continua sem evidência. Manter a branch aberta, sem merge, até esses aceites.
+- Por decisão do usuário, a implementação está concluída nesta etapa. Naquele momento, a validação visual ainda estava pendente; o aceite manual subsequente está registrado abaixo. A instalação em outro Windows limpo continua sem evidência. Manter a branch aberta, sem merge, até esse gate de distribuição.
+
+### 2026-10-27 — Aceite visual do usuário
+
+- O usuário confirmou ter concluído a validação visual do pacote atual e informou que está tudo certo até então. O aceite é registrado como validação manual do usuário, não como inspeção visual independente minha.
+- As duas observações dos guias ficam para a próxima rodada: navegação/identidade visual do índice do Guia de Classes e tiers de equipamento incorretos no Guia de Tiers. Estão detalhadas em `docs/USER_FEEDBACK_BACKLOG.md` e não bloqueiam o aceite visual desta entrega.
+- Resta como gate de distribuição a instalação e smoke em outro Windows limpo, sem Python/PostgreSQL e sem rede. A branch permanece aberta até esse teste, conforme o GDD.
