@@ -46,6 +46,8 @@ class CampaignServiceTests(unittest.TestCase):
         script = r'''
 import asyncio
 from app.main import app
+app.state.desktop_allowed_host = "localhost"
+app.state.desktop_allowed_origin = "http://localhost"
 
 async def main():
     sent = []
@@ -67,10 +69,11 @@ async def main():
     }
     await app(scope, receive, send)
     status = sent[0]["status"]
+    headers = dict(sent[0]["headers"])
     body = b"".join(message.get("body", b"") for message in sent if message["type"] == "http.response.body")
     paths = set(app.openapi()["paths"])
-    assert status == 200, status
-    assert b"Nenhuma campanha esta selecionada" in body
+    assert status == 303, status
+    assert headers[b"location"] == b"/desktop/campaigns"
     assert b"/login" not in body and b"/register" not in body
     assert "/login" not in paths and "/register" not in paths
     assert not any(middleware.cls.__name__ == "SessionMiddleware" for middleware in app.user_middleware)
@@ -190,7 +193,10 @@ asyncio.run(main())
             command.upgrade(campaigns._alembic_config(database_path), "c9d0e1f2a3b4")
             before = database_path.read_bytes()
 
-            self.assertEqual(campaigns.list_campaigns(), [])
+            listing = campaigns.list_campaigns()
+            self.assertEqual(listing, [])
+            self.assertEqual(len(listing.unavailable), 1)
+            self.assertTrue(listing.unavailable[0]["reason"])
             self.assertEqual(database_path.read_bytes(), before)
             self.assertFalse((Path(temp_dir) / "backups").exists())
 
@@ -211,11 +217,80 @@ asyncio.run(main())
             before = database_path.read_bytes()
             campaigns = CampaignService(saves)
 
-            self.assertEqual(campaigns.list_campaigns(), [])
+            listing = campaigns.list_campaigns()
+            self.assertEqual(listing, [])
+            self.assertEqual(len(listing.unavailable), 1)
+            self.assertEqual(listing.unavailable[0]["filename"], f"{campaign_id}.db")
             with self.assertRaisesRegex(ValueError, "Metadados incompletos"):
                 campaigns.activate_campaign(campaign_id)
             self.assertEqual(database_path.read_bytes(), before)
-            self.assertFalse((Path(temp_dir) / "backups").exists())
+
+    def test_campaign_listing_keeps_corrupt_file_visible_for_recovery(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            corrupt = saves / f"{uuid4()}.db"
+            corrupt.write_bytes(b"not a sqlite database")
+
+            listing = CampaignService(saves).list_campaigns()
+
+            self.assertEqual(listing, [])
+            self.assertEqual(listing.unavailable[0]["filename"], corrupt.name)
+            self.assertIn("corrompido", listing.unavailable[0]["reason"].lower())
+            self.assertEqual(corrupt.read_bytes(), b"not a sqlite database")
+
+    def test_campaign_listing_explains_unknown_migration_revision(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Revisao desconhecida")
+            with closing(sqlite3.connect(campaign.database_path)) as connection:
+                connection.execute("UPDATE alembic_version SET version_num = 'revision_xxx'")
+                connection.commit()
+
+            listing = campaigns.list_campaigns()
+
+            self.assertEqual(listing, [])
+            self.assertIn("revisao", listing.unavailable[0]["reason"].lower())
+
+    def test_corrupt_campaign_can_be_restored_from_matching_backup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            saves = CampaignService(root / "saves")
+            campaign = saves.create_campaign("Recuperacao")
+            backup = saves.create_manual_backup(campaign.campaign_id)
+            campaign.database_path.write_bytes(b"damaged save contents")
+
+            listing = saves.list_campaigns()
+            self.assertEqual(listing, [])
+            self.assertTrue(listing.unavailable)
+            restored = saves.restore_backup(campaign.campaign_id, backup)
+
+            self.assertEqual(restored.campaign_id, campaign.campaign_id)
+            self.assertEqual(restored.campaign_name, "Recuperacao")
+            diagnostic = list((root / "backups" / campaign.campaign_id).glob("pre-restore-*.db"))
+            self.assertEqual(len(diagnostic), 1)
+            self.assertEqual(diagnostic[0].read_bytes(), b"damaged save contents")
+
+    def test_restore_parks_stale_sqlite_sidecars_and_keeps_diagnostic_copies(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            campaigns = CampaignService(root / "saves")
+            campaign = campaigns.create_campaign("Com sidecars")
+            backup = campaigns.create_manual_backup(campaign.campaign_id)
+            wal = Path(f"{campaign.database_path}-wal")
+            shm = Path(f"{campaign.database_path}-shm")
+            wal.write_bytes(b"stale wal data")
+            shm.write_bytes(b"stale shm data")
+
+            restored = campaigns.restore_backup(campaign.campaign_id, backup)
+
+            self.assertEqual(restored.campaign_id, campaign.campaign_id)
+            self.assertFalse(wal.exists())
+            self.assertFalse(shm.exists())
+            diagnostic = list((root / "backups" / campaign.campaign_id).glob("pre-restore-*.db"))
+            self.assertEqual(len(diagnostic), 1)
+            self.assertEqual(Path(f"{diagnostic[0]}-wal").read_bytes(), b"stale wal data")
+            self.assertEqual(Path(f"{diagnostic[0]}-shm").read_bytes(), b"stale shm data")
 
     def test_empty_sqlite_file_is_rejected_before_migration_without_changes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -311,6 +386,82 @@ asyncio.run(main())
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
                 self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_failed_migration_restores_original_schema_and_keeps_backup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaigns = CampaignService(saves)
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            command.upgrade(campaigns._alembic_config(database_path), "c9d0e1f2a3b4")
+            with closing(sqlite3.connect(database_path)) as connection:
+                self._insert_legacy_row(connection, "guilds", {"id": 31, "name": "Guilda intacta"})
+                connection.commit()
+
+            def partial_failure(_config, _head):
+                with closing(sqlite3.connect(database_path)) as connection:
+                    connection.execute("ALTER TABLE guilds ADD COLUMN partial_migration_marker TEXT")
+                    connection.commit()
+                raise RuntimeError("falha simulada depois de uma alteracao parcial")
+
+            with patch("app.services.campaign_service.command.upgrade", side_effect=partial_failure):
+                with self.assertRaisesRegex(RuntimeError, "arquivo original foi restaurado"):
+                    campaigns._ensure_schema(database_path, campaign_id)
+
+            with closing(sqlite3.connect(database_path)) as connection:
+                revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+                guild = connection.execute("SELECT name FROM guilds WHERE id = 31").fetchone()[0]
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(guilds)")}
+                self.assertEqual(revision, "c9d0e1f2a3b4")
+                self.assertEqual(guild, "Guilda intacta")
+                self.assertNotIn("partial_migration_marker", columns)
+                self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+            backups = list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db"))
+            self.assertEqual(len(backups), 1)
+            with closing(sqlite3.connect(backups[0])) as connection:
+                self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+                self.assertEqual(connection.execute("SELECT name FROM guilds WHERE id = 31").fetchone()[0], "Guilda intacta")
+
+    def test_campaign_export_import_restore_backup_and_delete_lifecycle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                self._assert_campaign_file_lifecycle(Path(temp_dir))
+            finally:
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
+    def _assert_campaign_file_lifecycle(self, temp_path: Path) -> None:
+        campaigns = CampaignService(temp_path / "saves")
+        original = campaigns.create_campaign("Arquivo de origem", "Guilda original")
+        export_path = temp_path / "exports" / "origem.gimcampaign"
+        campaigns.export_campaign(original.campaign_id, export_path)
+        with self.assertRaises(FileExistsError):
+            campaigns.export_campaign(original.campaign_id, export_path)
+        campaigns.export_campaign(original.campaign_id, export_path, overwrite=True)
+
+        imported = campaigns.import_campaign(export_path)
+        self.assertNotEqual(imported.campaign_id, original.campaign_id)
+        self.assertEqual(imported.last_session_state, "created")
+        self.assertIsNone(imported.last_clean_shutdown_utc)
+        with closing(sqlite3.connect(imported.database_path)) as connection:
+            metadata_id = connection.execute("SELECT campaign_id FROM campaign_metadata").fetchone()[0]
+            guild_id = connection.execute("SELECT campaign_id FROM guilds").fetchone()[0]
+            self.assertEqual(metadata_id, imported.campaign_id)
+            self.assertEqual(guild_id, imported.campaign_id)
+
+        backup_path = campaigns.create_manual_backup(imported.campaign_id)
+        campaigns.rename_campaign(imported.campaign_id, "Nome temporario")
+        restored = campaigns.restore_backup(imported.campaign_id, backup_path)
+        self.assertEqual(restored.campaign_name, "Arquivo de origem")
+
+        campaigns.activate_campaign(original.campaign_id)
+        with self.assertRaisesRegex(ValueError, "Feche a campanha"):
+            campaigns.delete_campaign(original.campaign_id)
+        campaigns.close_active_campaign(original.campaign_id)
+        delete_backup = campaigns.delete_campaign(original.campaign_id)
+        self.assertTrue(delete_backup.is_file())
+        self.assertFalse(original.database_path.exists())
 
     @staticmethod
     def _insert_legacy_row(connection, table: str, values: dict[str, object]) -> None:

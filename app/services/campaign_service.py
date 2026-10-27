@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import sqlite3
+import shutil
 from threading import RLock
 from uuid import UUID, uuid4
 
@@ -16,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
-from app.database.connection import SessionLocal, configure_database, create_database_engine
+from app.database.connection import SessionLocal, configure_database, create_database_engine, get_engine
 from app.models import CampaignMetadata, Guild, GuildResources
 
 
@@ -38,6 +39,14 @@ class CampaignInfo:
     last_session_state: str = "created"
     tutorial_status: str = "pending"
     confirmation_preferences: str = "{}"
+
+
+class CampaignListing(list):
+    """Valid campaigns plus visible recovery entries for detected save files."""
+
+    def __init__(self):
+        super().__init__()
+        self.unavailable: list[dict[str, str]] = []
 
 
 def default_saves_directory() -> Path:
@@ -79,6 +88,21 @@ class CampaignService:
             stale_backup.unlink()
         return backup_path
 
+    @staticmethod
+    def _restore_sqlite_backup(backup_path: Path, database_path: Path) -> None:
+        with closing(sqlite3.connect(backup_path)) as source, closing(sqlite3.connect(database_path)) as destination:
+            destination.execute("PRAGMA foreign_keys=OFF")
+            source.backup(destination)
+            destination.commit()
+
+    @staticmethod
+    def _assert_outside_checkout(path: Path) -> Path:
+        target = path.expanduser().resolve()
+        checkout = Path(__file__).resolve().parents[2]
+        if target == checkout or checkout in target.parents:
+            raise ValueError("Arquivos de save, backup e exportacao devem ficar fora da pasta do aplicativo.")
+        return target
+
     def _ensure_schema(self, database_path: Path, campaign_id: str) -> None:
         config = self._alembic_config(database_path)
         script = ScriptDirectory.from_config(config)
@@ -104,8 +128,21 @@ class CampaignService:
                 current = revisions[0]
         self._validate_revision_ancestry(script, current, head)
         if current != head:
-            self._backup_before_schema_change(database_path, campaign_id, current)
-            command.upgrade(config, head)
+            backup_path = self._backup_before_schema_change(database_path, campaign_id, current)
+            try:
+                command.upgrade(config, head)
+            except Exception as migration_error:
+                try:
+                    self._restore_sqlite_backup(backup_path, database_path)
+                except Exception as restore_error:
+                    raise RuntimeError(
+                        f"A atualizacao falhou e a restauracao automatica nao foi concluida. "
+                        f"Preserve o save e use este backup para recuperacao: {backup_path}"
+                    ) from restore_error
+                raise RuntimeError(
+                    f"A atualizacao do save falhou. O arquivo original foi restaurado; "
+                    f"backup de recuperacao: {backup_path}"
+                ) from migration_error
             with closing(sqlite3.connect(database_path)) as connection:
                 connection.execute(
                     "UPDATE campaign_metadata SET schema_version = ? WHERE campaign_id = ?",
@@ -201,7 +238,7 @@ class CampaignService:
                     campaign_name=name,
                     schema_version=CURRENT_SCHEMA_VERSION,
                     content_version=0,
-                    last_session_state="initializing",
+                    last_session_state="created",
                 )
                 db.add(metadata)
                 db.flush()
@@ -215,7 +252,6 @@ class CampaignService:
 
                 apply_initial_campaign_content(db)
                 metadata.content_version = INITIAL_CONTENT_VERSION
-                metadata.last_session_state = "active"
                 metadata.updated_at_utc = datetime.now(timezone.utc)
                 db.commit()
                 return self._to_info(metadata, database_path)
@@ -266,17 +302,175 @@ class CampaignService:
 
     def list_campaigns(self) -> list[CampaignInfo]:
         if not self.saves_directory.exists():
-            return []
-        result = []
+            return CampaignListing()
+        result = CampaignListing()
         for path in sorted(self.saves_directory.glob("*.db")):
             try:
                 campaign_id = str(UUID(path.stem))
                 result.append(self.inspect_campaign(campaign_id))
-            except (ValueError, sqlite3.DatabaseError, SQLAlchemyError, OSError):
-                continue
+            except (ValueError, sqlite3.DatabaseError, SQLAlchemyError, OSError) as exc:
+                if isinstance(exc, sqlite3.DatabaseError):
+                    reason = "O arquivo está corrompido ou não é um banco SQLite válido."
+                elif isinstance(exc, SQLAlchemyError):
+                    reason = "O save não pôde ser validado pelo sistema. O arquivo foi preservado; tente restaurar um backup compatível."
+                else:
+                    reason = str(exc).strip() or "O arquivo não pôde ser validado."
+                try:
+                    recovery_id = str(UUID(path.stem))
+                except ValueError:
+                    recovery_id = ""
+                result.unavailable.append({"filename": path.name, "campaign_id": recovery_id, "reason": reason[:240]})
         return result
 
-    def activate_campaign(self, campaign_id: str) -> CampaignInfo:
+    def rename_campaign(self, campaign_id: str, campaign_name: str) -> CampaignInfo:
+        name = campaign_name.strip()
+        if not name or len(name) > 120:
+            raise ValueError("O nome da campanha deve ter entre 1 e 120 caracteres.")
+        info = self.inspect_campaign(campaign_id)
+        with closing(sqlite3.connect(info.database_path)) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE campaign_metadata SET campaign_name = ?, updated_at_utc = CURRENT_TIMESTAMP WHERE campaign_id = ?",
+                (name, info.campaign_id),
+            )
+            connection.commit()
+        return self.inspect_campaign(campaign_id)
+
+    def create_manual_backup(self, campaign_id: str) -> Path:
+        info = self.inspect_campaign(campaign_id)
+        with closing(sqlite3.connect(info.database_path)) as connection:
+            revision_row = connection.execute("SELECT version_num FROM alembic_version").fetchone()
+        revision = revision_row[0] if revision_row else "unknown"
+        return self._backup_before_schema_change(info.database_path, info.campaign_id, f"manual-{revision}")
+
+    def restore_backup(self, campaign_id: str, backup_path: str | Path) -> CampaignInfo:
+        database_path = self._path_for(campaign_id)
+        if not database_path.is_file():
+            raise FileNotFoundError("Save da campanha nao encontrado.")
+        engine_database = get_engine().url.database
+        if engine_database and Path(engine_database).resolve() == database_path.resolve():
+            raise ValueError("Feche a campanha antes de restaurar um backup.")
+        source_path = Path(backup_path).expanduser().resolve()
+        if not source_path.is_file():
+            raise FileNotFoundError("Backup selecionado nao foi encontrado.")
+        canonical_id = str(UUID(campaign_id))
+        self._validate_campaign_before_open(source_path, canonical_id)
+        diagnostic_dir = self.saves_directory.parent / "backups" / canonical_id
+        diagnostic_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        diagnostic_path = diagnostic_dir / f"pre-restore-{timestamp}.db"
+        shutil.copy2(database_path, diagnostic_path)
+        sidecars: list[tuple[Path, Path]] = []
+        for suffix in ("-wal", "-shm"):
+            original_sidecar = Path(f"{database_path}{suffix}")
+            if original_sidecar.exists():
+                shutil.copy2(original_sidecar, Path(f"{diagnostic_path}{suffix}"))
+                parked_sidecar = Path(f"{database_path}.restore-old{suffix}")
+                sidecars.append((original_sidecar, parked_sidecar))
+        staged_path = database_path.with_suffix(".restore.tmp")
+        try:
+            self._restore_sqlite_backup(source_path, staged_path)
+            parked: list[tuple[Path, Path]] = []
+            try:
+                for original_sidecar, parked_sidecar in sidecars:
+                    os.replace(original_sidecar, parked_sidecar)
+                    parked.append((original_sidecar, parked_sidecar))
+                os.replace(staged_path, database_path)
+            except Exception:
+                for original_sidecar, parked_sidecar in reversed(parked):
+                    if parked_sidecar.exists():
+                        os.replace(parked_sidecar, original_sidecar)
+                raise
+            else:
+                for _original_sidecar, parked_sidecar in parked:
+                    parked_sidecar.unlink(missing_ok=True)
+        finally:
+            staged_path.unlink(missing_ok=True)
+        return self.inspect_campaign(campaign_id)
+
+    def delete_campaign(self, campaign_id: str, active_campaign_id: str | None = None) -> Path:
+        info = self.inspect_campaign(campaign_id)
+        if active_campaign_id and info.campaign_id == str(UUID(active_campaign_id)):
+            raise ValueError("Feche a campanha antes de exclui-la.")
+        engine_database = get_engine().url.database
+        if engine_database and Path(engine_database).resolve() == info.database_path.resolve():
+            raise ValueError("Feche a campanha antes de exclui-la.")
+        backup_path = self.create_manual_backup(info.campaign_id)
+        info.database_path.unlink()
+        for suffix in ("-wal", "-shm"):
+            Path(f"{info.database_path}{suffix}").unlink(missing_ok=True)
+        return backup_path
+
+    def export_campaign(
+        self, campaign_id: str, destination: str | Path, overwrite: bool = False
+    ) -> Path:
+        info = self.inspect_campaign(campaign_id)
+        target = self._assert_outside_checkout(Path(destination))
+        if target == info.database_path.resolve():
+            raise ValueError("Escolha um arquivo diferente do save original.")
+        if target.exists() and not overwrite:
+            raise FileExistsError("O arquivo de exportacao ja existe; confirme a substituicao antes de continuar.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        staged_path = target.with_name(f".{target.name}.{uuid4().hex}.tmp")
+        try:
+            self._restore_sqlite_backup(info.database_path, staged_path)
+            with closing(sqlite3.connect(staged_path)) as connection:
+                integrity = connection.execute("PRAGMA integrity_check").fetchone()
+                if not integrity or integrity[0] != "ok":
+                    raise ValueError("A exportacao falhou na validacao de integridade.")
+            staged_path.replace(target)
+            return target
+        finally:
+            staged_path.unlink(missing_ok=True)
+
+    def import_campaign(self, source: str | Path) -> CampaignInfo:
+        source_path = Path(source).expanduser().resolve()
+        if not source_path.is_file():
+            raise FileNotFoundError("Arquivo de campanha nao encontrado.")
+        self._assert_outside_checkout(source_path)
+        with closing(sqlite3.connect(source_path)) as connection:
+            integrity = connection.execute("PRAGMA integrity_check").fetchone()
+            if not integrity or integrity[0] != "ok":
+                raise ValueError("O arquivo selecionado esta corrompido.")
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "campaign_metadata" not in tables:
+                raise ValueError("O arquivo selecionado nao e um save de campanha.")
+            rows = connection.execute("SELECT campaign_id FROM campaign_metadata").fetchall()
+            if len(rows) != 1 or not rows[0][0]:
+                raise ValueError("O arquivo selecionado nao possui uma campanha valida.")
+            source_campaign_id = str(UUID(rows[0][0]))
+        self._validate_campaign_before_open(source_path, source_campaign_id)
+
+        self.saves_directory.mkdir(parents=True, exist_ok=True)
+        campaign_id = str(uuid4())
+        final_path = self._path_for(campaign_id)
+        staged_path = final_path.with_suffix(".import.tmp")
+        try:
+            self._restore_sqlite_backup(source_path, staged_path)
+            with closing(sqlite3.connect(staged_path)) as connection:
+                connection.execute("PRAGMA foreign_keys=OFF")
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "UPDATE campaign_metadata "
+                    "SET campaign_id = ?, last_session_state = 'created', last_clean_shutdown_utc = NULL "
+                    "WHERE campaign_id = ?",
+                    (campaign_id, source_campaign_id),
+                )
+                connection.execute(
+                    "UPDATE guilds SET campaign_id = ? WHERE campaign_id = ?",
+                    (campaign_id, source_campaign_id),
+                )
+                connection.commit()
+                violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+                if violations:
+                    raise ValueError(f"O save importado tem referencias invalidas: {violations[:5]}")
+            self._validate_campaign_before_open(staged_path, campaign_id)
+            staged_path.replace(final_path)
+        finally:
+            staged_path.unlink(missing_ok=True)
+        return self.inspect_campaign(campaign_id)
+
+    def activate_campaign(self, campaign_id: str, mark_active: bool = True) -> CampaignInfo:
         path = self._path_for(campaign_id)
         if not path.is_file():
             raise FileNotFoundError("Save da campanha nao encontrado.")
@@ -285,27 +479,53 @@ class CampaignService:
         info = self.inspect_campaign(campaign_id)
         with _activation_lock:
             configure_database(f"sqlite:///{info.database_path.as_posix()}")
-            with SessionLocal() as db:
-                metadata = db.get(CampaignMetadata, info.campaign_id)
-                if metadata is None:
-                    raise ValueError("O save desapareceu durante a abertura.")
-                metadata.last_session_state = "active"
-                metadata.updated_at_utc = datetime.now(timezone.utc)
-                db.commit()
+            if mark_active:
+                with SessionLocal() as db:
+                    metadata = db.get(CampaignMetadata, info.campaign_id)
+                    if metadata is None:
+                        raise ValueError("O save desapareceu durante a abertura.")
+                    metadata.last_session_state = "active"
+                    metadata.updated_at_utc = datetime.now(timezone.utc)
+                    db.commit()
         return info
 
-    def close_active_campaign(self, campaign_id: str) -> None:
+    def close_active_campaign(self, campaign_id: str, closed_at_utc: datetime | None = None) -> None:
         with _activation_lock:
             with SessionLocal() as db:
                 metadata = db.get(CampaignMetadata, str(UUID(campaign_id)))
                 if metadata is None:
                     raise FileNotFoundError("Save da campanha ativa nao encontrado.")
-                now = datetime.now(timezone.utc)
+                now = closed_at_utc or datetime.now(timezone.utc)
                 metadata.last_clean_shutdown_utc = now
                 metadata.last_session_state = "closed"
                 metadata.updated_at_utc = now
                 db.commit()
             configure_database("sqlite:///:memory:")
+
+    def suspend_active_campaign(self, campaign_id: str) -> None:
+        with _activation_lock:
+            with SessionLocal() as db:
+                metadata = db.get(CampaignMetadata, str(UUID(campaign_id)))
+                if metadata is None:
+                    raise FileNotFoundError("Save da campanha ativa nao encontrado.")
+                metadata.last_session_state = "suspended"
+                metadata.last_clean_shutdown_utc = None
+                metadata.updated_at_utc = datetime.now(timezone.utc)
+                db.commit()
+            configure_database("sqlite:///:memory:")
+
+    def mark_campaign_closed(self, campaign_id: str, closed_at_utc: datetime) -> None:
+        path = self._path_for(campaign_id)
+        self._validate_campaign_before_open(path, str(UUID(campaign_id)))
+        now = closed_at_utc.astimezone(timezone.utc)
+        with closing(sqlite3.connect(path)) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE campaign_metadata SET last_clean_shutdown_utc = ?, last_session_state = 'closed', "
+                "updated_at_utc = ? WHERE campaign_id = ?",
+                (now.isoformat(), now.isoformat(), str(UUID(campaign_id))),
+            )
+            connection.commit()
 
     @staticmethod
     def _to_info(metadata: CampaignMetadata, path: Path) -> CampaignInfo:
