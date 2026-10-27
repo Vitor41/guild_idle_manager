@@ -160,3 +160,9 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - Suíte independente após o commit: `APP_MODE=desktop`, SQLite em memória, 64 testes em 198,888 s, zero falhas, um skip opt-in. O smoke nativo opt-in passou separadamente em 21,041 s: janela, DOM, bridge, criação, tutorial, retorno, fechamento e servidor. Somente perfil temporário foi usado.
 - Capturas da instalação final em `docs/qa/` foram revisadas: dashboard amplo, mínimo 747 x 593, menu compacto aberto, Missões e gerenciador de campanhas. Não há rolagem horizontal no mínimo; o botão Campanhas e a navegação estão visíveis e operáveis. Aceite visual para essas superfícies e dimensões.
 - Inspeção das entradas do ZIP não encontrou `.env`, `venv`, saves, logs, testes, `.git` ou `.aws`. O instalador foi validado em perfil local temporário; a instalação em **outro Windows limpo** ainda não foi executada. A documentação técnica de DEV estava desatualizada e foi devolvida para ajuste. A branch permanece aberta até a auditoria completa do GDD e o teste externo quando disponível.
+
+### 2026-10-27 — Decisão desta rodada
+
+- `README.md` e `docs/DEV_DESKTOP.md` foram corrigidos nos commits `3d6c524` e `1ecae6f`; contêm comandos de checkout DEV, suíte SQLite, build, instalação e recuperação, sem apagar variáveis pré-existentes do shell. O estado da branch está limpo.
+- A versão DEV pode seguir para teste do usuário na máquina atual: servidor apenas em loopback, janela própria, campanha SQLite, arte local, instalador e atualização isolada demonstrados. Isto **não fecha o GDD**.
+- Pendências de aceite integral: smoke em outro Windows limpo/WebView2 e passagem manual no aplicativo instalado por um fluxo de cada sistema da seção 13, incluindo timers e loot de sucesso/falha. A matriz de serviços e páginas HTTP cobre a lógica, mas não substitui essas interações de ponta a ponta. Manter `feature/desktop-offline` aberta; não integrar nem arquivar o trabalho.
