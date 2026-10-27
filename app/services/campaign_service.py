@@ -29,6 +29,8 @@ class CampaignInfo:
     updated_at_utc: datetime
     content_version: int
     schema_version: int
+    last_clean_shutdown_utc: datetime | None = None
+    last_session_state: str = "created"
     tutorial_status: str = "pending"
     confirmation_preferences: str = "{}"
 
@@ -149,6 +151,19 @@ class CampaignService:
                 db.commit()
         return info
 
+    def close_active_campaign(self, campaign_id: str) -> None:
+        with _activation_lock:
+            with SessionLocal() as db:
+                metadata = db.get(CampaignMetadata, str(UUID(campaign_id)))
+                if metadata is None:
+                    raise FileNotFoundError("Save da campanha ativa nao encontrado.")
+                now = datetime.now(timezone.utc)
+                metadata.last_clean_shutdown_utc = now
+                metadata.last_session_state = "closed"
+                metadata.updated_at_utc = now
+                db.commit()
+            configure_database("sqlite:///:memory:")
+
     @staticmethod
     def _to_info(metadata: CampaignMetadata, path: Path) -> CampaignInfo:
         return CampaignInfo(
@@ -159,6 +174,8 @@ class CampaignService:
             updated_at_utc=metadata.updated_at_utc,
             content_version=metadata.content_version,
             schema_version=metadata.schema_version,
+            last_clean_shutdown_utc=metadata.last_clean_shutdown_utc,
+            last_session_state=metadata.last_session_state,
             tutorial_status=metadata.tutorial_status,
             confirmation_preferences=metadata.confirmation_preferences,
         )
