@@ -87,3 +87,10 @@ Este checklist não substitui o GDD nem os testes de regressão; serve para torn
 - A prancha `design/preview/class-readability-26.png` foi inspecionada: os 26 códigos de `CLASS_TREE` têm um sprite correspondente, sem faltas ou sobras. Em 24 px, os emblemas requerem nome adjacente e fundo sólido para identificação.
 - Achados devolvidos ao DEV durante a implementação: encerrar corretamente campanhas suspensas quando o aplicativo fecha, impedir caminho arbitrário no bridge de exportação e provar navegação/formulários com a proteção de origem ativa. Os testes isolados acima não aprovam o Gate 2.
 - Ainda faltam avaliação da janela real, suite completa, cenários de falha/recuperação e pacote final de sprites integrado antes de qualquer aceite.
+
+### 2026-10-26 — Revisão independente dos commits do Trabalho 2
+
+- Commits examinados: `04c8d11` e `47c4208`.
+- No ambiente isolado `.venv-desktop`, com `APP_MODE=desktop`, a bateria `tests.test_campaign_service`, `tests.test_clock_guard`, `tests.test_desktop_bridge`, `tests.test_desktop_http_smoke` e `tests.test_desktop_security` passou: 27 testes em 218,239 s.
+- Um lançamento adicional com `LOCALAPPDATA` temporário respondeu ao healthcheck em loopback. O processo Python criou uma janela intitulada `Guild Idle Manager` (handle nativo observado), mas ela não apareceu no inventário da automação visual desta sessão. O processo de diagnóstico foi encerrado; nenhum save do usuário foi aberto.
+- Decisão: ainda não aprovar Gate 2. Falta evidência visual/interativa da janela, fechamento limpo com a campanha ativa e revisão do fluxo completo do menu no runtime nativo. Prosseguir com a integração de arte e o QA de empacotamento sem tratar essa lacuna como resolvida.
