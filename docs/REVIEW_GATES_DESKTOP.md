@@ -25,16 +25,16 @@ Este documento é o checklist independente da conversa principal. A fonte do esc
 
 ## Gate 1 — Core offline e campanhas
 
-- [ ] App novo cria e abre campanha SQLite sem PostgreSQL, `.env` ou login.
-- [ ] Duas campanhas têm guildas, recursos, mercenários, itens e progresso isolados.
-- [ ] `campaign_metadata`, preferências de tutorial/confirmação e identificação da campanha persistem entre aberturas.
+- [x] App novo cria e abre campanha SQLite sem PostgreSQL, `.env` ou login.
+- [x] Duas campanhas têm guildas, recursos, mercenários, itens e progresso isolados.
+- [x] `campaign_metadata`, preferências de tutorial/confirmação e identificação da campanha persistem entre aberturas.
 - [ ] Chaves estrangeiras, transações, cascatas e locks possuem comportamento compatível com SQLite.
 - [ ] Missão, masmorra, loot, inventário, contratação e construções continuam respeitando pré-condições e atomicidade.
-- [ ] Alembic/estratégia de schema local é versionada e não executa SQL exclusivo do PostgreSQL.
+- [x] Alembic/estratégia de schema local é versionada e não executa SQL exclusivo do PostgreSQL.
 - [ ] Seeds de conteúdo são aplicadas por versão; segundo carregamento não duplica nem sobrescreve estado.
 - [ ] Modo web anterior ainda inicia ou há justificativa explícita/testada para mudança inevitável.
-- [ ] Testes novos usam diretórios temporários e não escrevem em guildas reais; suite anterior continua verde.
-- [ ] Relatório DEV lista commits, arquivos, comandos, resultados e riscos conhecidos.
+- [x] Testes novos usam diretórios temporários e não escrevem em guildas reais; suite anterior continua verde.
+- [x] Relatório DEV lista commits, arquivos, comandos, resultados e riscos conhecidos.
 
 ## Gate 2 — Janela, save e relógio
 
