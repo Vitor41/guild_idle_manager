@@ -22,7 +22,7 @@ from app.database.connection import SessionLocal, configure_database, create_dat
 from app.models import CampaignMetadata, Guild, GuildResources
 
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 INITIAL_CONTENT_VERSION = 1
 _activation_lock = RLock()
 

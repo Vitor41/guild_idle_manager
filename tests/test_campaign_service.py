@@ -120,7 +120,7 @@ asyncio.run(main())
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
         with closing(sqlite3.connect(first.database_path)) as connection:
-            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "a6b7c8d9e0f1")
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "b7c8d9e0f1a2")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -391,11 +391,54 @@ asyncio.run(main())
                     "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
                 ).fetchone()
                 columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
-                self.assertEqual(revision, "a6b7c8d9e0f1")
+                self.assertEqual(revision, "b7c8d9e0f1a2")
                 self.assertEqual(guild, (7, "Guilda preservada", None))
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
                 self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_upgrade_from_work_one_head_adds_pause_state_and_updates_schema_version(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            campaigns = CampaignService(saves)
+            campaign = campaigns.create_campaign("Save Work 1")
+            command.downgrade(
+                campaigns._alembic_config(campaign.database_path),
+                "a6b7c8d9e0f1",
+            )
+            with closing(sqlite3.connect(campaign.database_path)) as connection:
+                connection.execute(
+                    "UPDATE campaign_metadata SET schema_version = 3 WHERE campaign_id = ?",
+                    (campaign.campaign_id,),
+                )
+                connection.commit()
+                self.assertNotIn(
+                    "capacity_paused",
+                    {row[1] for row in connection.execute("PRAGMA table_info(gathering_assignments)")},
+                )
+
+            migration = campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
+            self.assertIsNotNone(migration)
+            self.assertEqual(migration.previous_revision, "a6b7c8d9e0f1")
+            self.assertEqual(migration.current_revision, "b7c8d9e0f1a2")
+            self.assertEqual(migration.previous_save_version, 3)
+            self.assertEqual(migration.current_save_version, 4)
+            with closing(sqlite3.connect(campaign.database_path)) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
+                    "b7c8d9e0f1a2",
+                )
+                self.assertIn(
+                    "capacity_paused",
+                    {row[1] for row in connection.execute("PRAGMA table_info(gathering_assignments)")},
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT schema_version FROM campaign_metadata WHERE campaign_id = ?",
+                        (campaign.campaign_id,),
+                    ).fetchone()[0],
+                    4,
+                )
 
     def test_failed_migration_restores_original_schema_and_keeps_backup(self):
         with tempfile.TemporaryDirectory() as temp_dir:

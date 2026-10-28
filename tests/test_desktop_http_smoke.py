@@ -185,7 +185,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             "previous_revision": notice["previous_revision"],
             "current_revision": notice["current_revision"],
             "previous_save_version": 1,
-            "current_save_version": 3,
+            "current_save_version": 4,
             "backup_created": True,
         }, notice
         backup_files = list(
@@ -207,7 +207,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert status == 200
         assert b'role="status" aria-live="polite"' in dashboard_body
         assert "Dados da campanha atualizados.".encode("utf-8") in dashboard_body
-        assert "Versão 1 → 3".encode("utf-8") in dashboard_body
+        assert "Versão 1 → 4".encode("utf-8") in dashboard_body
         assert "cópia de segurança foi criada antes da atualização".encode("utf-8") in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in migration_body

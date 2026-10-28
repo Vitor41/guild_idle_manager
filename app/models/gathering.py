@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.connection import Base
@@ -29,6 +29,7 @@ class GatheringAssignment(Base):
     node_code: Mapped[str] = mapped_column(String(80), nullable=False)
     progress_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cycle_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    capacity_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     extra_chance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rng_seed: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     started_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

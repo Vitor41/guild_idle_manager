@@ -91,7 +91,7 @@ def assign_worker(
     return assignment
 
 
-def release_worker(db: Session, guild: Guild, assignment_id: int, *, now: datetime | None = None) -> dict[str, int | str]:
+def release_worker(db: Session, guild: Guild, assignment_id: int, *, now: datetime | None = None) -> dict[str, int | str | bool]:
     assignment = db.scalar(select(GatheringAssignment).where(
         GatheringAssignment.id == assignment_id,
         GatheringAssignment.guild_id == guild.id,
@@ -111,36 +111,93 @@ def advance_assignment(
     *,
     now: datetime | None = None,
     max_seconds: int | None = None,
-) -> dict[str, int | str]:
+) -> dict[str, int | str | bool]:
     timestamp = _utc(now or datetime.now(timezone.utc))
     elapsed = max(0, floor((timestamp - _utc(assignment.checkpoint_at_utc)).total_seconds()))
     if max_seconds is not None:
         elapsed = min(elapsed, max(0, max_seconds))
-    accrued = max(0, assignment.progress_seconds) + elapsed
-    cycles, remainder = divmod(accrued, CYCLE_SECONDS)
     template = _material_template(db, assignment.resource_family, guild.level)
     produced = 0
     stored = 0
-    if cycles and template is not None:
-        for cycle in range(assignment.cycle_count, assignment.cycle_count + cycles):
+    discarded = 0
+    db.flush()
+    capacity = get_inventory_capacity(db, guild)
+    used = get_inventory_usage(db, guild.id)
+
+    # Time spent while full is paused. On the first call after space is freed,
+    # restart the clock there so that paused time cannot become backlog.
+    if assignment.capacity_paused:
+        if used < capacity:
+            assignment.capacity_paused = False
+        assignment.checkpoint_at_utc = timestamp
+        db.add(assignment)
+        return {
+            "cycles": 0,
+            "produced": 0,
+            "stored": 0,
+            "discarded": 0,
+            "extra_chance": min(45, max(0, assignment.extra_chance)),
+            "capacity": capacity,
+            "used": used,
+            "paused": assignment.capacity_paused,
+        }
+
+    if used >= capacity:
+        assignment.capacity_paused = True
+        assignment.checkpoint_at_utc = timestamp
+        db.add(assignment)
+        return {
+            "cycles": 0,
+            "produced": 0,
+            "stored": 0,
+            "discarded": 0,
+            "extra_chance": min(45, max(0, assignment.extra_chance)),
+            "capacity": capacity,
+            "used": used,
+            "paused": True,
+        }
+
+    accrued = max(0, assignment.progress_seconds) + elapsed
+    cycles_available, remainder = divmod(accrued, CYCLE_SECONDS)
+    cycles_processed = 0
+    progress = remainder
+    if cycles_available and template is not None:
+        remaining_capacity = max(0, capacity - used)
+        for cycle in range(assignment.cycle_count, assignment.cycle_count + cycles_available):
             quantity = 1
             cycle_rng = random.Random(f"{assignment.rng_seed}:{cycle}")
             if cycle_rng.randrange(100) < min(45, max(0, assignment.extra_chance)):
                 quantity += 1
             produced += quantity
-        stored, _discarded = add_inventory_quantity_capped(db, guild, template.id, produced)
-    assignment.cycle_count += cycles
-    assignment.progress_seconds = remainder
+            remaining_capacity -= quantity
+            cycles_processed += 1
+            assignment.cycle_count += 1
+            if remaining_capacity <= 0:
+                # The cycle that fills the warehouse is completed (its own
+                # overflow is lost); later cycles remain unprocessed.
+                assignment.capacity_paused = True
+                progress = 0
+                break
+        if produced:
+            stored, _discarded = add_inventory_quantity_capped(db, guild, template.id, produced)
+            discarded = produced - stored
+            if stored < produced:
+                # Re-check the cap at write time in case another inventory
+                # transaction used space after this assignment was measured.
+                assignment.capacity_paused = True
+                progress = 0
+    assignment.progress_seconds = progress
     assignment.checkpoint_at_utc = timestamp
     db.add(assignment)
     return {
-        "cycles": cycles,
+        "cycles": cycles_processed,
         "produced": produced,
         "stored": stored,
-        "discarded": produced - stored,
+        "discarded": discarded,
         "extra_chance": min(45, max(0, assignment.extra_chance)),
-        "capacity": get_inventory_capacity(db, guild),
+        "capacity": capacity,
         "used": get_inventory_usage(db, guild.id),
+        "paused": assignment.capacity_paused,
     }
 
 
@@ -150,9 +207,9 @@ def advance_all_assignments(
     *,
     now: datetime | None = None,
     max_seconds: int | None = None,
-) -> dict[str, dict[str, int | str]]:
+) -> dict[str, dict[str, int | str | bool]]:
     timestamp = _utc(now or datetime.now(timezone.utc))
-    result: dict[str, dict[str, int | str]] = {}
+    result: dict[str, dict[str, int | str | bool]] = {}
     for assignment in list_assignments(db, guild.id):
         result[assignment.resource_family] = advance_assignment(
             db, guild, assignment, now=timestamp, max_seconds=max_seconds,

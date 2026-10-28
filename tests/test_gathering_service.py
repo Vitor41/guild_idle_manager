@@ -55,19 +55,64 @@ class GatheringServiceTests(unittest.TestCase):
         self.assertEqual(second["cycles"], 0)
         self.assertEqual(inventory.quantity, 2)
 
-    def test_shared_capacity_starts_at_1500_and_discards_cycle_overflow(self):
+    def test_filling_cycle_loses_only_its_overflow_and_leaves_later_cycle_pending(self):
         self.assertEqual(get_inventory_capacity(self.db, self.guild), 1500)
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
+        assignment.extra_chance = 45
+        assignment.rng_seed = 4  # Cycle zero deterministically yields the extra unit.
         self.db.add(GuildInventoryItem(guild_id=self.guild.id, item_template_id=self.wood.id, quantity=1499))
         self.db.flush()
-        first = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=1))
-        second = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=2))
+        first = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=5))
+        second = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=6))
         self.db.commit()
         self.assertEqual(first["stored"], 1)
+        self.assertEqual(first["produced"], 2)
+        self.assertEqual(first["discarded"], 1)
+        self.assertEqual(first["cycles"], 1)
+        self.assertTrue(first["paused"])
+        self.assertEqual(assignment.cycle_count, 1)
+        self.assertEqual(assignment.progress_seconds, 0)
         self.assertEqual(second["stored"], 0)
-        self.assertEqual(second["discarded"], 1)
+        self.assertEqual(second["discarded"], 0)
+        self.assertEqual(second["cycles"], 0)
+        self.assertEqual(assignment.cycle_count, 1)
         self.assertEqual(get_inventory_usage(self.db, self.guild.id), 1500)
         self.assertEqual(self.db.scalar(select(Mercenary).where(Mercenary.id == self.worker.id)).status, "gathering")
+
+    def test_full_warehouse_keeps_worker_and_progress_paused(self):
+        assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
+        assignment.progress_seconds = 20
+        self.db.add(GuildInventoryItem(guild_id=self.guild.id, item_template_id=self.wood.id, quantity=1500))
+        self.db.flush()
+
+        result = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=4))
+
+        self.assertTrue(result["paused"])
+        self.assertEqual(result["cycles"], 0)
+        self.assertEqual(assignment.cycle_count, 0)
+        self.assertEqual(assignment.progress_seconds, 20)
+        self.assertEqual(self.db.scalar(select(Mercenary).where(Mercenary.id == self.worker.id)).status, "gathering")
+
+    def test_freeing_space_resumes_from_now_without_duplicate_or_paused_backlog(self):
+        assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
+        inventory = GuildInventoryItem(guild_id=self.guild.id, item_template_id=self.wood.id, quantity=1500)
+        self.db.add(inventory)
+        self.db.flush()
+
+        paused = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=1))
+        self.assertTrue(paused["paused"])
+        inventory.quantity = 1499
+        resumed = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(hours=1))
+        self.assertEqual(resumed["cycles"], 0)
+        self.assertFalse(resumed["paused"])
+        self.assertEqual(assignment.cycle_count, 0)
+        after_one_active_cycle = advance_assignment(
+            self.db, self.guild, assignment, now=self.start + timedelta(hours=1, seconds=60)
+        )
+        self.assertEqual(after_one_active_cycle["cycles"], 1)
+        self.assertEqual(after_one_active_cycle["stored"], 1)
+        self.assertEqual(assignment.cycle_count, 1)
+        self.assertEqual(get_inventory_usage(self.db, self.guild.id), 1500)
 
     def test_warehouse_and_guild_levels_expand_shared_capacity(self):
         self.guild.level = 11
