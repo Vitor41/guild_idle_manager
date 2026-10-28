@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20260623-1">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261027-1">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' and request.url.path.startswith('/regional') %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261028-1">{% endif %}
   </head>
   <body data-app-mode="{{ request.app.state.app_mode }}" data-route="{{ request.url.path }}">
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
@@ -31,6 +32,7 @@
             <a href="/gathering"><span class="nav-icon">⚒</span><span>Coleta</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional"><span class="nav-icon">⚑</span><span>Vigília Regional</span></a>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
             <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
             <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
@@ -135,6 +137,7 @@
           <div><p class="eyebrow">Retorno a guilda</p><h2 id="offline-title">Progresso offline</h2></div>
         </div>
         <div class="offline-summary">
+          {% if request.app.state.app_mode == 'desktop' %}<img src="/static/assets/desktop/evolution/sprites/ui_64/gathering-kit.png" width="48" height="48" alt="" loading="lazy">{% endif %}
           <p>Você ficou ausente por <strong>{{ offline.elapsed_label or 'um período' }}</strong>. Foram reconhecidas <strong>{{ offline.credited_label or '0min' }}</strong>.</p>
           <dl class="offline-reward-grid">
             <div><dt>Ouro</dt><dd>+{{ offline.gold }}</dd></div>
@@ -164,5 +167,6 @@
     <script src="{{ url_for('static', path='/js/main.js') }}?v=20260622-4"></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' and request.url.path.startswith('/regional') %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}" defer></script>{% endif %}
   </body>
 </html>
