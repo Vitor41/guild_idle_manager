@@ -1,0 +1,23 @@
+{
+  "package": "guild-idle-gameplay-evolution-art",
+  "version": "0.1.0",
+  "status": "visual handoff; semantic codes to be bound to implemented gameplay models by DEV",
+  "base": "/static/assets/desktop/evolution/",
+  "source": "Original images generated with Codex imagegen on 2026-10-28. Masters and export script are in design/preview/evolution_masters and design/preview/export_evolution_assets.py.",
+  "illustrations": {
+    "region_home": {"path": "illustrations/region-home.webp", "width": 1600, "height": 900, "role": "campaign selection and home region hero", "fallback": "solid surface with live guild and region names"},
+    "regional_vigil": {"path": "illustrations/regional-vigil.webp", "width": 1600, "height": 900, "role": "vigil report hero", "fallback": "solid surface with live cycle heading and deltas"},
+    "dimensional_portal": {"path": "illustrations/dimensional-portal.webp", "width": 1600, "height": 900, "role": "active portal event hero", "fallback": "solid surface with live event type, deadline and action"},
+    "regional_rebellion": {"path": "illustrations/regional-rebellion.webp", "width": 1600, "height": 900, "role": "rebellion invitation and active event hero", "fallback": "solid surface with live invitation, timer and choice"},
+    "gathering_worksite": {"path": "illustrations/gathering-worksite.webp", "width": 1600, "height": 900, "role": "gathering assignment context", "fallback": "solid surface with live task and material labels"},
+    "achievement_reliquary": {"path": "illustrations/achievement-reliquary.webp", "width": 1600, "height": 900, "role": "claimable rare achievement or reward modal", "fallback": "solid surface with live reward name and claim action"}
+  },
+  "sprites": {
+    "vigil_tower": {"paths": {"64": "sprites/ui_64/vigil-tower.png", "128": "sprites/ui_128/vigil-tower.png", "512": "sprites/master_512/vigil-tower.png"}, "role": "regional vigil"},
+    "portal_gate": {"paths": {"64": "sprites/ui_64/portal-gate.png", "128": "sprites/ui_128/portal-gate.png", "512": "sprites/master_512/portal-gate.png"}, "role": "dimensional portal"},
+    "rebellion_shield": {"paths": {"64": "sprites/ui_64/rebellion-shield.png", "128": "sprites/ui_128/rebellion-shield.png", "512": "sprites/master_512/rebellion-shield.png"}, "role": "regional rebellion"},
+    "gathering_kit": {"paths": {"64": "sprites/ui_64/gathering-kit.png", "128": "sprites/ui_128/gathering-kit.png", "512": "sprites/master_512/gathering-kit.png"}, "role": "designated gathering"},
+    "achievement_medal": {"paths": {"64": "sprites/ui_64/achievement-medal.png", "128": "sprites/ui_128/achievement-medal.png", "512": "sprites/master_512/achievement-medal.png"}, "role": "achievement, claimable or claimed"}
+  },
+  "accessibility": "Every status and decision must be live HTML text; decorative illustrations use alt empty, informative icons use a concise localized alt only when the same meaning is not already adjacent in text. Do not encode active, pending, claimed or blocked in color or motion alone."
+}
