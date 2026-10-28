@@ -15,6 +15,13 @@ def open_campaign_with_migration(app, campaigns: CampaignService, clock_guard: C
         raise ValueError("Retorne ao menu de campanhas e feche a campanha atual antes de abrir outra.")
     if active is not None:
         return campaigns.inspect_campaign(campaign_id), None, None
+    suspended = getattr(app.state, "suspended_campaigns", set())
+    for offline_campaign_id in list(suspended):
+        try:
+            clock_guard.end_offline_period_in_save_picker(campaigns, offline_campaign_id)
+        except FileNotFoundError:
+            pass
+        suspended.discard(offline_campaign_id)
     info, migration = campaigns.activate_campaign_with_migration(campaign_id, mark_active=False)
     summary = clock_guard.activate_campaign(info.campaign_id)
     info = campaigns.inspect_campaign(info.campaign_id)
@@ -36,8 +43,8 @@ def suspend_campaign(app, campaigns: CampaignService, clock_guard: ClockGuard) -
     info = getattr(app.state, "active_campaign", None)
     if info is None:
         return
-    clock_guard.suspend_campaign(info.campaign_id)
-    campaigns.suspend_active_campaign(info.campaign_id)
+    offline_started_at = clock_guard.suspend_campaign(info.campaign_id)
+    campaigns.suspend_active_campaign(info.campaign_id, offline_started_at=offline_started_at)
     app.state.active_campaign = None
     suspended = getattr(app.state, "suspended_campaigns", set())
     suspended.add(info.campaign_id)

@@ -8,18 +8,19 @@ from app.services.prd2_balance_service import (
 
 
 class OfflineMaterialRewardTests(unittest.TestCase):
-    def test_one_three_and_eight_hours(self):
+    def test_passive_offline_reward_excludes_gathering_materials(self):
         one_hour = calculate_offline_material_rewards(20, 3600, 8 * 3600, 2)
         three_hours = calculate_offline_material_rewards(20, 3 * 3600, 8 * 3600, 2)
         eight_hours = calculate_offline_material_rewards(20, 8 * 3600, 8 * 3600, 2)
-        self.assertEqual((one_hour["wood_base"], one_hour["ore_base"]), (12, 8))
-        self.assertEqual((three_hours["wood_base"], three_hours["ore_base"]), (36, 24))
-        self.assertEqual((eight_hours["wood_base"], eight_hours["ore_base"]), (96, 64))
-        self.assertEqual(one_hour["warehouse_bonus"], 2)
+        self.assertEqual((one_hour["wood_base"], one_hour["ore_base"]), (0, 0))
+        self.assertEqual((three_hours["wood_base"], three_hours["ore_base"]), (0, 0))
+        self.assertEqual((eight_hours["wood_base"], eight_hours["ore_base"]), (0, 0))
+        self.assertEqual(one_hour["warehouse_bonus"], 0)
+        self.assertEqual(eight_hours["special_crystals"], 1)
 
     def test_crystal_only_at_effective_cap(self):
-        self.assertEqual(calculate_offline_material_rewards(20, 7 * 3600, 8 * 3600)["crystals"], 0)
-        self.assertEqual(calculate_offline_material_rewards(20, 8 * 3600, 8 * 3600)["crystals"], 1)
+        self.assertEqual(calculate_offline_material_rewards(20, 7 * 3600, 8 * 3600)["special_crystals"], 0)
+        self.assertEqual(calculate_offline_material_rewards(20, 8 * 3600, 8 * 3600)["special_crystals"], 1)
 
 
 class Prd2MissionBalanceTests(unittest.TestCase):

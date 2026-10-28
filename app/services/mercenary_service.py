@@ -338,8 +338,11 @@ def recruit_mercenary(
 
 
 def get_mercenary_summary(db: Session, guild_id: int) -> dict[str, int]:
+    busy = count_mercenaries_by_status(db, guild_id, "busy")
+    gathering = count_mercenaries_by_status(db, guild_id, "gathering")
     return {
         "total": count_mercenaries_by_guild(db, guild_id),
         "available": count_mercenaries_by_status(db, guild_id, "available"),
-        "busy": count_mercenaries_by_status(db, guild_id, "busy"),
+        "busy": busy + gathering,
+        "gathering": gathering,
     }

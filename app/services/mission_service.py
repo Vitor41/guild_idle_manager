@@ -25,7 +25,7 @@ from app.repositories.mission_repository import (
     list_mission_runs_by_guild,
 )
 from app.repositories.mercenary_repository import list_available_mercenaries_by_ids
-from app.repositories.item_repository import add_inventory_quantity, list_active_drops_for_mission
+from app.repositories.item_repository import list_active_drops_for_mission
 from app.services.building_service import (
     apply_material_quantity_bonus,
     apply_xp_bonus,
@@ -43,6 +43,7 @@ from app.services.equipment_service import (
     get_party_chance_details,
 )
 from app.services.guild_progression_service import add_guild_xp_from_mercenary_xp
+from app.services.inventory_capacity_service import add_inventory_quantity_capped
 from app.services.progression_service import add_xp_and_apply_levelups
 from app.services.result_detail_service import parse_result_details, serialize_result_details
 from app.services.skill_service import get_party_skill_effects
@@ -605,8 +606,11 @@ def claim_mission_loot(
                         )
                 else:
                     quantity = apply_material_quantity_bonus(quantity, db, guild.id, is_primary=is_primary_material)
-                    add_inventory_quantity(db, guild.id, drop.item_template_id, quantity)
-                    item_results.append(f"{clean_generated_name(drop.item_template.name)} x{quantity}")
+                    stored, discarded = add_inventory_quantity_capped(db, guild, drop.item_template_id, quantity)
+                    item_results.append(
+                        f"{clean_generated_name(drop.item_template.name)} x{stored}"
+                        + (f" · {discarded} excedente descartado (Armazém cheio)" if discarded else "")
+                    )
                     if is_primary_material and profession_bonus:
                         record_guild_stat(db, guild.id, "profession_bonus_uses", 1)
 

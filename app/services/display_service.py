@@ -17,6 +17,7 @@ RARITY_LABELS = {
 STATUS_LABELS = {
     "available": "Disponível",
     "busy": "Ocupado",
+    "gathering": "Em coleta",
     "in_progress": "Em andamento",
     "completed": "Concluído",
     "failed": "Falhou",

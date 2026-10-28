@@ -13,7 +13,6 @@ from app.models.guild import Guild, GuildResources
 from app.models.item import ItemTemplate
 from app.repositories.crafting_repository import create_recipe, get_active_recipe, get_recipe_by_name, list_active_recipes
 from app.repositories.item_repository import (
-    add_inventory_quantity,
     get_inventory_item,
     get_item_instance_by_guild,
     get_item_template_by_name,
@@ -25,6 +24,7 @@ from app.repositories.item_repository import (
 from app.services.building_service import get_building_level
 from app.services.equipment_service import create_equipment_instance_from_template, get_item_power_score
 from app.services.guild_progression_service import add_guild_xp
+from app.services.inventory_capacity_service import add_inventory_quantity_capped, get_inventory_capacity, get_inventory_usage
 from app.services.achievement_service import record_guild_stat, unlock_codex_reference
 from app.services.display_service import clean_generated_name
 
@@ -271,12 +271,16 @@ def craft_recipe(db: Session, guild: Guild, resources: GuildResources | None, re
     resources.gold -= recipe.gold_cost
     for owned, quantity in owned_materials:
         remove_inventory_quantity(db, owned, quantity)
+    db.flush()
     output = recipe.output_item_template
     if output.item_type == "equipment":
         for _ in range(recipe.output_quantity):
             create_equipment_instance_from_template(db, guild.id, output)
     else:
-        add_inventory_quantity(db, guild.id, output.id, recipe.output_quantity)
+        capacity_left = max(0, get_inventory_capacity(db, guild) - get_inventory_usage(db, guild.id))
+        if recipe.output_quantity > capacity_left:
+            raise CraftingError("Espaço insuficiente no Armazém para guardar o resultado.")
+        add_inventory_quantity_capped(db, guild, output.id, recipe.output_quantity)
     add_guild_xp(guild, 5)
     record_guild_stat(db, guild.id, "crafted_count", recipe.output_quantity)
     unlock_codex_reference(db, guild.id, "item", output.id)

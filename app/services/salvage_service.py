@@ -12,7 +12,6 @@ from app.models.guild import Guild, GuildResources
 from app.models.item import ItemTemplate
 from app.models.salvage import GuildSalvageJob
 from app.repositories.item_repository import (
-    add_inventory_quantity,
     delete_item_instance,
     list_available_item_instances_by_guild,
     list_available_item_instances_for_template,
@@ -23,6 +22,7 @@ from app.repositories.salvage_repository import (
     get_salvage_job_by_guild,
     list_salvage_jobs_by_guild,
 )
+from app.services.inventory_capacity_service import add_inventory_quantity_capped
 from app.services.building_service import get_building_level
 from app.services.display_service import clean_generated_name
 
@@ -221,8 +221,10 @@ def collect_salvage(db: Session, guild: Guild, job_id: str) -> GuildSalvageJob:
         raise SalvageError("O Ferreiro ainda não terminou a desmontagem.")
 
     result_quantity = sum(SystemRandom().randint(1, 3) for _ in range(job.quantity))
-    add_inventory_quantity(db, guild.id, job.material_template_id, result_quantity)
-    job.result_quantity = result_quantity
+    stored_quantity, _discarded_quantity = add_inventory_quantity_capped(
+        db, guild, job.material_template_id, result_quantity,
+    )
+    job.result_quantity = stored_quantity
     job.status = "completed"
     job.collected_at = now
     db.add(job)

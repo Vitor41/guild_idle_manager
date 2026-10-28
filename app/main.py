@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
@@ -7,10 +8,19 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.database.connection import SessionLocal
 from app.routes import session_routes
-from app.routes import blacksmith_routes, building_routes, class_change_routes, class_routes, codex_routes, dashboard_routes, dock_routes, dungeon_routes, guide_routes, home_routes, inventory_routes, market_routes, mercenary_routes, mission_routes, profession_routes, progress_routes, tavern_routes, tier_routes, tutorial_routes
+from app.routes import blacksmith_routes, building_routes, class_change_routes, class_routes, codex_routes, dashboard_routes, dock_routes, dungeon_routes, gathering_routes, guide_routes, home_routes, inventory_routes, market_routes, mercenary_routes, mission_routes, profession_routes, progress_routes, tavern_routes, tier_routes, tutorial_routes
 
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+async def _desktop_gameplay_ticks() -> None:
+    while True:
+        await asyncio.sleep(30)
+        active = getattr(app.state, "active_campaign", None)
+        guard = getattr(app.state, "clock_guard", None)
+        if active is not None and guard is not None:
+            guard.checkpoint_active_session(active.campaign_id)
 
 
 app = FastAPI(
@@ -85,6 +95,7 @@ app.include_router(dungeon_routes.router)
 app.include_router(profession_routes.router)
 app.include_router(dock_routes.router)
 app.include_router(building_routes.router)
+app.include_router(gathering_routes.router)
 app.include_router(inventory_routes.router)
 app.include_router(market_routes.router)
 app.include_router(blacksmith_routes.router)
@@ -118,6 +129,7 @@ def seed_global_catalogs() -> None:
                 app.state.clock_guard,
                 settings.active_campaign_id,
             )
+        app.state.gameplay_tick_task = asyncio.get_running_loop().create_task(_desktop_gameplay_ticks())
         return
 
     db = SessionLocal()
@@ -131,6 +143,10 @@ def seed_global_catalogs() -> None:
 
 @app.on_event("shutdown")
 def close_desktop_campaign() -> None:
+    if settings.app_mode == "desktop":
+        tick_task = getattr(app.state, "gameplay_tick_task", None)
+        if tick_task is not None:
+            tick_task.cancel()
     if settings.app_mode == "desktop" and (
         getattr(app.state, "active_campaign", None) is not None
         or getattr(app.state, "suspended_campaigns", set())

@@ -62,6 +62,15 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn("desktop-operations-intro", missions)
         self.assertIn("desktop-operations-intro", dungeons)
 
+    def test_gathering_screen_uses_local_evolution_art_and_navigation(self):
+        script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
+        template = (ROOT / "app" / "templates" / "gathering" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('["/gathering", "material-wood"]', script)
+        self.assertIn("evolution/illustrations/gathering-worksite.webp", template)
+        self.assertIn("evolution/sprites/ui_64/gathering-kit.png", template)
+        self.assertTrue((ART_ROOT / "evolution" / "illustrations" / "gathering-worksite.webp").is_file())
+        self.assertTrue((ART_ROOT / "evolution" / "sprites" / "ui_64" / "gathering-kit.png").is_file())
+
     def test_desktop_button_hover_and_focus_keep_secondary_and_danger_roles(self):
         theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
 

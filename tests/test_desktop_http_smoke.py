@@ -164,7 +164,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 "SELECT last_session_state, last_clean_shutdown_utc FROM campaign_metadata WHERE campaign_id = ?",
                 (campaign.campaign_id,),
             ).fetchone()
-        assert session_state == "suspended" and closed_at is None, (session_state, closed_at)
+        assert session_state == "offline" and closed_at is not None, (session_state, closed_at)
 
         previous_campaign = saves.create_campaign("Save de versao anterior")
         with closing(sqlite3.connect(previous_campaign.database_path)) as connection:
@@ -185,7 +185,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             "previous_revision": notice["previous_revision"],
             "current_revision": notice["current_revision"],
             "previous_save_version": 1,
-            "current_save_version": 2,
+            "current_save_version": 3,
             "backup_created": True,
         }, notice
         backup_files = list(
@@ -207,7 +207,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert status == 200
         assert b'role="status" aria-live="polite"' in dashboard_body
         assert "Dados da campanha atualizados.".encode("utf-8") in dashboard_body
-        assert "Versão 1 → 2".encode("utf-8") in dashboard_body
+        assert "Versão 1 → 3".encode("utf-8") in dashboard_body
         assert "cópia de segurança foi criada antes da atualização".encode("utf-8") in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in migration_body

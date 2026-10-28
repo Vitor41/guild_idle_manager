@@ -46,20 +46,20 @@ class ClockGuardTests(unittest.TestCase):
         guard = ClockGuard(store, wall_clock=lambda: now[0])
         store.save("campaign-a", close)
 
-        below_minimum = guard.evaluate_return("campaign-a", "closed", close, close + timedelta(minutes=4))
+        below_minimum = guard.evaluate_return("campaign-a", "offline", close, close + timedelta(minutes=4))
         self.assertEqual(below_minimum.credited_seconds, 0)
-        normal = guard.evaluate_return("campaign-a", "closed", close, close + timedelta(minutes=30))
+        normal = guard.evaluate_return("campaign-a", "offline", close, close + timedelta(minutes=30))
         self.assertEqual(normal.credited_seconds, 30 * 60)
-        capped = guard.evaluate_return("campaign-a", "closed", close, close + timedelta(hours=10))
+        capped = guard.evaluate_return("campaign-a", "offline", close, close + timedelta(hours=10))
         self.assertEqual(capped.credited_seconds, 8 * 60 * 60)
 
-        rolled_back = guard.evaluate_return("campaign-a", "closed", close, close - timedelta(seconds=1))
+        rolled_back = guard.evaluate_return("campaign-a", "offline", close, close - timedelta(seconds=1))
         self.assertEqual(rolled_back.credited_seconds, 0)
         self.assertIn("voltou", rolled_back.warning)
         imported = guard.evaluate_return("campaign-b", "created", close - timedelta(days=2), close)
         self.assertEqual(imported.credited_seconds, 0)
 
-    def test_clean_close_awards_once_and_open_session_time_is_not_idle(self):
+    def test_only_explicit_offline_mode_awards_and_report_waits_for_acknowledgement(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             campaigns = CampaignService(Path(temp_dir) / "saves")
             campaign = campaigns.create_campaign("Teste do relogio")
@@ -73,19 +73,26 @@ class ClockGuardTests(unittest.TestCase):
 
             campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
             summary = guard.activate_campaign(campaign.campaign_id)
-            self.assertEqual(summary["credited_seconds"], 30 * 60)
+            self.assertIsNone(summary)
             with SessionLocal() as db:
                 resources = db.scalar(select(GuildResources))
-                self.assertEqual(resources.gold, 102)
+                self.assertEqual(resources.gold, 100)
 
-            fake.tick(2 * 60 * 60)
-            second_open_summary = guard.activate_campaign(campaign.campaign_id)
-            self.assertEqual(second_open_summary["credited_seconds"], 0)
+            guard.suspend_campaign(campaign.campaign_id)
+            campaigns.suspend_active_campaign(campaign.campaign_id, offline_started_at=fake.now)
+            fake.tick(30 * 60)
+            campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
+            report = guard.activate_campaign(campaign.campaign_id)
+            self.assertEqual(report["credited_seconds"], 30 * 60)
             with SessionLocal() as db:
                 resources = db.scalar(select(GuildResources))
                 metadata = db.get(CampaignMetadata, campaign.campaign_id)
                 self.assertEqual(resources.gold, 102)
+                self.assertEqual(metadata.stamina_seconds, 7 * 60 * 60 + 30 * 60)
                 self.assertEqual(metadata.last_session_state, "active")
+                self.assertIsNotNone(metadata.pending_offline_report)
+            self.assertTrue(guard.acknowledge_offline_report(campaign.campaign_id, report["report_id"]))
+            self.assertTrue(guard.acknowledge_offline_report(campaign.campaign_id, report["report_id"]))
             campaigns.close_active_campaign(campaign.campaign_id)
 
     def test_import_initializes_new_anchor_without_crediting_pre_import_time(self):
@@ -96,7 +103,7 @@ class ClockGuardTests(unittest.TestCase):
             closed_at = datetime(2025, 12, 1, tzinfo=timezone.utc)
             with closing(sqlite3.connect(original.database_path)) as connection:
                 connection.execute(
-                    "UPDATE campaign_metadata SET last_session_state = 'closed', last_clean_shutdown_utc = ?",
+                    "UPDATE campaign_metadata SET last_session_state = 'offline', last_clean_shutdown_utc = ?",
                     (closed_at.isoformat(),),
                 )
                 connection.commit()
@@ -123,11 +130,11 @@ class ClockGuardTests(unittest.TestCase):
         future = closed + timedelta(hours=10)
         store.save("campaign-cap", closed)
         guard = ClockGuard(store, wall_clock=lambda: future)
-        capped = guard.evaluate_return("campaign-cap", "closed", closed, future)
+        capped = guard.evaluate_return("campaign-cap", "offline", closed, future)
         self.assertEqual(capped.credited_seconds, 8 * 60 * 60)
         store.save("campaign-cap", future)
 
-        rewound = guard.evaluate_return("campaign-cap", "closed", closed, closed + timedelta(hours=2))
+        rewound = guard.evaluate_return("campaign-cap", "offline", closed, closed + timedelta(hours=2))
 
         self.assertEqual(rewound.credited_seconds, 0)
         self.assertIn("voltou", rewound.warning)
@@ -142,11 +149,11 @@ class ClockGuardTests(unittest.TestCase):
             store = MemoryAnchorStore()
             guard = ClockGuard(store, wall_clock=lambda: now)
 
-            missing = guard.evaluate_return(campaign.campaign_id, "closed", now - timedelta(days=2), now)
+            missing = guard.evaluate_return(campaign.campaign_id, "offline", now - timedelta(days=2), now)
             self.assertEqual(missing.credited_seconds, 0)
             self.assertIn("não foi encontrada", missing.warning.lower())
             store.values[campaign.campaign_id] = {"campaign_id": campaign.campaign_id, "high_water_utc": "invalid"}
-            corrupt = guard.evaluate_return(campaign.campaign_id, "closed", now - timedelta(days=2), now)
+            corrupt = guard.evaluate_return(campaign.campaign_id, "offline", now - timedelta(days=2), now)
             self.assertEqual(corrupt.credited_seconds, 0)
             self.assertIn("inválida", corrupt.warning.lower())
             interrupted = guard.evaluate_return(campaign.campaign_id, "active", now - timedelta(days=2), now)
@@ -216,14 +223,14 @@ class ClockGuardTests(unittest.TestCase):
                 restarted_app.state.suspended_campaigns = set()
                 reopened_first, summary = open_campaign(restarted_app, campaigns, guard, first.campaign_id)
                 self.assertEqual(reopened_first.campaign_id, first.campaign_id)
-                self.assertEqual(summary["credited_seconds"], 30 * 60)
+                self.assertIsNone(summary)
                 with SessionLocal() as db:
                     resources = db.scalar(select(GuildResources))
-                    self.assertEqual(resources.gold, 102)
+                    self.assertEqual(resources.gold, 100)
                 _, immediate_summary = open_campaign(restarted_app, campaigns, guard, first.campaign_id)
                 self.assertIsNone(immediate_summary)
                 with SessionLocal() as db:
-                    self.assertEqual(db.scalar(select(GuildResources)).gold, 102)
+                    self.assertEqual(db.scalar(select(GuildResources)).gold, 100)
                 close_campaign(restarted_app, campaigns, guard)
             finally:
                 configure_database("sqlite:///:memory:")
@@ -245,7 +252,30 @@ class ClockGuardTests(unittest.TestCase):
             close_suspended_campaigns(app, campaigns, guard)
 
             self.assertFalse(app.state.suspended_campaigns)
-            self.assertEqual(campaigns.inspect_campaign(campaign.campaign_id).last_session_state, "closed")
+            self.assertEqual(campaigns.inspect_campaign(campaign.campaign_id).last_session_state, "offline")
+
+    def test_explicit_offline_period_after_app_exit_is_credited_once(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Modo offline")
+            fake = FakeClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
+            guard = ClockGuard(MemoryAnchorStore(), fake.wall, lambda: fake.monotonic)
+            app = FastAPI()
+            app.state.active_campaign = None
+            app.state.suspended_campaigns = set()
+            open_campaign(app, campaigns, guard, campaign.campaign_id)
+            suspend_campaign(app, campaigns, guard)
+            close_suspended_campaigns(app, campaigns, guard)
+
+            fake.tick(30 * 60)
+            restarted_app = FastAPI()
+            restarted_app.state.active_campaign = None
+            restarted_app.state.suspended_campaigns = set()
+            _info, report = open_campaign(restarted_app, campaigns, guard, campaign.campaign_id)
+            self.assertEqual(report["credited_seconds"], 30 * 60)
+            with SessionLocal() as db:
+                self.assertEqual(db.scalar(select(GuildResources)).gold, 102)
+            close_campaign(restarted_app, campaigns, guard)
 
 
 if __name__ == "__main__":

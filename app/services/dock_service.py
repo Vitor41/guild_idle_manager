@@ -8,7 +8,7 @@ from app.core.time import as_utc
 from app.core.time import prepare_timer_context
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.guild import Guild, GuildResources
-from app.repositories.item_repository import add_inventory_quantity
+from app.services.inventory_capacity_service import add_inventory_quantity_capped, get_inventory_capacity, get_inventory_usage
 from app.services.building_service import ensure_guild_buildings, get_building_level
 from app.services.equipment_service import create_equipment_instance_from_template
 from app.services.building_balance_service import docks_values
@@ -114,12 +114,16 @@ def buy_dock_offer(db: Session, guild: Guild, resources: GuildResources, offer_i
     total = offer.unit_price * quantity
     if resources.gold < total:
         raise DockError("Ouro insuficiente para esta compra.")
+    if offer.item_template.item_type != "equipment":
+        capacity_left = max(0, get_inventory_capacity(db, guild) - get_inventory_usage(db, guild.id))
+        if quantity > capacity_left:
+            raise DockError("Espaço insuficiente no Armazém para esta compra.")
     resources.gold -= total
     offer.remaining_stock -= quantity
     if offer.item_template.item_type == "equipment":
         create_equipment_instance_from_template(db, guild.id, offer.item_template)
     else:
-        add_inventory_quantity(db, guild.id, offer.item_template_id, quantity)
+        add_inventory_quantity_capped(db, guild, offer.item_template_id, quantity)
     db.add_all([resources, offer])
     record_guild_stat(db, guild.id, "dock_purchases", 1)
     db.commit()

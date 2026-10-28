@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -32,6 +33,7 @@ class CampaignPlayer:
     is_admin: bool = False
     tutorial_status: str = "pending"
     confirmation_preferences: str = "{}"
+    home_region: str = ""
 
 
 def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | None:
@@ -40,7 +42,17 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
     campaign = getattr(request.app.state, "active_campaign", None)
     if campaign is None:
         return None
-    return db.get(CampaignMetadata, campaign.campaign_id)
+    metadata = db.get(CampaignMetadata, campaign.campaign_id)
+    if metadata is None:
+        return None
+    if metadata.pending_offline_report:
+        try:
+            import json
+
+            request.state.offline_summary = json.loads(metadata.pending_offline_report)
+        except (TypeError, ValueError):
+            request.state.offline_summary = {"warning": "O relatório offline salvo está indisponível. As recompensas não foram creditadas novamente."}
+    return metadata
 
 
 def get_current_user(request: Request, db: DbSession) -> User | None:
@@ -93,9 +105,10 @@ def get_current_player(request: Request, db: DbSession) -> User | CampaignPlayer
         request.app.state.pending_campaign_migration = None
     return CampaignPlayer(
         id=campaign.campaign_id,
-        username=campaign.campaign_name,
+        username=(db.scalar(select(Guild.name).where(Guild.campaign_id == campaign.campaign_id)) or campaign.campaign_name),
         tutorial_status=campaign.tutorial_status,
         confirmation_preferences=campaign.confirmation_preferences,
+        home_region=campaign.home_region,
     )
 
 

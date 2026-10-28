@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Coleta · Guild Idle Manager{% endblock %}
+
+{% block content %}
+  <section class="dashboard gathering-page" aria-labelledby="gathering-title">
+    <header class="desktop-page-hero gathering-hero">
+      <img src="/static/assets/desktop/evolution/illustrations/gathering-worksite.webp" width="1600" height="900" alt="" fetchpriority="high">
+      <div>
+        <img class="gathering-kit" src="/static/assets/desktop/evolution/sprites/ui_64/gathering-kit.png" width="48" height="48" alt="" loading="lazy">
+        <p class="eyebrow">Madeira · minério · couro</p>
+        <h1 id="gathering-title">Postos de coleta</h1>
+        <p>Designe até três mercenários. Cada pessoa ocupa um posto e continua trabalhando enquanto houver espaço no Armazém.</p>
+      </div>
+    </header>
+
+    {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+    {% if message %}<p class="form-success" role="status">{{ message }}</p>{% endif %}
+
+    <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">
+      <div><span>Armazém compartilhado</span><strong>{{ "{:,.0f}".format(used).replace(",", ".") }} / {{ "{:,.0f}".format(capacity).replace(",", ".") }}</strong></div>
+      <progress max="{{ capacity }}" value="{{ [used, capacity]|min }}">{{ used }} de {{ capacity }}</progress>
+      <p>Equipamentos únicos não ocupam espaço. A produção excedente é descartada quando cada ciclo termina.</p>
+    </section>
+
+    <div class="gathering-grid">
+      {% for family, label, node in [("wood", "Madeira", "Bosque"), ("ore", "Minério", "Pedreira"), ("leather", "Couro", "Terras de caça")] %}
+        {% set assignment = assignments|selectattr('resource_family', 'equalto', family)|first %}
+        <article class="panel gathering-card">
+          <div class="gathering-card__heading"><span class="eyebrow">{{ node }}</span><h2>{{ label }}</h2></div>
+          {% if assignment %}
+            <p class="gathering-status">Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
+            <p>1 unidade por ciclo de 60 s{% if assignment.extra_chance %} · +{{ assignment.extra_chance }}% de chance para 1 extra{% endif %}</p>
+            <p class="gathering-progress">Próximo ciclo em {{ 60 - assignment.progress_seconds }} s</p>
+            <form method="post" action="/gathering/release/{{ assignment.id }}">
+              <button class="secondary-button" type="submit">Liberar trabalhador</button>
+            </form>
+          {% else %}
+            <p class="gathering-status">Posto disponível</p>
+            {% if workers %}
+              <form method="post" action="/gathering/assign" class="gathering-assignment-form">
+                <input type="hidden" name="resource_family" value="{{ family }}">
+                <label for="worker-{{ family }}">Mercenário</label>
+                <select id="worker-{{ family }}" name="mercenary_id" required>
+                  {% for worker in workers %}<option value="{{ worker.id }}">{{ worker.name }} · nível {{ worker.level }}</option>{% endfor %}
+                </select>
+                <button type="submit">Designar para coleta</button>
+              </form>
+            {% else %}
+              <p>Não há mercenários disponíveis. Libere alguém de uma atividade para iniciar a coleta.</p>
+            {% endif %}
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

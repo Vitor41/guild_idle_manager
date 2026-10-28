@@ -120,7 +120,7 @@ asyncio.run(main())
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
         with closing(sqlite3.connect(first.database_path)) as connection:
-            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "a1b2c3d4e5f6")
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "a6b7c8d9e0f1")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -391,7 +391,7 @@ asyncio.run(main())
                     "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
                 ).fetchone()
                 columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
-                self.assertEqual(revision, "a1b2c3d4e5f6")
+                self.assertEqual(revision, "a6b7c8d9e0f1")
                 self.assertEqual(guild, (7, "Guilda preservada", None))
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
@@ -444,6 +444,13 @@ asyncio.run(main())
     def _assert_campaign_file_lifecycle(self, temp_path: Path) -> None:
         campaigns = CampaignService(temp_path / "saves")
         original = campaigns.create_campaign("Arquivo de origem", "Guilda original")
+        with closing(sqlite3.connect(original.database_path)) as connection:
+            connection.execute(
+                "INSERT INTO offline_return_reports "
+                "(report_id, campaign_id, report_json, created_at_utc) VALUES (?, ?, ?, ?)",
+                (str(uuid4()), original.campaign_id, "{}", datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
         export_path = temp_path / "exports" / "origem.gimcampaign"
         campaigns.export_campaign(original.campaign_id, export_path)
         with self.assertRaises(FileExistsError):
@@ -459,6 +466,10 @@ asyncio.run(main())
             guild_id = connection.execute("SELECT campaign_id FROM guilds").fetchone()[0]
             self.assertEqual(metadata_id, imported.campaign_id)
             self.assertEqual(guild_id, imported.campaign_id)
+            report_campaign_ids = connection.execute(
+                "SELECT DISTINCT campaign_id FROM offline_return_reports"
+            ).fetchall()
+            self.assertEqual(report_campaign_ids, [(imported.campaign_id,)])
 
         backup_path = campaigns.create_manual_backup(imported.campaign_id)
         campaigns.rename_campaign(imported.campaign_id, "Nome temporario")

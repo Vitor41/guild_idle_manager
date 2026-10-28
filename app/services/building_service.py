@@ -352,7 +352,7 @@ def get_building_bonus_summary(db: Session, guild_id: int) -> dict[str, int]:
         "material_quantity_bonus": get_material_quantity_bonus(db, guild_id),
         "max_mission_party_size": get_max_allowed_mission_party_size(db, guild_id),
         "max_run_multiplier": get_max_run_multiplier(db, guild_id),
-        "tavern_quality_bonus_percent": min(20, (get_building_level(db, guild_id, "tavern") // 5) * 2),
+        "tavern_quality_bonus_percent": min(30, (get_building_level(db, guild_id, "tavern") // 5) * 2),
         "offline_bonus_percent": get_building_level(db, guild_id, "warehouse") // 5,
         "market_slots": market_values(get_building_level(db, guild_id, "market"))["slots"],
     }

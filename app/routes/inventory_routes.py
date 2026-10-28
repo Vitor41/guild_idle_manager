@@ -11,6 +11,7 @@ from app.services.equipment_service import get_equipment_slot_label
 from app.services.icon_service import get_item_icon, get_item_icon_path
 from app.services.display_service import BONUS_ATTRIBUTE_LABELS, clean_generated_name, item_type_label, rarity_label
 from app.services.inventory_service import get_equipment_for_guild, get_inventory_for_guild
+from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 
 
 router = APIRouter(prefix="/inventory")
@@ -38,6 +39,7 @@ def inventory_index(
         inventory_item.rarity_label = rarity_label(inventory_item.item_template.rarity)
         inventory_item.item_type_label = item_type_label(inventory_item.item_template.item_type)
     equipment_items = get_equipment_for_guild(db, guild.id)
+    equipment_count = len(equipment_items)
     for item in equipment_items:
         item.display_name = clean_generated_name(item.item_template.name)
         item.view_icon = get_item_icon(item)
@@ -87,6 +89,9 @@ def inventory_index(
             "resources": resources,
             "inventory_items": inventory_items,
             "equipment_items": equipment_items,
+            "equipment_count": equipment_count,
+            "warehouse_capacity": get_inventory_capacity(db, guild),
+            "warehouse_used": get_inventory_usage(db, guild.id),
             "get_item_icon": get_item_icon,
             "get_equipment_slot_label": get_equipment_slot_label,
             "selected_category": selected_category,

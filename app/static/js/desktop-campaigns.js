@@ -53,7 +53,7 @@
       showMessage("Preparando a campanha...");
       const result = await request("/desktop/api/campaigns", {
         method: "POST",
-        body: JSON.stringify({ campaign_name: form.get("campaign_name"), guild_name: form.get("guild_name") }),
+        body: JSON.stringify({ guild_name: form.get("guild_name") }),
       });
       window.location.assign(result.redirect);
     } catch (error) { showMessage(error.message, true); }
@@ -80,11 +80,11 @@
       } catch (error) { showMessage(error.message, true); }
     });
     card.querySelector(".rename-campaign").addEventListener("click", async () => {
-      const name = await ask({ title: "Renomear campanha", message: "Escolha um novo nome para sua campanha.", input: true, value: card.querySelector("h3").textContent });
+      const name = await ask({ title: "Renomear guilda", message: "Escolha um novo nome para sua guilda.", input: true, value: card.querySelector("h3").textContent });
       if (name === null) return;
       try {
-        const result = await request(`/desktop/api/campaigns/${id}`, { method: "PATCH", body: JSON.stringify({ campaign_name: name }) });
-        card.querySelector("h3").textContent = result.campaign_name;
+        const result = await request(`/desktop/api/campaigns/${id}`, { method: "PATCH", body: JSON.stringify({ guild_name: name }) });
+        card.querySelector("h3").textContent = result.guild_name;
       } catch (error) { showMessage(error.message, true); }
     });
     card.querySelector(".backup-campaign").addEventListener("click", async () => {

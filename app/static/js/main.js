@@ -28,9 +28,36 @@ function updateGenericCountdowns() {
 const offlineDialog = document.querySelector("#offline-dialog[data-auto-open]");
 if (offlineDialog) {
   offlineDialog.showModal();
-  offlineDialog.querySelectorAll("[data-offline-close]").forEach((button) => {
-    button.addEventListener("click", () => offlineDialog.close());
-  });
+    offlineDialog.addEventListener("cancel", (event) => event.preventDefault());
+    offlineDialog.querySelectorAll("[data-offline-close]").forEach((button) => {
+      button.addEventListener("click", () => offlineDialog.close());
+    });
+    offlineDialog.querySelector("[data-offline-ack]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const error = offlineDialog.querySelector(".offline-ack-error");
+      button.disabled = true;
+      error.hidden = true;
+      try {
+        const reportId = offlineDialog.dataset.reportId;
+        if (offlineDialog.dataset.requiresAck === "True" && !reportId) {
+          throw new Error("Não foi possível identificar o relatório salvo. Ele continuará pendente para recuperação.");
+        }
+        if (reportId) {
+          const response = await fetch("/desktop/api/offline-report/acknowledge", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ report_id: reportId }),
+          });
+          if (!response.ok) throw new Error("Não foi possível confirmar o relatório. Tente novamente.");
+        }
+        offlineDialog.close();
+      } catch (failure) {
+        error.textContent = failure.message;
+        error.hidden = false;
+      } finally {
+        button.disabled = false;
+      }
+    });
 }
 
 const tutorialInvite = document.querySelector("#tutorial-invite[data-tutorial-invite]");

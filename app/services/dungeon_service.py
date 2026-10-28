@@ -23,7 +23,7 @@ from app.repositories.dungeon_repository import (
     list_active_dungeon_templates_for_band,
     list_dungeon_runs_by_guild,
 )
-from app.repositories.item_repository import add_inventory_quantity, get_item_template_by_name
+from app.repositories.item_repository import get_item_template_by_name
 from app.repositories.mercenary_repository import list_available_mercenaries_by_ids
 from app.repositories.mission_repository import list_available_mercenaries_by_guild
 from app.services.building_service import (
@@ -42,6 +42,7 @@ from app.services.equipment_service import (
     get_party_chance_details,
 )
 from app.services.guild_progression_service import add_guild_xp_from_mercenary_xp
+from app.services.inventory_capacity_service import add_inventory_quantity_capped
 from app.services.mission_service import format_duration_seconds
 from app.services.progression_service import add_xp_and_apply_levelups
 from app.services.result_detail_service import parse_result_details, serialize_result_details
@@ -539,8 +540,11 @@ def claim_dungeon_loot(
                         quantity, db, guild.id,
                         is_primary=primary_material is not None and drop.id == primary_material.id,
                     )
-                    add_inventory_quantity(db, guild.id, drop.item_template_id, quantity)
-                    item_results.append(f"{clean_generated_name(drop.item_template.name)} x{quantity}")
+                    stored, discarded = add_inventory_quantity_capped(db, guild, drop.item_template_id, quantity)
+                    item_results.append(
+                        f"{clean_generated_name(drop.item_template.name)} x{stored}"
+                        + (f" · {discarded} excedente descartado (Armazém cheio)" if discarded else "")
+                    )
 
     dungeon_run.status = "completed" if success else "failed"
     dungeon_run.success = success

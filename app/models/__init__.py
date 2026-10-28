@@ -15,12 +15,14 @@ from app.models.tavern import GuildTavernState, TavernConfig, TavernSpecialOffer
 from app.models.user import User
 from app.models.content import ContentSeedRun, ProfessionTemplate, ProfessionTraining
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
-from app.models.campaign import CampaignMetadata
+from app.models.campaign import CampaignMetadata, OfflineReturnReport
+from app.models.gathering import GatheringAssignment
 
 
 __all__ = [
     "BuildingTemplate",
     "CampaignMetadata",
+    "OfflineReturnReport",
     "AchievementTemplate",
     "Base",
     "ClassChangeRun",
@@ -35,6 +37,7 @@ __all__ = [
     "Guild",
     "GuildBuilding",
     "GuildResources",
+    "GatheringAssignment",
     "GuildTavernState",
     "GuildInventoryItem",
     "GuildItemInstance",

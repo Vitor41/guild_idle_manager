@@ -15,12 +15,11 @@ templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "tem
 
 
 class CampaignCreate(BaseModel):
-    campaign_name: str = Field(min_length=1, max_length=120)
     guild_name: str = Field(min_length=1, max_length=120)
 
 
 class CampaignRename(BaseModel):
-    campaign_name: str = Field(min_length=1, max_length=120)
+    guild_name: str = Field(min_length=1, max_length=120)
 
 
 def _services(request: Request):
@@ -53,7 +52,7 @@ def create_campaign(payload: CampaignCreate, request: Request):
     if getattr(request.app.state, "active_campaign", None) is not None:
         raise HTTPException(status_code=409, detail="Volte ao menu de campanhas antes de criar outra.")
     try:
-        info = campaigns.create_campaign(payload.campaign_name, payload.guild_name)
+        info = campaigns.create_campaign(payload.guild_name, payload.guild_name)
         clock_guard.initialize_campaign(info.campaign_id)
         info, summary = open_campaign(request.app, campaigns, clock_guard, info.campaign_id)
         return {"campaign_id": info.campaign_id, "redirect": "/dashboard", "offline_summary": summary}
@@ -94,15 +93,30 @@ def return_to_campaigns(request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class OfflineReportAcknowledgement(BaseModel):
+    report_id: str = Field(min_length=1, max_length=64)
+
+
+@router.post("/api/offline-report/acknowledge")
+def acknowledge_offline_report(payload: OfflineReportAcknowledgement, request: Request):
+    _campaigns, clock_guard = _services(request)
+    active = getattr(request.app.state, "active_campaign", None)
+    if active is None:
+        raise HTTPException(status_code=409, detail="Abra uma campanha antes de confirmar o relatório.")
+    if not clock_guard.acknowledge_offline_report(active.campaign_id, payload.report_id):
+        raise HTTPException(status_code=409, detail="Este relatório já foi confirmado ou não corresponde à campanha.")
+    return {"acknowledged": True}
+
+
 @router.patch("/api/campaigns/{campaign_id}")
 def rename_campaign(campaign_id: str, payload: CampaignRename, request: Request):
     campaigns, _ = _services(request)
     try:
-        info = campaigns.rename_campaign(campaign_id, payload.campaign_name)
+        info = campaigns.rename_guild(campaign_id, payload.guild_name)
         active = getattr(request.app.state, "active_campaign", None)
         if active and active.campaign_id == info.campaign_id:
             request.app.state.active_campaign = info
-        return {"campaign_id": info.campaign_id, "campaign_name": info.campaign_name}
+        return {"campaign_id": info.campaign_id, "guild_name": info.guild_name}
     except (ValueError, FileNotFoundError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -123,6 +137,7 @@ def delete_campaign(campaign_id: str, request: Request):
     active = getattr(request.app.state, "active_campaign", None)
     try:
         backup_path = campaigns.delete_campaign(campaign_id, active.campaign_id if active else None)
+        getattr(request.app.state, "suspended_campaigns", set()).discard(campaign_id)
         return {"message": "Campanha excluída. Uma cópia de segurança foi mantida.", "backup_name": backup_path.name}
     except (ValueError, FileNotFoundError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

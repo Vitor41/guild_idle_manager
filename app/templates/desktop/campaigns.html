@@ -24,8 +24,6 @@
       <section class="create-panel" aria-labelledby="new-campaign-title">
         <h2 id="new-campaign-title">Fundar uma campanha</h2>
         <form id="create-campaign-form">
-          <label for="campaign-name">Nome da campanha</label>
-          <input id="campaign-name" name="campaign_name" maxlength="120" required autocomplete="off" placeholder="Ex.: As Cinzas de Eldoria">
           <label for="guild-name">Nome da guilda</label>
           <input id="guild-name" name="guild_name" maxlength="120" required autocomplete="off" placeholder="Ex.: Companhia do Luar">
           <button class="button primary" type="submit">Criar e jogar</button>
@@ -44,15 +42,16 @@
           <div class="campaign-list">
             {% for campaign in campaigns %}
               <article class="campaign-card" data-campaign-id="{{ campaign.campaign_id }}">
-                <div class="campaign-mark" aria-hidden="true">{{ campaign.campaign_name[:1]|upper }}</div>
+                <div class="campaign-mark" aria-hidden="true">{{ campaign.guild_name[:1]|upper }}</div>
                 <div class="campaign-details">
-                  <h3>{{ campaign.campaign_name }}</h3>
+                  <h3>{{ campaign.guild_name }}</h3>
+                  <p class="campaign-region">{{ campaign.home_region }}</p>
                   <p>Atualizada {{ campaign.updated_at_utc.strftime('%d/%m/%Y %H:%M') }} UTC</p>
                   <p class="save-status">{% if campaign.last_session_state == 'closed' %}Encerrada corretamente{% elif campaign.last_session_state == 'active' %}Sessão anterior interrompida{% else %}Campanha pronta{% endif %}</p>
                 </div>
                 <div class="campaign-actions">
                   <button class="button primary open-campaign" type="button">Continuar</button>
-                  <button class="button quiet rename-campaign" type="button">Renomear</button>
+                  <button class="button quiet rename-campaign" type="button">Renomear guilda</button>
                   <button class="button quiet backup-campaign" type="button">Criar cópia de segurança</button>
                   <button class="button quiet export-campaign" type="button">Exportar</button>
                   <button class="button quiet restore-campaign" type="button">Restaurar cópia</button>

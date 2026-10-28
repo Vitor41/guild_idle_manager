@@ -28,6 +28,7 @@
             <a href="/tavern"><span class="nav-icon">♜</span><span>Taverna</span></a>
             <a href="/mercenaries"><span class="nav-icon">⚔</span><span>Mercenários</span></a>
             <a href="/missions"><span class="nav-icon">✦</span><span>Missões</span></a>
+            <a href="/gathering"><span class="nav-icon">⚒</span><span>Coleta</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
@@ -64,17 +65,17 @@
             <div class="guild-banner">
               <span class="crest-placeholder">✦</span>
               <div>
-                <span class="topbar-label">Guilda</span>
+                <span class="topbar-label">Guilda{% if current_user.home_region is defined and current_user.home_region %} · {{ current_user.home_region }}{% endif %}</span>
                 <strong>{{ guild.name if guild is defined and guild else 'Administração' }}</strong>
               </div>
             </div>
             <div class="topbar-stats">
-              <span><small>{% if request.app.state.app_mode == 'desktop' %}Campanha{% else %}Usuário{% endif %}</small>{{ current_user.username }}</span>
+              {% if request.app.state.app_mode != 'desktop' %}<span><small>Usuário</small>{{ current_user.username }}</span>{% endif %}
               <span><small>Nível</small>{{ guild.level if guild is defined and guild else '-' }}</span>
               <span><small>XP</small>{{ guild.xp if guild is defined and guild and guild.xp is defined else 0 }}</span>
               {% if resources is defined and resources %}{{ treasury(resources) }}{% endif %}
             </div>
-            {% if request.app.state.app_mode == 'desktop' %}<form method="post" action="/desktop/return-to-campaigns"><button class="topbar-back-button" type="submit" title="Suspender esta campanha e voltar ao menu">Campanhas</button></form>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<form method="post" action="/desktop/return-to-campaigns"><button class="topbar-back-button" type="submit" title="Registrar o início do modo offline e voltar à seleção">Modo Offline</button></form>{% endif %}
             {% if request.app.state.app_mode != 'desktop' %}<a class="topbar-power-button" href="/logout" title="Sair" aria-label="Sair"><span aria-hidden="true">&#x23FB;</span></a>{% endif %}
           </header>
           <main class="page-shell game-shell">
@@ -128,27 +129,36 @@
     {% endif %}
     {% if request is defined and request.state._state.get('offline_summary') %}
       {% set offline = request.state._state.get('offline_summary') %}
-      <dialog class="confirmation-dialog offline-dialog" id="offline-dialog" data-auto-open aria-labelledby="offline-title">
+      <dialog class="confirmation-dialog offline-dialog" id="offline-dialog" data-auto-open data-report-id="{{ offline.report_id or '' }}" data-requires-ack="{{ request.app.state.app_mode == 'desktop' }}" aria-labelledby="offline-title">
         <div class="confirmation-dialog__header">
           <span class="confirmation-dialog__sigil" aria-hidden="true">$</span>
           <div><p class="eyebrow">Retorno a guilda</p><h2 id="offline-title">Progresso offline</h2></div>
-          <button class="confirmation-dialog__close" type="button" data-offline-close aria-label="Fechar">&times;</button>
         </div>
         <div class="offline-summary">
-          <p>Você ficou ausente por <strong>{{ offline.elapsed_label }}</strong>.</p>
+          <p>Você ficou ausente por <strong>{{ offline.elapsed_label or 'um período' }}</strong>. Foram reconhecidas <strong>{{ offline.credited_label or '0min' }}</strong>.</p>
           <dl class="offline-reward-grid">
             <div><dt>Ouro</dt><dd>+{{ offline.gold }}</dd></div>
-            <div><dt>Madeira</dt><dd>+{{ offline.materials.wood_total }}</dd></div>
-            <div><dt>Minérios</dt><dd>+{{ offline.materials.ore_total }}</dd></div>
-            <div><dt>Cristais</dt><dd>+{{ offline.materials.crystals }}</dd></div>
+            <div><dt>Cristal especial</dt><dd>+{{ offline.special_crystals or 0 }}</dd></div>
+            <div><dt>Estamina consumida</dt><dd>{{ ((offline.stamina_spent_seconds or 0) // 3600) }}h</dd></div>
+            <div><dt>Estamina restante</dt><dd>{{ ((offline.stamina_remaining_seconds or 0) // 3600) }}h</dd></div>
           </dl>
+          {% if offline.gathering %}
+            <h3>Produção por tarefa</h3>
+            <ul class="offline-gathering-list">
+              {% for family, result in offline.gathering.items() %}
+                <li><strong>{{ {'wood': 'Madeira', 'ore': 'Minério', 'leather': 'Couro'}.get(family, family) }}</strong><span>{{ result.cycles }} ciclos{% if result.extra_chance %} · +{{ result.extra_chance }}% de chance extra{% endif %} · {{ result.stored }} guardadas{% if result.discarded %} · {{ result.discarded }} excedente descartado{% endif %}</span></li>
+              {% endfor %}
+            </ul>
+          {% endif %}
           {% if offline.cap_reached %}<p class="note">O limite offline de {{ offline.cap_hours }} horas foi atingido.</p>{% endif %}
+          {% if offline.warning %}<p class="note">{{ offline.warning }}</p>{% endif %}
           <footer class="offline-summary__notice">
-            <span>O bônus do Armazém já está aplicado.</span>
+            <span>Madeira, minério e couro dependem das tarefas de coleta designadas.</span>
             <span>Para mais detalhes, acesse o <a href="/guide#idle">Guia do Jogo</a>.</span>
           </footer>
         </div>
-        <div class="confirmation-dialog__actions"><button type="button" data-offline-close>Continuar</button></div>
+        <p class="offline-ack-error" role="alert" hidden></p>
+        <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
     <script src="{{ url_for('static', path='/js/main.js') }}?v=20260622-4"></script>

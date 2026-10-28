@@ -9,6 +9,7 @@ import sqlite3
 import shutil
 from threading import RLock
 from uuid import UUID, uuid4
+from hashlib import sha256
 
 from alembic import command
 from alembic.config import Config
@@ -21,7 +22,7 @@ from app.database.connection import SessionLocal, configure_database, create_dat
 from app.models import CampaignMetadata, Guild, GuildResources
 
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 INITIAL_CONTENT_VERSION = 1
 _activation_lock = RLock()
 
@@ -30,6 +31,8 @@ _activation_lock = RLock()
 class CampaignInfo:
     campaign_id: str
     campaign_name: str
+    guild_name: str
+    home_region: str
     database_path: Path
     created_at_utc: datetime
     updated_at_utc: datetime
@@ -277,6 +280,9 @@ class CampaignService:
                     content_version=0,
                     last_session_state="created",
                 )
+                regions = ("Vale da Fronteira", "Bosque de Âmbar", "Costa das Brumas", "Terras de Cinza", "Picos do Norte")
+                region_index = int.from_bytes(sha256(campaign_id.encode("utf-8")).digest()[:4], "big") % len(regions)
+                metadata.home_region = regions[region_index]
                 db.add(metadata)
                 db.flush()
                 guild = Guild(campaign_id=campaign_id, name=guild_name, level=1, reputation=0)
@@ -291,7 +297,7 @@ class CampaignService:
                 metadata.content_version = INITIAL_CONTENT_VERSION
                 metadata.updated_at_utc = datetime.now(timezone.utc)
                 db.commit()
-                return self._to_info(metadata, database_path)
+                return self._to_info(metadata, database_path, guild.name)
         except Exception:
             if engine is not None:
                 engine.dispose()
@@ -333,7 +339,8 @@ class CampaignService:
                     raise ValueError("Este formato de campanha não é compatível com o aplicativo.")
                 if metadata.schema_version > CURRENT_SCHEMA_VERSION:
                     raise ValueError("A campanha foi criada por uma versão mais recente do aplicativo.")
-                return self._to_info(metadata, path)
+                guild = db.scalar(select(Guild).where(Guild.campaign_id == metadata.campaign_id))
+                return self._to_info(metadata, path, guild.name if guild else metadata.campaign_name)
         finally:
             engine.dispose()
 
@@ -368,6 +375,20 @@ class CampaignService:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 "UPDATE campaign_metadata SET campaign_name = ?, updated_at_utc = CURRENT_TIMESTAMP WHERE campaign_id = ?",
+                (name, info.campaign_id),
+            )
+            connection.commit()
+        return self.inspect_campaign(campaign_id)
+
+    def rename_guild(self, campaign_id: str, guild_name: str) -> CampaignInfo:
+        name = guild_name.strip()
+        if not name or len(name) > 120:
+            raise ValueError("O nome da guilda deve ter entre 1 e 120 caracteres.")
+        info = self.inspect_campaign(campaign_id)
+        with closing(sqlite3.connect(info.database_path)) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE guilds SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE campaign_id = ?",
                 (name, info.campaign_id),
             )
             connection.commit()
@@ -497,6 +518,11 @@ class CampaignService:
                     "UPDATE guilds SET campaign_id = ? WHERE campaign_id = ?",
                     (campaign_id, source_campaign_id),
                 )
+                if "offline_return_reports" in tables:
+                    connection.execute(
+                        "UPDATE offline_return_reports SET campaign_id = ? WHERE campaign_id = ?",
+                        (campaign_id, source_campaign_id),
+                    )
                 connection.commit()
                 violations = connection.execute("PRAGMA foreign_key_check").fetchall()
                 if violations:
@@ -545,15 +571,16 @@ class CampaignService:
                 db.commit()
             configure_database("sqlite:///:memory:")
 
-    def suspend_active_campaign(self, campaign_id: str) -> None:
+    def suspend_active_campaign(self, campaign_id: str, offline_started_at: datetime | None = None) -> None:
         with _activation_lock:
             with SessionLocal() as db:
                 metadata = db.get(CampaignMetadata, str(UUID(campaign_id)))
                 if metadata is None:
                     raise FileNotFoundError("Arquivo da campanha ativa não encontrado.")
-                metadata.last_session_state = "suspended"
-                metadata.last_clean_shutdown_utc = None
-                metadata.updated_at_utc = datetime.now(timezone.utc)
+                metadata.last_session_state = "offline"
+                now = offline_started_at or datetime.now(timezone.utc)
+                metadata.last_clean_shutdown_utc = now
+                metadata.updated_at_utc = now
                 db.commit()
             configure_database("sqlite:///:memory:")
 
@@ -571,10 +598,12 @@ class CampaignService:
             connection.commit()
 
     @staticmethod
-    def _to_info(metadata: CampaignMetadata, path: Path) -> CampaignInfo:
+    def _to_info(metadata: CampaignMetadata, path: Path, guild_name: str | None = None) -> CampaignInfo:
         return CampaignInfo(
             campaign_id=metadata.campaign_id,
             campaign_name=metadata.campaign_name,
+            guild_name=guild_name or metadata.campaign_name,
+            home_region=metadata.home_region,
             database_path=path,
             created_at_utc=metadata.created_at_utc,
             updated_at_utc=metadata.updated_at_utc,

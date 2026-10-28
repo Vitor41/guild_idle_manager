@@ -9,23 +9,23 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import sqlite3
 from math import floor
 from time import monotonic
 from typing import Callable, Protocol
+from uuid import uuid4
 
 from sqlalchemy import select
 
 from app.core.game_balance import OFFLINE_CAP_SECONDS, OFFLINE_MINIMUM_SECONDS
 from app.database.connection import SessionLocal
-from app.models import CampaignMetadata, Guild
+from app.models import CampaignMetadata, Guild, OfflineReturnReport
 from app.repositories.guild_repository import get_resources_by_guild_id
-from app.repositories.item_repository import add_inventory_quantity
-from app.services.building_service import get_material_quantity_bonus
 from app.services.offline_progress_service import (
-    _canonical_material,
     calculate_offline_material_rewards,
     get_passive_gold_rate,
 )
+from app.services.gathering_service import advance_all_assignments
 
 
 class ClockAnchorError(RuntimeError):
@@ -140,6 +140,7 @@ def _as_utc(value: datetime) -> datetime:
 class ClockDecision:
     elapsed_seconds: int = 0
     credited_seconds: int = 0
+    stamina_seconds: int = 0
     warning: str | None = None
 
 
@@ -161,11 +162,12 @@ class ClockGuard:
         session_state: str,
         closed_at_utc: datetime | None,
         now_utc: datetime | None = None,
+        stamina_seconds: int = OFFLINE_CAP_SECONDS,
     ) -> ClockDecision:
         now = _as_utc(now_utc or self.wall_clock())
-        if session_state in {"created", "initializing", "suspended"}:
+        if session_state in {"created", "initializing", "suspended", "closed"}:
             return ClockDecision()
-        if session_state != "closed" or closed_at_utc is None:
+        if session_state != "offline" or closed_at_utc is None:
             return ClockDecision(warning="A sessão anterior não foi encerrada corretamente; o progresso retroativo foi ignorado.")
         try:
             anchor = self.anchor_store.load(campaign_id)
@@ -184,10 +186,18 @@ class ClockGuard:
         elapsed = max(0, floor((now - interval_start).total_seconds()))
         if elapsed < OFFLINE_MINIMUM_SECONDS:
             return ClockDecision(elapsed_seconds=elapsed)
+        credited = min(elapsed, OFFLINE_CAP_SECONDS, max(0, stamina_seconds))
         return ClockDecision(
             elapsed_seconds=elapsed,
-            credited_seconds=min(elapsed, OFFLINE_CAP_SECONDS),
-            warning="O progresso offline foi limitado ao máximo permitido." if elapsed > OFFLINE_CAP_SECONDS else None,
+            credited_seconds=credited,
+            stamina_seconds=credited,
+            warning=(
+                "O progresso offline foi limitado ao máximo permitido."
+                if elapsed > OFFLINE_CAP_SECONDS
+                else "O progresso offline foi limitado pela estamina disponível."
+                if credited < min(elapsed, OFFLINE_CAP_SECONDS)
+                else None
+            ),
         )
 
     def activate_campaign(self, campaign_id: str) -> dict[str, object] | None:
@@ -199,34 +209,69 @@ class ClockGuard:
                 raise ValueError("A campanha não contém dados válidos de uma guilda para abrir.")
             previous_state = metadata.last_session_state
             closed_at = metadata.last_clean_shutdown_utc
-            decision = self.evaluate_return(campaign_id, previous_state, closed_at, now)
+            decision = self.evaluate_return(campaign_id, previous_state, closed_at, now, metadata.stamina_seconds)
             resources = get_resources_by_guild_id(db, guild.id)
             summary: dict[str, object] | None = None
-            if decision.credited_seconds and resources is not None:
+            gathering = advance_all_assignments(
+                db, guild, now=now, max_seconds=decision.credited_seconds,
+            )
+            if metadata.pending_offline_report:
+                try:
+                    summary = json.loads(metadata.pending_offline_report)
+                except (TypeError, ValueError):
+                    summary = {"warning": "O relatório offline salvo não pôde ser lido; nenhuma recompensa foi creditada novamente."}
+            elif decision.credited_seconds and resources is not None:
                 rate = get_passive_gold_rate(db, guild)
                 gold = floor(rate["total"] * decision.credited_seconds / 3600)
                 materials = calculate_offline_material_rewards(
                     rate["total"],
                     decision.credited_seconds,
                     OFFLINE_CAP_SECONDS,
-                    get_material_quantity_bonus(db, guild.id),
                 )
                 resources.gold += gold
-                for family, quantity_key in (("wood", "wood_total"), ("ore", "ore_total"), ("gem", "crystals")):
-                    quantity = materials[quantity_key]
-                    if quantity > 0:
-                        template = _canonical_material(db, family)
-                        if template is not None:
-                            add_inventory_quantity(db, guild.id, template.id, quantity)
+                resources.special_crystals += materials["special_crystals"]
+                metadata.stamina_seconds = max(0, metadata.stamina_seconds - decision.stamina_seconds)
                 summary = {
+                    "report_id": str(uuid4()),
                     "elapsed_seconds": decision.elapsed_seconds,
                     "credited_seconds": decision.credited_seconds,
+                    "elapsed_label": _format_elapsed(decision.elapsed_seconds),
+                    "credited_label": _format_elapsed(decision.credited_seconds),
                     "gold": gold,
                     "materials": materials,
+                    "special_crystals": materials["special_crystals"],
+                    "gathering": gathering,
+                    "stamina_spent_seconds": decision.stamina_seconds,
+                    "stamina_remaining_seconds": metadata.stamina_seconds,
+                    "cap_reached": decision.credited_seconds >= OFFLINE_CAP_SECONDS,
+                    "cap_hours": OFFLINE_CAP_SECONDS // 3600,
+                    "rate": rate,
                     "warning": decision.warning,
                 }
-            elif decision.warning:
-                summary = {"elapsed_seconds": decision.elapsed_seconds, "credited_seconds": 0, "gold": 0, "warning": decision.warning}
+                metadata.pending_offline_report = json.dumps(summary, separators=(",", ":"))
+                db.add(OfflineReturnReport(
+                    report_id=summary["report_id"], campaign_id=campaign_id,
+                    report_json=metadata.pending_offline_report, created_at_utc=now,
+                ))
+            elif decision.warning or decision.elapsed_seconds >= OFFLINE_MINIMUM_SECONDS:
+                summary = {
+                    "report_id": str(uuid4()),
+                    "elapsed_seconds": decision.elapsed_seconds,
+                    "credited_seconds": 0,
+                    "elapsed_label": _format_elapsed(decision.elapsed_seconds),
+                    "credited_label": "0min",
+                    "gold": 0,
+                    "special_crystals": 0,
+                    "gathering": gathering,
+                    "stamina_spent_seconds": 0,
+                    "stamina_remaining_seconds": metadata.stamina_seconds,
+                    "warning": decision.warning or "Não havia estamina disponível para processar o período offline.",
+                }
+                metadata.pending_offline_report = json.dumps(summary, separators=(",", ":"))
+                db.add(OfflineReturnReport(
+                    report_id=summary["report_id"], campaign_id=campaign_id,
+                    report_json=metadata.pending_offline_report, created_at_utc=now,
+                ))
             metadata.last_session_state = "active"
             metadata.updated_at_utc = now
             db.commit()
@@ -240,6 +285,47 @@ class ClockGuard:
         self._session_started[campaign_id] = self.monotonic_clock()
         return summary
 
+    def acknowledge_offline_report(self, campaign_id: str, report_id: str) -> bool:
+        with SessionLocal() as db:
+            metadata = db.get(CampaignMetadata, campaign_id)
+            if metadata is None:
+                return False
+            if not metadata.pending_offline_report:
+                history = db.get(OfflineReturnReport, report_id)
+                return bool(history and history.campaign_id == campaign_id and history.acknowledged_at_utc)
+            try:
+                report = json.loads(metadata.pending_offline_report)
+            except (TypeError, ValueError):
+                return False
+            if report.get("report_id") != report_id:
+                return False
+            history = db.get(OfflineReturnReport, report_id)
+            if history is not None and history.acknowledged_at_utc is None:
+                history.acknowledged_at_utc = _as_utc(self.wall_clock())
+                db.add(history)
+            metadata.pending_offline_report = None
+            metadata.updated_at_utc = _as_utc(self.wall_clock())
+            db.commit()
+            return True
+
+    def end_offline_period_in_save_picker(self, campaign_service, campaign_id: str) -> None:
+        """Stop eligibility when the user keeps the app open in the save picker."""
+        info = campaign_service.inspect_campaign(campaign_id)
+        now = _as_utc(self.wall_clock())
+        with sqlite3.connect(info.database_path) as connection:
+            connection.execute(
+                "UPDATE campaign_metadata SET last_session_state = 'suspended', "
+                "last_clean_shutdown_utc = NULL, updated_at_utc = ? WHERE campaign_id = ?",
+                (now.isoformat(), campaign_id),
+            )
+            connection.commit()
+        try:
+            anchor = self.anchor_store.load(campaign_id)
+            previous_high_water = _as_utc(datetime.fromisoformat(anchor["high_water_utc"])) if anchor else now
+        except (ClockAnchorError, KeyError, ValueError, TypeError):
+            previous_high_water = now
+        self.anchor_store.save(campaign_id, max(previous_high_water, now))
+
     def initialize_campaign(self, campaign_id: str) -> None:
         now = _as_utc(self.wall_clock())
         try:
@@ -251,8 +337,8 @@ class ClockGuard:
 
     def close_campaign(self, campaign_id: str, campaign_service) -> float:
         now = _as_utc(self.wall_clock())
-        started = self._session_started.pop(campaign_id, self.monotonic_clock())
-        active_seconds = max(0.0, self.monotonic_clock() - started)
+        active_seconds = self.checkpoint_active_session(campaign_id)
+        self._session_started.pop(campaign_id, None)
         try:
             anchor = self.anchor_store.load(campaign_id)
             previous_high_water = _as_utc(datetime.fromisoformat(anchor["high_water_utc"])) if anchor else now
@@ -271,10 +357,12 @@ class ClockGuard:
         except (ClockAnchorError, KeyError, ValueError, TypeError):
             previous_high_water = now
         self.anchor_store.save(campaign_id, max(previous_high_water, now))
-        campaign_service.mark_campaign_closed(campaign_id, now)
+        # Campaigns in the picker were explicitly placed in offline mode. Preserve that
+        # intent across a process exit; merely closing the picker grants no offline time.
 
-    def suspend_campaign(self, campaign_id: str) -> None:
+    def suspend_campaign(self, campaign_id: str) -> datetime:
         now = _as_utc(self.wall_clock())
+        self.checkpoint_active_session(campaign_id)
         self._session_started.pop(campaign_id, None)
         try:
             anchor = self.anchor_store.load(campaign_id)
@@ -282,3 +370,41 @@ class ClockGuard:
         except (ClockAnchorError, KeyError, ValueError, TypeError):
             previous_high_water = now
         self.anchor_store.save(campaign_id, max(previous_high_water, now))
+        with SessionLocal() as db:
+            metadata = db.get(CampaignMetadata, campaign_id)
+            guild = db.scalar(select(Guild).where(Guild.campaign_id == campaign_id))
+            if guild is not None:
+                advance_all_assignments(db, guild, now=now)
+            if metadata is not None:
+                metadata.last_clean_shutdown_utc = now
+                metadata.last_session_state = "offline"
+                metadata.updated_at_utc = now
+                db.commit()
+        return now
+
+    def checkpoint_active_session(self, campaign_id: str) -> int:
+        now_monotonic = self.monotonic_clock()
+        started = self._session_started.get(campaign_id)
+        if started is None:
+            return 0
+        active_seconds = max(0, floor(now_monotonic - started))
+        self._session_started[campaign_id] = now_monotonic
+        with SessionLocal() as db:
+            metadata = db.get(CampaignMetadata, campaign_id)
+            if metadata is not None and active_seconds:
+                accumulated = max(0, metadata.stamina_recharge_remainder_seconds) + active_seconds
+                completed_hours, remainder = divmod(accumulated, 3600)
+                metadata.stamina_seconds = min(8 * 60 * 60, metadata.stamina_seconds + completed_hours * 2 * 60 * 60)
+                metadata.stamina_recharge_remainder_seconds = 0 if metadata.stamina_seconds >= 8 * 60 * 60 else remainder
+                metadata.updated_at_utc = _as_utc(self.wall_clock())
+            guild = db.scalar(select(Guild).where(Guild.campaign_id == campaign_id))
+            if guild is not None:
+                advance_all_assignments(db, guild, now=_as_utc(self.wall_clock()))
+            db.commit()
+        return active_seconds
+
+
+def _format_elapsed(seconds: int) -> str:
+    hours, remainder = divmod(max(0, seconds), 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{hours}h {minutes}min" if hours else f"{minutes}min"

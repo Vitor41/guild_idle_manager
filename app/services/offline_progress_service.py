@@ -9,8 +9,7 @@ from app.models.item import ItemTemplate
 from app.models.mercenary import Mercenary
 from app.repositories.guild_repository import get_resources_by_guild_id
 from app.repositories.market_repository import create_guild_activity, get_guild_activity
-from app.services.building_service import get_building_level, get_material_quantity_bonus
-from app.repositories.item_repository import add_inventory_quantity
+from app.services.building_service import get_building_level
 from app.core.game_balance import OFFLINE_BASE_GOLD_PER_HOUR, OFFLINE_CAP_SECONDS, OFFLINE_MINIMUM_SECONDS
 
 
@@ -52,20 +51,16 @@ def calculate_offline_material_rewards(
     cap_seconds: int,
     warehouse_bonus: int = 0,
 ) -> dict[str, int]:
-    wood_rate = floor(max(0, gold_per_hour) * 0.60)
-    ore_rate = floor(max(0, gold_per_hour) * 0.40)
-    wood_base = floor(wood_rate * max(0, credited_seconds) / 3600)
-    ore_base = floor(ore_rate * max(0, credited_seconds) / 3600)
-    applied_bonus = max(0, warehouse_bonus) if wood_base > 0 or ore_base > 0 else 0
     return {
-        "wood_rate": wood_rate,
-        "ore_rate": ore_rate,
-        "wood_base": wood_base,
-        "ore_base": ore_base,
-        "warehouse_bonus": applied_bonus,
-        "wood_total": wood_base + applied_bonus,
-        "ore_total": ore_base + applied_bonus,
+        "wood_rate": 0,
+        "ore_rate": 0,
+        "wood_base": 0,
+        "ore_base": 0,
+        "warehouse_bonus": 0,
+        "wood_total": 0,
+        "ore_total": 0,
         "crystals": 1 if credited_seconds >= cap_seconds else 0,
+        "special_crystals": 1 if credited_seconds >= cap_seconds else 0,
     }
 
 
@@ -108,27 +103,21 @@ def process_offline_progress(db: Session, guild: Guild) -> dict[str, object] | N
     credited_seconds = min(elapsed_seconds, OFFLINE_CAP_SECONDS)
     rate = get_passive_gold_rate(db, guild)
     gold = floor(rate["total"] * credited_seconds / 3600)
-    materials = calculate_offline_material_rewards(
-        rate["total"], credited_seconds, OFFLINE_CAP_SECONDS,
-        get_material_quantity_bonus(db, guild.id),
-    )
+    materials = calculate_offline_material_rewards(rate["total"], credited_seconds, OFFLINE_CAP_SECONDS)
     resources = get_resources_by_guild_id(db, guild.id)
     if resources is not None and gold > 0:
         resources.gold += gold
         db.add(resources)
-    for family, quantity_key in (("wood", "wood_total"), ("ore", "ore_total"), ("gem", "crystals")):
-        quantity = materials[quantity_key]
-        if quantity <= 0:
-            continue
-        template = _canonical_material(db, family)
-        if template is not None:
-            add_inventory_quantity(db, guild.id, template.id, quantity)
+    if resources is not None:
+        resources.special_crystals += materials["special_crystals"]
+        db.add(resources)
     db.commit()
     return {
         "elapsed_label": _format_elapsed(elapsed_seconds),
         "credited_label": _format_elapsed(credited_seconds),
         "gold": gold,
         "materials": materials,
+        "special_crystals": materials["special_crystals"],
         "cap_reached": credited_seconds >= OFFLINE_CAP_SECONDS,
         "cap_hours": OFFLINE_CAP_SECONDS // 3600,
         "rate": rate,

@@ -84,6 +84,7 @@ class GuildResources(Base):
     wood: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     ore: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     crystals: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    special_crystals: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

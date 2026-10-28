@@ -30,18 +30,24 @@ class PrdBuildingBalanceTests(unittest.TestCase):
     def test_housing_early_levels_and_cap(self):
         self.assertEqual([housing_capacity(level) for level in (1, 2, 3)], [1, 2, 3])
         self.assertEqual(housing_capacity(5), 5)
-        self.assertEqual(housing_capacity(BUILDING_MAX_LEVEL), 20)
+        self.assertEqual(housing_capacity(50), 20)
+        self.assertEqual(housing_capacity(BUILDING_MAX_LEVEL), 30)
 
     def test_warehouse_fixed_bonus(self):
         self.assertEqual(warehouse_material_bonus(1), 1)
         self.assertEqual(warehouse_material_bonus(25), 10)
         self.assertEqual(warehouse_material_bonus(50), 20)
+        self.assertEqual(warehouse_material_bonus(100), 30)
 
     def test_maximum_building_benefits(self):
         self.assertEqual(training_xp_bonus(50), 50)
         self.assertEqual(blacksmith_drop_bonus(50), 25)
         self.assertEqual(market_values(50)["slots"], 10)
+        self.assertEqual(market_values(100)["slots"], 20)
         self.assertGreater(building_cost_factor(50), building_cost_factor(25))
+        existing_total = sum(building_cost_factor(level) for level in range(1, 51))
+        extension_total = sum(building_cost_factor(level) for level in range(51, 101))
+        self.assertLess(extension_total / existing_total, 3)
 
 
 class PrdProfessionTests(unittest.TestCase):
