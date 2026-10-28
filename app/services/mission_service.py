@@ -455,6 +455,9 @@ def start_mission(
     mission_template_id: str,
     mercenary_ids: list[str],
     run_multiplier: str = "1",
+    *,
+    commit: bool = True,
+    regional_duration_seconds: int | None = None,
 ) -> MissionRun:
     if not mission_template_id:
         raise MissionError("Missao e obrigatoria.")
@@ -501,8 +504,9 @@ def start_mission(
     started_at = utc_now()
     skill_effects = get_party_skill_effects(db, mercenaries)
     office = mission_office_values(get_building_level(db, guild.id, "contract_office"))
-    duration = mission_template.duration_seconds if mission_template.mission_type == "long_idle" else floor(
-        mission_template.duration_seconds * parsed_multiplier
+    base_duration = regional_duration_seconds or mission_template.duration_seconds
+    duration = base_duration if mission_template.mission_type == "long_idle" else floor(
+        base_duration * parsed_multiplier
         * (100 - min(30, skill_effects.get("duration_reduction", 0) + office["duration_reduction_percent"])) / 100
     )
     ends_at = started_at + timedelta(seconds=max(1, duration))
@@ -514,6 +518,7 @@ def start_mission(
         started_at=started_at,
         ends_at=ends_at,
         run_multiplier=parsed_multiplier,
+        commit=commit,
     )
 
 
@@ -543,10 +548,18 @@ def claim_mission_loot(
         raise MissionError("Missao sem mercenario vinculado.")
 
     mission_template = mission_run.mission_template
+    regional_offer = None
+    if mission_run.regional_offer_id is not None:
+        from app.models.regional import RegionalOffer
+
+        regional_offer = db.get(RegionalOffer, mission_run.regional_offer_id)
     run_multiplier = mission_run.run_multiplier or 1
     chance_details = get_party_chance_details(
-        db, guild.id, mission_template.base_success_chance, mercenaries,
-        mission_template.recommended_power, mission_template.recommended_level,
+        db, guild.id,
+        regional_offer.success_chance_snapshot if regional_offer else mission_template.base_success_chance,
+        mercenaries,
+        regional_offer.recommended_power_snapshot if regional_offer else mission_template.recommended_power,
+        regional_offer.recommended_level_snapshot if regional_offer else mission_template.recommended_level,
     )
     skill_effects = get_party_skill_effects(db, mercenaries)
     success_chance = mission_template.base_success_chance if mission_template.mission_type == "long_idle" else max(
@@ -558,12 +571,14 @@ def claim_mission_loot(
         office_reward = 0 if mission_template.mission_type == "long_idle" else mission_office_values(
             get_building_level(db, guild.id, "contract_office")
         )["reward_bonus_percent"]
-        gold_reward = floor(mission_template.base_gold_reward * run_multiplier * (100 + skill_effects.get("gold_reward", 0) + office_reward) / 100)
-        xp_reward = apply_xp_bonus(floor(mission_template.base_xp_reward * run_multiplier * (100 + skill_effects.get("xp_reward", 0) + office_reward) / 100), db, guild.id)
+        base_gold = regional_offer.gold_reward_snapshot if regional_offer else mission_template.base_gold_reward
+        base_xp = regional_offer.xp_reward_snapshot if regional_offer else mission_template.base_xp_reward
+        gold_reward = floor(base_gold * run_multiplier * (100 + skill_effects.get("gold_reward", 0) + office_reward) / 100)
+        xp_reward = apply_xp_bonus(floor(base_xp * run_multiplier * (100 + skill_effects.get("xp_reward", 0) + office_reward) / 100), db, guild.id)
     else:
         gold_reward = 0
         xp_reward = 0 if mission_template.mission_type == "long_idle" else apply_xp_bonus(
-            floor(mission_template.base_xp_reward * run_multiplier * 0.25), db, guild.id
+            floor((regional_offer.xp_reward_snapshot if regional_offer else mission_template.base_xp_reward) * run_multiplier * 0.25), db, guild.id
         )
 
     add_gold(resources, gold_reward)
@@ -632,6 +647,18 @@ def claim_mission_loot(
         record_guild_stat(db, guild.id, "missions_completed", 1)
         if mission_template.mission_type == "gathering":
             record_guild_stat(db, guild.id, "gathering_completed", 1)
+    if mission_run.regional_offer_id is not None:
+        from app.services.regional_cycle_service import record_player_offer_result
+
+        record_player_offer_result(
+            db, guild,
+            source_type="mission",
+            source_run_id=mission_run.id,
+            offer_id=mission_run.regional_offer_id,
+            success=success,
+            gold_earned=gold_reward,
+            xp_earned=xp_reward * len(mercenaries),
+        )
     if commit:
         db.commit()
         db.refresh(mission_run)

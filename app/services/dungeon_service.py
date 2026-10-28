@@ -410,6 +410,9 @@ def start_dungeon(
     dungeon_template_id: str,
     mercenary_ids: list[str],
     run_multiplier: str = "1",
+    *,
+    commit: bool = True,
+    regional_duration_seconds: int | None = None,
 ) -> DungeonRun:
     if not are_dungeons_available(db, guild.id):
         raise DungeonError("Evolua Exploradores para o nível 1 antes de acessar Masmorras.")
@@ -451,7 +454,8 @@ def start_dungeon(
     started_at = utc_now()
     skill_effects = get_party_skill_effects(db, mercenaries)
     scouts = scouts_values(get_building_level(db, guild.id, "scouts"))
-    duration = floor(dungeon_template.duration_seconds * parsed_multiplier * (
+    base_duration = regional_duration_seconds or dungeon_template.duration_seconds
+    duration = floor(base_duration * parsed_multiplier * (
         100 - min(35, skill_effects.get("duration_reduction", 0) + scouts["duration_reduction_percent"])
     ) / 100)
     ends_at = started_at + timedelta(seconds=max(1, duration))
@@ -463,6 +467,7 @@ def start_dungeon(
         started_at,
         ends_at,
         parsed_multiplier,
+        commit=commit,
     )
 
 
@@ -493,19 +498,36 @@ def claim_dungeon_loot(
         raise DungeonError("Masmorra sem grupo vinculado.")
 
     template = dungeon_run.dungeon_template
+    regional_offer = None
+    if dungeon_run.regional_offer_id is not None:
+        from app.models.regional import RegionalOffer
+
+        regional_offer = db.get(RegionalOffer, dungeon_run.regional_offer_id)
     run_multiplier = dungeon_run.run_multiplier or 1
-    chance_details = get_advanced_dungeon_chance(db, guild.id, template, mercenaries)
+    if regional_offer is None:
+        chance_details = get_advanced_dungeon_chance(db, guild.id, template, mercenaries)
+    else:
+        chance_details = get_party_chance_details(
+            db, guild.id, regional_offer.success_chance_snapshot, mercenaries,
+            regional_offer.recommended_power_snapshot, regional_offer.recommended_level_snapshot,
+        )
+        skills = get_party_skill_effects(db, mercenaries)
+        synergy = get_group_synergy_bonus(mercenaries, template)
+        skill_bonus = skills.get("success_chance", 0) + skills.get("dungeon_power", 0) // 10
+        chance_details["final_chance"] = max(5, min(95, chance_details["final_chance"] + skill_bonus + synergy))
     scouts = scouts_values(get_building_level(db, guild.id, "scouts"))
     chance_details["final_chance"] = min(95, chance_details["final_chance"] + scouts["success_bonus_percentage_points"])
     skill_effects = get_party_skill_effects(db, mercenaries)
     success = randint(1, 100) <= chance_details["final_chance"]
 
     if success:
-        gold_reward = floor(template.base_gold_reward * run_multiplier * (100 + skill_effects.get("gold_reward", 0)) / 100)
-        xp_reward = apply_xp_bonus(floor(template.base_xp_reward * run_multiplier * (100 + skill_effects.get("xp_reward", 0)) / 100), db, guild.id)
+        base_gold = regional_offer.gold_reward_snapshot if regional_offer else template.base_gold_reward
+        base_xp = regional_offer.xp_reward_snapshot if regional_offer else template.base_xp_reward
+        gold_reward = floor(base_gold * run_multiplier * (100 + skill_effects.get("gold_reward", 0)) / 100)
+        xp_reward = apply_xp_bonus(floor(base_xp * run_multiplier * (100 + skill_effects.get("xp_reward", 0)) / 100), db, guild.id)
     else:
         gold_reward = 0
-        xp_reward = apply_xp_bonus(floor(template.base_xp_reward * run_multiplier * 0.25), db, guild.id)
+        xp_reward = apply_xp_bonus(floor((regional_offer.xp_reward_snapshot if regional_offer else template.base_xp_reward) * run_multiplier * 0.25), db, guild.id)
 
     resources.gold += gold_reward
     xp_messages: list[str] = []
@@ -566,6 +588,18 @@ def claim_dungeon_loot(
         record_guild_stat(db, guild.id, "bosses_defeated", 1)
     if success:
         unlock_codex_reference(db, guild.id, "dungeon", template.id)
+    if dungeon_run.regional_offer_id is not None:
+        from app.services.regional_cycle_service import record_player_offer_result
+
+        record_player_offer_result(
+            db, guild,
+            source_type="dungeon",
+            source_run_id=dungeon_run.id,
+            offer_id=dungeon_run.regional_offer_id,
+            success=success,
+            gold_earned=gold_reward,
+            xp_earned=xp_reward * len(mercenaries),
+        )
     if commit:
         db.commit()
         db.refresh(dungeon_run)

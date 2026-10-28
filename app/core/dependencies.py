@@ -52,6 +52,12 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
             request.state.offline_summary = json.loads(metadata.pending_offline_report)
         except (TypeError, ValueError):
             request.state.offline_summary = {"warning": "O relatório offline salvo está indisponível. As recompensas não foram creditadas novamente."}
+    if getattr(request.app.state, "app_mode", "web") == "desktop":
+        guild = db.scalar(select(Guild).where(Guild.campaign_id == metadata.campaign_id))
+        if guild is not None:
+            from app.services.regional_cycle_service import advance_regional_world
+
+            advance_regional_world(db, metadata, guild)
     return metadata
 
 

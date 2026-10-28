@@ -104,6 +104,8 @@ def create_dungeon_run(
     started_at: datetime,
     ends_at: datetime,
     run_multiplier: int = 1,
+    *,
+    commit: bool = True,
 ) -> DungeonRun:
     run = DungeonRun(
         guild_id=guild_id,
@@ -119,8 +121,11 @@ def create_dungeon_run(
         db.add(DungeonRunMember(dungeon_run_id=run.id, mercenary_id=mercenary.id))
         mercenary.status = "busy"
         db.add(mercenary)
-    db.commit()
-    db.refresh(run)
+    if commit:
+        db.commit()
+        db.refresh(run)
+    else:
+        db.flush()
     return run
 
 

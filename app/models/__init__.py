@@ -17,6 +17,18 @@ from app.models.content import ContentSeedRun, ProfessionTemplate, ProfessionTra
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.campaign import CampaignMetadata, OfflineReturnReport
 from app.models.gathering import GatheringAssignment
+from app.models.regional import (
+    RegionalCpuCyclePlan,
+    RegionalCpuMercenary,
+    RegionalCpuResource,
+    RegionalCycle,
+    RegionalCycleRegion,
+    RegionalGuildState,
+    RegionalOffer,
+    RegionalRegionState,
+    RegionalRunOutcome,
+    RegionalWorldState,
+)
 
 
 __all__ = [
@@ -38,6 +50,16 @@ __all__ = [
     "GuildBuilding",
     "GuildResources",
     "GatheringAssignment",
+    "RegionalCpuCyclePlan",
+    "RegionalCpuMercenary",
+    "RegionalCpuResource",
+    "RegionalCycle",
+    "RegionalCycleRegion",
+    "RegionalGuildState",
+    "RegionalOffer",
+    "RegionalRegionState",
+    "RegionalRunOutcome",
+    "RegionalWorldState",
     "GuildTavernState",
     "GuildInventoryItem",
     "GuildItemInstance",

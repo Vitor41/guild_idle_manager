@@ -142,6 +142,8 @@ def create_mission_run(
     started_at: datetime,
     ends_at: datetime,
     run_multiplier: int = 1,
+    *,
+    commit: bool = True,
 ) -> MissionRun:
     mission_run = MissionRun(
         guild_id=guild_id,
@@ -157,8 +159,11 @@ def create_mission_run(
         db.add(MissionRunMember(mission_run_id=mission_run.id, mercenary_id=mercenary.id))
         mercenary.status = "busy"
         db.add(mercenary)
-    db.commit()
-    db.refresh(mission_run)
+    if commit:
+        db.commit()
+        db.refresh(mission_run)
+    else:
+        db.flush()
     return mission_run
 
 

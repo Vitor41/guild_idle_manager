@@ -107,8 +107,10 @@ if settings.app_mode != "desktop":
     app.include_router(admin_routes.router)
 else:
     from app.desktop.routes import router as desktop_router
+    from app.routes.regional_routes import router as regional_router
 
     app.include_router(desktop_router)
+    app.include_router(regional_router)
 app.include_router(session_routes.router)
 
 

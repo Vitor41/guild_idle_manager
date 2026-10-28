@@ -17,7 +17,7 @@ class CampaignMetadata(Base):
     campaign_name: Mapped[str] = mapped_column(String(120), nullable=False)
     created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     content_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_clean_shutdown_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_session_state: Mapped[str] = mapped_column(String(30), nullable=False, default="created")

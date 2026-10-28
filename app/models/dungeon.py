@@ -64,6 +64,8 @@ class DungeonRun(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     guild_id: Mapped[int] = mapped_column(ForeignKey("guilds.id"), nullable=False, index=True)
     dungeon_template_id: Mapped[int] = mapped_column(ForeignKey("dungeon_templates.id"), nullable=False, index=True)
+    regional_offer_id: Mapped[int | None] = mapped_column(ForeignKey("regional_offers.id"), nullable=True, unique=True)
+    rank_snapshot: Mapped[str | None] = mapped_column(String(2), nullable=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="in_progress", index=True)
     run_multiplier: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
