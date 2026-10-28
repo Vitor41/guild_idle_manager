@@ -774,6 +774,11 @@ asyncio.run(main())
             DockOffer.dock_rotation_merchant_id.in_(dock_merchant_ids)
         ).order_by(DockOffer.id))
         self.assertIsNotNone(dock_offer)
+        # Work 1 added a finite warehouse capacity; keep this persistence fixture independent of it.
+        warehouse = get_guild_building_by_effect(db, guild.id, "warehouse")
+        warehouse.level = 100
+        db.add(warehouse)
+        db.flush()
         buy_dock_offer(db, guild, resources, dock_offer.id, 1)
         self.assertLess(dock_offer.remaining_stock, dock_offer.initial_stock)
 
