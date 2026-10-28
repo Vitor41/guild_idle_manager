@@ -1,6 +1,10 @@
 # Prévia visual local
 
-Abra `index.html` diretamente no navegador e navegue pelas cinco telas locais: salão, mercenários, operações, taverna e inventário. Os arquivos usam CSS, um pequeno script de navegação e imagens locais; não precisam de servidor, internet ou build. Dados, nomes, preços e ações são ilustrativos.
+Abra `index.html` diretamente no navegador e navegue pelas telas locais: salão, mercenários, operações, taverna, inventário e evolução da campanha. Os arquivos usam CSS, um pequeno script de navegação e imagens locais; não precisam de servidor, internet ou build. Dados, nomes, preços e ações são ilustrativos.
+
+## Evolução da gameplay
+
+Abra [`evolution.html`](evolution.html) diretamente no navegador para ver região natal, Vigília, coleta designada, portal, rebelião, conquistas e quatro pop-ups demonstrativos. A prévia usa apenas HTML, CSS, JavaScript e os novos assets locais. Os botões de pop-up mostram os estados de interface, sem executar regras ou alterar saves. Os masters originais estão em `evolution_masters/`; `export_evolution_assets.py` reconstrói os WebP e sprites PNG otimizados. A especificação está em [`docs/art_direction/GAMEPLAY_EVOLUTION_VISUAL_SYSTEM.md`](../../docs/art_direction/GAMEPLAY_EVOLUTION_VISUAL_SYSTEM.md).
 
 ## Navegação em janela estreita
 

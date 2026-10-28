@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evolução da campanha — prévia de direção de arte</title>
+  <link rel="stylesheet" href="evolution.css">
+  <script defer src="evolution.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="rail" aria-label="Navegação da prévia">
+      <a class="brand" href="index.html"><img src="../../app/static/assets/desktop/sprites/64/guild-sigil.png" alt=""><span><strong>GUILD IDLE</strong><small>MANAGER</small></span></a>
+      <nav aria-label="Seções da prévia">
+        <span class="nav-label">EVOLUÇÃO</span>
+        <a href="#regiao" aria-current="page"><img src="../../app/static/assets/desktop/sprites/64/biome-fortress.png" alt="">Região natal</a>
+        <a href="#vigilia"><img src="../../app/static/assets/desktop/evolution/sprites/ui_64/vigil-tower.png" alt="">Vigília</a>
+        <a href="#coleta"><img src="../../app/static/assets/desktop/evolution/sprites/ui_64/gathering-kit.png" alt="">Coleta</a>
+        <a href="#eventos"><img src="../../app/static/assets/desktop/evolution/sprites/ui_64/portal-gate.png" alt="">Eventos</a>
+        <a href="#conquistas"><img src="../../app/static/assets/desktop/evolution/sprites/ui_64/achievement-medal.png" alt="">Conquistas</a>
+        <span class="nav-label">REFERÊNCIA</span>
+        <a href="index.html"><img src="../../app/static/assets/desktop/sprites/64/guild-sigil.png" alt="">Sala de Comando</a>
+      </nav>
+      <p class="rail-note">Prévia de arte, com dados ilustrativos. As regras e os valores virão do jogo.</p>
+    </aside>
+    <div class="main-column">
+      <header class="topbar"><span>CAMPANHA <b>/</b> FRONTEIRA DE ASHEN</span><span>Vigília 04 <b>·</b> 03:18 restantes</span><button class="text-link" data-dialog="offline-report">Ver retorno offline</button></header>
+      <main id="regiao">
+        <div class="page-heading"><div><p class="eyebrow">MUNDO EM MOVIMENTO</p><h1>Fronteira de Ashen</h1><p>Sua região natal define o contexto da campanha e suas próximas escolhas.</p></div><span class="demo-tag">PRÉVIA · DADOS ILUSTRATIVOS</span></div>
+        <section class="hero region-hero" aria-labelledby="region-title">
+          <img class="hero-image" src="../../app/static/assets/desktop/evolution/illustrations/region-home.webp" alt="" width="1600" height="900">
+          <div class="hero-content"><p class="eyebrow">REGIÃO NATAL · CAMPANHA LOCAL</p><h2 id="region-title">Um vale que reage às suas decisões</h2><p>O relógio da Vigília avança, contratos mudam e cada guilda deixa marcas na fronteira.</p><div class="button-row"><a class="button primary" href="#vigilia">Ver estado da região</a><a class="button secondary" href="#coleta">Preparar companhia</a></div></div>
+        </section>
+        <section class="metrics" aria-label="Indicadores regionais ilustrativos">
+          <article><span>Segurança</span><strong>62 <small>/ 100</small></strong><div class="meter"><i style="width:62%;--fill:var(--green)"></i></div><p>+4 após patrulhas</p></article>
+          <article><span>Ameaça</span><strong>38 <small>/ 100</small></strong><div class="meter"><i style="width:38%;--fill:var(--red)"></i></div><p>−3 após contrato</p></article>
+          <article><span>Influência</span><strong>27 <small>/ 100</small></strong><div class="meter"><i style="width:27%;--fill:var(--teal)"></i></div><p>Participação da guilda</p></article>
+          <article><span>Reputação</span><strong>184</strong><div class="metric-rule"></div><p>Histórico da guilda</p></article>
+        </section>
+        <aside class="notification" aria-label="Notificação regional pendente"><img src="../../app/static/assets/desktop/evolution/sprites/ui_64/rebellion-shield.png" alt="" width="48" height="48"><div><strong>Convite regional pendente</strong><p>A Ponte de Cinzas pede uma resposta antes do prazo.</p></div><button class="button secondary" data-dialog="rebellion-invite">Responder</button></aside>
+
+        <section id="vigilia" class="section-block" aria-labelledby="vigil-title">
+          <div class="section-heading"><div><p class="eyebrow">CICLO REGIONAL · 6 HORAS</p><h2 id="vigil-title">Vigília Regional</h2></div><button class="text-link" data-dialog="vigil-report">Ver relatório de exemplo</button></div>
+          <div class="split">
+            <article class="feature-card vigil-card"><img class="feature-image" src="../../app/static/assets/desktop/evolution/illustrations/regional-vigil.webp" alt="" loading="lazy" width="1600" height="900"><div class="feature-content"><img class="feature-icon" src="../../app/static/assets/desktop/evolution/sprites/ui_128/vigil-tower.png" alt="" width="64" height="64"><div><span class="status active">Em andamento</span><h3>Os vigias mantêm as rotas abertas</h3><p>As ofertas atuais ficam estáveis até o próximo ciclo. O resumo explicará o que mudou e por quê.</p></div></div></article>
+            <article class="panel ledger"><h3>Última Vigília</h3><p class="subtle">Encerrada às 06:00 · resultados confirmados</p><dl><div><dt>Segurança</dt><dd>+4 <small>patrulhas bem-sucedidas</small></dd></div><div><dt>Ameaça</dt><dd>−3 <small>portal contido</small></dd></div><div><dt>Influência</dt><dd>+2 <small>contribuição da guilda</small></dd></div></dl><button class="button secondary" data-dialog="vigil-report">Ler prestação de contas</button></article>
+          </div>
+        </section>
+
+        <section id="coleta" class="section-block" aria-labelledby="gathering-title">
+          <div class="section-heading"><div><p class="eyebrow">MERCENÁRIOS OCUPADOS, ESCOLHAS REAIS</p><h2 id="gathering-title">Atividades de coleta</h2></div><span class="subtle">Armazém 1.246 / 1.500 unidades</span></div>
+          <div class="gather-layout"><div class="gather-intro"><img src="../../app/static/assets/desktop/evolution/illustrations/gathering-worksite.webp" alt="" loading="lazy" width="1600" height="900"><div><img src="../../app/static/assets/desktop/evolution/sprites/ui_128/gathering-kit.png" alt="" width="72" height="72"><h3>Um trabalhador por atividade</h3><p>Madeira, minério e couro têm fonte e rendimento próprios. O mercenário designado permanece ocupado.</p></div></div><div class="task-list"><article class="task"><span class="status active">Produzindo</span><h3>Madeira · Bosque da Ponte</h3><p>Lyra Ventoverde · próximo ciclo em <strong>00:41</strong></p><div class="meter"><i style="width:67%;--fill:var(--teal)"></i></div><footer><span>Estimativa: 60/h</span><button class="button secondary">Gerenciar</button></footer></article><article class="task"><span class="status warning">Pausada · armazém cheio</span><h3>Minério · Pedreira Antiga</h3><p>Bren da Muralha continua designado. A produção retorna quando houver espaço.</p><footer><span>Último ciclo preservado</span><button class="button secondary">Ver capacidade</button></footer></article><article class="task"><span class="status available">Disponível</span><h3>Couro · Trilhas do Oeste</h3><p>Designe um mercenário livre antes de iniciar a atividade.</p><footer><span>Fonte inicial</span><button class="button primary">Designar mercenário</button></footer></article></div></div>
+        </section>
+
+        <section id="eventos" class="section-block" aria-labelledby="events-title"><div class="section-heading"><div><p class="eyebrow">EVENTOS COM CONSEQUÊNCIAS</p><h2 id="events-title">Portais e rebeliões</h2></div><span class="subtle">Estados demonstrativos, não simultâneos</span></div><div class="event-grid"><article class="event-card portal-card"><img src="../../app/static/assets/desktop/evolution/illustrations/dimensional-portal.webp" alt="" loading="lazy" width="1600" height="900"><div class="event-content"><div class="event-top"><img src="../../app/static/assets/desktop/evolution/sprites/ui_128/portal-gate.png" alt="" width="72" height="72"><span class="status active">Portal ativo</span></div><h3>Fenda nas Montanhas Veladas</h3><p>Uma entrada por guilda. A oferta expira em 02:14; a equipe enviada ficará ocupada até o resultado.</p><div class="button-row"><button class="button primary" data-dialog="portal-detail">Preparar entrada</button><span class="subtle">Rank sugerido: B</span></div></div></article><article class="event-card rebellion-card"><img src="../../app/static/assets/desktop/evolution/illustrations/regional-rebellion.webp" alt="" loading="lazy" width="1600" height="900"><div class="event-content"><div class="event-top"><img src="../../app/static/assets/desktop/evolution/sprites/ui_128/rebellion-shield.png" alt="" width="72" height="72"><span class="status pending">Resposta pendente</span></div><h3>Chamado da Ponte de Cinzas</h3><p>A região pede ajuda. Aceitar abre uma hora de prioridade para organizar a companhia; recusar delega à CPU.</p><div class="button-row"><button class="button primary" data-dialog="rebellion-invite">Responder ao chamado</button><span class="subtle">Resposta até 00:48</span></div></div></article></div></section>
+
+        <section id="conquistas" class="section-block" aria-labelledby="achievements-title"><div class="section-heading"><div><p class="eyebrow">MARCOS DA CAMPANHA</p><h2 id="achievements-title">Conquistas e recompensas</h2></div><span class="subtle">Resgate único por campanha</span></div><div class="achievement-feature"><img src="../../app/static/assets/desktop/evolution/illustrations/achievement-reliquary.webp" alt="" loading="lazy" width="1600" height="900"><div><img src="../../app/static/assets/desktop/evolution/sprites/ui_128/achievement-medal.png" alt="" width="76" height="76"><span class="status ready">Pronta para resgate</span><h3>Além do Véu</h3><p>Conclua cinco portais dimensionais. A recompensa é registrada uma vez no save.</p><button class="button primary" data-dialog="achievement-claim">Ver recompensa</button></div></div><div class="achievement-grid"><article class="achievement"><span class="status active">Em progresso</span><h3>Três Fontes</h3><p>Complete ciclos de coleta em madeira, minério e couro.</p><div class="meter"><i style="width:58%;--fill:var(--teal)"></i></div><small>Progresso auditável por família</small></article><article class="achievement"><span class="status claimed">Resgatada</span><h3>Companhia Completa</h3><p>O marco permanece no histórico após o resgate.</p><small>Recompensa entregue uma vez</small></article><article class="achievement"><span class="status locked">Bloqueada</span><h3>Guilda sem Fronteiras</h3><p>Contribua em rebeliões de três regiões distintas.</p><small>Recompensa: armadura Lendária única</small></article></div></section>
+        <footer class="page-footer">Prévia de direção de arte · Dados e ações ilustrativos · Assets locais, sem rede. <a href="../../docs/art_direction/GAMEPLAY_EVOLUTION_VISUAL_SYSTEM.md">Especificação de integração</a></footer>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="vigil-report" class="preview-dialog"><form method="dialog"><button class="dialog-close" aria-label="Fechar">×</button><p class="eyebrow">PRESTAÇÃO DE CONTAS</p><h2>Vigília 03 encerrada</h2><p>As patrulhas reduziram a ameaça e mantiveram as rotas abertas. O portal contido elevou a segurança regional.</p><dl><div><dt>Segurança</dt><dd>58 → 62</dd></div><div><dt>Ameaça</dt><dd>41 → 38</dd></div><div><dt>Influência</dt><dd>25 → 27</dd></div></dl><button class="button primary">Entendi</button></form></dialog>
+  <dialog id="portal-detail" class="preview-dialog"><form method="dialog"><button class="dialog-close" aria-label="Fechar">×</button><p class="eyebrow">PORTAL DIMENSIONAL</p><h2>Preparar entrada</h2><p>Uma entrada por guilda. Escolha uma equipe livre e confira chance, duração, loot possível e risco antes de enviar.</p><div class="callout">Oferta ativa por 02:14 · duração mínima da incursão: 1h</div><button class="button primary">Fechar prévia</button></form></dialog>
+  <dialog id="rebellion-invite" class="preview-dialog event-dialog"><form method="dialog"><button class="dialog-close" aria-label="Fechar">×</button><img src="../../app/static/assets/desktop/evolution/sprites/ui_128/rebellion-shield.png" alt="" width="96" height="96"><p class="eyebrow">CONVITE REGIONAL</p><h2>Uma rebelião pede reforços</h2><p>Você tem 00:48 para responder. Participar reserva uma hora de prioridade para organizar a companhia. Recusar deixa a resolução com as guildas CPU.</p><div class="button-row"><button class="button primary">Participar — prévia</button><button class="button secondary">Recusar — prévia</button></div></form></dialog>
+  <dialog id="achievement-claim" class="preview-dialog"><form method="dialog"><button class="dialog-close" aria-label="Fechar">×</button><p class="eyebrow">CONQUISTA PRONTA</p><h2>Além do Véu</h2><p>Cinco portais concluídos. A recompensa só entra no inventário após o resgate e não pode ser duplicada.</p><div class="callout">Ouro · materiais raros · influência</div><button class="button primary">Fechar prévia</button></form></dialog>
+  <dialog id="offline-report" class="preview-dialog"><form method="dialog"><button class="dialog-close" aria-label="Fechar">×</button><p class="eyebrow">RETORNO À CAMPANHA</p><h2>Seu plano avançou</h2><p>Tempo reconhecido: 06h de 08h ausentes. As atividades atribuídas progrediram até o limite do Armazém.</p><dl><div><dt>Estamina</dt><dd>8h → 2h</dd></div><div><dt>Ouro passivo</dt><dd>+480</dd></div><div><dt>Madeira · Lyra</dt><dd>+360</dd></div><div><dt>Minério · Bren</dt><dd>+214 · pausada</dd></div></dl><div class="callout">Armazém cheio: a coleta de minério pausou, mantendo o trabalhador designado.</div><button class="button primary">Entrar na campanha</button></form></dialog>
+</body>
+</html>
