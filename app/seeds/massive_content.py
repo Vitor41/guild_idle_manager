@@ -50,6 +50,20 @@ def _band_for_index(index: int):
     return BANDS[index % len(BANDS)]
 
 
+def _ensure_docks_template(db: Session) -> BuildingTemplate:
+    docks = db.scalar(select(BuildingTemplate).where(BuildingTemplate.effect_type == "docks"))
+    if docks is None:
+        docks = BuildingTemplate(
+            name="Docas", description="Recebe mercantes rotativos com materiais e equipamentos.",
+            effect_type="docks", base_upgrade_gold_cost=500, base_upgrade_wood_cost=100,
+            base_upgrade_ore_cost=50, base_upgrade_crystals_cost=0, max_level=100,
+            required_guild_level=1, is_active=True,
+        )
+        db.add(docks)
+        db.flush()
+    return docks
+
+
 def _material_rows() -> list[dict[str, object]]:
     families = {
         "wood": ("Madeira", 40, ["Bruta", "de Carvalho", "Sombria", "Arcana", "Ancestral"]),
@@ -282,7 +296,11 @@ def _insert_missing(db: Session, model, rows: list[dict[str, object]], key: str)
 def run_massive_content_seed(db: Session) -> dict[str, object]:
     marker = db.scalar(select(ContentSeedRun).where(ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION))
     if marker is not None:
+        _ensure_docks_template(db)
+        db.commit()
         return json.loads(marker.report_json)
+
+    _ensure_docks_template(db)
 
     legacy_names = {"Cacar lobos", "Patrulhar estrada", "Escoltar comerciante", "Limpar caverna pequena"}
     for legacy in db.scalars(select(MissionTemplate).where(MissionTemplate.name.in_(legacy_names))):
@@ -322,12 +340,6 @@ def run_massive_content_seed(db: Session) -> dict[str, object]:
         if profession.description.startswith("Especialista em coletas da família "):
             profession.description = f"Especialista em coleta de {family_labels.get(profession.material_family, profession.material_family)}."
             db.add(profession)
-
-    if db.scalar(select(BuildingTemplate).where(BuildingTemplate.effect_type == "docks")) is None:
-        db.add(BuildingTemplate(name="Docas", description="Recebe mercantes rotativos com materiais e equipamentos.", effect_type="docks",
-            base_upgrade_gold_cost=500, base_upgrade_wood_cost=100, base_upgrade_ore_cost=50, base_upgrade_crystals_cost=0,
-            max_level=50, required_guild_level=1, is_active=True))
-        db.flush()
 
     mission_ids = list(mission_map.values())
     dungeon_ids = list(dungeon_map.values())

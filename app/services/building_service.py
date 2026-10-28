@@ -1,5 +1,6 @@
 from math import ceil, floor
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.building import BuildingTemplate, GuildBuilding
@@ -148,12 +149,10 @@ def get_effect_label(effect_type: str) -> str:
 def seed_initial_building_templates(db: Session) -> None:
     created_any = False
     for data in INITIAL_BUILDING_TEMPLATES:
-        existing = get_building_template_by_name(db, str(data["name"]))
+        existing = db.scalar(
+            select(BuildingTemplate).where(BuildingTemplate.effect_type == str(data["effect_type"]))
+        )
         if existing:
-            if existing.max_level > BUILDING_MAX_LEVEL:
-                existing.max_level = BUILDING_MAX_LEVEL
-                db.add(existing)
-                created_any = True
             continue
         create_building_template(db, data)
         created_any = True

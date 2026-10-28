@@ -120,7 +120,7 @@ asyncio.run(main())
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
         with closing(sqlite3.connect(first.database_path)) as connection:
-            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "b7c8d9e0f1a2")
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "c0d1e2f3a4b5")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -391,7 +391,7 @@ asyncio.run(main())
                     "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
                 ).fetchone()
                 columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
-                self.assertEqual(revision, "b7c8d9e0f1a2")
+                self.assertEqual(revision, "c0d1e2f3a4b5")
                 self.assertEqual(guild, (7, "Guilda preservada", None))
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
@@ -420,13 +420,13 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "a6b7c8d9e0f1")
-            self.assertEqual(migration.current_revision, "b7c8d9e0f1a2")
+            self.assertEqual(migration.current_revision, "c0d1e2f3a4b5")
             self.assertEqual(migration.previous_save_version, 3)
             self.assertEqual(migration.current_save_version, 4)
             with closing(sqlite3.connect(campaign.database_path)) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "b7c8d9e0f1a2",
+                    "c0d1e2f3a4b5",
                 )
                 self.assertIn(
                     "capacity_paused",

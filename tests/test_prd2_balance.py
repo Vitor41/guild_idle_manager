@@ -16,11 +16,13 @@ class OfflineMaterialRewardTests(unittest.TestCase):
         self.assertEqual((three_hours["wood_base"], three_hours["ore_base"]), (0, 0))
         self.assertEqual((eight_hours["wood_base"], eight_hours["ore_base"]), (0, 0))
         self.assertEqual(one_hour["warehouse_bonus"], 0)
+        self.assertEqual(eight_hours["crystals"], 0)
         self.assertEqual(eight_hours["special_crystals"], 1)
 
     def test_crystal_only_at_effective_cap(self):
         self.assertEqual(calculate_offline_material_rewards(20, 7 * 3600, 8 * 3600)["special_crystals"], 0)
         self.assertEqual(calculate_offline_material_rewards(20, 8 * 3600, 8 * 3600)["special_crystals"], 1)
+        self.assertEqual(calculate_offline_material_rewards(20, 8 * 3600, 8 * 3600)["crystals"], 0)
 
 
 class Prd2MissionBalanceTests(unittest.TestCase):

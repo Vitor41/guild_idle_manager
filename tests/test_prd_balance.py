@@ -31,7 +31,8 @@ class PrdBuildingBalanceTests(unittest.TestCase):
         self.assertEqual([housing_capacity(level) for level in (1, 2, 3)], [1, 2, 3])
         self.assertEqual(housing_capacity(5), 5)
         self.assertEqual(housing_capacity(50), 20)
-        self.assertEqual(housing_capacity(BUILDING_MAX_LEVEL), 30)
+        self.assertEqual(housing_capacity(100), 20)
+        self.assertEqual(housing_capacity(BUILDING_MAX_LEVEL), 20)
 
     def test_warehouse_fixed_bonus(self):
         self.assertEqual(warehouse_material_bonus(1), 1)

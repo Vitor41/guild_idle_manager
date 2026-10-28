@@ -59,7 +59,7 @@ def calculate_offline_material_rewards(
         "warehouse_bonus": 0,
         "wood_total": 0,
         "ore_total": 0,
-        "crystals": 1 if credited_seconds >= cap_seconds else 0,
+        "crystals": 0,
         "special_crystals": 1 if credited_seconds >= cap_seconds else 0,
     }
 

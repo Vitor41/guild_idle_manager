@@ -18,8 +18,6 @@ def housing_capacity(level: int) -> int:
         0: 0, 1: 1, 2: 2, 3: 3, 5: 5, 10: 7, 15: 9,
         20: 11, 25: 13, 30: 15, 35: 17, 40: 18, 45: 19, 50: 20,
     }
-    for milestone in range(55, 101, 5):
-        capacities[milestone] = 20 + (milestone - 50) // 5
     return capacities[max(key for key in capacities if key <= level)]
 
 

@@ -95,6 +95,37 @@ class ClockGuardTests(unittest.TestCase):
             self.assertTrue(guard.acknowledge_offline_report(campaign.campaign_id, report["report_id"]))
             campaigns.close_active_campaign(campaign.campaign_id)
 
+    def test_special_crystal_is_granted_once_at_cap_and_survives_reopen(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Cristal especial no cap")
+            fake = FakeClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
+            guard = ClockGuard(MemoryAnchorStore(), fake.wall, lambda: fake.monotonic)
+
+            campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
+            guard.activate_campaign(campaign.campaign_id)
+            guard.suspend_campaign(campaign.campaign_id)
+            campaigns.suspend_active_campaign(campaign.campaign_id, offline_started_at=fake.now)
+            fake.tick(8 * 60 * 60)
+
+            campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
+            report = guard.activate_campaign(campaign.campaign_id)
+            self.assertEqual(report["credited_seconds"], 8 * 60 * 60)
+            self.assertEqual(report["special_crystals"], 1)
+            self.assertEqual(report["materials"]["crystals"], 0)
+            with SessionLocal() as db:
+                resources = db.scalar(select(GuildResources))
+                self.assertEqual(resources.special_crystals, 1)
+                self.assertEqual(resources.crystals, 0)
+            reopened = guard.activate_campaign(campaign.campaign_id)
+            self.assertEqual(reopened["report_id"], report["report_id"])
+            with SessionLocal() as db:
+                resources = db.scalar(select(GuildResources))
+                self.assertEqual(resources.special_crystals, 1)
+                self.assertEqual(resources.crystals, 0)
+            configure_database("sqlite:///:memory:")
+            gc.collect()
+
     def test_import_initializes_new_anchor_without_crediting_pre_import_time(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
