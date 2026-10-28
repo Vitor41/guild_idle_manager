@@ -79,6 +79,8 @@ def run() -> None:
     allowed_host = f"127.0.0.1:{port}"
     origin = f"http://{allowed_host}"
     logging.info("Starting loopback server at %s", origin)
+    server: uvicorn.Server | None = None
+    server_thread: threading.Thread | None = None
 
     try:
         from app.main import app
@@ -121,17 +123,17 @@ def run() -> None:
         )
         bridge._window = window
         window.events.closed += lambda: setattr(server, "should_exit", True)
-        try:
-            webview.start(gui="edgechromium")
-        finally:
-            server.should_exit = True
-            server_thread.join(timeout=12)
-            if server_thread.is_alive():
-                logging.error("O servidor local nao encerrou dentro do prazo.")
+        webview.start(gui="edgechromium")
     except Exception as exc:
         _show_startup_error(f"Não foi possível iniciar o Guild Idle Manager: {exc}")
         raise
     finally:
+        if server is not None:
+            server.should_exit = True
+        if server_thread is not None:
+            server_thread.join(timeout=12)
+            if server_thread.is_alive():
+                logging.error("O servidor local nao encerrou dentro do prazo.")
         listener.close()
 
 
