@@ -18,7 +18,7 @@ class RegionalWorldState(Base):
     )
     last_materialized_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
     last_completed_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
-    rules_version: Mapped[str] = mapped_column(String(40), nullable=False, default="vigilia-v1")
+    rules_version: Mapped[str] = mapped_column(String(40), nullable=False, default="vigilia-v2")
     created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at_utc: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now

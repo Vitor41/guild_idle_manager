@@ -33,13 +33,22 @@ from app.services.equipment_service import get_mercenary_attribute_summary
 from app.models.content import ProfessionTemplate
 
 
-VIGILIA_RULES_VERSION = "vigilia-v1"
+VIGILIA_RULES_VERSION = "vigilia-v2"
 CYCLE_SECONDS = 6 * 60 * 60
 RANKS = ("E", "D", "C", "B", "A", "S")
 # Confirmed GDD reference for a Vigília with no regional actions.
 REGION_BASELINE_PRESSURE = 1
 REGIONAL_IMPACT_BASE = 0.02
 REGIONAL_IMPACT_PER_RANK = 0.02
+# CPU rivals make a deterministic per-action decision each Vigília. Their
+# profile sets the cadence; archetype and campaign seed add small variation.
+CPU_ACTION_PROBABILITY_BY_PROFILE = {"strong": 0.28, "medium": 0.25, "new": 0.22}
+CPU_ARCHETYPE_ACTION_ADJUSTMENT = {
+    "expansion": 0.005,
+    "security": -0.005,
+    "contracts": 0.0,
+    "exploration": -0.005,
+}
 BASE_RANK_WEIGHTS = (31, 27, 22, 12, 7, 1)
 LATE_RANK_WEIGHTS = (8, 14, 23, 32, 18, 5)
 REGIONS = (
@@ -83,6 +92,17 @@ def _seed_text(*parts: object) -> str:
 
 def _rng(*parts: object) -> random.Random:
     return random.Random(int(_seed_text(*parts), 16))
+
+
+def regional_cpu_action_probability(campaign_id: str, state: RegionalGuildState) -> float:
+    """Stable per-rival activity cadence, with a small deterministic seed variation."""
+    base = CPU_ACTION_PROBABILITY_BY_PROFILE.get(state.profile, CPU_ACTION_PROBABILITY_BY_PROFILE["new"])
+    archetype_adjustment = CPU_ARCHETYPE_ACTION_ADJUSTMENT.get(state.archetype, 0.0)
+    seed_fraction = int(_seed_text(
+        campaign_id, state.region_code, state.slot, state.archetype, VIGILIA_RULES_VERSION, "activity-rate",
+    )[:8], 16) / 0xFFFFFFFF
+    seed_variation = (seed_fraction - 0.5) * 0.02
+    return round(max(0.05, min(0.35, base + archetype_adjustment + seed_variation)), 4)
 
 
 def rank_progression_stage(guild_level: int, total_power: int) -> float:
@@ -635,6 +655,8 @@ def _cpu_plan_for_guild(
     ]
     plan_seed = _seed_text(campaign_id, cycle.cycle_number, state.id, cycle.rules_version, "cpu-plan")
     rng = _rng(plan_seed)
+    activity_rng = _rng(plan_seed, "activity")
+    action_probability = regional_cpu_action_probability(campaign_id, state)
     all_offers = list(db.scalars(select(RegionalOffer).where(
         RegionalOffer.cycle_id == cycle.id,
         RegionalOffer.region_code == region.region_code,
@@ -654,6 +676,8 @@ def _cpu_plan_for_guild(
     rank_sum = 0
     action_index = 0
     for _ in range(actions_requested):
+        if activity_rng.random() >= action_probability:
+            continue
         use_exploration = state.archetype == "exploration" and dungeon_offers
         candidates = dungeon_offers if use_exploration else contract_offers
         if not candidates:

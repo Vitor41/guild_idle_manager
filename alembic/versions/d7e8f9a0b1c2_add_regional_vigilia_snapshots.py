@@ -23,7 +23,7 @@ def upgrade() -> None:
         sa.Column("campaign_id", sa.String(36), nullable=False),
         sa.Column("last_materialized_cycle", sa.Integer(), nullable=False, server_default="-1"),
         sa.Column("last_completed_cycle", sa.Integer(), nullable=False, server_default="-1"),
-        sa.Column("rules_version", sa.String(40), nullable=False, server_default="vigilia-v1"),
+        sa.Column("rules_version", sa.String(40), nullable=False, server_default="vigilia-v2"),
         sa.Column("created_at_utc", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at_utc", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["campaign_id"], ["campaign_metadata.campaign_id"]),
