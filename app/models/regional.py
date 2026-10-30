@@ -18,7 +18,7 @@ class RegionalWorldState(Base):
     )
     last_materialized_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
     last_completed_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
-    rules_version: Mapped[str] = mapped_column(String(40), nullable=False, default="vigilia-v2")
+    rules_version: Mapped[str] = mapped_column(String(40), nullable=False, default="vigilia-v3")
     created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at_utc: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
@@ -272,3 +272,71 @@ class RegionalRunOutcome(Base):
     gold_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     xp_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     resolved_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class RegionalEvent(Base):
+    """Campaign-scoped, replay-safe event trigger and lifecycle record."""
+
+    __tablename__ = "regional_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "campaign_id", "event_type", "trigger_cycle_number", "region_code",
+            name="uq_regional_event_trigger",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(
+        ForeignKey("campaign_metadata.campaign_id"), nullable=False, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    region_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    trigger_cycle_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    rules_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    seed: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", index=True)
+    dungeon_template_id: Mapped[int | None] = mapped_column(ForeignKey("dungeon_templates.id"), nullable=True)
+    created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    priority_ends_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cpu_started_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    resolved_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    player_decision: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    summary_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+
+class RegionalEventParticipant(Base):
+    __tablename__ = "regional_event_participants"
+    __table_args__ = (
+        UniqueConstraint("event_id", "guild_state_id", name="uq_regional_event_guild_participant"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("regional_events.id"), nullable=False, index=True)
+    guild_state_id: Mapped[int] = mapped_column(
+        ForeignKey("regional_guild_state.id"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="invited")
+    contribution: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    success: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    resolved_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RegionalEventActivity(Base):
+    __tablename__ = "regional_event_activities"
+    __table_args__ = (
+        UniqueConstraint("source_type", "source_run_id", name="uq_regional_event_activity_source_run"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("regional_events.id"), nullable=False, index=True)
+    guild_state_id: Mapped[int] = mapped_column(
+        ForeignKey("regional_guild_state.id"), nullable=False, index=True
+    )
+    source_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    source_run_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="in_progress")
+    successes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    contribution: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    resolved_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

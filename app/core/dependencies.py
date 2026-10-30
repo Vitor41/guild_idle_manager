@@ -9,6 +9,7 @@ from app.database.connection import get_db
 from app.models.guild import Guild
 from app.models.campaign import CampaignMetadata
 from app.models.user import User
+from app.models.regional import RegionalEventParticipant
 from app.repositories.guild_repository import get_guild_by_user_id
 from app.repositories.user_repository import get_user_by_id
 from app.repositories.market_repository import get_guild_activity
@@ -52,12 +53,49 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
             request.state.offline_summary = json.loads(metadata.pending_offline_report)
         except (TypeError, ValueError):
             request.state.offline_summary = {"warning": "O relatório offline salvo está indisponível. As recompensas não foram creditadas novamente."}
+    if getattr(request.state, "campaign_world_advanced", False):
+        return metadata
     if getattr(request.app.state, "app_mode", "web") == "desktop":
         guild = db.scalar(select(Guild).where(Guild.campaign_id == metadata.campaign_id))
         if guild is not None:
             from app.services.regional_cycle_service import advance_regional_world
+            from app.services.regional_event_service import (
+                active_rebellion,
+                evaluate_open_rebellion,
+                event_region_name,
+                expire_due_events,
+            )
 
-            advance_regional_world(db, metadata, guild)
+            active_cycle = advance_regional_world(db, metadata, guild)
+            now = utc_now()
+            expire_due_events(db, metadata.campaign_id, now)
+            event = evaluate_open_rebellion(db, metadata, active_cycle, guild.id, now)
+            if event is None:
+                event = active_rebellion(db, metadata.campaign_id)
+            request.state.pending_rebellion_invite = None
+            if event is not None:
+                from app.models.regional import RegionalGuildState
+
+                player_state = db.scalar(select(RegionalGuildState).where(
+                    RegionalGuildState.campaign_id == metadata.campaign_id,
+                    RegionalGuildState.guild_id == guild.id,
+                ))
+                if player_state is not None:
+                    participant = db.scalar(select(RegionalEventParticipant).where(
+                        RegionalEventParticipant.event_id == event.id,
+                        RegionalEventParticipant.guild_state_id == player_state.id,
+                        RegionalEventParticipant.status == "invited",
+                    ))
+                    if participant is not None:
+                        request.state.pending_rebellion_invite = {
+                            "event_id": event.id,
+                            "region_name": event_region_name(event.region_code),
+                            "priority_ends_at_iso": event.priority_ends_at_utc.isoformat(),
+                        }
+            # A campaign-wide route can be the first open request after a
+            # cycle boundary; persist the one-time roll before rendering.
+            db.commit()
+            request.state.campaign_world_advanced = True
     return metadata
 
 

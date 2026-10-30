@@ -45,6 +45,22 @@ def get_passive_gold_rate(db: Session, guild: Guild) -> dict[str, int]:
     }
 
 
+def gold_reward_sources(rate: dict[str, int], credited_seconds: int) -> dict[str, int]:
+    """Split credited gold into guild production and Warehouse, preserving the award."""
+    credited_gold = floor(rate.get("total", 0) * credited_seconds / 3600)
+    guild_rate = (
+        rate.get("base", 0)
+        + rate.get("guild", 0)
+        + rate.get("mercenaries", 0)
+    )
+    guild_gold = floor(guild_rate * credited_seconds / 3600)
+    return {
+        "guild_production": guild_gold,
+        # Assign any fractional rounding remainder so the breakdown sums exactly.
+        "warehouse": credited_gold - guild_gold,
+    }
+
+
 def calculate_offline_material_rewards(
     gold_per_hour: int,
     credited_seconds: int,
@@ -121,4 +137,5 @@ def process_offline_progress(db: Session, guild: Guild) -> dict[str, object] | N
         "cap_reached": credited_seconds >= OFFLINE_CAP_SECONDS,
         "cap_hours": OFFLINE_CAP_SECONDS // 3600,
         "rate": rate,
+        "gold_sources": gold_reward_sources(rate, credited_seconds),
     }

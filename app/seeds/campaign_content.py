@@ -37,7 +37,7 @@ def apply_initial_campaign_content(db: Session) -> None:
     seed_initial_dungeon_templates(db)
     seed_initial_dungeon_drops(db)
     seed_class_skills(db)
-    run_massive_content_seed(db)
+    run_massive_content_seed(db, deactivate_legacy_defaults=True)
     run_progression_refinement(db)
     seed_long_idle_missions(db)
     apply_prd2_balance(db)

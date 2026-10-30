@@ -14,11 +14,12 @@ def clamp_level(level: int) -> int:
 
 def housing_capacity(level: int) -> int:
     level = clamp_level(level)
-    capacities = {
-        0: 0, 1: 1, 2: 2, 3: 3, 5: 5, 10: 7, 15: 9,
-        20: 11, 25: 13, 30: 15, 35: 17, 40: 18, 45: 19, 50: 20,
-    }
-    return capacities[max(key for key in capacities if key <= level)]
+    if level < 1:
+        return 0
+    reached = max(index for index, milestone in enumerate(HOUSING_MILESTONES) if milestone <= level)
+    # Spread the 19 slot increases across housing milestones so level 1 grants
+    # one slot and the twentieth slot is reserved for level 100.
+    return 1 + reached * 19 // (len(HOUSING_MILESTONES) - 1)
 
 
 def training_xp_bonus(level: int) -> int:

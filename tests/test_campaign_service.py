@@ -34,7 +34,7 @@ from app.models import (
     ProfessionTemplate,
     User,
 )
-from app.repositories.item_repository import add_inventory_quantity
+from app.repositories.item_repository import RESOURCE_MATERIAL_FAMILIES, add_inventory_quantity
 from app.repositories.building_repository import get_guild_building_by_effect
 from app.services.building_service import ensure_guild_buildings, upgrade_guild_building
 from app.services.campaign_service import CampaignService
@@ -44,6 +44,7 @@ from app.services.crafting_service import craft_recipe, get_blacksmith_context
 from app.services.dock_service import buy_dock_offer, create_dock_rotation, get_docks_context
 from app.services.equipment_service import create_equipment_instance_from_template, equip_item
 from app.services.guild_service import get_current_guild_context
+from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 from app.services.market_service import collect_market_sale, get_market_page_context, start_material_sale
 from app.services.mission_service import claim_mission_loot, get_missions_page_context, start_mission
 from app.services.profession_service import complete_profession_training, get_professions_context, start_profession_training
@@ -120,7 +121,7 @@ asyncio.run(main())
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
         with closing(sqlite3.connect(first.database_path)) as connection:
-            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "d7e8f9a0b1c2")
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "e4f5a6b7c8d9")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -135,6 +136,16 @@ asyncio.run(main())
             self.assertEqual(db.scalar(text("PRAGMA foreign_keys")), 1)
             content_count = db.scalar(select(func.count(MissionTemplate.id)))
             self.assertGreater(content_count, 0)
+            # The normal fresh-campaign path applies the full campaign catalog
+            # before returning. Prove the first real Vigília can use it without
+            # fixture-only seeding or a ClockGuard fallback.
+            from app.services.regional_cycle_service import get_regional_board
+            campaign_metadata = db.get(CampaignMetadata, first.campaign_id)
+            regional_board = get_regional_board(db, campaign_metadata, guild)
+            self.assertEqual(regional_board["cycle"].cycle_number, 0)
+            self.assertEqual(len(regional_board["offers"]["contract"]), 10)
+            self.assertEqual(len(regional_board["offers"]["dungeon"]), 3)
+            self.assertEqual(len(regional_board["offers"]["boss"]), 1)
 
         campaigns.activate_campaign(second.campaign_id)
         with SessionLocal() as db:
@@ -391,11 +402,139 @@ asyncio.run(main())
                     "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
                 ).fetchone()
                 columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
-                self.assertEqual(revision, "d7e8f9a0b1c2")
+                self.assertEqual(revision, "e4f5a6b7c8d9")
                 self.assertEqual(guild, (7, "Guilda preservada", None))
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
                 self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_upgrade_from_pre_event_revision_preserves_campaign_regional_run_and_backup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaigns = CampaignService(saves)
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            command.upgrade(campaigns._alembic_config(database_path), "d7e8f9a0b1c2")
+
+            with closing(sqlite3.connect(database_path)) as connection:
+                self._insert_legacy_row(connection, "campaign_metadata", {
+                    "campaign_id": campaign_id,
+                    "campaign_name": "Save regional anterior a eventos",
+                    "schema_version": 5,
+                })
+                self._insert_legacy_row(connection, "guilds", {
+                    "id": 31,
+                    "campaign_id": campaign_id,
+                    "name": "Guilda preservada",
+                    "level": 12,
+                    "xp": 345,
+                    "reputation": 67,
+                })
+                self._insert_legacy_row(connection, "regional_guild_state", {
+                    "id": 41,
+                    "campaign_id": campaign_id,
+                    "region_code": "vale-fronteira",
+                    "slot": 0,
+                    "guild_id": 31,
+                    "name": "Guilda preservada",
+                    "profile": "player",
+                    "archetype": "player",
+                    "level": 12,
+                    "xp": 345,
+                    "power": 88,
+                    "reputation": 67,
+                })
+                self._insert_legacy_row(connection, "regional_cycles", {
+                    "id": 51,
+                    "campaign_id": campaign_id,
+                    "cycle_number": 3,
+                    "starts_at_utc": "2026-10-28 06:00:00",
+                    "ends_at_utc": "2026-10-28 12:00:00",
+                    "seed": "a" * 64,
+                    "rules_version": "vigilia-v2",
+                    "status": "completed",
+                })
+                self._insert_legacy_row(connection, "regional_offers", {
+                    "id": 61,
+                    "campaign_id": campaign_id,
+                    "cycle_id": 51,
+                    "cycle_number": 3,
+                    "region_code": "vale-fronteira",
+                    "offer_type": "contract",
+                    "slot": 0,
+                    "rank": "C",
+                    "name_snapshot": "Contrato antigo",
+                    "recommended_level_snapshot": 10,
+                    "recommended_power_snapshot": 80,
+                    "duration_seconds_snapshot": 3600,
+                    "gold_reward_snapshot": 75,
+                    "xp_reward_snapshot": 120,
+                    "success_chance_snapshot": 80,
+                    "status": "resolved",
+                })
+                self._insert_legacy_row(connection, "regional_run_outcomes", {
+                    "id": 71,
+                    "campaign_id": campaign_id,
+                    "guild_state_id": 41,
+                    "offer_id": 61,
+                    "source_type": "mission",
+                    "source_run_id": 99,
+                    "offer_cycle_number": 3,
+                    "applied_cycle_number": 3,
+                    "rank": "C",
+                    "success": 1,
+                    "contribution": 2,
+                    "gold_earned": 75,
+                    "xp_earned": 120,
+                })
+                connection.commit()
+
+            migration = campaigns._ensure_schema(database_path, campaign_id)
+            self.assertIsNotNone(migration)
+            self.assertEqual(migration.previous_revision, "d7e8f9a0b1c2")
+            self.assertEqual(migration.current_revision, "e4f5a6b7c8d9")
+            backups = list((Path(temp_dir) / "backups" / campaign_id).glob(
+                "pre-migration-d7e8f9a0b1c2-*.db"
+            ))
+            self.assertEqual(len(backups), 1)
+
+            expected_guild = ("Guilda preservada", 12, 345, 67)
+            expected_regional_guild = ("Guilda preservada", 12, 345, 88, 67)
+            expected_run = (campaign_id, "mission", 99, "C", 1, 2, 75, 120)
+            for path, expected_revision in ((database_path, "e4f5a6b7c8d9"), (backups[0], "d7e8f9a0b1c2")):
+                with closing(sqlite3.connect(path)) as connection:
+                    self.assertEqual(
+                        connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
+                        expected_revision,
+                    )
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT campaign_name FROM campaign_metadata WHERE campaign_id = ?",
+                            (campaign_id,),
+                        ).fetchone(),
+                        ("Save regional anterior a eventos",),
+                    )
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT name, level, xp, reputation FROM guilds WHERE id = 31"
+                        ).fetchone(),
+                        expected_guild,
+                    )
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT name, level, xp, power, reputation FROM regional_guild_state WHERE id = 41"
+                        ).fetchone(),
+                        expected_regional_guild,
+                    )
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT campaign_id, source_type, source_run_id, rank, success, "
+                            "contribution, gold_earned, xp_earned FROM regional_run_outcomes WHERE id = 71"
+                        ).fetchone(),
+                        expected_run,
+                    )
+                    self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
 
     def test_upgrade_from_work_one_head_adds_pause_state_and_updates_schema_version(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -420,13 +559,13 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "a6b7c8d9e0f1")
-            self.assertEqual(migration.current_revision, "d7e8f9a0b1c2")
+            self.assertEqual(migration.current_revision, "e4f5a6b7c8d9")
             self.assertEqual(migration.previous_save_version, 3)
-            self.assertEqual(migration.current_save_version, 5)
+            self.assertEqual(migration.current_save_version, 6)
             with closing(sqlite3.connect(campaign.database_path)) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "d7e8f9a0b1c2",
+                    "e4f5a6b7c8d9",
                 )
                 self.assertIn(
                     "capacity_paused",
@@ -437,7 +576,7 @@ asyncio.run(main())
                         "SELECT schema_version FROM campaign_metadata WHERE campaign_id = ?",
                         (campaign.campaign_id,),
                     ).fetchone()[0],
-                    5,
+                    6,
                 )
 
     def test_failed_migration_restores_original_schema_and_keeps_backup(self):
@@ -555,17 +694,30 @@ asyncio.run(main())
     def _exercise_gameplay(self, db, guild, resources) -> None:
         resources.gold = 100_000
         db.add(resources)
+        seeded_resource_families: set[str] = set()
         for material_template in db.scalars(select(ItemTemplate).where(ItemTemplate.item_type == "material")):
-            add_inventory_quantity(db, guild.id, material_template.id, 1_000)
+            quantity = 1
+            for resource_name, families in RESOURCE_MATERIAL_FAMILIES.items():
+                if material_template.material_family in families and resource_name not in seeded_resource_families:
+                    quantity = 300
+                    seeded_resource_families.add(resource_name)
+                    break
+            add_inventory_quantity(db, guild.id, material_template.id, quantity)
         db.commit()
         ensure_guild_buildings(db, guild.id)
+        # Keep this persistence fixture's initial stock under a finite capacity
+        # while retaining enough core resources for its later upgrade sequence.
+        warehouse = get_guild_building_by_effect(db, guild.id, "warehouse")
+        warehouse.level = 10
+        db.add(warehouse)
+        db.commit()
         housing = get_guild_building_by_effect(db, guild.id, "housing")
         tavern = get_guild_building_by_effect(db, guild.id, "tavern")
         self.assertIsNotNone(housing)
         self.assertIsNotNone(tavern)
         housing = upgrade_guild_building(db, guild, resources, housing.id)
         self.assertEqual(housing.level, 1)
-        housing.level = 2  # provide a two-person test roster without provisioning materials
+        housing.level = 3  # the revised milestone curve grants the second slot here
         db.commit()
         tavern = upgrade_guild_building(db, guild, resources, tavern.id)
         self.assertEqual(tavern.level, 1)
@@ -774,11 +926,9 @@ asyncio.run(main())
             DockOffer.dock_rotation_merchant_id.in_(dock_merchant_ids)
         ).order_by(DockOffer.id))
         self.assertIsNotNone(dock_offer)
-        # Work 1 added a finite warehouse capacity; keep this persistence fixture independent of it.
-        warehouse = get_guild_building_by_effect(db, guild.id, "warehouse")
-        warehouse.level = 100
-        db.add(warehouse)
-        db.flush()
+        # Initial fixture stock is normalized above; verify space remains for
+        # this purchase after the mission, dungeon, market and training flows.
+        self.assertLessEqual(get_inventory_usage(db, guild.id) + 1, get_inventory_capacity(db, guild))
         buy_dock_offer(db, guild, resources, dock_offer.id, 1)
         self.assertLess(dock_offer.remaining_stock, dock_offer.initial_stock)
 
@@ -791,6 +941,11 @@ asyncio.run(main())
         if recipe is None:
             recipe = db.scalar(select(CraftingRecipe).where(CraftingRecipe.is_active.is_(True)).order_by(CraftingRecipe.id))
         self.assertIsNotNone(recipe)
+        if not hasattr(recipe, "effective_gold_cost"):
+            from app.services.crafting_service import _effective_recipe_gold_cost
+            docks_level = get_guild_building_by_effect(db, guild.id, "docks").level
+            recipe.effective_gold_cost = _effective_recipe_gold_cost(db, recipe, docks_level)
+        shown_craft_gold = int(recipe.effective_gold_cost)
         for ingredient in recipe.materials:
             owned = db.scalar(select(GuildInventoryItem).where(
                 GuildInventoryItem.guild_id == guild.id,
@@ -800,7 +955,12 @@ asyncio.run(main())
             if shortfall > 0:
                 add_inventory_quantity(db, guild.id, ingredient.item_template_id, shortfall)
         db.commit()
+        gold_before_craft = resources.gold
         self.assertIn("criado com sucesso", craft_recipe(db, guild, resources, str(recipe.id)))
+        self.assertEqual(gold_before_craft - resources.gold, shown_craft_gold)
+        self.assertLessEqual(get_inventory_usage(db, guild.id) + 1, get_inventory_capacity(db, guild))
+        add_inventory_quantity(db, guild.id, material.id, 1)
+        db.commit()
 
         from app.services.guild_progression_service import add_guild_xp
         prior_level = guild.level

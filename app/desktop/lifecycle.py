@@ -17,6 +17,10 @@ def open_campaign_with_migration(app, campaigns: CampaignService, clock_guard: C
         return campaigns.inspect_campaign(campaign_id), None, None
     suspended = getattr(app.state, "suspended_campaigns", set())
     for offline_campaign_id in list(suspended):
+        # Reopening this save is the end of its offline interval. Keep its
+        # offline marker until activate_campaign calculates catch-up rewards.
+        if offline_campaign_id == campaign_id:
+            continue
         try:
             clock_guard.end_offline_period_in_save_picker(campaigns, offline_campaign_id)
         except FileNotFoundError:

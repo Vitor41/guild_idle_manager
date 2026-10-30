@@ -71,6 +71,20 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertTrue((ART_ROOT / "evolution" / "illustrations" / "gathering-worksite.webp").is_file())
         self.assertTrue((ART_ROOT / "evolution" / "sprites" / "ui_64" / "gathering-kit.png").is_file())
 
+    def test_narrow_desktop_shell_keeps_gameplay_navigation_reachable(self):
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+
+        self.assertIn('<details class="compact-navigation" open>', base)
+        self.assertIn('<summary aria-label="Abrir navegação principal">', base)
+        for route in ("/gathering", "/regional#events-title", "/codex"):
+            with self.subTest(route=route):
+                self.assertIn(f'href="{route}"', base)
+        self.assertIn("@media (max-width: 980px)", theme)
+        self.assertIn('.compact-navigation .sidebar-nav {', theme)
+        self.assertIn('.compact-navigation[open] .sidebar-nav { display: grid; }', theme)
+        self.assertIn('body[data-app-mode="desktop"] :focus-visible', theme)
+
     def test_desktop_button_hover_and_focus_keep_secondary_and_danger_roles(self):
         theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
 

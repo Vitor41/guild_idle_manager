@@ -148,7 +148,7 @@ Preferências que hoje pertencem ao usuário, como estado do tutorial e escolhas
 - Atualização do aplicativo não apaga saves. Atualização de schema deve ser transacional, com backup restaurável.
 - Toda mensagem de sucesso de uma ação deve vir depois do commit; erro deve reverter a transação.
 
-**Pendência explícita para o Trabalho 2:** o Gate 1 cria um backup antes da migração de schema, mas ainda não testa nem garante restauração automática do arquivo original quando uma migration falha. Até concluir rollback/restauração e seu teste de falha, o backup é apenas uma cópia preventiva; não declarar recovery de migration como pronto.
+**Estado atual da implementação:** `CampaignService` cria backup SQLite antes da migration e restaura o arquivo original quando a migration falha; `tests/test_campaign_service.py::test_failed_migration_restores_original_schema_and_keeps_backup` cobre falha parcial, restauração do schema/dados originais e preservação do backup. **Pendente:** validar esses caminhos com fixtures SQLite através do pacote candidato final. A cobertura em serviço/teste não comprova, por si só, o comportamento do artefato empacotado.
 
 ### 4.4 Conteúdo e seeds
 

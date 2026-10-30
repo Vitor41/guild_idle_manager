@@ -55,6 +55,23 @@ class GatheringServiceTests(unittest.TestCase):
         self.assertEqual(second["cycles"], 0)
         self.assertEqual(inventory.quantity, 2)
 
+    def test_max_seconds_caps_24h_elapsed_and_advances_checkpoint(self):
+        assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
+        endpoint = self.start + timedelta(days=1)
+
+        result = advance_assignment(
+            self.db, self.guild, assignment, now=endpoint, max_seconds=2 * 60 * 60,
+        )
+
+        self.assertEqual(result["cycles"], 120)
+        self.assertEqual(result["stored"], 120)
+        self.assertEqual(assignment.checkpoint_at_utc, endpoint)
+        self.assertEqual(assignment.progress_seconds, 0)
+        repeated = advance_assignment(
+            self.db, self.guild, assignment, now=endpoint, max_seconds=2 * 60 * 60,
+        )
+        self.assertEqual(repeated["cycles"], 0)
+
     def test_filling_cycle_loses_only_its_overflow_and_leaves_later_cycle_pending(self):
         self.assertEqual(get_inventory_capacity(self.db, self.guild), 1500)
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
@@ -70,6 +87,7 @@ class GatheringServiceTests(unittest.TestCase):
         self.assertEqual(first["discarded"], 1)
         self.assertEqual(first["cycles"], 1)
         self.assertTrue(first["paused"])
+        self.assertEqual(first["paused_seconds"], 240)
         self.assertEqual(assignment.cycle_count, 1)
         self.assertEqual(assignment.progress_seconds, 0)
         self.assertEqual(second["stored"], 0)
@@ -88,6 +106,7 @@ class GatheringServiceTests(unittest.TestCase):
         result = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=4))
 
         self.assertTrue(result["paused"])
+        self.assertEqual(result["paused_seconds"], 240)
         self.assertEqual(result["cycles"], 0)
         self.assertEqual(assignment.cycle_count, 0)
         self.assertEqual(assignment.progress_seconds, 20)
@@ -105,6 +124,7 @@ class GatheringServiceTests(unittest.TestCase):
         resumed = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(hours=1))
         self.assertEqual(resumed["cycles"], 0)
         self.assertFalse(resumed["paused"])
+        self.assertEqual(resumed["paused_seconds"], 59 * 60)
         self.assertEqual(assignment.cycle_count, 0)
         after_one_active_cycle = advance_assignment(
             self.db, self.guild, assignment, now=self.start + timedelta(hours=1, seconds=60)

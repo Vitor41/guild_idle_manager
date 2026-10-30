@@ -93,6 +93,10 @@ body[data-app-mode="desktop"] .sidebar-nav a[aria-current="page"] {
   border-color: #426b68; background: #1d3538; color: #f5d798;
   box-shadow: inset 3px 0 var(--teal, #68c3b5);
 }
+body[data-app-mode="desktop"] .regional-invite-badge {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: auto;
+  border-radius: 50%; background: #a34437; color: #fff5e8; font-size: .75rem; font-weight: 900;
+}
 body[data-app-mode="desktop"] .nav-icon { color: var(--teal, #68c3b5); }
 body[data-app-mode="desktop"] .nav-section-label {
   margin: 12px 10px 3px; color: #819899; font-size: .67rem;

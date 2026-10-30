@@ -8,7 +8,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "packaging" / "desktop" / "Install-Desktop-Dev.ps1"
-BUILT_PACKAGE = ROOT / "dist" / "GuildIdleManager-DEV"
+BUILT_PACKAGE = Path(os.environ.get(
+    "GIM_TEST_BUILT_PACKAGE",
+    str(ROOT / "dist" / "GuildIdleManager-DEV"),
+))
 
 
 @unittest.skipUnless(os.name == "nt" and shutil.which("powershell.exe"), "Requires Windows PowerShell")
@@ -18,21 +21,24 @@ class DesktopInstallerSafetyTests(unittest.TestCase):
         environment["LOCALAPPDATA"] = str(local_app_data)
         environment["TEMP"] = str(local_app_data / "Temp")
         Path(environment["TEMP"]).mkdir(parents=True, exist_ok=True)
-        return subprocess.run(
-            [
+        command = [
                 shutil.which("powershell.exe"),
                 "-NoProfile",
+                "-NonInteractive",
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
                 str(package / "Install-Desktop-Dev.ps1"),
                 "-NoShortcut",
-            ],
+        ]
+        return subprocess.run(
+            command,
             cwd=package,
             env=environment,
             capture_output=True,
             text=True,
             check=False,
+            timeout=120,
         )
 
     def _make_package(self, directory: Path) -> Path:

@@ -11,7 +11,8 @@ from app.models.content import ContentSeedRun, ProfessionTemplate
 from app.models.dock import MerchantOfferTemplate, MerchantTemplate
 from app.models.dungeon import DungeonTemplate
 from app.models.item import DungeonTemplateItemDrop, ItemTemplate, MissionTemplateItemDrop
-from app.models.mission import MissionTemplate
+from app.models.mission import MissionRun, MissionTemplate
+from app.models.regional import RegionalOffer
 
 
 PACK_KEY = "conteudo_massivo_pos_mvp026"
@@ -293,7 +294,11 @@ def _insert_missing(db: Session, model, rows: list[dict[str, object]], key: str)
     return objects
 
 
-def run_massive_content_seed(db: Session) -> dict[str, object]:
+def run_massive_content_seed(
+    db: Session,
+    *,
+    deactivate_legacy_defaults: bool = False,
+) -> dict[str, object]:
     marker = db.scalar(select(ContentSeedRun).where(ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION))
     if marker is not None:
         _ensure_docks_template(db)
@@ -302,33 +307,19 @@ def run_massive_content_seed(db: Session) -> dict[str, object]:
 
     _ensure_docks_template(db)
 
-    legacy_names = {"Cacar lobos", "Patrulhar estrada", "Escoltar comerciante", "Limpar caverna pequena"}
-    for legacy in db.scalars(select(MissionTemplate).where(MissionTemplate.name.in_(legacy_names))):
-        legacy.is_active = False
-        db.add(legacy)
+    if deactivate_legacy_defaults:
+        deactivate_obsolete_legacy_missions(db)
 
-    rarity_labels = {"common": "comum", "uncommon": "incomum", "rare": "raro", "epic": "épico", "legendary": "lendário", "mythic": "mítico"}
-    mission_type_labels = {"combat": "combate", "patrol": "patrulha", "escort": "escolta", "hunt": "caçada", "exploration": "exploração", "investigation": "investigação", "defense": "defesa", "rescue": "resgate", "contract": "contrato", "story": "história", "elite": "elite"}
     family_labels = {"wood": "madeiras", "ore": "minérios", "herb": "ervas", "leather": "couros", "cloth": "fibras", "gem": "gemas", "relic": "relíquias", "essence": "essências"}
-    for item in db.scalars(select(ItemTemplate).where(ItemTemplate.content_pack == PACK_KEY, ItemTemplate.item_type == "equipment")):
-        if item.description.startswith("Equipamento "):
-            item.description = f"Equipamento {rarity_labels.get(item.rarity, item.rarity)} indicado para progressão entre os níveis {item.level_band}."
-            db.add(item)
-    for mission in db.scalars(select(MissionTemplate).where(MissionTemplate.content_pack == PACK_KEY)):
-        if mission.description.startswith("Contrato de "):
-            mission.description = f"Contrato de {mission_type_labels.get(mission.mission_type, mission.mission_type)} recomendado para grupos próximos do nível {mission.recommended_level}."
-        elif mission.description.startswith("Expedição segura para obter recursos da família "):
-            mission.description = f"Expedição segura para obter {family_labels.get(mission.gathering_family or '', mission.gathering_family or 'materiais')}."
-        db.add(mission)
 
     materials = _material_rows()
     equipment = _equipment_rows()
     _insert_missing(db, ItemTemplate, materials + equipment, "slug")
     item_map = {item.slug: item for item in db.scalars(select(ItemTemplate).where(ItemTemplate.content_pack == PACK_KEY))}
 
-    _insert_missing(db, MissionTemplate, _mission_rows() + _gathering_rows(), "slug")
+    new_missions = _insert_missing(db, MissionTemplate, _mission_rows() + _gathering_rows(), "slug")
     mission_map = {item.slug: item for item in db.scalars(select(MissionTemplate).where(MissionTemplate.content_pack == PACK_KEY))}
-    _insert_missing(db, DungeonTemplate, _dungeon_rows(), "slug")
+    new_dungeons = _insert_missing(db, DungeonTemplate, _dungeon_rows(), "slug")
     dungeon_map = {item.slug: item for item in db.scalars(select(DungeonTemplate).where(DungeonTemplate.content_pack == PACK_KEY))}
 
     _insert_missing(db, ProfessionTemplate, [
@@ -336,18 +327,17 @@ def run_massive_content_seed(db: Session) -> dict[str, object]:
          "bonus_percent": 15, "training_gold_cost": 250, "training_duration_seconds": 3600, "is_active": True}
         for code, name, family in PROFESSIONS
     ], "code")
-    for profession in db.scalars(select(ProfessionTemplate)):
-        if profession.description.startswith("Especialista em coletas da família "):
-            profession.description = f"Especialista em coleta de {family_labels.get(profession.material_family, profession.material_family)}."
-            db.add(profession)
-
     mission_ids = list(mission_map.values())
     dungeon_ids = list(dungeon_map.values())
     material_items = [item_map[row["slug"]] for row in materials]
     equipment_items = [item_map[row["slug"]] for row in equipment]
     existing_mission_pairs = set(db.execute(select(MissionTemplateItemDrop.mission_template_id, MissionTemplateItemDrop.item_template_id)).all())
     mission_drops = []
+    new_mission_ids = {mission.id for mission in new_missions}
+    # Mission claims read the live drop table, so never extend loot on an existing template.
     for index, mission in enumerate(mission_ids):
+        if mission.id not in new_mission_ids:
+            continue
         material = material_items[index % len(material_items)]
         pair = (mission.id, material.id)
         if pair not in existing_mission_pairs:
@@ -356,6 +346,8 @@ def run_massive_content_seed(db: Session) -> dict[str, object]:
             existing_mission_pairs.add(pair)
     for index, equipment_item in enumerate(equipment_items):
         mission = mission_ids[index % len(mission_ids)]
+        if mission.id not in new_mission_ids:
+            continue
         pair = (mission.id, equipment_item.id)
         if pair not in existing_mission_pairs:
             mission_drops.append(MissionTemplateItemDrop(mission_template_id=mission.id, item_template_id=equipment_item.id,
@@ -364,7 +356,11 @@ def run_massive_content_seed(db: Session) -> dict[str, object]:
 
     existing_dungeon_pairs = set(db.execute(select(DungeonTemplateItemDrop.dungeon_template_id, DungeonTemplateItemDrop.item_template_id)).all())
     dungeon_drops = []
+    new_dungeon_ids = {dungeon.id for dungeon in new_dungeons}
+    # Dungeon claims also read live template drops; only newly inserted dungeons get pack defaults.
     for index, dungeon in enumerate(dungeon_ids):
+        if dungeon.id not in new_dungeon_ids:
+            continue
         for item in (material_items[index % len(material_items)], equipment_items[index % len(equipment_items)]):
             pair = (dungeon.id, item.id)
             if pair not in existing_dungeon_pairs:
@@ -384,11 +380,6 @@ def run_massive_content_seed(db: Session) -> dict[str, object]:
             "description": "Viajante das Docas com um estoque próprio e temporário.", "merchant_type": merchant_type,
             "min_dock_level": 1 + index % 10, "rotation_weight": max(10, 100 - index // 2), "content_pack": PACK_KEY, "is_active": True})
     _insert_missing(db, MerchantTemplate, merchant_rows, "slug")
-    merchant_name_labels = {row["slug"]: row["name"] for row in merchant_rows}
-    for merchant in db.scalars(select(MerchantTemplate).where(MerchantTemplate.content_pack == PACK_KEY)):
-        if re.match(r"^Mercante [A-Za-z]+ \d{2}$", merchant.name):
-            merchant.name = str(merchant_name_labels.get(merchant.slug, merchant.name))
-            db.add(merchant)
     merchants = list(db.scalars(select(MerchantTemplate).where(MerchantTemplate.content_pack == PACK_KEY).order_by(MerchantTemplate.id)))
     offer_items = material_items + equipment_items
     existing_offer_pairs = set(db.execute(select(MerchantOfferTemplate.merchant_template_id, MerchantOfferTemplate.item_template_id)).all())
@@ -419,3 +410,25 @@ def run_massive_content_seed(db: Session) -> dict[str, object]:
     db.add(ContentSeedRun(pack_key=PACK_KEY, version=PACK_VERSION, report_json=json.dumps(report, ensure_ascii=False), applied_at=datetime.now(timezone.utc)))
     db.commit()
     return report
+
+
+def deactivate_obsolete_legacy_missions(db: Session) -> int:
+    """Apply legacy starter defaults during fresh campaign initialization only."""
+    legacy_names = {"Cacar lobos", "Patrulhar estrada", "Escoltar comerciante", "Limpar caverna pequena"}
+    deactivated = 0
+    for legacy in db.scalars(select(MissionTemplate).where(MissionTemplate.name.in_(legacy_names))):
+        in_use = db.scalar(select(RegionalOffer.id).where(
+            RegionalOffer.mission_template_id == legacy.id,
+            RegionalOffer.status.in_(("available", "player_reserved", "in_progress")),
+        ).limit(1)) is not None
+        run_in_progress = db.scalar(select(MissionRun.id).where(
+            MissionRun.mission_template_id == legacy.id,
+            MissionRun.status == "in_progress",
+        ).limit(1)) is not None
+        if not in_use and not run_in_progress and legacy.is_active:
+            legacy.is_active = False
+            db.add(legacy)
+            deactivated += 1
+    if deactivated:
+        db.flush()
+    return deactivated

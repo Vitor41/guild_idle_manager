@@ -50,6 +50,7 @@ def gathering_index(
             "family_labels": FAMILY_LABELS,
             "capacity": get_inventory_capacity(db, guild),
             "used": get_inventory_usage(db, guild.id),
+            "inventory_url": "/inventory",
             "error": request.query_params.get("error"),
             "message": request.query_params.get("message"),
         },

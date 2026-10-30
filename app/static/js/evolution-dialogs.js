@@ -15,6 +15,10 @@ document.querySelectorAll(".evolution-dialog").forEach((dialog) => {
   });
 });
 
+document.querySelectorAll("dialog[data-regional-rebellion-auto-open]").forEach((dialog) => {
+  if (dialog instanceof HTMLDialogElement) window.GIMStartupModalQueue?.enqueue(dialog, 2);
+});
+
 document.querySelectorAll(".evolution-page img").forEach((image) => {
   const fallback = () => {
     image.hidden = true;

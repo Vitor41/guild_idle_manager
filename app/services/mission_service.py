@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
+import json
 from math import floor
 from random import randint
 from urllib.parse import urlencode
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.core.time import as_utc, prepare_timer_context
@@ -52,6 +53,9 @@ from app.services.profession_service import PROFESSION_COLORS, get_profession_dr
 from app.services.display_service import annotate_mercenary_display, clean_generated_name, rarity_label
 from app.services.icon_service import get_item_icon_path
 from app.services.building_balance_service import mission_office_values
+from app.services.supply_preparation_service import (
+    encode_supply_snapshot, prepare_supply_snapshot, supply_bonus_from_snapshot,
+)
 
 
 INITIAL_MISSION_TEMPLATES = [
@@ -458,6 +462,12 @@ def start_mission(
     *,
     commit: bool = True,
     regional_duration_seconds: int | None = None,
+    supply_selected: bool = False,
+    supply_rank: str | None = None,
+    regional_success_chance: int | None = None,
+    regional_recommended_power: int | None = None,
+    regional_recommended_level: int | None = None,
+    allow_regional_supply: bool = False,
 ) -> MissionRun:
     if not mission_template_id:
         raise MissionError("Missao e obrigatoria.")
@@ -510,6 +520,38 @@ def start_mission(
         * (100 - min(30, skill_effects.get("duration_reduction", 0) + office["duration_reduction_percent"])) / 100
     )
     ends_at = started_at + timedelta(seconds=max(1, duration))
+    supply_snapshot = None
+    supply_cost = 0
+    if supply_selected:
+        if not allow_regional_supply or mission_template.mission_type in {"gathering", "long_idle"}:
+            raise MissionError("Suprimento disponível apenas em contratos regionais.")
+        if supply_rank is None:
+            raise MissionError("Rank do contrato regional indisponível para cotar suprimento.")
+        rank = supply_rank
+        drops = list_active_drops_for_mission(db, mission_template.id)
+        preview_details = get_party_chance_details(
+            db, guild.id,
+            regional_success_chance if regional_success_chance is not None else mission_template.base_success_chance,
+            mercenaries,
+            regional_recommended_power if regional_recommended_power is not None else mission_template.recommended_power,
+            regional_recommended_level if regional_recommended_level is not None else mission_template.recommended_level,
+        )
+        preview_chance = max(5, min(95, preview_details["final_chance"] + skill_effects.get("success_chance", 0)))
+        office_reward = mission_office_values(get_building_level(db, guild.id, "contract_office"))["reward_bonus_percent"]
+        success_gold = floor(mission_template.base_gold_reward * parsed_multiplier * (100 + skill_effects.get("gold_reward", 0) + office_reward) / 100)
+        try:
+            supply_snapshot, supply_cost = prepare_supply_snapshot(
+                db, guild.id, rank, success_gold, drops, parsed_multiplier, True, preview_chance,
+            )
+        except ValueError as error:
+            raise MissionError(str(error)) from error
+        debit = db.execute(
+            update(GuildResources).where(
+                GuildResources.guild_id == guild.id, GuildResources.gold >= supply_cost,
+            ).values(gold=GuildResources.gold - supply_cost)
+        )
+        if debit.rowcount != 1:
+            raise MissionError("Saldo de ouro insuficiente para o suprimento.")
     return create_mission_run(
         db=db,
         guild_id=guild.id,
@@ -519,6 +561,7 @@ def start_mission(
         ends_at=ends_at,
         run_multiplier=parsed_multiplier,
         commit=commit,
+        preparation_snapshot_json=encode_supply_snapshot(supply_snapshot),
     )
 
 
@@ -562,9 +605,19 @@ def claim_mission_loot(
         regional_offer.recommended_level_snapshot if regional_offer else mission_template.recommended_level,
     )
     skill_effects = get_party_skill_effects(db, mercenaries)
-    success_chance = mission_template.base_success_chance if mission_template.mission_type == "long_idle" else max(
+    base_final_chance = mission_template.base_success_chance if mission_template.mission_type == "long_idle" else max(
         5, min(95, chance_details["final_chance"] + skill_effects.get("success_chance", 0))
     )
+    supply_snapshot = {}
+    if mission_run.preparation_snapshot_json:
+        try:
+            supply_snapshot = json.loads(mission_run.preparation_snapshot_json)
+        except (TypeError, json.JSONDecodeError):
+            supply_snapshot = {}
+    if isinstance(supply_snapshot, dict) and supply_snapshot.get("schema") == 1:
+        base_final_chance = int(supply_snapshot.get("base_final_chance", base_final_chance))
+    supply_bonus = supply_bonus_from_snapshot(mission_run.preparation_snapshot_json)
+    success_chance = min(95, base_final_chance + supply_bonus)
     success = randint(1, 100) <= success_chance
 
     if success:
@@ -638,6 +691,7 @@ def claim_mission_loot(
         level_ups=level_up_messages,
         guild_progress=guild_messages,
         items=item_results,
+        notes=([f"Chance final: {success_chance}% (suprimento +{supply_bonus} p.p.; custo registrado no início)."] if supply_bonus else []),
     )
     mission_run.resolved_at = now
     db.add(mission_run)
@@ -659,6 +713,9 @@ def claim_mission_loot(
             gold_earned=gold_reward,
             xp_earned=xp_reward * len(mercenaries),
         )
+    from app.services.regional_event_service import record_event_activity_result
+
+    record_event_activity_result(db, "mission", mission_run.id, success, now)
     if commit:
         db.commit()
         db.refresh(mission_run)

@@ -4,12 +4,14 @@ O launcher roda a cópia deste checkout em uma janela pywebview. Ele não usa Po
 
 ## Gerar instalador DEV offline
 
-Com PyInstaller instalado no `.venv-desktop`, gere `dist\GuildIdleManager-DEV-Setup.exe` e o ZIP portátil ao lado dele:
+Com PyInstaller instalado no `.venv-desktop`, gere o Setup e o ZIP portátil em uma pasta nova e isolada dentro de `dist\staging`. O build não substitui pacotes anteriores:
 
 ```powershell
 Set-Location 'C:\Users\vitor\Guild Idle Manager\App GIM'
 .\scripts\build_desktop_dev.ps1
 ```
+
+O comando informa o caminho da pasta candidata e preserva nela `GuildIdleManager-DEV-Setup.exe`, `GuildIdleManager-DEV.zip` e o bundle. Para escolher um nome determinístico, use `-OutputRoot 'dist\staging\gim-candidate'`. Os comandos abaixo selecionam o candidato mais recente para smoke e teste isolado do instalador.
 
 Consulte [WORK3_QA_DESKTOP.md](WORK3_QA_DESKTOP.md) para os hashes dos artefatos e as evidências. Em 2026-10-27, o smoke nativo confirmou `shown`, `loaded`, DOM e bridge em duas execuções; a instalação congelada também passou pelo fluxo de campanha e pelo smoke offline. Isso fecha a pendência de renderização inicial registrada anteriormente. A validação do instalador e o layout estreito também estão documentados ali.
 
@@ -19,10 +21,16 @@ O bundle também tem um smoke offline sem janela para validar a cópia empacotad
 
 ```powershell
 $env:GIM_SMOKE_RESULT = Join-Path $env:TEMP ('gim-desktop-bundle-smoke-' + [Guid]::NewGuid().ToString('N') + '.txt')
-.\dist\GuildIdleManager\GuildIdleManager.exe --smoke
+$candidate = Get-ChildItem .\dist\staging -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'GuildIdleManager\GuildIdleManager.exe') } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$bundle = Join-Path $candidate.FullName 'GuildIdleManager\GuildIdleManager.exe'
+& $bundle --smoke
 Get-Content $env:GIM_SMOKE_RESULT
 Remove-Item $env:GIM_SMOKE_RESULT
 Remove-Item Env:GIM_SMOKE_RESULT
+
+$env:GIM_TEST_BUILT_PACKAGE = Join-Path $candidate.FullName 'GuildIdleManager-DEV'
+& .\.venv-desktop\Scripts\python.exe -m unittest tests.test_desktop_installer
+Remove-Item Env:GIM_TEST_BUILT_PACKAGE
 ```
 
 Para validar novamente em um computador limpo, extraia o ZIP, execute o instalador e abra `Guild Idle Manager DEV`. O aplicativo não consulta serviços externos durante a abertura. Atualizações DEV substituem os arquivos do aplicativo no diretório de instalação; os saves permanecem separados.

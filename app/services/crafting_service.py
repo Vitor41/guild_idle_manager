@@ -3,12 +3,13 @@ from math import ceil
 from random import Random
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.time import prepare_timer_context
 
 from app.core.game_balance import BLACKSMITH_REFINE_LEVEL, REFINE_BASE_GOLD_COST, REFINE_BASE_ORE_COST, REFINE_RARITY_CAPS
 from app.models.crafting import CraftingRecipeMaterial
+from app.models.dock import MerchantOfferTemplate
 from app.models.guild import Guild, GuildResources
 from app.models.item import ItemTemplate
 from app.repositories.crafting_repository import create_recipe, get_active_recipe, get_recipe_by_name, list_active_recipes
@@ -22,6 +23,9 @@ from app.repositories.item_repository import (
     sync_inventory_resource_totals,
 )
 from app.services.building_service import get_building_level
+from app.services.building_balance_service import docks_values
+from app.services.economy_pricing_service import effective_crafting_gold_cost, effective_dock_unit_price
+from app.services.salvage_service import _select_salvage_material
 from app.services.equipment_service import create_equipment_instance_from_template, get_item_power_score
 from app.services.guild_progression_service import add_guild_xp
 from app.services.inventory_capacity_service import add_inventory_quantity_capped, get_inventory_capacity, get_inventory_usage
@@ -213,6 +217,9 @@ def list_rotating_recipes(
 def get_blacksmith_context(db: Session, guild: Guild) -> dict[str, object]:
     blacksmith_level = get_building_level(db, guild.id, "blacksmith")
     recipes, rotation = list_rotating_recipes(db, guild, blacksmith_level)
+    docks_level = get_building_level(db, guild.id, "docks")
+    for recipe in recipes:
+        recipe.effective_gold_cost = _effective_recipe_gold_cost(db, recipe, docks_level)
     if rotation is not None and rotation.get("ends_at") is not None:
         prepare_timer_context(rotation, datetime.now(timezone.utc))
     for recipe in recipes:
@@ -260,7 +267,8 @@ def craft_recipe(db: Session, guild: Guild, resources: GuildResources | None, re
         raise CraftingError("Esta receita não faz mais parte da rotação atual.")
     if blacksmith_level < recipe.required_blacksmith_level:
         raise CraftingError("Nivel do Ferreiro insuficiente para esta receita.")
-    if resources.gold < recipe.gold_cost:
+    gold_cost = _effective_recipe_gold_cost(db, recipe, get_building_level(db, guild.id, "docks"))
+    if resources.gold < gold_cost:
         raise CraftingError("Ouro insuficiente para fabricar este item.")
     owned_materials = []
     for material in recipe.materials:
@@ -268,7 +276,7 @@ def craft_recipe(db: Session, guild: Guild, resources: GuildResources | None, re
         if owned is None or owned.quantity < material.quantity:
             raise CraftingError(f"Material insuficiente: {material.item_template.name}.")
         owned_materials.append((owned, material.quantity))
-    resources.gold -= recipe.gold_cost
+    resources.gold -= gold_cost
     for owned, quantity in owned_materials:
         remove_inventory_quantity(db, owned, quantity)
     db.flush()
@@ -288,6 +296,57 @@ def craft_recipe(db: Session, guild: Guild, resources: GuildResources | None, re
     db.add(guild)
     db.commit()
     return f"{output.name} criado com sucesso."
+
+
+def _effective_recipe_gold_cost(db: Session, recipe, docks_level: int) -> int:
+    """Prevent a crafting → Market loop from minting gold, including zero-input recipes."""
+    if not recipe.materials:
+        return effective_crafting_gold_cost(
+            recipe.gold_cost, recipe.output_item_template.base_sell_value,
+            recipe.output_quantity, 0,
+        )
+    if docks_level < 1:
+        return int(recipe.gold_cost)
+    cache = db.info.setdefault("_closed_loop_crafting_material_costs", {})
+    if docks_level not in cache:
+        catalog_level = docks_values(docks_level)["catalog_level"]
+        offers = db.scalars(select(MerchantOfferTemplate).options(
+            joinedload(MerchantOfferTemplate.item_template),
+        ).where(
+            MerchantOfferTemplate.is_active.is_(True),
+            MerchantOfferTemplate.min_dock_level <= catalog_level,
+        )).unique().all()
+        lowest_price: dict[int, int | float] = {}
+        cheapest_equipment: dict[int, tuple[int, ItemTemplate]] = {}
+        for offer in offers:
+            template = offer.item_template
+            if template.item_type == "material":
+                effective = effective_dock_unit_price(offer.base_price, template.base_sell_value)
+                lowest_price[template.id] = min(effective, lowest_price.get(template.id, effective))
+            elif template.item_type == "equipment":
+                effective = effective_dock_unit_price(offer.base_price, template.base_sell_value)
+                previous = cheapest_equipment.get(template.id)
+                if previous is None or effective < previous[0]:
+                    cheapest_equipment[template.id] = (effective, template)
+        # One bought equipment plus the minimum 50g fee yields 1–3 units,
+        # exactly 2 in expectation. This is a long-run EV unit cost.
+        for dock_cost, equipment_template in cheapest_equipment.values():
+            material = _select_salvage_material(db, equipment_template)
+            expected_cost = (dock_cost + 50) / 2
+            lowest_price[material.id] = min(
+                expected_cost, lowest_price.get(material.id, expected_cost)
+            )
+        cache[docks_level] = lowest_price
+    lowest_price = cache[docks_level]
+    material_ids = {int(material.item_template_id) for material in recipe.materials}
+    if material_ids - lowest_price.keys():
+        return int(recipe.gold_cost)
+    input_cost = sum(lowest_price[int(material.item_template_id)] * int(material.quantity)
+                     for material in recipe.materials)
+    return effective_crafting_gold_cost(
+        recipe.gold_cost, recipe.output_item_template.base_sell_value,
+        recipe.output_quantity, input_cost,
+    )
 
 
 def refine_equipment(db: Session, guild: Guild, resources: GuildResources | None, item_instance_id: str) -> dict[str, int | str]:
@@ -326,6 +385,8 @@ def refine_equipment(db: Session, guild: Guild, resources: GuildResources | None
     after = get_item_power_score(item)
     add_guild_xp(guild, 3)
     record_guild_stat(db, guild.id, "refined_count", 1)
+    if item.upgrade_level == 10:
+        record_guild_stat(db, guild.id, f"refined_distinct_to_10:{item.id}", 1)
     db.add(item)
     db.add(resources)
     db.add(guild)

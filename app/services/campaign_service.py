@@ -20,10 +20,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database.connection import SessionLocal, configure_database, create_database_engine, get_engine
 from app.models import CampaignMetadata, Guild, GuildResources
+from app.models.content import ContentSeedRun
+from app.seeds.massive_content import PACK_KEY, PACK_VERSION, run_massive_content_seed
 
 
-CURRENT_SCHEMA_VERSION = 5
-INITIAL_CONTENT_VERSION = 1
+CURRENT_SCHEMA_VERSION = 6
+INITIAL_CONTENT_VERSION = PACK_VERSION
 _activation_lock = RLock()
 
 
@@ -546,6 +548,32 @@ class CampaignService:
         self._validate_campaign_before_open(path, str(UUID(campaign_id)))
         migration = self._ensure_schema(path, str(UUID(campaign_id)))
         info = self.inspect_campaign(campaign_id)
+        if mark_active and info.content_version < PACK_VERSION:
+            # Content updates are additive, but still back up old campaigns before
+            # inserting catalog rows or advancing their content version.
+            self._backup_before_schema_change(
+                info.database_path, info.campaign_id,
+                f"content-{info.content_version}-to-{PACK_VERSION}",
+            )
+            content_engine = create_database_engine(f"sqlite:///{info.database_path.as_posix()}")
+            content_factory = sessionmaker(bind=content_engine, autoflush=False, expire_on_commit=False)
+            try:
+                with content_factory() as db:
+                    metadata = db.get(CampaignMetadata, info.campaign_id)
+                    if metadata is None:
+                        raise ValueError("O save não contém os dados da campanha para atualizar o catálogo.")
+                    marker_exists = db.scalar(select(ContentSeedRun.id).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    )) is not None
+                    if not marker_exists:
+                        run_massive_content_seed(db, deactivate_legacy_defaults=False)
+                    metadata.content_version = PACK_VERSION
+                    metadata.updated_at_utc = datetime.now(timezone.utc)
+                    db.commit()
+            finally:
+                content_engine.dispose()
+            info = self.inspect_campaign(campaign_id)
         with _activation_lock:
             configure_database(f"sqlite:///{info.database_path.as_posix()}")
             if mark_active:
@@ -556,7 +584,7 @@ class CampaignService:
                     metadata.last_session_state = "active"
                     metadata.updated_at_utc = datetime.now(timezone.utc)
                     db.commit()
-        return info, migration
+        return self.inspect_campaign(campaign_id), migration
 
     def close_active_campaign(self, campaign_id: str, closed_at_utc: datetime | None = None) -> None:
         with _activation_lock:

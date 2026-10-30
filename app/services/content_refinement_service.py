@@ -15,7 +15,7 @@ from app.seeds.massive_content import BANDS, PACK_KEY
 
 
 REFINEMENT_PACK_KEY = "refino_progressao_linear_pos_mvp034"
-REFINEMENT_VERSION = 2
+REFINEMENT_VERSION = 3
 
 MISSION_TYPE_LABELS = {
     "combat": "combate", "patrol": "patrulha", "escort": "escolta", "hunt": "caçada",
@@ -157,7 +157,10 @@ def _mission_balance(mission: MissionTemplate, index: int) -> None:
     elite = mission.mission_type == "elite" or mission.difficulty in {"heroic", "legendary"}
     gathering = mission.mission_type == "gathering"
     difficulty_factor = 1.22 if elite else 1.0
-    mission.required_min_mercenary_level = level
+    # Preserve the band-level gate from the seed. The recommended level still
+    # ranks challenge and power, while this lower threshold leaves early
+    # contracts startable by a new roster.
+    mission.required_min_mercenary_level = max(1, int(mission.required_min_mercenary_level or 1))
     mission.required_guild_level = min(50, max(1, ceil(level / 8)))
     mission.recommended_power = max(8, int((level * 2.3 + tier * 8) * (1.25 if elite else 1)))
     mission.duration_seconds = int((120 + level * 16 + tier * 90 + (index % 5) * 45) * (1.25 if elite else 1))

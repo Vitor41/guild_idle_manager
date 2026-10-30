@@ -1,3 +1,5 @@
+param([string]$OutputRoot)
+
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $repo
@@ -29,31 +31,45 @@ function Assert-ContainedNoReparsePoint([string]$Root, [string]$Target) {
     return $resolvedTarget
 }
 
+$distRoot = Assert-ContainedNoReparsePoint $repo (Join-Path $repo 'dist')
+New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
+$stagingRoot = Join-Path $distRoot 'staging'
+New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
+if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    $OutputRoot = Join-Path $stagingRoot ("gim-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
+} else {
+    if ([System.IO.Path]::IsPathRooted($OutputRoot)) {
+        $OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
+    } else {
+        $OutputRoot = [System.IO.Path]::GetFullPath((Join-Path $repo $OutputRoot))
+    }
+}
+$buildRoot = Assert-ContainedNoReparsePoint $stagingRoot $OutputRoot
+New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
+
 $python = Join-Path $repo '.venv-desktop\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw 'Crie .venv-desktop e instale requirements-desktop-dev.txt antes do build.'
 }
-& $python -m PyInstaller --noconfirm --clean --distpath (Join-Path $repo 'dist') --workpath (Join-Path $repo 'build\pyinstaller') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
+& $python -m PyInstaller --noconfirm --clean --distpath $buildRoot --workpath (Join-Path $buildRoot 'pyinstaller-work') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminou com codigo $LASTEXITCODE" }
 
-$packageRoot = Join-Path $repo 'dist\GuildIdleManager-DEV'
-$distRoot = Join-Path $repo 'dist'
-New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
-$packageRoot = Assert-ContainedNoReparsePoint $distRoot $packageRoot
+$packageRoot = Join-Path $buildRoot 'GuildIdleManager-DEV'
+$packageRoot = Assert-ContainedNoReparsePoint $stagingRoot $packageRoot
 if (Test-Path -LiteralPath $packageRoot) { Remove-Item -LiteralPath $packageRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $packageRoot | Out-Null
-Copy-Item -LiteralPath (Join-Path $repo 'dist\GuildIdleManager') -Destination $packageRoot -Recurse
+Copy-Item -LiteralPath (Join-Path $buildRoot 'GuildIdleManager') -Destination $packageRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $repo 'packaging\desktop\Install-Desktop-Dev.ps1') -Destination $packageRoot
 Copy-Item -LiteralPath (Join-Path $repo 'docs\DEV_DESKTOP.md') -Destination $packageRoot
-$zip = Join-Path $repo 'dist\GuildIdleManager-DEV.zip'
-$zip = Assert-ContainedNoReparsePoint $distRoot $zip
+$zip = Join-Path $buildRoot 'GuildIdleManager-DEV.zip'
+$zip = Assert-ContainedNoReparsePoint $stagingRoot $zip
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $zip -CompressionLevel Optimal
 Write-Output "Pacote DEV criado: $zip"
 
 $installerName = 'GuildIdleManager-DEV-Setup.exe'
-$installer = Join-Path $repo "dist\$installerName"
-$installer = Assert-ContainedNoReparsePoint $distRoot $installer
+$installer = Join-Path $buildRoot $installerName
+$installer = Assert-ContainedNoReparsePoint $stagingRoot $installer
 $iexpressSource = Join-Path $env:TEMP ("gim_iexpress_" + [Guid]::NewGuid().ToString('N'))
 $tempRoot = [System.IO.Path]::GetFullPath($env:TEMP)
 $iexpressSource = Assert-ContainedNoReparsePoint $tempRoot $iexpressSource
@@ -113,7 +129,9 @@ if ($iexpressExitCode -ne 0) {
 $installerCreated = $false
 $stableLengthSamples = 0
 $previousLength = 0L
-for ($attempt = 0; $attempt -lt 90; $attempt++) {
+# IExpress can return before its background packaging process materializes the
+# self-extracting Setup; keep waiting for the completed file and stable size.
+for ($attempt = 0; $attempt -lt 300; $attempt++) {
     if (Test-Path -LiteralPath $installerTemp -PathType Leaf) {
         $fileInfo = Get-Item -LiteralPath $installerTemp
         if ($fileInfo.Length -gt 10MB -and $fileInfo.Length -eq $previousLength) {
@@ -130,7 +148,7 @@ for ($attempt = 0; $attempt -lt 90; $attempt++) {
     Start-Sleep -Seconds 1
 }
 if (-not $installerCreated) {
-    throw "IExpress terminou com codigo zero, mas nao materializou um Setup estavel. ZIP e diagnosticos preservados em $iexpressSource."
+    throw "IExpress terminou com codigo zero, mas nao materializou um Setup estavel em 300 segundos. ZIP e diagnosticos preservados em $iexpressSource."
 }
 $signature = [System.IO.File]::ReadAllBytes($installerTemp)
 if ($signature.Length -lt 2 -or $signature[0] -ne 0x4D -or $signature[1] -ne 0x5A) {
@@ -145,3 +163,4 @@ Assert-ContainedNoReparsePoint $distRoot $installer | Out-Null
 Assert-ContainedNoReparsePoint $tempRoot $iexpressSource | Out-Null
 Remove-Item -LiteralPath $iexpressSource -Recurse -Force
 Write-Output "Instalador Windows DEV criado: $installer"
+Write-Output "Pasta de staging preservada: $buildRoot"

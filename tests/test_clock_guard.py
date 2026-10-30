@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone
-from contextlib import closing
+from contextlib import closing, contextmanager
 import gc
+import json
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from sqlalchemy import select
@@ -17,8 +19,26 @@ from app.desktop.lifecycle import (
     open_campaign,
     suspend_campaign,
 )
-from app.models import CampaignMetadata, GuildResources
+from app.models import (
+    BuildingTemplate, CampaignMetadata, DungeonTemplate, Guild, GuildBuilding,
+    GuildResources, Mercenary, MercenaryClass,
+)
+from app.models.dungeon import DungeonRun
+from app.models.item import GuildItemInstance
+from app.models.regional import (
+    RegionalEvent, RegionalEventActivity, RegionalEventParticipant,
+)
+from app.repositories.mercenary_repository import create_mercenary
 from app.services.campaign_service import CampaignService
+from app.services.dungeon_service import claim_dungeon_loot, start_dungeon
+from app.services.regional_cycle_service import (
+    REGIONS, ensure_campaign_world, get_current_player_regional_guild,
+)
+from app.services.regional_event_service import (
+    active_portals_for_region, attach_event_activity,
+    build_portal_boss_snapshot, build_portal_loot_snapshot,
+)
+from app.services import dungeon_service
 
 
 class FakeClock:
@@ -32,6 +52,15 @@ class FakeClock:
     def tick(self, seconds: int) -> None:
         self.now += timedelta(seconds=seconds)
         self.monotonic += seconds
+
+
+@contextmanager
+def temporary_campaign_saves():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            yield temp_dir
+        finally:
+            configure_database("sqlite:///:memory:")
 
 
 class ClockGuardTests(unittest.TestCase):
@@ -84,6 +113,11 @@ class ClockGuardTests(unittest.TestCase):
             campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
             report = guard.activate_campaign(campaign.campaign_id)
             self.assertEqual(report["credited_seconds"], 30 * 60)
+            self.assertIn("guild_production", report["gold_sources"])
+            self.assertIn("warehouse", report["gold_sources"])
+            self.assertEqual(sum(report["gold_sources"].values()), report["gold"])
+            self.assertEqual(report["regional_context"]["cycle_number"], 1)
+            self.assertIn("active_portals", report["regional_context"])
             with SessionLocal() as db:
                 resources = db.scalar(select(GuildResources))
                 metadata = db.get(CampaignMetadata, campaign.campaign_id)
@@ -94,6 +128,224 @@ class ClockGuardTests(unittest.TestCase):
             self.assertTrue(guard.acknowledge_offline_report(campaign.campaign_id, report["report_id"]))
             self.assertTrue(guard.acknowledge_offline_report(campaign.campaign_id, report["report_id"]))
             campaigns.close_active_campaign(campaign.campaign_id)
+
+    def test_regional_catchup_runs_when_offline_stamina_is_empty_without_rewards(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Vigilia sem estamina")
+            fake = FakeClock(campaign.created_at_utc + timedelta(seconds=1))
+            guard = ClockGuard(MemoryAnchorStore(), fake.wall, lambda: fake.monotonic)
+            campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
+            guard.activate_campaign(campaign.campaign_id)
+            guard.suspend_campaign(campaign.campaign_id)
+            campaigns.suspend_active_campaign(campaign.campaign_id, offline_started_at=fake.now)
+            campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
+            with SessionLocal() as db:
+                metadata = db.get(CampaignMetadata, campaign.campaign_id)
+                metadata.stamina_seconds = 0
+                db.commit()
+                before_gold = db.scalar(select(GuildResources)).gold
+            fake.tick(12 * 60 * 60)
+            campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
+            report = guard.activate_campaign(campaign.campaign_id)
+            self.assertEqual(report["credited_seconds"], 0)
+            self.assertEqual(report["gold"], 0)
+            self.assertEqual(report["regional_context"]["cycle_number"], 3)
+            self.assertEqual(report["regional_context"]["cycles_processed"], 2)
+            with SessionLocal() as db:
+                self.assertEqual(db.scalar(select(GuildResources)).gold, before_gold)
+                metadata = db.get(CampaignMetadata, campaign.campaign_id)
+                self.assertIsNotNone(metadata.pending_offline_report)
+            guard.close_campaign(campaign.campaign_id, campaigns)
+
+    def test_offline_portal_deadline_waits_for_started_dungeon_and_reward_is_not_duplicated(self):
+        with temporary_campaign_saves() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Portal durante ausencia")
+            base = campaign.created_at_utc
+            if base.tzinfo is None:
+                base = base.replace(tzinfo=timezone.utc)
+            fake = FakeClock(base + timedelta(minutes=1))
+            store = MemoryAnchorStore()
+            guard = ClockGuard(store, fake.wall, lambda: fake.monotonic)
+
+            campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
+            guard.activate_campaign(campaign.campaign_id)
+            with SessionLocal() as db:
+                metadata = db.get(CampaignMetadata, campaign.campaign_id)
+                guild = db.scalar(select(Guild).where(Guild.campaign_id == campaign.campaign_id))
+                resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
+                scout_template = db.scalar(select(BuildingTemplate).where(BuildingTemplate.effect_type == "scouts"))
+                portal_template = db.scalar(select(DungeonTemplate).where(
+                    DungeonTemplate.is_active.is_(True),
+                    DungeonTemplate.content_type == "boss",
+                    DungeonTemplate.biome == "portal",
+                ).order_by(DungeonTemplate.id))
+                mercenary_class = db.scalar(select(MercenaryClass).where(MercenaryClass.is_active.is_(True)))
+                self.assertIsNotNone(scout_template)
+                self.assertIsNotNone(portal_template)
+                self.assertIsNotNone(mercenary_class)
+                db.add(GuildBuilding(guild_id=guild.id, building_template_id=scout_template.id, level=1))
+                mercenary = create_mercenary(db, guild.id, mercenary_class, "Equipe do portal")
+                db.flush()
+                ensure_campaign_world(db, metadata, guild)
+                player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
+                home_code = next(code for code, name in REGIONS if name == metadata.home_region)
+
+                # Relax only the frozen fixture snapshot so one seeded guild can
+                # reach the actual dungeon-service lifecycle; no catalog rule changes.
+                boss_snapshot = build_portal_boss_snapshot(portal_template)
+                boss_snapshot.update({
+                    "min_party_size": 1, "max_party_size": 1,
+                    "required_guild_level": 1, "required_min_mercenary_level": 1,
+                    "required_building_type": None, "required_building_level": 0,
+                    "required_total_power": 0, "required_class_code": None,
+                    "required_tank_count": 0, "required_support_count": 0,
+                    "required_damage_count": 0, "required_equipment_tier": 0,
+                    "duration_seconds": 3600, "base_gold_reward": 100,
+                    "base_xp_reward": 100, "base_success_chance": 95,
+                })
+                event_seed = "fixture-active-portal-no-natural-roll"
+                portal_event = RegionalEvent(
+                    campaign_id=campaign.campaign_id,
+                    event_type="portal", region_code=home_code,
+                    trigger_cycle_number=0, rules_version="regional-events-v1",
+                    seed=event_seed, status="active",
+                    dungeon_template_id=portal_template.id,
+                    created_at_utc=fake.now,
+                    expires_at_utc=fake.now + timedelta(hours=3),
+                    summary_json=json.dumps({
+                        "portal_boss": {"version": "portal-boss-v1", "template": boss_snapshot},
+                        "portal_loot": build_portal_loot_snapshot(db, portal_template, event_seed),
+                    }),
+                )
+                db.add(portal_event)
+                db.flush()
+                event_id = portal_event.id
+                start_time = fake.now + timedelta(minutes=30)
+                fake.now = start_time
+                with patch.object(dungeon_service, "utc_now", return_value=start_time):
+                    run = start_dungeon(
+                        db, guild, str(portal_template.id), [str(mercenary.id)],
+                        commit=False,
+                        regional_duration_seconds=6 * 3600,
+                        regional_min_duration_seconds=6 * 3600,
+                        template_snapshot=boss_snapshot,
+                    )
+                    activity = attach_event_activity(db, portal_event, player_state, "dungeon", run.id)
+                db.commit()
+                run_id = run.id
+                guild_id = guild.id
+                mercenary_id = mercenary.id
+                activity_id = activity.id
+                run_end = run.ends_at
+                if run_end.tzinfo is None:
+                    run_end = run_end.replace(tzinfo=timezone.utc)
+                initial_gold = int(resources.gold)
+                self.assertEqual(activity.status, "in_progress")
+                self.assertEqual(db.get(Mercenary, mercenary_id).status, "busy")
+                self.assertGreaterEqual((run.ends_at - run.started_at).total_seconds(), 3600)
+
+            # Begin offline before the portal deadline and return after it, while
+            # the six-hour dungeon run remains unfinished.
+            offline_start = guard.suspend_campaign(campaign.campaign_id)
+            fake.tick(4 * 3600)
+            offline_return = fake.now
+            self.assertGreater(offline_return, base + timedelta(hours=3))
+            self.assertLess(offline_return, run_end)
+            offline_summary = guard.activate_campaign(campaign.campaign_id)
+            self.assertIsNotNone(offline_summary)
+            self.assertGreater(offline_summary["elapsed_seconds"], 3 * 3600)
+            self.assertEqual(offline_summary["elapsed_seconds"], 4 * 3600)
+
+            with SessionLocal() as db:
+                event = db.get(RegionalEvent, event_id)
+                run = db.get(DungeonRun, run_id)
+                activity = db.get(RegionalEventActivity, activity_id)
+                participant = db.scalar(select(RegionalEventParticipant).where(
+                    RegionalEventParticipant.event_id == event_id,
+                ))
+                resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild_id))
+                stored_report = json.loads(db.get(CampaignMetadata, campaign.campaign_id).pending_offline_report)
+                event_summary = json.loads(event.summary_json)
+                self.assertLess(event.expires_at_utc.replace(tzinfo=timezone.utc), offline_return)
+                self.assertEqual(event.status, "in_progress")
+                self.assertEqual(event_summary["reason"], "deadline_elapsed_waiting_for_started_activities")
+                self.assertFalse(event_summary["new_entries_after_expiry"])
+                self.assertTrue(event_summary["started_activities_may_finish"])
+                self.assertEqual(active_portals_for_region(db, campaign.campaign_id, event.region_code), [])
+                self.assertEqual(run.status, "in_progress")
+                self.assertEqual(activity.status, "in_progress")
+                self.assertEqual(participant.status, "participating")
+                self.assertEqual(db.get(Mercenary, mercenary_id).status, "busy")
+                self.assertEqual(
+                    stored_report["regional_context"]["recent_events"][0]["status"],
+                    "in_progress",
+                )
+                self.assertEqual(stored_report["regional_context"]["active_portals"], 0)
+                self.assertEqual(stored_report["elapsed_seconds"], 4 * 3600)
+                gold_after_catchup = int(resources.gold)
+                offline_gold = int(offline_summary["gold"])
+                self.assertEqual(gold_after_catchup - initial_gold, offline_gold)
+
+                # Complete the pre-deadline run through the real reward service.
+                # The success roll is fixed only for this isolated fixture so the
+                # test verifies the reward ledger and delayed event finalization.
+                with patch.object(dungeon_service, "utc_now", return_value=run_end), patch.object(
+                    dungeon_service, "randint", return_value=1,
+                ):
+                    resolved = claim_dungeon_loot(db, db.get(Guild, guild_id), resources, run_id)
+                db.refresh(event)
+                db.refresh(resources)
+                self.assertEqual(resolved.status, "completed")
+                self.assertTrue(resolved.success)
+                self.assertGreater(resolved.gold_reward, 0)
+                self.assertEqual(event.status, "resolved")
+                self.assertEqual(db.get(RegionalEventActivity, activity_id).status, "resolved")
+                self.assertEqual(db.get(RegionalEventParticipant, participant.id).status, "resolved")
+                self.assertEqual(db.get(Mercenary, mercenary_id).status, "available")
+                final_gold = int(resources.gold)
+                self.assertEqual(final_gold - gold_after_catchup, int(resolved.gold_reward))
+                item_instances_after_claim = int(db.query(GuildItemInstance).filter_by(guild_id=guild_id).count())
+                self.assertEqual(final_gold, initial_gold + offline_gold + int(resolved.gold_reward))
+                guild_after_claim = db.get(Guild, guild_id)
+                mercenary_after_claim = db.get(Mercenary, mercenary_id)
+                xp_after_claim = (int(guild_after_claim.xp), int(mercenary_after_claim.xp))
+
+                with self.assertRaises(dungeon_service.DungeonError):
+                    claim_dungeon_loot(db, guild_after_claim, resources, run_id)
+                db.refresh(resources)
+                db.refresh(guild_after_claim)
+                db.refresh(mercenary_after_claim)
+                self.assertEqual(int(resources.gold), final_gold)
+                self.assertEqual(
+                    (int(guild_after_claim.xp), int(mercenary_after_claim.xp)),
+                    xp_after_claim,
+                )
+                self.assertEqual(
+                    int(db.query(GuildItemInstance).filter_by(guild_id=guild_id).count()),
+                    item_instances_after_claim,
+                )
+
+            # Reopening the same pending offline report is idempotent and must not
+            # apply either the offline credit or the dungeon reward a second time.
+            repeated_summary = guard.activate_campaign(campaign.campaign_id)
+            self.assertEqual(repeated_summary, offline_summary)
+            with SessionLocal() as db:
+                resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild_id))
+                event = db.get(RegionalEvent, event_id)
+                run = db.get(DungeonRun, run_id)
+                self.assertEqual(int(resources.gold), final_gold)
+                self.assertEqual(event.status, "resolved")
+                self.assertEqual(run.status, "completed")
+                self.assertEqual(
+                    int(db.query(GuildItemInstance).filter_by(guild_id=guild_id).count()),
+                    item_instances_after_claim,
+                )
+                persisted_report = json.loads(db.get(CampaignMetadata, campaign.campaign_id).pending_offline_report)
+                self.assertEqual(persisted_report["regional_context"]["recent_events"][0]["status"], "in_progress")
+            self.assertGreaterEqual(offline_start, base)
+            guard.close_campaign(campaign.campaign_id, campaigns)
 
     def test_special_crystal_is_granted_once_at_cap_and_survives_reopen(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -111,6 +363,7 @@ class ClockGuardTests(unittest.TestCase):
             campaigns.activate_campaign(campaign.campaign_id, mark_active=False)
             report = guard.activate_campaign(campaign.campaign_id)
             self.assertEqual(report["credited_seconds"], 8 * 60 * 60)
+            self.assertEqual(sum(report["gold_sources"].values()), report["gold"])
             self.assertEqual(report["special_crystals"], 1)
             self.assertEqual(report["materials"]["crystals"], 0)
             with SessionLocal() as db:

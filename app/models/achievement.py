@@ -8,6 +8,7 @@ from app.database.connection import Base
 
 if TYPE_CHECKING:
     from app.models.guild import Guild
+    from app.models.item import ItemTemplate
 
 
 def utc_now() -> datetime:
@@ -25,10 +26,12 @@ class AchievementTemplate(Base):
     threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     reward_gold: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     reward_xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reward_item_template_id: Mapped[int | None] = mapped_column(ForeignKey("item_templates.id"), nullable=True)
     is_secret: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     guild_achievements: Mapped[list["GuildAchievement"]] = relationship(back_populates="achievement_template")
+    reward_item_template: Mapped["ItemTemplate | None"] = relationship()
 
 
 class GuildAchievement(Base):

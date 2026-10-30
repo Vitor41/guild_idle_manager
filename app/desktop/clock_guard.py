@@ -23,6 +23,7 @@ from app.models import CampaignMetadata, Guild, OfflineReturnReport
 from app.repositories.guild_repository import get_resources_by_guild_id
 from app.services.offline_progress_service import (
     calculate_offline_material_rewards,
+    gold_reward_sources,
     get_passive_gold_rate,
 )
 from app.services.gathering_service import advance_all_assignments
@@ -215,6 +216,41 @@ class ClockGuard:
             gathering = advance_all_assignments(
                 db, guild, now=now, max_seconds=decision.credited_seconds,
             )
+            regional_context = None
+            if decision.elapsed_seconds >= OFFLINE_MINIMUM_SECONDS and not metadata.pending_offline_report:
+                from app.models.regional import RegionalWorldState
+                from app.services.regional_cycle_service import REGIONS, get_regional_board
+
+                world_before = db.get(RegionalWorldState, campaign_id)
+                completed_before = world_before.last_completed_cycle if world_before is not None else -1
+                regional = get_regional_board(db, metadata, guild, now)
+                cycles_processed = max(0, regional["world"].last_completed_cycle - completed_before)
+                region_names = dict(REGIONS)
+                recent_events = []
+                for event in regional.get("event_history", [])[:3]:
+                    try:
+                        event_result = json.loads(event.summary_json or "{}").get("result")
+                    except (TypeError, ValueError):
+                        event_result = None
+                    recent_events.append({
+                        "type": event.event_type,
+                        "region_code": event.region_code,
+                        "region_name": region_names.get(event.region_code, event.region_code),
+                        "status": event.status,
+                        "status_label": {
+                            "active": "Aberto", "in_progress": "Em andamento",
+                            "resolved": "Concluído", "expired": "Expirado",
+                            "suppressed": "Suprimido", "not_triggered": "Não ocorreu",
+                        }.get(event.status, "Registrado"),
+                        "result": event_result,
+                    })
+                regional_context = {
+                    "cycles_processed": cycles_processed,
+                    "cycle_number": regional["cycle"].cycle_number + 1,
+                    "active_portals": len(regional.get("portal_events", [])),
+                    "active_rebellion": regional.get("rebellion_event") is not None,
+                    "recent_events": recent_events,
+                }
             if metadata.pending_offline_report:
                 try:
                     summary = json.loads(metadata.pending_offline_report)
@@ -238,6 +274,7 @@ class ClockGuard:
                     "elapsed_label": _format_elapsed(decision.elapsed_seconds),
                     "credited_label": _format_elapsed(decision.credited_seconds),
                     "gold": gold,
+                    "gold_sources": gold_reward_sources(rate, decision.credited_seconds),
                     "materials": materials,
                     "special_crystals": materials["special_crystals"],
                     "gathering": gathering,
@@ -246,6 +283,7 @@ class ClockGuard:
                     "cap_reached": decision.credited_seconds >= OFFLINE_CAP_SECONDS,
                     "cap_hours": OFFLINE_CAP_SECONDS // 3600,
                     "rate": rate,
+                    "regional_context": regional_context,
                     "warning": decision.warning,
                 }
                 metadata.pending_offline_report = json.dumps(summary, separators=(",", ":"))
@@ -263,6 +301,7 @@ class ClockGuard:
                     "gold": 0,
                     "special_crystals": 0,
                     "gathering": gathering,
+                    "regional_context": regional_context,
                     "stamina_spent_seconds": 0,
                     "stamina_remaining_seconds": metadata.stamina_seconds,
                     "warning": decision.warning or "Não havia estamina disponível para processar o período offline.",

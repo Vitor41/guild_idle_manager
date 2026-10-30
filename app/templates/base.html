@@ -5,13 +5,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20260623-1">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261029-1">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261027-1">{% endif %}
-    {% if request.app.state.app_mode == 'desktop' and request.url.path.startswith('/regional') %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261028-1">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261029-1">{% endif %}
   </head>
   <body data-app-mode="{{ request.app.state.app_mode }}" data-route="{{ request.url.path }}">
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
+    {% set pending_rebellion_invite = request.state._state.get('pending_rebellion_invite') if request is defined else none %}
     {% if has_app_shell %}
       <div class="app-frame" {% if request.app.state.app_mode != 'desktop' %}data-session-started-at="{{ request.scope.get('session', {}).get('session_started_at', 0) }}" data-session-global-seconds="{{ request.scope.get('session', {}).get('session_global_seconds', 18000) }}" data-session-idle-seconds="{{ request.scope.get('session', {}).get('session_idle_seconds', 3600) }}"{% endif %} data-confirmation-preferences='{{ current_user.confirmation_preferences or "{}" }}'>
         <aside class="sidebar" aria-label="Navegacao principal">
@@ -32,7 +33,7 @@
             <a href="/gathering"><span class="nav-icon">⚒</span><span>Coleta</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
-            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional"><span class="nav-icon">⚑</span><span>Vigília Regional</span></a>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional#events-title"><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
             <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
             <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
@@ -129,6 +130,21 @@
         <div class="confirmation-dialog__actions"><form method="post" action="/tutorial/decline"><button class="secondary-button">Não, pular tutorial</button></form><form method="post" action="/tutorial/start"><button>Sim, iniciar tutorial</button></form></div>
       </dialog>
     {% endif %}
+    {% if has_app_shell and request.app.state.app_mode == 'desktop' and pending_rebellion_invite %}
+      <dialog class="evolution-dialog regional-rebellion-dialog" data-regional-rebellion-auto-open aria-labelledby="regional-rebellion-title" aria-describedby="regional-rebellion-description">
+        <form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar convite">×</button></form>
+        <div class="regional-rebellion-dialog__content">
+          <p class="evolution-eyebrow">DEFESA REGIONAL · CONVITE PRIORITÁRIO</p>
+          <h2 id="regional-rebellion-title">Uma rebelião ameaça {{ pending_rebellion_invite.region_name }}</h2>
+          <p id="regional-rebellion-description">Sua guilda tem prioridade até <time data-evolution-countdown="{{ pending_rebellion_invite.priority_ends_at_iso }}" datetime="{{ pending_rebellion_invite.priority_ends_at_iso }}">{{ pending_rebellion_invite.priority_ends_at_iso }}</time>. Aceite para enviar equipes durante as próximas 12 horas ou delegue a defesa à CPU. O prazo continua offline.</p>
+          <div class="regional-rebellion-dialog__actions">
+            <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--primary" type="submit" name="decision" value="accept" autofocus>Aceitar convite</button></form>
+            <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--secondary" type="submit" name="decision" value="decline">Delegar à CPU</button></form>
+          </div>
+          <a class="regional-rebellion-dialog__details" href="/regional#events-title">Ver detalhes em Vigília Regional</a>
+        </div>
+      </dialog>
+    {% endif %}
     {% if request is defined and request.state._state.get('offline_summary') %}
       {% set offline = request.state._state.get('offline_summary') %}
       <dialog class="confirmation-dialog offline-dialog" id="offline-dialog" data-auto-open data-report-id="{{ offline.report_id or '' }}" data-requires-ack="{{ request.app.state.app_mode == 'desktop' }}" aria-labelledby="offline-title">
@@ -141,6 +157,7 @@
           <p>Você ficou ausente por <strong>{{ offline.elapsed_label or 'um período' }}</strong>. Foram reconhecidas <strong>{{ offline.credited_label or '0min' }}</strong>.</p>
           <dl class="offline-reward-grid">
             <div><dt>Ouro</dt><dd>+{{ offline.gold }}</dd></div>
+            {% if offline.gold_sources %}<div><dt>Produção da guilda (base, nível e equipe)</dt><dd>+{{ offline.gold_sources.guild_production }}</dd></div><div><dt>Bônus do Armazém</dt><dd>+{{ offline.gold_sources.warehouse }}</dd></div>{% endif %}
             <div><dt>Cristal especial</dt><dd>+{{ offline.special_crystals or 0 }}</dd></div>
             <div><dt>Estamina consumida</dt><dd>{{ ((offline.stamina_spent_seconds or 0) // 3600) }}h</dd></div>
             <div><dt>Estamina restante</dt><dd>{{ ((offline.stamina_remaining_seconds or 0) // 3600) }}h</dd></div>
@@ -155,6 +172,14 @@
           {% endif %}
           {% if offline.cap_reached %}<p class="note">O limite offline de {{ offline.cap_hours }} horas foi atingido.</p>{% endif %}
           {% if offline.warning %}<p class="note">{{ offline.warning }}</p>{% endif %}
+          {% if offline.regional_context %}
+            <section class="offline-regional-context" aria-labelledby="offline-regional-title">
+              <h3 id="offline-regional-title">Vigília durante a ausência</h3>
+              <p>{{ offline.regional_context.cycles_processed }} Vigília{% if offline.regional_context.cycles_processed != 1 %}s{% endif %} processada{% if offline.regional_context.cycles_processed != 1 %}s{% endif %} durante a ausência · ciclo atual: {{ offline.regional_context.cycle_number }} · {{ offline.regional_context.active_portals }} portal(is) aberto(s) · {% if offline.regional_context.active_rebellion %}rebelião ativa{% else %}sem rebelião ativa{% endif %}.</p>
+                {% if offline.regional_context.recent_events %}<ul>{% for event in offline.regional_context.recent_events %}<li>{{ 'Portal' if event.type == 'portal' else 'Rebelião' }} · {{ event.region_name or event.region_code }} · {{ event.status_label }}{% if event.result %} · {{ 'sucesso' if event.result == 'success' else 'falha' }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+              <a href="/regional#events-title">Abrir Vigília e histórico</a>
+            </section>
+          {% endif %}
           <footer class="offline-summary__notice">
             <span>Madeira, minério e couro dependem das tarefas de coleta designadas.</span>
             <span>Para mais detalhes, acesse o <a href="/guide#idle">Guia do Jogo</a>.</span>
@@ -165,8 +190,9 @@
       </dialog>
     {% endif %}
     <script src="{{ url_for('static', path='/js/main.js') }}?v=20260622-4"></script>
+    <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261029-2" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
-    {% if request.app.state.app_mode == 'desktop' and request.url.path.startswith('/regional') %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}" defer></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261029-1" defer></script>{% endif %}
   </body>
 </html>

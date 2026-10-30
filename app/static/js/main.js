@@ -1,3 +1,33 @@
+const startupModalQueue = (() => {
+  const pending = [];
+  let active = null;
+  let sequence = 0;
+  const advance = () => {
+    if (active?.open) return;
+    active = null;
+    while (pending.length) {
+      const next = pending.shift().dialog;
+      if (!(next instanceof HTMLDialogElement) || next.open) continue;
+      active = next;
+      next.addEventListener("close", () => {
+        if (active === next) active = null;
+        advance();
+      }, { once: true });
+      next.showModal();
+      return;
+    }
+  };
+  return {
+    enqueue(dialog, priority) {
+      if (!(dialog instanceof HTMLDialogElement) || dialog.open || pending.some((row) => row.dialog === dialog)) return;
+      pending.push({ dialog, priority, sequence: sequence++ });
+      pending.sort((left, right) => left.priority - right.priority || left.sequence - right.sequence);
+      advance();
+    },
+  };
+})();
+window.GIMStartupModalQueue = startupModalQueue;
+
 function formatGenericRemaining(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -27,7 +57,6 @@ function updateGenericCountdowns() {
 
 const offlineDialog = document.querySelector("#offline-dialog[data-auto-open]");
 if (offlineDialog) {
-  offlineDialog.showModal();
     offlineDialog.addEventListener("cancel", (event) => event.preventDefault());
     offlineDialog.querySelectorAll("[data-offline-close]").forEach((button) => {
       button.addEventListener("click", () => offlineDialog.close());
@@ -58,10 +87,11 @@ if (offlineDialog) {
         button.disabled = false;
       }
     });
+  startupModalQueue.enqueue(offlineDialog, 0);
 }
 
 const tutorialInvite = document.querySelector("#tutorial-invite[data-tutorial-invite]");
-if (tutorialInvite) tutorialInvite.showModal();
+if (tutorialInvite) startupModalQueue.enqueue(tutorialInvite, 1);
 
 document.addEventListener("click", (event) => {
   const closeButton = event.target.closest("[data-close-multi-select]");

@@ -2,22 +2,26 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.database.connection import Base, SessionLocal, configure_database, get_engine
 from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
 from app.models import (
     CampaignMetadata,
+    DungeonTemplate,
     GatheringAssignment,
     Guild,
     GuildInventoryItem,
     GuildResources,
     ItemTemplate,
+    MissionTemplate,
     Mercenary,
     MercenaryClass,
     ProfessionTemplate,
 )
 from app.services.gathering_service import advance_assignment, assign_worker
+from app.services.dungeon_service import seed_initial_dungeon_templates
+from app.services.mission_service import seed_initial_mission_templates
 
 
 START = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -45,6 +49,23 @@ class GatheringOnlineOfflineParityTests(unittest.TestCase):
             )
             db.add_all([self.mercenary_class, self.profession, self.material])
             db.commit()
+            # Vigília catch-up materializes contracts, dungeons, and a boss before
+            # ClockGuard completes the offline return. Seed the real starter
+            # catalogs so these parity fixtures exercise that production path.
+            seed_initial_mission_templates(db)
+            seed_initial_dungeon_templates(db)
+            self.assertGreater(db.scalar(select(func.count(MissionTemplate.id)).where(
+                MissionTemplate.is_active.is_(True),
+                ~MissionTemplate.mission_type.in_(("gathering", "long_idle")),
+            )), 0)
+            self.assertGreater(db.scalar(select(func.count(DungeonTemplate.id)).where(
+                DungeonTemplate.is_active.is_(True),
+                DungeonTemplate.content_type == "dungeon",
+            )), 0)
+            self.assertGreater(db.scalar(select(func.count(DungeonTemplate.id)).where(
+                DungeonTemplate.is_active.is_(True),
+                DungeonTemplate.content_type == "boss",
+            )), 0)
             self.class_id = self.mercenary_class.id
             self.profession_id = self.profession.id
             self.material_id = self.material.id

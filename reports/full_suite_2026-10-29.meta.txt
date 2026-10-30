@@ -1,0 +1,8 @@
+started_local=2026-10-29T19:30:14.2114026-03:00
+python=C:\Users\vitor\Guild Idle Manager\App GIM\.venv-desktop\Scripts\python.exe
+APP_MODE=desktop
+DATABASE_URL=sqlite://
+command=C:\Users\vitor\Guild Idle Manager\App GIM\.venv-desktop\Scripts\python.exe -m unittest discover -s tests -v
+finished_local=2026-10-29T19:40:34.9433179-03:00
+exit_code=0
+elapsed_seconds=620.72

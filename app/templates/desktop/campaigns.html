@@ -5,93 +5,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>Campanhas · Guild Idle Manager</title>
-    <link rel="stylesheet" href="/static/css/desktop-campaigns.css">
+    <link rel="stylesheet" href="/static/css/desktop-evolution.css?v=20261029-1">
+    <link rel="stylesheet" href="/static/css/desktop-campaigns.css?v=20261029-2">
     <link rel="stylesheet" href="/static/css/desktop-art.css">
     <script src="/static/js/desktop-campaigns.js" defer></script>
     <script src="/static/js/desktop-art.js" defer></script>
   </head>
   <body data-app-mode="desktop" data-route="/desktop/campaigns">
-    <main class="desktop-shell">
-      <header class="masthead">
-        <div class="seal" aria-hidden="true">G</div>
-        <div>
-          <p class="eyebrow">Guild Idle Manager</p>
-          <h1>Suas campanhas</h1>
-          <p class="intro">Cada campanha guarda sua própria guilda e progresso.</p>
-        </div>
+    <main class="campaign-manager evolution-page">
+      <header class="campaign-topbar" aria-label="Identidade do jogo">
+        <a class="campaign-brand" href="/desktop/campaigns" aria-label="Guild Idle Manager · campanhas">
+          <img src="/static/assets/desktop/evolution/sprites/ui_64/vigil-tower.png" width="38" height="38" alt="">
+          <span><strong>GUILD IDLE MANAGER</strong><small>SELEÇÃO LOCAL</small></span>
+        </a>
+        <span>SUAS CAMPANHAS <b>/</b> COLETA</span>
       </header>
 
-      <section class="create-panel" aria-labelledby="new-campaign-title">
-        <h2 id="new-campaign-title">Fundar uma campanha</h2>
-        <form id="create-campaign-form">
-          <label for="guild-name">Nome da guilda</label>
-          <input id="guild-name" name="guild_name" maxlength="120" required autocomplete="off" placeholder="Ex.: Companhia do Luar">
-          <button class="button primary" type="submit">Criar e jogar</button>
-        </form>
+      <section class="campaign-workspace" aria-labelledby="campaign-page-title">
+        <div class="campaign-welcome">
+          <img src="/static/assets/desktop/evolution/illustrations/region-home.webp" width="1600" height="900" alt="" fetchpriority="high">
+          <div>
+            <p class="evolution-eyebrow">IDENTIDADE DA CAMPANHA</p>
+            <h1 id="campaign-page-title">Campanhas e trabalhadores</h1>
+            <p>O nome da guilda identifica cada campanha local. A região natal aparece logo abaixo para você reconhecer sua jornada.</p>
+          </div>
+        </div>
+
+        <section class="campaign-create" id="new-campaign" aria-labelledby="new-campaign-title">
+          <p class="evolution-eyebrow">NOVA CAMPANHA</p>
+          <h2 id="new-campaign-title">Fundar guilda</h2>
+          <p>A região natal será sorteada ao criar a campanha.</p>
+          <form id="create-campaign-form">
+            <label for="guild-name">Nome da guilda</label>
+            <input id="guild-name" name="guild_name" maxlength="120" required autocomplete="off" placeholder="Ex.: Companhia do Luar">
+            <button class="evolution-button evolution-button--primary" type="submit">Criar e jogar</button>
+          </form>
+        </section>
       </section>
 
       <section class="campaign-section" aria-labelledby="campaign-list-title">
-        <div class="section-heading">
+        <div class="evolution-section__heading">
           <div>
-            <p class="eyebrow">Neste dispositivo</p>
-            <h2 id="campaign-list-title">Suas campanhas</h2>
+            <p class="evolution-eyebrow">NESTE DISPOSITIVO</p>
+            <h2 id="campaign-list-title">Retomar uma guilda</h2>
+            <p>Suas campanhas mantêm regiões, atividades e progresso separados.</p>
           </div>
-          <button id="import-campaign" class="button quiet" type="button">Importar campanha</button>
+          <button id="import-campaign" class="evolution-button evolution-button--secondary" type="button">Importar campanha</button>
         </div>
         {% if campaigns %}
           <div class="campaign-list">
             {% for campaign in campaigns %}
               <article class="campaign-card" data-campaign-id="{{ campaign.campaign_id }}">
-                <div class="campaign-mark" aria-hidden="true">{{ campaign.guild_name[:1]|upper }}</div>
-                <div class="campaign-details">
-                  <h3>{{ campaign.guild_name }}</h3>
-                  <p class="campaign-region">{{ campaign.home_region }}</p>
-                  <p>Atualizada {{ campaign.updated_at_utc.strftime('%d/%m/%Y %H:%M') }} UTC</p>
-                  <p class="save-status">{% if campaign.last_session_state == 'closed' %}Encerrada corretamente{% elif campaign.last_session_state == 'active' %}Sessão anterior interrompida{% else %}Campanha pronta{% endif %}</p>
+                <div class="campaign-card__art" aria-hidden="true">
+                  <img src="/static/assets/desktop/evolution/illustrations/region-home.webp" width="1600" height="900" alt="" loading="lazy">
+                  <span class="campaign-sigil">{{ campaign.guild_name[:1]|upper }}</span>
                 </div>
-                <div class="campaign-actions">
-                  <button class="button primary open-campaign" type="button">Continuar</button>
-                  <button class="button quiet rename-campaign" type="button">Renomear guilda</button>
-                  <button class="button quiet backup-campaign" type="button">Criar cópia de segurança</button>
-                  <button class="button quiet export-campaign" type="button">Exportar</button>
-                  <button class="button quiet restore-campaign" type="button">Restaurar cópia</button>
-                  <button class="button danger delete-campaign" type="button">Excluir</button>
+                <div class="campaign-details">
+                  <span class="evolution-status evolution-status--muted">Salva localmente</span>
+                  <h3>{{ campaign.guild_name }}</h3>
+                  <p class="campaign-region">Região natal: {{ campaign.home_region }}</p>
+                  <p>Atualizada {{ campaign.updated_at_utc.strftime('%d/%m/%Y %H:%M') }} UTC</p>
+                  <p class="campaign-state {% if campaign.last_session_state == 'active' %}campaign-state--warning{% endif %}" role="status">
+                    {% if campaign.last_session_state == 'closed' %}Encerrada corretamente{% elif campaign.last_session_state == 'active' %}Sessão anterior interrompida{% else %}Pronta para continuar{% endif %}
+                  </p>
+                </div>
+                <div class="campaign-actions" aria-label="Ações para {{ campaign.guild_name }}">
+                  <button class="evolution-button evolution-button--primary open-campaign" type="button">Continuar</button>
+                  <button class="evolution-button evolution-button--secondary rename-campaign" type="button">Renomear guilda</button>
+                  <button class="evolution-button evolution-button--secondary backup-campaign" type="button">Criar cópia de segurança</button>
+                  <button class="evolution-button evolution-button--secondary export-campaign" type="button">Exportar</button>
+                  <button class="evolution-button evolution-button--secondary restore-campaign" type="button">Restaurar cópia</button>
+                  <button class="evolution-button evolution-button--danger delete-campaign" type="button">Excluir</button>
                 </div>
               </article>
             {% endfor %}
           </div>
         {% else %}
-          <div class="empty-state">
-            <span class="empty-ornament" aria-hidden="true">✦</span>
-            <h3>Nenhuma campanha por aqui</h3>
-            <p>Crie uma nova guilda ou importe um arquivo de campanha para continuar sua jornada.</p>
+          <div class="campaign-empty">
+            <img src="/static/assets/desktop/evolution/illustrations/gathering-worksite.webp" width="1600" height="900" alt="" loading="lazy">
+            <div><span class="evolution-status evolution-status--active">Pronta para começar</span><h3>Nenhuma campanha por aqui</h3><p>Fundar uma guilda ou importar uma campanha coloca sua jornada nesta lista.</p></div>
           </div>
         {% endif %}
       </section>
+
       {% if unavailable_campaigns %}
-        <section class="recovery-panel" aria-labelledby="recovery-title">
-          <h2 id="recovery-title">Arquivos que precisam de recuperação</h2>
-          <p>Estes arquivos foram preservados, mas não puderam ser abertos. Confira o arquivo listado e restaure uma cópia de segurança compatível.</p>
+        <section class="campaign-recovery" aria-labelledby="recovery-title">
+          <div><p class="evolution-eyebrow">RECUPERAÇÃO</p><h2 id="recovery-title">Arquivos que precisam de recuperação</h2><p>Os arquivos foram preservados. Selecione uma cópia compatível para restaurar a campanha.</p></div>
           <ul>
             {% for entry in unavailable_campaigns %}
               <li><strong>{{ entry.filename }}</strong><span>{{ entry.reason }}</span>
-                {% if entry.campaign_id %}<button class="button quiet restore-unavailable" type="button" data-campaign-id="{{ entry.campaign_id }}">Restaurar cópia</button>{% endif %}
+                {% if entry.campaign_id %}<button class="evolution-button evolution-button--secondary restore-unavailable" type="button" data-campaign-id="{{ entry.campaign_id }}">Restaurar cópia</button>{% endif %}
               </li>
             {% endfor %}
           </ul>
         </section>
       {% endif %}
-      <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+      <p id="status-message" class="campaign-message" role="status" aria-live="polite"></p>
     </main>
-    <dialog id="action-dialog" aria-labelledby="dialog-title">
+    <dialog id="action-dialog" class="campaign-dialog" aria-labelledby="dialog-title">
       <form method="dialog">
+        <p class="evolution-eyebrow">AÇÃO DA CAMPANHA</p>
         <h2 id="dialog-title">Confirmar ação</h2>
         <p class="dialog-message"></p>
         <label for="dialog-input">Novo nome</label>
         <input id="dialog-input" maxlength="120" autocomplete="off">
         <div class="dialog-actions">
-          <button class="button quiet" value="cancel">Cancelar</button>
-          <button class="button primary dialog-confirm" value="confirm">Confirmar</button>
+          <button class="evolution-button evolution-button--secondary" value="cancel">Cancelar</button>
+          <button class="evolution-button evolution-button--primary dialog-confirm" value="confirm">Confirmar</button>
         </div>
       </form>
     </dialog>

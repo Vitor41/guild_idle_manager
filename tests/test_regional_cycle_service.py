@@ -19,6 +19,8 @@ from app.models.dungeon import DungeonTemplate
 from app.models.mission import MissionTemplate
 from app.models.regional import (
     RegionalCpuCyclePlan,
+    RegionalCpuMercenary,
+    RegionalCpuResource,
     RegionalCycle,
     RegionalCycleRegion,
     RegionalGuildState,
@@ -31,7 +33,16 @@ from app.services.guild_service import get_current_guild_context
 from app.repositories.mercenary_repository import create_mercenary
 from app.services.mission_service import claim_mission_loot, start_mission
 from app.services import mission_service, regional_cycle_service
-from app.services.regional_cycle_service import CYCLE_SECONDS, RANKS, advance_regional_world, simulate_rank_distribution
+from app.services.regional_cycle_service import (
+    CYCLE_SECONDS,
+    LEGACY_VIGILIA_RULES_VERSION,
+    RANKS,
+    advance_regional_world,
+    cpu_initial_profile_values,
+    regional_stage_for_region,
+    rival_calm_for_cycle,
+    simulate_rank_distribution,
+)
 from app.core.dependencies import CampaignPlayer
 from app.routes.regional_routes import regional_index, templates as regional_templates
 
@@ -270,6 +281,12 @@ class RegionalCycleSimulationTests(unittest.TestCase):
 
                         for region in region_states:
                             security, threat = 50, 25
+                            strong_rival_present = any(
+                                state.region_code == region.region_code
+                                and state.profile == "strong"
+                                and state.active
+                                for state in guild_states
+                            )
                             first_portal_eligible = None
                             first_rebellion_eligible = None
                             portal_hazards = []
@@ -290,6 +307,12 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                                     failure_impact = impact(group["failures_by_rank"])
                                     threat = round(max(0, min(100, threat - success_impact + failure_impact)), 4)
                                     security = round(max(0, min(100, security + success_impact - failure_impact)), 4)
+                                if (
+                                    strong_rival_present
+                                    and cycle_number < regional_cycle_service.RIVAL_CALM_WINDOW_CYCLES
+                                ):
+                                    security = round(min(100, security + regional_cycle_service.RIVAL_CALM_IMPACT_PER_CYCLE), 4)
+                                    threat = round(max(0, threat - regional_cycle_service.RIVAL_CALM_IMPACT_PER_CYCLE), 4)
                                 if threat >= 70:
                                     first_portal_eligible = first_portal_eligible or cycle_number
                                     portal_hazards.append(min(0.25, 0.05 + (threat - 70) * (0.20 / 30)))
@@ -341,25 +364,56 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         }
 
                     rank_template_stats = {
-                        offer_type: {rank: {"count": 0, "level": 0, "power": 0}
+                        offer_type: {rank: {"count": 0, "level": 0, "power": 0,
+                                           "mercenary_requirement": 0, "guild_requirement": 0}
                                      for rank in RANKS}
-                        for offer_type in ("contract", "dungeon", "boss")
+                        for offer_type in ("contract_early", "contract_mid", "contract_late", "dungeon", "boss")
                     }
-                    mission_pool = list(db.scalars(select(MissionTemplate).where(
-                        MissionTemplate.is_active.is_(True),
-                        ~MissionTemplate.mission_type.in_(("gathering", "long_idle")),
-                        MissionTemplate.required_min_mercenary_level <= max(
-                            1, regional_cycle_service._guild_player_level(guild) * 2,
+                    contract_stages = (
+                        ("early", 1, 1, 0.0), ("mid", 25, 25, 0.5), ("late", 50, 350, 1.0),
+                    )
+                    contract_pools = {
+                        stage_name: regional_cycle_service._contract_candidates(db, guild_level, roster_level)
+                        for stage_name, guild_level, roster_level, _stage_value in contract_stages
+                    }
+                    candidate_pool_metrics = {}
+                    for stage_name, guild_level, roster_level, _stage_value in contract_stages:
+                        pool = contract_pools[stage_name]
+                        challenge_ceiling = max(20, guild_level, roster_level)
+                        self.assertGreaterEqual(len(pool), 10)
+                        self.assertLessEqual(max(row.recommended_level for row in pool), challenge_ceiling)
+                        self.assertLessEqual(max(row.required_min_mercenary_level for row in pool), challenge_ceiling)
+                        candidate_pool_metrics[stage_name] = {
+                            "guild_level": guild_level,
+                            "roster_level": roster_level,
+                            "challenge_ceiling": challenge_ceiling,
+                            "templates": len(pool),
+                            "max_recommended_level": max(row.recommended_level for row in pool),
+                            "max_required_mercenary_level": max(row.required_min_mercenary_level for row in pool),
+                        }
+                    guild_only_pool = regional_cycle_service._contract_candidates(db, 50, 50)
+                    self.assertLessEqual(max(row.recommended_level for row in guild_only_pool), 50)
+                    candidate_pool_metrics["guild_50_roster_50"] = {
+                        "guild_level": 50,
+                        "roster_level": 50,
+                        "challenge_ceiling": 50,
+                        "templates": len(guild_only_pool),
+                        "max_recommended_level": max(row.recommended_level for row in guild_only_pool),
+                        "max_required_mercenary_level": max(
+                            row.required_min_mercenary_level for row in guild_only_pool
                         ),
-                        MissionTemplate.recommended_level <= max(
-                            20, regional_cycle_service._guild_player_level(guild) * 3,
-                        ),
-                    ).order_by(MissionTemplate.id)))
-                    if len(mission_pool) < 10:
-                        mission_pool = list(db.scalars(select(MissionTemplate).where(
-                            MissionTemplate.is_active.is_(True),
-                            ~MissionTemplate.mission_type.in_(("gathering", "long_idle")),
-                        ).order_by(MissionTemplate.id)))
+                    }
+                    self.assertGreaterEqual(candidate_pool_metrics["late"]["max_recommended_level"], 301)
+                    late_high_rank_counts = {"offers": 0, "eligible": 0}
+                    early_s_levels = []
+                    early_startability = {
+                        "boards": 0,
+                        "startable_offers": 0,
+                        "power_at_or_above_recommendation": 0,
+                        "startable_count_histogram": [0] * 11,
+                        "boards_with_at_least_two_startable": 0,
+                        "by_seed": {},
+                    }
                     dungeon_pool = list(db.scalars(select(DungeonTemplate).where(
                         DungeonTemplate.is_active.is_(True),
                         DungeonTemplate.content_type == "dungeon",
@@ -374,6 +428,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         bucket = rank_template_stats[offer_type][rank]
                         bucket["count"] += 1
                         bucket["level"] += int(template.recommended_level or 1)
+                        bucket["mercenary_requirement"] += int(template.required_min_mercenary_level or 1)
+                        bucket["guild_requirement"] += int(template.required_guild_level or 1)
                         if isinstance(template, MissionTemplate):
                             bucket["power"] += max(1, int(template.recommended_power or 0))
                         else:
@@ -381,17 +437,64 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                                 1, int(template.required_total_power or template.recommended_level * 10),
                             )
 
-                    for sample_cycle in range(10_000):
-                        rng = regional_cycle_service._rng("rank-template-correlation", 1842, sample_cycle)
-                        contract_templates = regional_cycle_service._select_templates(mission_pool, 10, rng)
-                        contract_ranks = regional_cycle_service._roll_contract_rank_set(
-                            rng, regional_cycle_service.rank_weights_for_stage(0.0),
-                        )
-                        for template, rank in zip(
-                            sorted(contract_templates, key=regional_cycle_service._template_rank_order),
-                            sorted(contract_ranks, key=RANKS.index),
-                        ):
-                            add_template_rank("contract", template, rank)
+                    correlation_seeds = (1842, 5271, 9013, 17021, 42893)
+                    for seed in correlation_seeds:
+                      seed_startability = {"boards": 0, "startable_offers": 0, "power_at_or_above_recommendation": 0}
+                      for sample_cycle in range(2_000):
+                        for stage_name, guild_level, roster_level, stage_value in contract_stages:
+                            contract_rng = regional_cycle_service._rng(
+                                "rank-template-correlation", seed, stage_name, sample_cycle,
+                            )
+                            contract_templates = regional_cycle_service._select_contract_templates(
+                                contract_pools[stage_name], 10, contract_rng, guild_level, roster_level,
+                            )
+                            if stage_name == "early":
+                                # Representative first playable roster: one level-1
+                                # mercenary with conservative starter-class power 14,
+                                # guild level 1, no buildings, and office level 0.
+                                startable_templates = [template for template in contract_templates if (
+                                    template.required_guild_level <= 1
+                                    and template.required_min_mercenary_level <= 1
+                                    and (
+                                        template.required_building_type is None
+                                        or template.required_building_level <= 0
+                                    )
+                                    and template.min_party_size <= 1 <= template.max_party_size
+                                )]
+                                startable_count = len(startable_templates)
+                                early_startability["boards"] += 1
+                                early_startability["startable_offers"] += startable_count
+                                early_startability["power_at_or_above_recommendation"] += sum(
+                                    int(template.recommended_power or 0) <= 14
+                                    for template in startable_templates
+                                )
+                                early_startability["startable_count_histogram"][startable_count] += 1
+                                early_startability["boards_with_at_least_two_startable"] += int(startable_count >= 2)
+                                seed_startability["boards"] += 1
+                                seed_startability["startable_offers"] += startable_count
+                                seed_startability["power_at_or_above_recommendation"] += sum(
+                                    int(template.recommended_power or 0) <= 14
+                                    for template in startable_templates
+                                )
+                            contract_ranks = regional_cycle_service._roll_contract_rank_set(
+                                contract_rng, regional_cycle_service.rank_weights_for_stage(stage_value),
+                            )
+                            for template, rank in regional_cycle_service._pair_contract_templates_with_ranks(
+                                contract_templates, contract_ranks,
+                            ):
+                                add_template_rank(f"contract_{stage_name}", template, rank)
+                                if stage_name == "early" and rank == "S":
+                                    early_s_levels.append(template.recommended_level)
+                                if stage_name == "late" and rank in {"B", "A", "S"}:
+                                    late_high_rank_counts["offers"] += 1
+                                    eligible = (
+                                        template.required_guild_level <= guild_level
+                                        and template.required_min_mercenary_level <= roster_level
+                                        and template.required_building_level <= 100
+                                        and template.min_party_size <= 5
+                                    )
+                                    late_high_rank_counts["eligible"] += int(eligible)
+                        rng = regional_cycle_service._rng("rank-template-correlation", seed, "other", sample_cycle)
                         dungeon_templates = regional_cycle_service._select_templates(dungeon_pool, 3, rng)
                         dungeon_ranks = sorted((regional_cycle_service._roll_rank(
                             rng, regional_cycle_service._rank_weight_payload(0.0)["dungeon"],
@@ -408,6 +511,15 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                             RANKS.index(boss_rank) * (len(boss_pool) - 1) / (len(RANKS) - 1),
                         )
                         add_template_rank("boss", boss_pool[boss_index], boss_rank)
+                      early_startability["by_seed"][str(seed)] = {
+                          "boards": seed_startability["boards"],
+                          "avg_startable_offers": round(
+                              seed_startability["startable_offers"] / max(1, seed_startability["boards"]), 3,
+                          ),
+                          "avg_power_at_or_above_recommendation": round(
+                              seed_startability["power_at_or_above_recommendation"] / max(1, seed_startability["boards"]), 3,
+                          ),
+                      }
 
                     rank_template_correlation = {}
                     for offer_type, ranks in rank_template_stats.items():
@@ -418,10 +530,46 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                                 "offers": totals["count"],
                                 "avg_level": round(totals["level"] / count, 2),
                                 "avg_power": round(totals["power"] / count, 2),
+                                "avg_required_mercenary_level": round(totals["mercenary_requirement"] / count, 2),
+                                "avg_required_guild_level": round(totals["guild_requirement"] / count, 2),
                             }
                         for metric in ("avg_level", "avg_power"):
                             values = [rank_template_correlation[offer_type][rank][metric] for rank in RANKS]
                             self.assertEqual(values, sorted(values), f"{offer_type} {metric} rank order")
+                    early_contracts = rank_template_correlation["contract_early"]
+                    mid_contracts = rank_template_correlation["contract_mid"]
+                    late_contracts = rank_template_correlation["contract_late"]
+                    self.assertEqual(regional_cycle_service.rank_weights_for_stage(0.0)["S"], 1)
+                    for contracts_at_stage in (early_contracts, mid_contracts, late_contracts):
+                        self.assertGreaterEqual(
+                            contracts_at_stage["S"]["avg_level"], contracts_at_stage["E"]["avg_level"] + 5,
+                        )
+                    self.assertTrue(early_s_levels)
+                    self.assertGreaterEqual(
+                        sum(early_s_levels) / len(early_s_levels), 10,
+                        "early S contracts should average into aspirational content",
+                    )
+                    early_startability["avg_startable_offers_per_board"] = round(
+                        early_startability["startable_offers"] / max(1, early_startability["boards"]), 3,
+                    )
+                    early_startability["percent_boards_with_at_least_two_startable"] = round(
+                        100 * early_startability["boards_with_at_least_two_startable"]
+                        / max(1, early_startability["boards"]), 2,
+                    )
+                    self.assertGreaterEqual(early_startability["avg_startable_offers_per_board"], 2.5)
+                    self.assertGreaterEqual(early_startability["percent_boards_with_at_least_two_startable"], 75)
+                    self.assertGreaterEqual(min(
+                        count for count, frequency in enumerate(early_startability["startable_count_histogram"])
+                        if frequency
+                    ), 2)
+                    early_startability["power_is_a_success_recommendation_not_a_start_gate"] = True
+                    self.assertGreater(mid_contracts["S"]["avg_level"], early_contracts["S"]["avg_level"])
+                    self.assertGreater(late_contracts["S"]["avg_level"], mid_contracts["S"]["avg_level"])
+                    self.assertGreater(late_high_rank_counts["offers"], 0)
+                    self.assertEqual(late_high_rank_counts["eligible"], late_high_rank_counts["offers"])
+                    rank_template_correlation["late_high_rank_eligibility"] = late_high_rank_counts
+                    rank_template_correlation["candidate_pool_by_stage"] = candidate_pool_metrics
+                    rank_template_correlation["early_startability"] = early_startability
 
                     boss_offers = list(db.scalars(select(RegionalOffer).where(
                         RegionalOffer.campaign_id == first.campaign_id,
@@ -434,6 +582,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         label: simulate_rank_distribution(stage, seed=1842, cycles=10_000)
                         for label, stage in (("early", 0.0), ("mid", 0.5), ("late", 1.0))
                     }
+                    self.assertLess(rank_curves["early"]["rank_percentages"]["S"], 2.0)
                     def mean_rank(counts):
                         total = sum(counts.values())
                         return sum(index * counts[rank] for index, rank in enumerate(RANKS)) / max(1, total)
@@ -531,7 +680,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertIn(guild.name, html)
                     self.assertIn("regional-vigil.webp", html)
                     self.assertIn("Ler relatório", html)
-                    self.assertIn("Indisponível nesta etapa", html)
+                    self.assertIn("Portais e rebeliões", html)
 
                     duplicate_reservations = db.execute(
                         select(RegionalCpuCyclePlan.cycle_id, RegionalCpuCyclePlan.decisions_json)
@@ -587,6 +736,136 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertEqual(db.scalar(select(func.count(RegionalCycleRegion.id)).where(
                         RegionalCycleRegion.campaign_id == second.campaign_id,
                     )), snapshot_count)
+            finally:
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
+    def test_region_stage_scales_cpu_profiles_and_temporary_strong_rival_calm_expires(self):
+        first_region, last_region = regional_cycle_service.REGIONS[0][0], regional_cycle_service.REGIONS[-1][0]
+        first_stage = regional_stage_for_region(first_region)
+        last_stage = regional_stage_for_region(last_region)
+        self.assertEqual((first_stage, last_stage), (1, 5))
+        first_values = {
+            profile: cpu_initial_profile_values(profile, first_stage)
+            for profile in ("strong", "medium", "new")
+        }
+        last_values = {
+            profile: cpu_initial_profile_values(profile, last_stage)
+            for profile in ("strong", "medium", "new")
+        }
+        for stage_values in (first_values, last_values):
+            self.assertGreater(stage_values["strong"]["guild_level"], stage_values["medium"]["guild_level"])
+            self.assertGreater(stage_values["medium"]["guild_level"], stage_values["new"]["guild_level"])
+            self.assertGreater(stage_values["strong"]["mercenary_level"], stage_values["medium"]["mercenary_level"])
+            self.assertGreater(stage_values["medium"]["mercenary_level"], stage_values["new"]["mercenary_level"])
+            for stat in ("attributes", "gold", "material", "capacity"):
+                value = lambda profile: sum(stage_values[profile][stat]) if stat == "attributes" else stage_values[profile][stat]
+                self.assertGreater(value("strong"), value("medium"))
+                self.assertGreater(value("medium"), value("new"))
+        self.assertGreater(last_values["strong"]["guild_level"], first_values["strong"]["guild_level"])
+        self.assertGreater(last_values["strong"]["mercenary_level"], first_values["strong"]["mercenary_level"])
+        self.assertGreater(sum(last_values["strong"]["attributes"]), sum(first_values["strong"]["attributes"]))
+        self.assertGreater(last_values["strong"]["gold"], first_values["strong"]["gold"])
+        self.assertGreater(last_values["strong"]["capacity"], first_values["strong"]["capacity"])
+
+        calm = rival_calm_for_cycle(0, regional_cycle_service.VIGILIA_RULES_VERSION, True, True)
+        self.assertEqual(calm, rival_calm_for_cycle(0, regional_cycle_service.VIGILIA_RULES_VERSION, True, True))
+        self.assertTrue(calm["active"])
+        self.assertTrue(calm["applied"])
+        self.assertFalse(rival_calm_for_cycle(0, LEGACY_VIGILIA_RULES_VERSION, True, True)["active"])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                campaigns = CampaignService(Path(temp_dir) / "saves")
+                info = campaigns.create_campaign("Bandas CPU", "Guilda de Teste")
+                campaigns.activate_campaign(info.campaign_id)
+                with SessionLocal() as db:
+                    campaign = db.get(CampaignMetadata, info.campaign_id)
+                    guild, _resources = get_current_guild_context(db, info.campaign_id)
+                    start = campaign.created_at_utc
+                    regional_cycle_service.ensure_campaign_world(db, campaign, guild)
+                    cpu_guilds = list(db.scalars(select(RegionalGuildState).where(
+                        RegionalGuildState.campaign_id == info.campaign_id,
+                        RegionalGuildState.guild_id.is_(None),
+                    )))
+                    by_region_profile = {}
+                    for state in cpu_guilds:
+                        by_region_profile.setdefault((state.region_code, state.profile), []).append(state)
+                    self.assertEqual(len(cpu_guilds), 24)
+                    home_code = next(
+                        code for code, name in regional_cycle_service.REGIONS if name == campaign.home_region
+                    )
+                    for region_code, _region_name in regional_cycle_service.REGIONS:
+                        expected_new = 2 if region_code == home_code else 3
+                        self.assertEqual(len(by_region_profile[(region_code, "new")]), expected_new)
+                    for region_code, _region_name in regional_cycle_service.REGIONS:
+                        strong = by_region_profile[(region_code, "strong")][0]
+                        medium = by_region_profile[(region_code, "medium")][0]
+                        new = by_region_profile[(region_code, "new")][0]
+                        self.assertGreater(strong.level, medium.level)
+                        self.assertGreater(medium.level, new.level)
+                        self.assertGreater(strong.power, medium.power)
+                        self.assertGreater(medium.power, new.power)
+                    first_strong = by_region_profile[(first_region, "strong")][0]
+                    last_strong = by_region_profile[(last_region, "strong")][0]
+                    self.assertGreater(last_strong.level, first_strong.level)
+                    self.assertGreater(last_strong.power, first_strong.power)
+                    cpu_resources = {
+                        (row.guild_state_id, row.resource_code): row
+                        for row in db.scalars(select(RegionalCpuResource).where(
+                            RegionalCpuResource.campaign_id == info.campaign_id,
+                        ))
+                    }
+                    self.assertGreater(
+                        cpu_resources[(last_strong.id, "gold")].amount,
+                        cpu_resources[(first_strong.id, "gold")].amount,
+                    )
+                    self.assertGreater(
+                        cpu_resources[(last_strong.id, "gold")].capacity,
+                        cpu_resources[(first_strong.id, "gold")].capacity,
+                    )
+
+                    advance_regional_world(db, campaign, guild, start)
+                    with patch.object(regional_cycle_service, "regional_cpu_action_probability", return_value=0.0):
+                        advance_regional_world(db, campaign, guild, start + timedelta(seconds=CYCLE_SECONDS))
+                        cycle_zero = db.scalar(select(RegionalCycle).where(
+                            RegionalCycle.campaign_id == info.campaign_id,
+                            RegionalCycle.cycle_number == 0,
+                        ))
+                        first_snapshot = db.scalar(select(RegionalCycleRegion).where(
+                            RegionalCycleRegion.cycle_id == cycle_zero.id,
+                            RegionalCycleRegion.region_code == home_code,
+                        ))
+                        first_summary = json.loads(first_snapshot.summary_json)
+                        self.assertTrue(first_summary["baseline"]["applied"])
+                        self.assertEqual(first_snapshot.cpu_actions, 0)
+                        self.assertTrue(first_summary["rival_calm"]["active"])
+                        self.assertTrue(first_summary["rival_calm"]["applied"])
+                        self.assertEqual(first_summary["rival_calm"]["source_guild_state_id"],
+                                         by_region_profile[(home_code, "strong")][0].id)
+                        # One baseline delta (-1/+1) plus one independent calm offset (+0.25/-0.25).
+                        self.assertAlmostEqual(first_snapshot.security_after, first_snapshot.security_before - 0.75)
+                        self.assertAlmostEqual(first_snapshot.threat_after, first_snapshot.threat_before + 0.75)
+
+                        advance_regional_world(db, campaign, guild, start + timedelta(seconds=5 * CYCLE_SECONDS))
+                        cycle_four = db.scalar(select(RegionalCycle).where(
+                            RegionalCycle.campaign_id == info.campaign_id,
+                            RegionalCycle.cycle_number == 4,
+                        ))
+                        expired_snapshot = db.scalar(select(RegionalCycleRegion).where(
+                            RegionalCycleRegion.cycle_id == cycle_four.id,
+                            RegionalCycleRegion.region_code == home_code,
+                        ))
+                        expired_summary = json.loads(expired_snapshot.summary_json)
+                        self.assertTrue(expired_summary["baseline"]["applied"])
+                        self.assertFalse(expired_summary["rival_calm"]["active"])
+                        self.assertFalse(expired_summary["rival_calm"]["applied"])
+                        self.assertTrue(expired_summary["rival_calm"]["expired_before_this_cycle"])
+                        self.assertAlmostEqual(expired_snapshot.security_after, expired_snapshot.security_before - 1)
+                        self.assertAlmostEqual(expired_snapshot.threat_after, expired_snapshot.threat_before + 1)
+                        before_repeat = expired_snapshot.summary_json
+                        advance_regional_world(db, campaign, guild, start + timedelta(seconds=5 * CYCLE_SECONDS))
+                        self.assertEqual(expired_snapshot.summary_json, before_repeat)
             finally:
                 configure_database("sqlite:///:memory:")
                 gc.collect()
@@ -704,7 +983,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         RegionalGuildState.campaign_id == info.campaign_id,
                         RegionalGuildState.guild_id.is_(None),
                     )):
-                        cpu_state.active = False
+                        if cpu_state.profile != "strong":
+                            cpu_state.active = False
                     template = MissionTemplate(
                         name="Contrato Snapshot de teste",
                         description="Oferta de teste para conferir os dados congelados.",
@@ -829,9 +1109,10 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertAlmostEqual(region.security, 50.06)
                     self.assertAlmostEqual(region.threat, 24.94)
                     self.assertEqual(regional_cycle_service.REGION_BASELINE_PRESSURE, 1)
-                    advance_regional_world(
-                        db, campaign, guild, campaign.created_at_utc + timedelta(seconds=CYCLE_SECONDS),
-                    )
+                    with patch.object(regional_cycle_service, "regional_cpu_action_probability", return_value=0.0):
+                        advance_regional_world(
+                            db, campaign, guild, campaign.created_at_utc + timedelta(seconds=CYCLE_SECONDS),
+                        )
                     cycle_summary = db.scalar(select(RegionalCycleRegion).where(
                         RegionalCycleRegion.cycle_id == active_cycle.id,
                         RegionalCycleRegion.region_code == home_code,
@@ -842,9 +1123,12 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertEqual(summary["player_successes"], 1)
                     self.assertEqual(summary["player_failures"], 1)
                     self.assertAlmostEqual(cycle_summary.security_before, 50)
-                    self.assertAlmostEqual(cycle_summary.security_after, 50.06)
+                    self.assertTrue(summary["rival_calm"]["active"])
+                    self.assertTrue(summary["rival_calm"]["applied"])
+                    self.assertAlmostEqual(summary["rival_calm"]["security"], 0.25)
+                    self.assertAlmostEqual(cycle_summary.security_after, 50.31)
                     self.assertAlmostEqual(cycle_summary.threat_before, 25)
-                    self.assertAlmostEqual(cycle_summary.threat_after, 24.94)
+                    self.assertAlmostEqual(cycle_summary.threat_after, 24.69)
             finally:
                 configure_database("sqlite:///:memory:")
                 gc.collect()

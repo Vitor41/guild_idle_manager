@@ -144,12 +144,14 @@ def create_mission_run(
     run_multiplier: int = 1,
     *,
     commit: bool = True,
+    preparation_snapshot_json: str | None = None,
 ) -> MissionRun:
     mission_run = MissionRun(
         guild_id=guild_id,
         mission_template_id=mission_template_id,
         status="in_progress",
         run_multiplier=run_multiplier,
+        preparation_snapshot_json=preparation_snapshot_json,
         started_at=started_at,
         ends_at=ends_at,
     )

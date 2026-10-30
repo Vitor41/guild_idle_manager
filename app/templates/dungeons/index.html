@@ -110,7 +110,7 @@
                   <div class="loot-preview"><strong>Loot possível</strong><div class="loot-preview-list">{% for drop in dungeon.visible_drops %}<span class="loot-preview-item rarity-{{ drop.item_template.rarity }}" title="{{ drop.rarity_label }}"><span class="loot-preview-icon">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span><span>{{ drop.display_name }}<small>{{ drop.effective_drop_chance }}%{% if drop.effective_drop_chance > drop.base_drop_chance %} ({{ drop.base_drop_chance }}% + Ferreiro){% endif %} · {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}-{{ drop.max_quantity }}{% endif %}x</small></span></span>{% else %}<span class="subtle-note">Sem loot cadastrado</span>{% endfor %}</div></div>
                 </div>
               </div>
-              <form class="party-form" method="post" action="/dungeons/start">
+              <form class="party-form" method="post" action="/dungeons/start" data-supply-quote-url="/dungeons/supply-quote">
                 <input type="hidden" name="dungeon_template_id" value="{{ dungeon.id }}">
                 <label>
                   Multiplicador
@@ -124,7 +124,7 @@
                   {% for mercenary in available_mercenaries %}
                     {% set chance = dungeon_chances[dungeon.id][mercenary.id] %}
                     <label class="merc-choice rarity-{{ mercenary.rarity }}">
-                      <input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}">
+                      <input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}" {% if mercenary.id|string in selected_start_mercenary_ids %}checked{% endif %}>
                       <span class="choice-avatar rarity-{{ mercenary.rarity }}">{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="{{ mercenary.class_label }}">{% else %}{{ mercenary.name[:1] }}{% endif %}</span>
                       <span>
                         <strong>{{ mercenary.name }} <span class="merc-level">Nv. {{ mercenary.level }}</span></strong>
@@ -140,6 +140,7 @@
                     </label>
                   {% endfor %}
                 </div>
+                <label class="supply-preparation"><input type="checkbox" name="supply" value="1" {% if selected_start_supply %}checked{% endif %}><span><strong>Suprimento do grupo · até +5 p.p. (teto 95%)</strong><small>Selecione a equipe e o multiplicador para consultar a chance final e o custo exatos. O servidor confirma os mesmos valores ao iniciar; sem marcação, nada é consumido.</small></span></label>
                 <button type="submit" {% if not available_mercenaries or not dungeons_available or locked %}disabled{% endif %}>{{ 'Fechada durante exploração' if locked else 'Iniciar' }}</button>
               </form>
             </article>

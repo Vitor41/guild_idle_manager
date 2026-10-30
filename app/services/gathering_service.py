@@ -120,6 +120,7 @@ def advance_assignment(
     produced = 0
     stored = 0
     discarded = 0
+    paused_seconds = 0
     db.flush()
     capacity = get_inventory_capacity(db, guild)
     used = get_inventory_usage(db, guild.id)
@@ -136,6 +137,7 @@ def advance_assignment(
             "produced": 0,
             "stored": 0,
             "discarded": 0,
+            "paused_seconds": elapsed,
             "extra_chance": min(45, max(0, assignment.extra_chance)),
             "capacity": capacity,
             "used": used,
@@ -151,6 +153,7 @@ def advance_assignment(
             "produced": 0,
             "stored": 0,
             "discarded": 0,
+            "paused_seconds": elapsed,
             "extra_chance": min(45, max(0, assignment.extra_chance)),
             "capacity": capacity,
             "used": used,
@@ -176,6 +179,7 @@ def advance_assignment(
                 # The cycle that fills the warehouse is completed (its own
                 # overflow is lost); later cycles remain unprocessed.
                 assignment.capacity_paused = True
+                paused_seconds = max(0, accrued - cycles_processed * CYCLE_SECONDS)
                 progress = 0
                 break
         if produced:
@@ -185,15 +189,23 @@ def advance_assignment(
                 # Re-check the cap at write time in case another inventory
                 # transaction used space after this assignment was measured.
                 assignment.capacity_paused = True
+                paused_seconds = max(0, accrued - cycles_processed * CYCLE_SECONDS)
                 progress = 0
     assignment.progress_seconds = progress
     assignment.checkpoint_at_utc = timestamp
+    if cycles_processed:
+        from app.services.achievement_service import record_guild_stat
+
+        record_guild_stat(
+            db, guild.id, f"gathering_cycles_{assignment.resource_family}", cycles_processed,
+        )
     db.add(assignment)
     return {
         "cycles": cycles_processed,
         "produced": produced,
         "stored": stored,
         "discarded": discarded,
+        "paused_seconds": paused_seconds,
         "extra_chance": min(45, max(0, assignment.extra_chance)),
         "capacity": capacity,
         "used": get_inventory_usage(db, guild.id),

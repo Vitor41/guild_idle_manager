@@ -1,4 +1,80 @@
-{% extends "base.html" %}{% block title %}Conquistas e Códex - Guild Idle Manager{% endblock %}{% block content %}<section class="dashboard"><header class="topbar"><div><p class="eyebrow">Registro da Guilda</p><h1>Conquistas e Códex</h1><p class="note">Coleção permanente de classes, itens e desafios descobertos.</p></div></header>{% if message %}<p class="success-message">{{ message }}</p>{% endif %}{% if error %}<p class="error-message">{{ error }}</p>{% endif %}
-<section class="panel"><h2>Conquistas</h2><div class="achievement-grid">{% for card in achievement_cards %}{% set achievement=card.progress %}<article class="achievement-card {% if achievement.unlocked_at %}unlocked{% endif %}"><h3>{{ card.template.title }}</h3><p class="note">{{ card.template.description }}</p><div class="progress-track"><span style="width: {{ (achievement.progress * 100 / card.template.threshold)|round|int }}%"></span></div><p>{{ achievement.progress }}/{{ card.template.threshold }}</p><div class="badge-row">{% if card.template.reward_gold %}<span class="tag">{{ card.template.reward_gold }} ouro</span>{% endif %}{% if card.template.reward_xp %}<span class="tag">{{ card.template.reward_xp }} XP de guilda</span>{% endif %}</div>{% if achievement.unlocked_at and not achievement.claimed_at %}<form method="post" action="/codex/achievements/{{ achievement.id }}/claim"><button>Coletar recompensa</button></form>{% elif achievement.claimed_at %}<span class="status-badge status-active">Coletada</span>{% endif %}</article>{% endfor %}</div></section>
-<section class="panel table-panel"><div class="section-heading"><div><h2>Coleção descoberta</h2><p class="note">{{ unlocked_count }}/{{ total_count }} registros desbloqueados. Registros desconhecidos permanecem ocultos.</p></div><div class="filter-tabs">{% for value,label in [('all','Todos'),('class','Classes'),('item','Itens'),('dungeon','Masmorras')] %}<a href="/codex?category={{ value }}" class="{% if selected_category == value %}active{% endif %}">{{ label }}</a>{% endfor %}</div></div><div class="codex-grid">{% for entry in codex_entries %}<article class="codex-card rarity-{{ entry.rarity }}"><span class="tag">{{ {'class':'Classe','item':'Item','dungeon':'Masmorra'}.get(entry.category, entry.category) }}</span><h3>{{ entry.title }}</h3><p class="note">{{ entry.description }}</p></article>{% else %}<p class="note">Nenhum registro desta categoria foi descoberto.</p>{% endfor %}</div></section>
-<section class="panel table-panel"><h2>Coleção de mercenários</h2>{% if mercenary_collection %}<div class="codex-grid">{% for mercenary in mercenary_collection %}<article class="codex-card rarity-{{ mercenary.rarity }}"><span class="tag">{{ mercenary.rarity_label }}</span><h3>{{ mercenary.name }}</h3><p class="note">{{ mercenary.class_label }} · Nível {{ mercenary.level }}</p></article>{% endfor %}</div>{% else %}<p class="note">Nenhum mercenário registrado.</p>{% endif %}</section></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Conquistas e Códex - Guild Idle Manager{% endblock %}
+{% block content %}
+<section class="dashboard codex-page">
+  <header class="codex-page-heading" aria-labelledby="codex-page-title">
+    <img class="codex-page-heading__art" src="{{ url_for('static', path='assets/desktop/evolution/illustrations/achievement-reliquary.webp') }}" width="1600" height="900" alt="" fetchpriority="high">
+    <div class="codex-page-heading__content">
+      <p class="eyebrow">REGISTROS DA GUILDA</p>
+      <h1 id="codex-page-title">Conquistas e Códex</h1>
+      <p class="note">Metas graduais, recompensas resgatáveis e descobertas permanentes da campanha.</p>
+      <p class="codex-page-heading__tagline"><img src="{{ url_for('static', path='assets/desktop/evolution/sprites/ui_64/achievement-medal.png') }}" width="32" height="32" alt=""> Progresso e legado da campanha</p>
+    </div>
+    <strong class="codex-discovery-count">{{ unlocked_count }} <span>/ {{ total_count }} descobertas</span></strong>
+  </header>
+  <nav class="codex-anchor-tabs" aria-label="Atalhos do registro">
+    <a href="#codex-achievements">Conquistas</a>
+    <a href="#codex-legendary">Recompensa Lendária</a>
+    <a href="#codex-collection">Códex</a>
+    <a href="#mercenary-collection">Coleção</a>
+  </nav>
+
+  {% if message %}<p class="success-message" role="status">{{ message }}</p>{% endif %}
+  {% if error %}<p class="error-message" role="alert">{{ error }}</p>{% endif %}
+
+  <section class="panel codex-achievement-section" id="codex-achievements" aria-labelledby="codex-achievements-title">
+    <div class="section-heading">
+      <div><h2 id="codex-achievements-title">Trilhas de conquistas</h2><p class="note">Cada trilha mostra requisito, progresso, estado e recompensa registrada.</p></div>
+      <nav class="filter-tabs" aria-label="Filtrar trilhas">
+        {% for value,label in [('all','Todas'),('progression','Progressão'),('collection','Coleção'),('events','Eventos')] %}<a href="/codex?trail={{ value }}&amp;category={{ selected_category }}" class="{% if selected_trail == value %}active{% endif %}" {% if selected_trail == value %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+      </nav>
+    </div>
+    <div class="achievement-grid">
+      {% for card in achievement_cards %}{% set achievement=card.progress %}
+      <article class="achievement-card {% if achievement.unlocked_at %}unlocked{% endif %}" id="achievement-{{ achievement.id }}">
+        <span class="tag">{{ {'progression':'Progressão','collection':'Coleção','events':'Eventos'}.get(card.trail, card.trail) }}</span>
+        <span class="codex-achievement-state">{% if achievement.claimed_at %}Resgatada{% elif achievement.unlocked_at %}Pronta para resgate{% elif achievement.progress %}Em progresso{% else %}Bloqueada{% endif %}</span>
+        <h3>{{ card.template.title }}</h3><p class="note">{{ card.template.description }}</p>
+        <div class="progress-track" role="progressbar" aria-label="Progresso: {{ card.template.title }}" aria-valuemin="0" aria-valuemax="{{ card.template.threshold }}" aria-valuenow="{{ achievement.progress }}"><span style="width: {{ (achievement.progress * 100 / card.template.threshold)|round|int }}%"></span></div>
+        <p class="codex-progress-label">{{ achievement.progress }} de {{ card.template.threshold }}</p>
+        <div class="badge-row">{% if card.template.reward_gold %}<span class="tag">{{ card.template.reward_gold }} ouro</span>{% endif %}{% if card.template.reward_xp %}<span class="tag">{{ card.template.reward_xp }} XP de guilda</span>{% endif %}{% if card.template.reward_item_template %}<span class="tag">Equipamento Lendário único: {{ card.template.reward_item_template.name }}</span>{% endif %}</div>
+        <details><summary>Ver requisito e estado</summary><p>Requisito registrado: {{ card.criterion_label }} ≥ {{ card.template.threshold }}.</p><p>Estado: {% if achievement.claimed_at %}recompensa coletada{% elif achievement.unlocked_at %}pronta para resgate{% elif achievement.progress %}em progresso{% else %}bloqueada{% endif %}.</p><p>Recompensa configurada: {% if card.template.reward_gold or card.template.reward_xp or card.template.reward_item_template %}{% if card.template.reward_gold %}{{ card.template.reward_gold }} ouro{% endif %}{% if card.template.reward_xp %}{% if card.template.reward_gold %} · {% endif %}{{ card.template.reward_xp }} XP de guilda{% endif %}{% if card.template.reward_item_template %} · {{ card.template.reward_item_template.name }}{% endif %}{% else %}nenhuma recompensa{% endif %}.</p></details>
+        {% if achievement.unlocked_at and not achievement.claimed_at %}<form method="post" action="/codex/achievements/{{ achievement.id }}/claim"><button>Coletar recompensa</button></form>{% elif achievement.claimed_at %}<span class="status-badge status-active">Resgatada</span>{% endif %}
+      </article>
+      {% else %}<p class="note">Nenhuma conquista nesta trilha.</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="panel codex-legendary-section" id="codex-legendary" aria-labelledby="codex-legendary-title">
+    <div class="section-heading"><div><p class="eyebrow">LATE GAME · RECOMPENSA ÚNICA</p><h2 id="codex-legendary-title">O Último Desafio</h2><p class="note">Marcos lendários da campanha. Cada peça é criada uma vez, ao resgatar a conquista.</p></div></div>
+    {% if legendary_achievement_cards %}
+    <div class="codex-legendary-grid">
+      {% for card in legendary_achievement_cards %}{% set achievement=card.progress %}
+      <article class="codex-legendary-card {% if achievement.unlocked_at and not achievement.claimed_at %}is-ready{% elif achievement.claimed_at %}is-claimed{% endif %}">
+        <div class="codex-legendary-card__art" aria-hidden="true"><img src="{{ url_for('static', path='assets/desktop/evolution/illustrations/achievement-reliquary.webp') }}" width="1600" height="900" alt="" loading="lazy"><span class="codex-legendary-card__medal"><img src="{{ url_for('static', path='assets/desktop/evolution/sprites/ui_64/achievement-medal.png') }}" width="48" height="48" alt=""></span></div>
+        <div class="codex-legendary-card__content"><span class="codex-achievement-state">{% if achievement.claimed_at %}Resgatada{% elif achievement.unlocked_at %}Pronta para resgate{% elif achievement.progress %}Em progresso{% else %}Bloqueada{% endif %}</span>
+          <h3>{{ card.template.title }}</h3><p>{{ card.template.description }}</p>
+          <p class="codex-legendary-card__reward"><strong>{{ card.template.reward_item_template.name }}</strong><span>{{ {'main_hand':'Arma','chest':'Armadura','ring':'Acessório','helmet':'Elmo'}.get(card.template.reward_item_template.equipment_slot, 'Equipamento') }} Lendário único · {{ {'legendary':'Lendário','mythic':'Mítico','epic':'Épico','rare':'Raro','uncommon':'Incomum','common':'Comum'}.get(card.template.reward_item_template.rarity, 'Especial') }}</span></p>
+          <div class="progress-track" role="progressbar" aria-label="Progresso: {{ card.template.title }}" aria-valuemin="0" aria-valuemax="{{ card.template.threshold }}" aria-valuenow="{{ achievement.progress }}"><span style="width: {{ (achievement.progress * 100 / card.template.threshold)|round|int }}%"></span></div><p class="codex-progress-label">{{ achievement.progress }} de {{ card.template.threshold }} · {{ card.criterion_label }}</p>
+          {% if achievement.unlocked_at and not achievement.claimed_at %}<form method="post" action="/codex/achievements/{{ achievement.id }}/claim"><button>Resgatar peça lendária</button></form>{% elif achievement.claimed_at %}<span class="status-badge status-active">Recompensa entregue</span>{% else %}<span class="codex-legendary-card__locked">Complete o marco para liberar o resgate.</span>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}<p class="note">Nenhuma recompensa lendária está disponível no catálogo desta campanha.</p>{% endif %}
+  </section>
+
+  <section class="panel table-panel" id="codex-collection" aria-labelledby="codex-collection-title">
+    <div class="section-heading"><div><p class="eyebrow">ÍNDICE VISUAL FUNCIONAL</p><h2 id="codex-collection-title">Descobertas do Códex</h2><p class="note">Registros desconhecidos permanecem ocultos. Abra um detalhe para ver a origem e a raridade.</p></div>
+      <div class="filter-tabs" role="group" aria-label="Filtrar Códex">{% for value,label in [('all','Todos'),('class','Classes'),('item','Itens'),('dungeon','Masmorras')] %}<a href="/codex?category={{ value }}&amp;trail={{ selected_trail }}" class="{% if selected_category == value %}active{% endif %}" {% if selected_category == value %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</div>
+    </div>
+    {% if selected_codex_entry %}<section class="codex-entry-detail" id="codex-entry-detail" aria-labelledby="codex-entry-detail-title" tabindex="-1"><div class="section-heading"><div><p class="eyebrow">DETALHES DO REGISTRO</p><h3 id="codex-entry-detail-title">{{ selected_codex_entry.title }}</h3></div><a href="/codex?category={{ selected_category }}&amp;trail={{ selected_trail }}#codex-collection">Voltar à coleção</a></div><p>{{ selected_codex_entry.description or 'Este registro não possui descrição adicional.' }}</p><dl><div><dt>Categoria</dt><dd>{{ {'class':'Classe','item':'Item','dungeon':'Masmorra'}.get(selected_codex_entry.category, 'Registro') }}</dd></div><div><dt>Raridade</dt><dd>{{ {'common':'Comum','uncommon':'Incomum','rare':'Raro','epic':'Épico','legendary':'Lendário','mythic':'Mítico'}.get(selected_codex_entry.rarity, 'Especial') }}</dd></div></dl></section>{% endif %}
+    <strong class="codex-discovery-count codex-collection-count">{{ unlocked_count }} <span>/ {{ total_count }} descobertas</span></strong>
+    <div class="codex-grid">{% for entry in codex_entries %}<article class="codex-card rarity-{{ entry.rarity }}"><div class="codex-card__heading">{% if entry.icon_path %}<img src="{{ url_for('static', path=entry.icon_path) }}" width="48" height="48" alt="" loading="lazy">{% else %}<span class="codex-card__icon-fallback" aria-hidden="true">✦</span>{% endif %}<span class="tag">{{ {'class':'Classe','item':'Item','dungeon':'Masmorra'}.get(entry.category, entry.category) }} descoberta</span></div><h3><a href="/codex?category={{ selected_category }}&amp;trail={{ selected_trail }}&amp;entry={{ entry.id }}#codex-entry-detail">{{ entry.title }}</a></h3><p class="note">{{ entry.description }}</p><a class="codex-card-detail" href="/codex?category={{ selected_category }}&amp;trail={{ selected_trail }}&amp;entry={{ entry.id }}#codex-entry-detail">Ver detalhe →</a></article>{% else %}<p class="note">Nenhum registro desta categoria foi descoberto.</p>{% endfor %}</div>
+  </section>
+
+  <section class="panel table-panel" id="mercenary-collection" aria-labelledby="mercenary-collection-title"><div class="section-heading"><div><p class="eyebrow">ELENCO E LEGADO</p><h2 id="mercenary-collection-title">Coleção de mercenários</h2><p class="note">Mercenários encontrados durante esta campanha.</p></div></div>
+    {% if mercenary_collection %}<div class="codex-grid">{% for mercenary in mercenary_collection %}<article class="codex-card codex-mercenary-card rarity-{{ mercenary.rarity }}"><div class="codex-mercenary-card__portrait">{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" width="64" height="64" alt="" loading="lazy">{% else %}<span aria-hidden="true">{{ mercenary.class_label[:1] }}</span>{% endif %}</div><span class="tag">{{ mercenary.rarity_label }}</span><h3>{{ mercenary.name }}</h3><p class="note">{{ mercenary.class_label }} · Nível {{ mercenary.level }}{% if mercenary.status == 'available' %} · Disponível{% elif mercenary.status == 'mission' %} · Em missão{% elif mercenary.status == 'dungeon' %} · Em masmorra{% elif mercenary.status == 'gathering' %} · Em coleta{% endif %}</p></article>{% endfor %}</div>{% else %}<p class="note">Nenhum mercenário registrado.</p>{% endif %}
+  </section>
+</section>
+{% endblock %}

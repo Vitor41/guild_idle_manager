@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import http.client
 import logging
 from logging.handlers import RotatingFileHandler
@@ -14,7 +15,53 @@ from urllib.parse import urlsplit
 
 import uvicorn
 
-from app.desktop.paths import user_log_directory
+from app.desktop.paths import user_data_directory, user_log_directory
+
+
+class DesktopAlreadyRunningError(RuntimeError):
+    pass
+
+
+def _acquire_single_instance_mutex(local_app_data: str | None = None):
+    if os.name != "nt":
+        return None
+    profile_root = local_app_data or os.environ.get("LOCALAPPDATA")
+    if not profile_root:
+        raise RuntimeError("A pasta de dados local não está disponível.")
+    identity = os.path.normcase(os.path.abspath(profile_root)).encode("utf-8")
+    suffix = hashlib.sha256(identity).hexdigest()[:24]
+    mutex_name = f"Local\\GuildIdleManager-{suffix}"
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_int
+    kernel32.ReleaseMutex.argtypes = [ctypes.c_void_p]
+    kernel32.ReleaseMutex.restype = ctypes.c_int
+    kernel32.SetLastError.argtypes = [ctypes.c_ulong]
+    kernel32.SetLastError.restype = None
+    kernel32.GetLastError.argtypes = []
+    kernel32.GetLastError.restype = ctypes.c_ulong
+    kernel32.SetLastError(0)
+    handle = kernel32.CreateMutexW(None, 1, mutex_name)
+    if not handle:
+        raise ctypes.WinError(kernel32.GetLastError())
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        kernel32.CloseHandle(handle)
+        raise DesktopAlreadyRunningError(
+            "O Guild Idle Manager já está aberto para este perfil de dados."
+        )
+    return handle, kernel32
+
+
+def _release_single_instance_mutex(mutex) -> None:
+    if mutex is None:
+        return
+    handle, kernel32 = mutex
+    try:
+        kernel32.ReleaseMutex(handle)
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _configure_logging() -> None:
@@ -65,24 +112,64 @@ def _show_startup_error(message: str) -> None:
         ctypes.windll.user32.MessageBoxW(0, message, "Guild Idle Manager", 0x10)
 
 
+def _skip_pywebview_early_webview_focus(webview_module=None) -> None:
+    """Avoid focusing WebView2 before its CoreWebView2 instance is ready.
+
+    pywebview 6.2.1's WinForms Shown handler focuses the WebView2 control
+    synchronously. On this runtime that blocks the UI thread before
+    CoreWebView2InitializationCompleted, leaving the desktop window blank.
+    The window manager still activates the form normally; mouse interaction
+    focuses the browser after it is ready.
+    """
+    if os.name != "nt":
+        return
+    if webview_module is None:
+        import webview as webview_module
+
+    from webview.platforms import winforms
+
+    browser_form = winforms.BrowserView.BrowserForm
+    if getattr(browser_form, "_gim_skip_early_webview_focus", False):
+        return
+    if not hasattr(browser_form, "on_shown") or not hasattr(winforms, "is_cef"):
+        raise RuntimeError("A versão do pywebview não oferece o ponto de compatibilidade WinForms esperado.")
+
+    def on_shown_without_early_focus(form, *_args):
+        if not winforms.is_cef:
+            form.shown.set()
+
+    browser_form.on_shown = on_shown_without_early_focus
+    browser_form._gim_skip_early_webview_focus = True
+    logging.info("Applied WinForms WebView2 early-focus compatibility for pywebview")
+
+
 def run() -> None:
     if os.name != "nt":
         raise RuntimeError("O aplicativo desktop exige o Windows.")
     os.environ["APP_MODE"] = "desktop"
     _configure_logging()
+    try:
+        instance_mutex = _acquire_single_instance_mutex()
+    except DesktopAlreadyRunningError as exc:
+        logging.warning("%s", exc)
+        if os.name == "nt":
+            ctypes.windll.user32.MessageBoxW(0, str(exc), "Guild Idle Manager", 0x30)
+        return
 
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("127.0.0.1", 0))
-    listener.listen(8)
-    port = listener.getsockname()[1]
-    allowed_host = f"127.0.0.1:{port}"
-    origin = f"http://{allowed_host}"
-    logging.info("Starting loopback server at %s", origin)
+    listener = None
     server: uvicorn.Server | None = None
     server_thread: threading.Thread | None = None
 
     try:
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(8)
+        port = listener.getsockname()[1]
+        allowed_host = f"127.0.0.1:{port}"
+        origin = f"http://{allowed_host}"
+        logging.info("Starting loopback server at %s", origin)
+
         from app.main import app
 
         app.state.desktop_allowed_host = allowed_host
@@ -106,6 +193,8 @@ def run() -> None:
 
         import webview
 
+        _skip_pywebview_early_webview_focus(webview)
+
         from app.desktop.bridge import DesktopBridge
 
         bridge = DesktopBridge(app.state.campaign_service, app.state.clock_guard)
@@ -123,7 +212,10 @@ def run() -> None:
         )
         bridge._window = window
         window.events.closed += lambda: setattr(server, "should_exit", True)
-        webview.start(gui="edgechromium")
+        webview_storage = user_data_directory() / "webview"
+        webview_storage.mkdir(parents=True, exist_ok=True)
+        logging.info("Using stable WebView2 user data at %s", webview_storage)
+        webview.start(gui="edgechromium", storage_path=str(webview_storage))
     except Exception as exc:
         _show_startup_error(f"Não foi possível iniciar o Guild Idle Manager: {exc}")
         raise
@@ -134,7 +226,11 @@ def run() -> None:
             server_thread.join(timeout=12)
             if server_thread.is_alive():
                 logging.error("O servidor local nao encerrou dentro do prazo.")
-        listener.close()
+        try:
+            if listener is not None:
+                listener.close()
+        finally:
+            _release_single_instance_mutex(instance_mutex)
 
 
 if __name__ == "__main__":

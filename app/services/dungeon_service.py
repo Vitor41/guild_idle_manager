@@ -1,14 +1,17 @@
 from datetime import datetime, timedelta, timezone
 from math import floor
-from random import randint
+from random import Random, randint
+import json
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.core.time import as_utc, prepare_timer_context
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild, GuildResources
+from app.models.item import ItemTemplate
 from app.repositories.dungeon_repository import (
     count_awaiting_dungeon_loot,
     count_dungeon_runs_by_status,
@@ -54,6 +57,10 @@ from app.services.icon_service import get_item_icon_path
 from app.services.equipment_service import get_party_power_score
 from app.repositories.item_repository import list_equipment_for_mercenary
 from app.services.prd3_dungeon_balance_service import dungeon_identity, maximum_drop_rarity
+from app.services.supply_preparation_service import (
+    encode_supply_snapshot, estimate_drop_sale_value, guild_gold, prepare_supply_snapshot,
+    quote_supply, supply_bonus_from_snapshot,
+)
 
 
 INITIAL_DUNGEON_TEMPLATES = [
@@ -277,6 +284,92 @@ def get_advanced_dungeon_chance(db: Session, guild_id: int, template: DungeonTem
     return base
 
 
+def get_final_dungeon_chance(
+    db: Session,
+    guild_id: int,
+    template: DungeonTemplate,
+    mercenaries,
+    *,
+    regional_success_chance: int | None = None,
+    regional_recommended_power: int | None = None,
+    regional_recommended_level: int | None = None,
+) -> int:
+    """Return the resolver's chance, including party, skill, synergy, and Scouts bonuses."""
+    if regional_success_chance is None:
+        chance = get_advanced_dungeon_chance(db, guild_id, template, mercenaries)["final_chance"]
+    else:
+        details = get_party_chance_details(
+            db, guild_id, regional_success_chance, mercenaries,
+            regional_recommended_power if regional_recommended_power is not None else template.recommended_power,
+            regional_recommended_level if regional_recommended_level is not None else template.recommended_level,
+        )
+        skills = get_party_skill_effects(db, mercenaries)
+        synergy = get_group_synergy_bonus(mercenaries, template)
+        skill_bonus = skills.get("success_chance", 0) + skills.get("dungeon_power", 0) // 10
+        chance = max(5, min(95, details["final_chance"] + skill_bonus + synergy))
+    scouts = scouts_values(get_building_level(db, guild_id, "scouts"))
+    return min(95, chance + scouts["success_bonus_percentage_points"])
+
+
+def get_dungeon_supply_quote(
+    db: Session,
+    guild: Guild,
+    dungeon_template_id: str,
+    mercenary_ids: list[str],
+    run_multiplier: str = "1",
+) -> dict[str, object]:
+    """Build an exact server quote for the selected legacy dungeon party and multiplier."""
+    if not are_dungeons_available(db, guild.id):
+        return {"available": False, "reason": "Masmorras ainda não estão disponíveis para esta guilda."}
+    try:
+        template_id = int(dungeon_template_id)
+        multiplier = int(run_multiplier or "1")
+        parsed_ids = parse_dungeon_mercenary_ids(mercenary_ids)
+    except (DungeonError, ValueError):
+        return {"available": False, "reason": "Masmorra, grupo ou multiplicador inválido."}
+    if multiplier < 1 or multiplier > get_max_run_multiplier(db, guild.id):
+        return {"available": False, "reason": "Multiplicador indisponível para esta guilda."}
+    template = get_active_dungeon_template(db, template_id)
+    if template is None:
+        return {"available": False, "reason": "Masmorra indisponível."}
+    try:
+        validate_dungeon_requirements(db, guild, template)
+        if len(parsed_ids) < template.min_party_size:
+            raise DungeonError("Grupo menor que o mínimo exigido para esta masmorra.")
+        if len(parsed_ids) > template.max_party_size:
+            raise DungeonError("Grupo maior que o máximo permitido para esta masmorra.")
+        mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_ids)
+        if len(mercenaries) != len(parsed_ids):
+            raise DungeonError("Mercenário indisponível.")
+        if any(member.level < template.required_min_mercenary_level for member in mercenaries):
+            raise DungeonError("Um ou mais mercenários não possuem nível suficiente.")
+        validate_advanced_party_requirements(db, guild, template, mercenaries)
+    except DungeonError as error:
+        return {"available": False, "reason": str(error)}
+
+    base_final_chance = get_final_dungeon_chance(db, guild.id, template, mercenaries)
+    applied_bonus_pp = min(5, max(0, 95 - base_final_chance))
+    skills = get_party_skill_effects(db, mercenaries)
+    success_gold = floor(
+        template.base_gold_reward * multiplier * (100 + skills.get("gold_reward", 0)) / 100
+    )
+    quote = quote_supply(
+        rank=_legacy_supply_rank(template.recommended_level),
+        success_gold=success_gold,
+        expected_drop_sale=estimate_drop_sale_value(
+            db, guild.id, list_active_drops_for_dungeon(db, template.id), multiplier,
+        ),
+        multiplier=multiplier,
+        available_gold=guild_gold(db, guild.id),
+        applied_bonus_pp=applied_bonus_pp,
+    )
+    quote.update({
+        "base_final_chance": base_final_chance,
+        "final_chance": min(95, base_final_chance + applied_bonus_pp),
+    })
+    return quote
+
+
 def parse_dungeon_mercenary_ids(values: list[str]) -> list[int]:
     parsed_ids: list[int] = []
     for value in values:
@@ -413,6 +506,14 @@ def start_dungeon(
     *,
     commit: bool = True,
     regional_duration_seconds: int | None = None,
+    regional_min_duration_seconds: int | None = None,
+    template_snapshot: dict[str, object] | None = None,
+    supply_selected: bool = False,
+    supply_rank: str | None = None,
+    regional_success_chance: int | None = None,
+    regional_recommended_power: int | None = None,
+    regional_recommended_level: int | None = None,
+    supply_include_drops: bool = True,
 ) -> DungeonRun:
     if not are_dungeons_available(db, guild.id):
         raise DungeonError("Evolua Exploradores para o nível 1 antes de acessar Masmorras.")
@@ -427,9 +528,14 @@ def start_dungeon(
     if parsed_multiplier < 1 or parsed_multiplier > get_max_run_multiplier(db, guild.id):
         raise DungeonError("Multiplicador indisponivel para esta guilda.")
 
-    dungeon_template = get_active_dungeon_template(db, parsed_template_id)
-    if dungeon_template is None:
-        raise DungeonError("Masmorra indisponível.")
+    if template_snapshot is not None:
+        if int(template_snapshot.get("id", -1)) != parsed_template_id or db.get(DungeonTemplate, parsed_template_id) is None:
+            raise DungeonError("Snapshot da masmorra indisponível.")
+        dungeon_template = SimpleNamespace(**template_snapshot)
+    else:
+        dungeon_template = get_active_dungeon_template(db, parsed_template_id)
+        if dungeon_template is None:
+            raise DungeonError("Masmorra indisponível.")
     validate_dungeon_requirements(db, guild, dungeon_template)
     if db.bind is not None and db.bind.dialect.name == "postgresql":
         db.execute(select(func.pg_advisory_xact_lock(guild.id, dungeon_template.id)))
@@ -458,7 +564,34 @@ def start_dungeon(
     duration = floor(base_duration * parsed_multiplier * (
         100 - min(35, skill_effects.get("duration_reduction", 0) + scouts["duration_reduction_percent"])
     ) / 100)
+    if regional_min_duration_seconds is not None:
+        duration = max(int(regional_min_duration_seconds), duration)
     ends_at = started_at + timedelta(seconds=max(1, duration))
+    supply_snapshot = None
+    supply_cost = 0
+    if supply_selected:
+        rank = supply_rank or _legacy_supply_rank(dungeon_template.recommended_level)
+        preview_chance = get_final_dungeon_chance(
+            db, guild.id, dungeon_template, mercenaries,
+            regional_success_chance=regional_success_chance,
+            regional_recommended_power=regional_recommended_power,
+            regional_recommended_level=regional_recommended_level,
+        )
+        drops = list_active_drops_for_dungeon(db, dungeon_template.id) if supply_include_drops else []
+        success_gold = floor(dungeon_template.base_gold_reward * parsed_multiplier * (100 + skill_effects.get("gold_reward", 0)) / 100)
+        try:
+            supply_snapshot, supply_cost = prepare_supply_snapshot(
+                db, guild.id, rank, success_gold, drops, parsed_multiplier, True, preview_chance,
+            )
+        except ValueError as error:
+            raise DungeonError(str(error)) from error
+        debit = db.execute(
+            update(GuildResources).where(
+                GuildResources.guild_id == guild.id, GuildResources.gold >= supply_cost,
+            ).values(gold=GuildResources.gold - supply_cost)
+        )
+        if debit.rowcount != 1:
+            raise DungeonError("Saldo de ouro insuficiente para o suprimento.")
     return create_dungeon_run(
         db,
         guild.id,
@@ -468,7 +601,13 @@ def start_dungeon(
         ends_at,
         parsed_multiplier,
         commit=commit,
+        preparation_snapshot_json=encode_supply_snapshot(supply_snapshot),
     )
+
+
+def _legacy_supply_rank(recommended_level: int) -> str:
+    level = max(1, int(recommended_level))
+    return "E" if level <= 10 else "D" if level <= 20 else "C" if level <= 30 else "B" if level <= 40 else "A" if level <= 50 else "S"
 
 
 def claim_dungeon_loot(
@@ -498,25 +637,55 @@ def claim_dungeon_loot(
         raise DungeonError("Masmorra sem grupo vinculado.")
 
     template = dungeon_run.dungeon_template
+    portal_event = None
+    portal_activity = None
+    from app.models.regional import RegionalEvent, RegionalEventActivity
+
+    portal_activity = db.scalar(select(RegionalEventActivity).where(
+        RegionalEventActivity.source_type == "dungeon",
+        RegionalEventActivity.source_run_id == dungeon_run.id,
+        RegionalEventActivity.status == "in_progress",
+    ))
+    if portal_activity is not None:
+        linked_event = db.get(RegionalEvent, portal_activity.event_id)
+        if linked_event is not None and linked_event.event_type == "portal" and linked_event.status in {"active", "in_progress"}:
+            portal_event = linked_event
+    portal_event_summary: dict[str, object] = {}
+    portal_boss_snapshot: dict[str, object] = {}
+    if portal_event is not None:
+        try:
+            parsed_summary = json.loads(portal_event.summary_json or "{}")
+            portal_event_summary = parsed_summary if isinstance(parsed_summary, dict) else {}
+        except (TypeError, json.JSONDecodeError):
+            portal_event_summary = {}
+        boss_record = portal_event_summary.get("portal_boss")
+        boss_data = boss_record.get("template") if isinstance(boss_record, dict) else None
+        if isinstance(boss_data, dict) and int(boss_data.get("id", -1)) == dungeon_run.dungeon_template_id:
+            portal_boss_snapshot = boss_data
+            template = SimpleNamespace(**boss_data)
     regional_offer = None
     if dungeon_run.regional_offer_id is not None:
         from app.models.regional import RegionalOffer
 
         regional_offer = db.get(RegionalOffer, dungeon_run.regional_offer_id)
     run_multiplier = dungeon_run.run_multiplier or 1
-    if regional_offer is None:
-        chance_details = get_advanced_dungeon_chance(db, guild.id, template, mercenaries)
-    else:
-        chance_details = get_party_chance_details(
-            db, guild.id, regional_offer.success_chance_snapshot, mercenaries,
-            regional_offer.recommended_power_snapshot, regional_offer.recommended_level_snapshot,
-        )
-        skills = get_party_skill_effects(db, mercenaries)
-        synergy = get_group_synergy_bonus(mercenaries, template)
-        skill_bonus = skills.get("success_chance", 0) + skills.get("dungeon_power", 0) // 10
-        chance_details["final_chance"] = max(5, min(95, chance_details["final_chance"] + skill_bonus + synergy))
+    base_final_chance = get_final_dungeon_chance(
+        db, guild.id, template, mercenaries,
+        regional_success_chance=regional_offer.success_chance_snapshot if regional_offer else None,
+        regional_recommended_power=regional_offer.recommended_power_snapshot if regional_offer else None,
+        regional_recommended_level=regional_offer.recommended_level_snapshot if regional_offer else None,
+    )
+    chance_details = {"final_chance": base_final_chance}
     scouts = scouts_values(get_building_level(db, guild.id, "scouts"))
-    chance_details["final_chance"] = min(95, chance_details["final_chance"] + scouts["success_bonus_percentage_points"])
+    supply_snapshot = {}
+    if dungeon_run.preparation_snapshot_json:
+        try:
+            supply_snapshot = json.loads(dungeon_run.preparation_snapshot_json)
+        except (TypeError, json.JSONDecodeError):
+            supply_snapshot = {}
+    if isinstance(supply_snapshot, dict) and supply_snapshot.get("schema") == 1:
+        chance_details["final_chance"] = int(supply_snapshot.get("base_final_chance", chance_details["final_chance"]))
+    chance_details["final_chance"] = min(95, chance_details["final_chance"] + supply_bonus_from_snapshot(dungeon_run.preparation_snapshot_json))
     skill_effects = get_party_skill_effects(db, mercenaries)
     success = randint(1, 100) <= chance_details["final_chance"]
 
@@ -540,7 +709,42 @@ def claim_dungeon_loot(
     guild_messages = add_guild_xp_from_mercenary_xp(guild, xp_reward * len(mercenaries))
 
     item_results: list[str] = []
-    if success:
+    portal_loot_result: dict[str, object] | None = None
+    if success and portal_event is not None:
+        portal_summary = portal_event_summary
+        table = portal_summary.get("portal_loot") if isinstance(portal_summary, dict) else None
+        table = table if isinstance(table, dict) else {}
+        entries = table.get("entries") if isinstance(table.get("entries"), list) else []
+        loot_rng = Random(f"{portal_event.seed}:{dungeon_run.id}:{table.get('version', 'missing')}:portal-loot")
+        ticket = loot_rng.randint(1, 100)
+        cursor = 0
+        dropped_item_id = None
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            cursor += max(0, min(100 - cursor, int(entry.get("chance_percent", 0))))
+            if ticket > cursor:
+                continue
+            item_id = int(entry.get("item_template_id", 0))
+            item_data = entry.get("item_snapshot")
+            if isinstance(item_data, dict) and int(item_data.get("id", -1)) == item_id:
+                item_template = SimpleNamespace(**item_data)
+            else:
+                # Older portal snapshots predate frozen item properties.
+                item_template = db.get(ItemTemplate, item_id)
+            if item_template is None or item_template.item_type != "equipment":
+                break
+            unlock_codex_reference(db, guild.id, "item", item_template.id)
+            instance = create_equipment_instance_from_template(db, guild.id, item_template)
+            item_results.append(f"{clean_generated_name(item_template.name)} ({format_equipment_bonus(instance)})")
+            dropped_item_id = item_template.id
+            break
+        portal_loot_result = {
+            "table_version": table.get("version"),
+            "roll_ticket": ticket,
+            "item_template_id": dropped_item_id,
+        }
+    elif success:
         active_drops = list_active_drops_for_dungeon(db, template.id)
         primary_material = next((drop for drop in active_drops if drop.item_template.item_type != "equipment"), None)
         for drop in active_drops:
@@ -577,7 +781,19 @@ def claim_dungeon_loot(
         level_ups=level_up_messages,
         guild_progress=guild_messages,
         items=item_results,
+        notes=([f"Chance final: {chance_details['final_chance']}% (suprimento +{supply_bonus_from_snapshot(dungeon_run.preparation_snapshot_json)} p.p.; custo registrado no início)."] if supply_bonus_from_snapshot(dungeon_run.preparation_snapshot_json) else []),
     )
+    if portal_event is not None:
+        portal_summary = portal_event_summary
+        if not isinstance(portal_summary, dict):
+            portal_summary = {}
+        if portal_loot_result is None:
+            table = portal_summary.get("portal_loot")
+            table_version = table.get("version") if isinstance(table, dict) else None
+            portal_loot_result = {"table_version": table_version, "roll_ticket": None, "item_template_id": None}
+        portal_summary["portal_loot_result"] = portal_loot_result
+        portal_event.summary_json = json.dumps(portal_summary, ensure_ascii=False, sort_keys=True)
+        db.add(portal_event)
     dungeon_run.resolved_at = now
     db.add(dungeon_run)
     db.add(resources)
@@ -600,6 +816,18 @@ def claim_dungeon_loot(
             gold_earned=gold_reward,
             xp_earned=xp_reward * len(mercenaries),
         )
+    from app.services.regional_event_service import record_event_activity_result
+
+    event_activity = record_event_activity_result(db, "dungeon", dungeon_run.id, success, now)
+    if event_activity is not None:
+        from app.models.regional import RegionalEvent
+
+        event = db.get(RegionalEvent, event_activity.event_id)
+        if event is not None and event.event_type == "portal":
+            from app.services.regional_event_service import resolve_portal_participant
+
+            resolve_portal_participant(db, event_activity, success, now)
+            record_guild_stat(db, guild.id, "portals_completed", 1)
     if commit:
         db.commit()
         db.refresh(dungeon_run)

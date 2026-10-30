@@ -19,6 +19,7 @@ def serialize_result_details(
     level_ups: list[str],
     guild_progress: list[str],
     items: list[str],
+    notes: list[str] | None = None,
 ) -> str:
     return json.dumps(
         {
@@ -27,7 +28,7 @@ def serialize_result_details(
             "level_ups": level_ups,
             "guild_progress": guild_progress,
             "items": items,
-            "notes": [],
+            "notes": notes or [],
         },
         ensure_ascii=False,
     )

@@ -1,0 +1,6 @@
+test_first_install_and_managed_update_preserve_saves_and_replace_app_files (tests.test_desktop_installer.DesktopInstallerSafetyTests.test_first_install_and_managed_update_preserve_saves_and_replace_app_files) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 42.163s
+
+OK

@@ -1,5 +1,5 @@
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -22,6 +22,14 @@ from app.services.mission_service import (
 
 router = APIRouter(prefix="/missions")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+
+
+def _mission_error_url(error: object, form: dict[str, list[str]]) -> str:
+    query = [("error", str(error))]
+    query.extend(("selected_mercenary_id", value) for value in form.get("mercenary_ids", []))
+    if (form.get("supply") or [""])[0] == "1":
+        query.append(("selected_supply", "1"))
+    return "/missions?" + urlencode(query, doseq=True)
 
 
 @router.get("")
@@ -73,6 +81,8 @@ def missions_index(
             "guild": guild,
             "resources": resources,
             "error": request.query_params.get("error"),
+            "selected_start_mercenary_ids": request.query_params.getlist("selected_mercenary_id"),
+            "selected_start_supply": request.query_params.get("selected_supply") == "1",
             "message": request.query_params.get("message"),
             "result_status": request.query_params.get("result"),
             **context,
@@ -101,9 +111,10 @@ async def start(
             mission_template_id=(form.get("mission_template_id") or [""])[0],
             mercenary_ids=form.get("mercenary_ids", []),
             run_multiplier=(form.get("run_multiplier") or ["1"])[0],
+            supply_selected=(form.get("supply") or [""])[0] == "1",
         )
     except MissionError as error:
-        return RedirectResponse(f"/missions?error={quote(str(error))}", status_code=303)
+        return RedirectResponse(_mission_error_url(error, form), status_code=303)
 
     return RedirectResponse("/missions?message=Missao%20iniciada.", status_code=303)
 

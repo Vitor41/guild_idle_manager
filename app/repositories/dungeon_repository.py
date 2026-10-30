@@ -106,12 +106,14 @@ def create_dungeon_run(
     run_multiplier: int = 1,
     *,
     commit: bool = True,
+    preparation_snapshot_json: str | None = None,
 ) -> DungeonRun:
     run = DungeonRun(
         guild_id=guild_id,
         dungeon_template_id=dungeon_template_id,
         status="in_progress",
         run_multiplier=run_multiplier,
+        preparation_snapshot_json=preparation_snapshot_json,
         started_at=started_at,
         ends_at=ends_at,
     )

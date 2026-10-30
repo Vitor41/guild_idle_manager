@@ -1,0 +1,632 @@
+test_campaign_export_import_restore_backup_and_delete_lifecycle (tests.test_campaign_service.CampaignServiceTests.test_campaign_export_import_restore_backup_and_delete_lifecycle) ... C:\Users\vitor\Guild Idle Manager\App GIM\.venv-desktop\Lib\site-packages\alembic\config.py:604: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+  util.warn_deprecated(
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_campaign_listing_explains_unknown_migration_revision (tests.test_campaign_service.CampaignServiceTests.test_campaign_listing_explains_unknown_migration_revision) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_campaign_listing_keeps_corrupt_file_visible_for_recovery (tests.test_campaign_service.CampaignServiceTests.test_campaign_listing_keeps_corrupt_file_visible_for_recovery) ... ok
+test_corrupt_campaign_can_be_restored_from_matching_backup (tests.test_campaign_service.CampaignServiceTests.test_corrupt_campaign_can_be_restored_from_matching_backup) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_desktop_home_without_campaign_uses_asgi_and_omits_session_expiry (tests.test_campaign_service.CampaignServiceTests.test_desktop_home_without_campaign_uses_asgi_and_omits_session_expiry) ... ok
+test_empty_sqlite_file_is_rejected_before_migration_without_changes (tests.test_campaign_service.CampaignServiceTests.test_empty_sqlite_file_is_rejected_before_migration_without_changes) ... ok
+test_failed_migration_restores_original_schema_and_keeps_backup (tests.test_campaign_service.CampaignServiceTests.test_failed_migration_restores_original_schema_and_keeps_backup) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+ok
+test_listing_campaigns_does_not_migrate_or_back_up_saves (tests.test_campaign_service.CampaignServiceTests.test_listing_campaigns_does_not_migrate_or_back_up_saves) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+ok
+test_mismatched_internal_campaign_id_is_rejected_without_changes (tests.test_campaign_service.CampaignServiceTests.test_mismatched_internal_campaign_id_is_rejected_without_changes) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_partial_unversioned_save_is_rejected_without_stamping_or_changes (tests.test_campaign_service.CampaignServiceTests.test_partial_unversioned_save_is_rejected_without_stamping_or_changes) ... ok
+test_restore_parks_stale_sqlite_sidecars_and_keeps_diagnostic_copies (tests.test_campaign_service.CampaignServiceTests.test_restore_parks_stale_sqlite_sidecars_and_keeps_diagnostic_copies) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_two_campaigns_create_open_and_persist_in_isolation (tests.test_campaign_service.CampaignServiceTests.test_two_campaigns_create_open_and_persist_in_isolation) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_unknown_future_revision_is_rejected_before_backup_or_upgrade (tests.test_campaign_service.CampaignServiceTests.test_unknown_future_revision_is_rejected_before_backup_or_upgrade) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+ok
+test_upgrade_from_pre_event_revision_preserves_campaign_regional_run_and_backup (tests.test_campaign_service.CampaignServiceTests.test_upgrade_from_pre_event_revision_preserves_campaign_regional_run_and_backup) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_upgrade_from_previous_alembic_revision_keeps_data_and_makes_backup (tests.test_campaign_service.CampaignServiceTests.test_upgrade_from_previous_alembic_revision_keeps_data_and_makes_backup) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_upgrade_from_work_one_head_adds_pause_state_and_updates_schema_version (tests.test_campaign_service.CampaignServiceTests.test_upgrade_from_work_one_head_adds_pause_state_and_updates_schema_version) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade e4f5a6b7c8d9 -> e3f4a5b6c7d8, Add backward-compatible supply preparation snapshots to activity runs.
+INFO  [alembic.runtime.migration] Running downgrade e3f4a5b6c7d8 -> d7e8f9a0b1c2, f6a7b8c9d0e1, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running downgrade d7e8f9a0b1c2 -> c0d1e2f3a4b5, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running downgrade c0d1e2f3a4b5 -> b7c8d9e0f1a2, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running downgrade b7c8d9e0f1a2 -> a6b7c8d9e0f1, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_legacy_campaign_upgrade_backs_up_and_preserves_materialized_offers (tests.test_campaign_content_versioning.CampaignContentVersioningTests.test_legacy_campaign_upgrade_backs_up_and_preserves_materialized_offers) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_new_campaign_uses_pack_version_for_future_cycle_snapshots (tests.test_campaign_content_versioning.CampaignContentVersioningTests.test_new_campaign_uses_pack_version_for_future_cycle_snapshots) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_cycle_resolves_before_expiry_retry_is_idempotent_and_catches_up_24h (tests.test_regional_cycle_service.RegionalCycleSimulationTests.test_cycle_resolves_before_expiry_retry_is_idempotent_and_catches_up_24h) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_region_stage_scales_cpu_profiles_and_temporary_strong_rival_calm_expires (tests.test_regional_cycle_service.RegionalCycleSimulationTests.test_region_stage_scales_cpu_profiles_and_temporary_strong_rival_calm_expires) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_regional_run_uses_frozen_duration_chance_and_rewards (tests.test_regional_cycle_service.RegionalCycleSimulationTests.test_regional_run_uses_frozen_duration_chance_and_rewards) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_seeded_cpu_simulation_100_cycles_and_campaign_isolation (tests.test_regional_cycle_service.RegionalCycleSimulationTests.test_seeded_cpu_simulation_100_cycles_and_campaign_isolation) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 456cbfbc61a7, create auth and guild foundation
+INFO  [alembic.runtime.migration] Running upgrade 456cbfbc61a7 -> 9d31a31f301b, create mercenaries foundation
+INFO  [alembic.runtime.migration] Running upgrade 9d31a31f301b -> e8f676d861ef, create missions timer loot admin
+INFO  [alembic.runtime.migration] Running upgrade e8f676d861ef -> ea1a090fa460, create progression items inventory admin
+INFO  [alembic.runtime.migration] Running upgrade ea1a090fa460 -> 32cc1e85d2d8, create equipment rng power
+INFO  [alembic.runtime.migration] Running upgrade 32cc1e85d2d8 -> a4c9aaec8d92, create buildings advanced missions dungeons rarity
+INFO  [alembic.runtime.migration] Running upgrade a4c9aaec8d92 -> 7bd557d33fad, add run multipliers and building level zero
+INFO  [alembic.runtime.migration] Running upgrade 7bd557d33fad -> d9e2cd17a723, add tavern classes and guild progression
+INFO  [alembic.runtime.migration] Running upgrade d9e2cd17a723 -> 0cb6b6aed05d, add mercenary hire cost and dismissal support
+INFO  [alembic.runtime.migration] Running upgrade 0cb6b6aed05d -> 0287a3a072cd, add item icon groups and expanded slots
+INFO  [alembic.runtime.migration] Running upgrade 0287a3a072cd -> ef8f80ce71ab, add mission display order
+INFO  [alembic.runtime.migration] Running upgrade ef8f80ce71ab -> c27a934be410, add expeditions metadata, offline progress and market
+INFO  [alembic.runtime.migration] Running upgrade c27a934be410 -> b51f3c8a9210, add skills bosses crafting refinement progression and codex
+INFO  [alembic.runtime.migration] Running upgrade b51f3c8a9210 -> d4e5f6a7b8c9, add massive content docks professions and tutorial
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add online session activity tracking
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add confirmation preferences and achievement xp
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, rebalance PRD buildings to level 50
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, reconcile material inventory and guild treasury
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, add blacksmith salvage jobs
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> a1b2c3d4e5f6, add metadata needed by local offline campaigns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> a6b7c8d9e0f1, add campaign economy foundations
+INFO  [alembic.runtime.migration] Running upgrade a6b7c8d9e0f1 -> b7c8d9e0f1a2, pause gathering workers while the shared warehouse is full
+INFO  [alembic.runtime.migration] Running upgrade b7c8d9e0f1a2 -> c0d1e2f3a4b5, expand the legacy default building cap to level 100
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d7e8f9a0b1c2, add campaign-scoped regional cycles, snapshots, and outcomes
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2, f6a7b8c9d0e1 -> e3f4a5b6c7d8, add campaign-scoped regional event lifecycle records
+INFO  [alembic.runtime.migration] Running upgrade e3f4a5b6c7d8 -> e4f5a6b7c8d9, Add backward-compatible supply preparation snapshots to activity runs.
+ok
+test_accept_keeps_one_hour_priority_then_full_twelve_hour_activity_window (tests.test_regional_event_service.RegionalEventServiceTests.test_accept_keeps_one_hour_priority_then_full_twelve_hour_activity_window) ... ok
+test_concurrent_portal_and_rebellion_triggers_are_campaign_idempotent (tests.test_regional_event_service.RegionalEventServiceTests.test_concurrent_portal_and_rebellion_triggers_are_campaign_idempotent) ... ok
+test_cpu_cycle_started_before_rebellion_deadline_is_kept_in_final_summary (tests.test_regional_event_service.RegionalEventServiceTests.test_cpu_cycle_started_before_rebellion_deadline_is_kept_in_final_summary) ... ok
+test_cpu_portal_entry_is_deterministic_linked_once_and_separate_from_player (tests.test_regional_event_service.RegionalEventServiceTests.test_cpu_portal_entry_is_deterministic_linked_once_and_separate_from_player) ... ok
+test_explicit_decline_starts_cpu_twelve_hour_window_immediately (tests.test_regional_event_service.RegionalEventServiceTests.test_explicit_decline_starts_cpu_twelve_hour_window_immediately) ... ok
+test_first_cpu_cycle_after_priority_is_linked_to_rebellion (tests.test_regional_event_service.RegionalEventServiceTests.test_first_cpu_cycle_after_priority_is_linked_to_rebellion) ... ok
+test_incidence_audit_portal_roll_matches_production_seeded_service (tests.test_regional_event_service.RegionalEventServiceTests.test_incidence_audit_portal_roll_matches_production_seeded_service) ... ok
+test_no_response_gets_full_twelve_hour_cpu_window_after_priority (tests.test_regional_event_service.RegionalEventServiceTests.test_no_response_gets_full_twelve_hour_cpu_window_after_priority) ... ok
+test_only_event_linked_activities_contribute_and_multiple_runs_are_allowed (tests.test_regional_event_service.RegionalEventServiceTests.test_only_event_linked_activities_contribute_and_multiple_runs_are_allowed) ... ok
+test_portal_generation_respects_threat_threshold_chance_curve_and_cycle_idempotency (tests.test_regional_event_service.RegionalEventServiceTests.test_portal_generation_respects_threat_threshold_chance_curve_and_cycle_idempotency) ... ok
+test_portal_loot_snapshot_is_versioned_high_rarity_and_not_guaranteed (tests.test_regional_event_service.RegionalEventServiceTests.test_portal_loot_snapshot_is_versioned_high_rarity_and_not_guaranteed) ... ok
+test_portal_stays_open_for_other_guilds_until_deadline_and_keeps_started_run (tests.test_regional_event_service.RegionalEventServiceTests.test_portal_stays_open_for_other_guilds_until_deadline_and_keeps_started_run) ... ok
+test_rebellion_generation_rolls_only_eligible_regions_once_per_cycle (tests.test_regional_event_service.RegionalEventServiceTests.test_rebellion_generation_rolls_only_eligible_regions_once_per_cycle) ... ok
+test_rebellion_global_limit_suppresses_extra_regions_and_replays_identically (tests.test_regional_event_service.RegionalEventServiceTests.test_rebellion_global_limit_suppresses_extra_regions_and_replays_identically) ... ok
+test_rebellion_run_started_before_deadline_counts_when_it_finishes_after (tests.test_regional_event_service.RegionalEventServiceTests.test_rebellion_run_started_before_deadline_counts_when_it_finishes_after) ... ok
+test_rebellion_seed_replay_produces_same_results_from_same_start_state (tests.test_regional_event_service.RegionalEventServiceTests.test_rebellion_seed_replay_produces_same_results_from_same_start_state) ... ok
+test_regular_regional_outcome_does_not_count_as_rebellion_activity (tests.test_regional_event_service.RegionalEventServiceTests.test_regular_regional_outcome_does_not_count_as_rebellion_activity) ... ok
+test_visitor_rebellion_run_updates_target_and_home_influence_with_event_score (tests.test_regional_event_service.RegionalEventServiceTests.test_visitor_rebellion_run_updates_target_and_home_influence_with_event_score) ... ok
+test_docks_seed_creates_new_template_and_leaves_existing_base_untouched (tests.test_building_template_caps.BuildingTemplateCapTests.test_docks_seed_creates_new_template_and_leaves_existing_base_untouched) ... ok
+test_migration_updates_builtin_legacy_default_and_preserves_other_caps (tests.test_building_template_caps.BuildingTemplateCapTests.test_migration_updates_builtin_legacy_default_and_preserves_other_caps) ... INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+ok
+test_new_initial_templates_use_level_100 (tests.test_building_template_caps.BuildingTemplateCapTests.test_new_initial_templates_use_level_100) ... ok
+test_seed_never_changes_existing_caps_or_custom_fields (tests.test_building_template_caps.BuildingTemplateCapTests.test_seed_never_changes_existing_caps_or_custom_fields) ... ok
+test_concurrent_material_sale_submissions_cannot_overbook_quota (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_concurrent_material_sale_submissions_cannot_overbook_quota) ... ok
+test_crafted_equipment_can_flow_through_salvage_and_market_services (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_crafted_equipment_can_flow_through_salvage_and_market_services) ... ok
+test_dungeon_start_and_claim_resolve_real_loot_and_xp (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_dungeon_start_and_claim_resolve_real_loot_and_xp) ... ok
+test_dungeon_supply_quote_snapshot_and_resolution_share_explorers_and_skill_chance (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_dungeon_supply_quote_snapshot_and_resolution_share_explorers_and_skill_chance) ... ok
+test_gathering_reports_capacity_overflow_and_pause_resume (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_gathering_reports_capacity_overflow_and_pause_resume) ... ok
+test_journey_runner_enters_claims_and_closes_an_active_portal_with_runtime_services (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_journey_runner_enters_claims_and_closes_an_active_portal_with_runtime_services) ... ok
+test_level_one_apprentice_can_start_and_claim_catalog_mission_without_office (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_level_one_apprentice_can_start_and_claim_catalog_mission_without_office) ... ok
+test_material_market_and_salvage_use_live_capacity_and_prices (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_material_market_and_salvage_use_live_capacity_and_prices) ... ok
+test_material_market_quota_counts_active_sales_and_reopens_after_24h (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_material_market_quota_counts_active_sales_and_reopens_after_24h) ... ok
+test_material_market_quota_scales_with_slots (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_material_market_quota_scales_with_slots) ... ok
+test_material_market_quota_starts_at_25_and_steps_at_five_level_milestones (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_material_market_quota_starts_at_25_and_steps_at_five_level_milestones) ... ok
+test_mission_start_and_claim_apply_real_mercenary_xp (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_mission_start_and_claim_apply_real_mercenary_xp) ... ok
+test_recent_mission_drop_equipped_changes_paired_dungeon_result_and_loot (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_recent_mission_drop_equipped_changes_paired_dungeon_result_and_loot) ... ok
+test_regional_cycle_and_event_services_process_thresholded_portal (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_regional_cycle_and_event_services_process_thresholded_portal) ... ok
+test_regional_supply_is_debited_once_at_start_and_failure_claim_keeps_cost (tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_regional_supply_is_debited_once_at_start_and_failure_claim_keeps_cost) ... ok
+
+----------------------------------------------------------------------
+Ran 59 tests in 237.053s
+
+REGIONAL_SIMULATION_METRICS={"boss_percentages": {"A": 20.6, "B": 22.8, "C": 28.0, "D": 17.8, "E": 9.2, "S": 1.6}, "boss_ranks_500": {"A": 103, "B": 114, "C": 140, "D": 89, "E": 46, "S": 8}, "cpu_only_pressure_by_region_base_1_impact_0_02_plus_0_02_per_rank": {"bosque-ambar": {"expected_portal_rolls": 0, "final_security": 36.52, "final_threat": 38.48, "first_portal_eligible_cycle": null, "first_rebellion_eligible_cycle": null, "portal_eligible_cycles": 0, "portal_roll_probability_ignoring_active_event_suppression": 0.0}, "costa-brumas": {"expected_portal_rolls": 0, "final_security": 32.96, "final_threat": 42.04, "first_portal_eligible_cycle": null, "first_rebellion_eligible_cycle": null, "portal_eligible_cycles": 0, "portal_roll_probability_ignoring_active_event_suppression": 0.0}, "picos-norte": {"expected_portal_rolls": 0, "final_security": 22.08, "final_threat": 52.92, "first_portal_eligible_cycle": null, "first_rebellion_eligible_cycle": null, "portal_eligible_cycles": 0, "portal_roll_probability_ignoring_active_event_suppression": 0.0}, "terras-cinza": {"expected_portal_rolls": 0, "final_security": 35.72, "final_threat": 39.28, "first_portal_eligible_cycle": null, "first_rebellion_eligible_cycle": null, "portal_eligible_cycles": 0, "portal_roll_probability_ignoring_active_event_suppression": 0.0}, "vale-fronteira": {"expected_portal_rolls": 0, "final_security": 37.58, "final_threat": 37.42, "first_portal_eligible_cycle": null, "first_rebellion_eligible_cycle": null, "portal_eligible_cycles": 0, "portal_roll_probability_ignoring_active_event_suppression": 0.0}}, "cpu_profile_progression_100_cycles": {"medium": {"avg_influence": 77.0, "avg_level": 12.2, "avg_power": 83.2, "avg_reputation": 69.6, "guilds": 5}, "new": {"avg_influence": 57.79, "avg_level": 2.43, "avg_power": 16.93, "avg_reputation": 55.21, "guilds": 14}, "player": {"avg_influence": 0.0, "avg_level": 1.0, "avg_power": 0.0, "avg_reputation": 0.0, "guilds": 1}, "strong": {"avg_influence": 88.6, "avg_level": 27.2, "avg_power": 206.6, "avg_reputation": 61.4, "guilds": 5}}, "cpu_resources_negative_values": 0, "cycles": {"10": {"actions": 71, "cycles": 10, "gold_earned": 5087, "profiles": {"medium": {"actions": 15, "avg_roster_size": 3.0, "gold": 4194, "gold_per_action": 279.6, "gold_per_guild": 838.8, "guild_count": 5, "success_rate": 0.7333, "successes": 11, "xp": 52267}, "new": {"actions": 30, "avg_roster_size": 1.0, "gold": 560, "gold_per_action": 18.67, "gold_per_guild": 40.0, "guild_count": 14, "success_rate": 0.9333, "successes": 28, "xp": 2492}, "strong": {"actions": 26, "avg_roster_size": 5.0, "gold": 333, "gold_per_action": 12.81, "gold_per_guild": 66.6, "guild_count": 5, "success_rate": 0.5769, "successes": 15, "xp": 2864}}, "success_rate": 0.7606, "successes": 54, "xp_earned": 57623}, "50": {"actions": 324, "cycles": 50, "gold_earned": 37117, "profiles": {"medium": {"actions": 65, "avg_roster_size": 3.0, "gold": 11065, "gold_per_action": 170.23, "gold_per_guild": 2213.0, "guild_count": 5, "success_rate": 0.8154, "successes": 53, "xp": 152341}, "new": {"actions": 116, "avg_roster_size": 1.0, "gold": 2140, "gold_per_action": 18.45, "gold_per_guild": 152.86, "guild_count": 14, "success_rate": 0.9224, "successes": 107, "xp": 9523}, "strong": {"actions": 143, "avg_roster_size": 5.0, "gold": 23912, "gold_per_action": 167.22, "gold_per_guild": 4782.4, "guild_count": 5, "success_rate": 0.6434, "successes": 92, "xp": 315813}}, "success_rate": 0.7778, "successes": 252, "xp_earned": 477677}, "100": {"actions": 608, "cycles": 100, "gold_earned": 56600, "profiles": {"medium": {"actions": 121, "avg_roster_size": 3.0, "gold": 14501, "gold_per_action": 119.84, "gold_per_guild": 2900.2, "guild_count": 5, "success_rate": 0.8099, "successes": 98, "xp": 191269}, "new": {"actions": 222, "avg_roster_size": 1.0, "gold": 4140, "gold_per_action": 18.65, "gold_per_guild": 295.71, "guild_count": 14, "success_rate": 0.9324, "successes": 207, "xp": 18423}, "strong": {"actions": 265, "avg_roster_size": 5.0, "gold": 37959, "gold_per_action": 143.24, "gold_per_guild": 7591.8, "guild_count": 5, "success_rate": 0.6566, "successes": 174, "xp": 481831}}, "success_rate": 0.7878, "successes": 479, "xp_earned": 691523}}, "impact_parameter_sweep_baseline_1_when_no_actions": {"impact_base_and_rank_scale_0.01": {"expected_portal_rolls": 0, "first_portal_cycle_min_max": [null, null], "first_rebellion_cycle_min_max": [null, null], "portal_regions_by_cycle_100": 0, "rebellion_regions_by_cycle_100": 0}, "impact_base_and_rank_scale_0.015": {"expected_portal_rolls": 0, "first_portal_cycle_min_max": [null, null], "first_rebellion_cycle_min_max": [null, null], "portal_regions_by_cycle_100": 0, "rebellion_regions_by_cycle_100": 0}, "impact_base_and_rank_scale_0.02": {"expected_portal_rolls": 0, "first_portal_cycle_min_max": [null, null], "first_rebellion_cycle_min_max": [null, null], "portal_regions_by_cycle_100": 0, "rebellion_regions_by_cycle_100": 0}, "impact_base_and_rank_scale_0.025": {"expected_portal_rolls": 0, "first_portal_cycle_min_max": [null, null], "first_rebellion_cycle_min_max": [null, null], "portal_regions_by_cycle_100": 0, "rebellion_regions_by_cycle_100": 0}, "impact_base_and_rank_scale_0.03": {"expected_portal_rolls": 0, "first_portal_cycle_min_max": [null, null], "first_rebellion_cycle_min_max": [null, null], "portal_regions_by_cycle_100": 0, "rebellion_regions_by_cycle_100": 0}}, "no_actions_baseline1_pressure": {"bosque-ambar": {"expected_portal_rolls": 10.65, "final_security": 0, "final_threat": 100, "first_portal_eligible_cycle": 45, "first_rebellion_eligible_cycle": 60, "portal_eligible_cycles": 55, "portal_roll_probability_ignoring_active_event_suppression": 1.0}, "costa-brumas": {"expected_portal_rolls": 10.65, "final_security": 0, "final_threat": 100, "first_portal_eligible_cycle": 45, "first_rebellion_eligible_cycle": 60, "portal_eligible_cycles": 55, "portal_roll_probability_ignoring_active_event_suppression": 1.0}, "picos-norte": {"expected_portal_rolls": 10.65, "final_security": 0, "final_threat": 100, "first_portal_eligible_cycle": 45, "first_rebellion_eligible_cycle": 60, "portal_eligible_cycles": 55, "portal_roll_probability_ignoring_active_event_suppression": 1.0}, "terras-cinza": {"expected_portal_rolls": 10.65, "final_security": 0, "final_threat": 100, "first_portal_eligible_cycle": 45, "first_rebellion_eligible_cycle": 60, "portal_eligible_cycles": 55, "portal_roll_probability_ignoring_active_event_suppression": 1.0}, "vale-fronteira": {"expected_portal_rolls": 10.65, "final_security": 0, "final_threat": 100, "first_portal_eligible_cycle": 45, "first_rebellion_eligible_cycle": 60, "portal_eligible_cycles": 55, "portal_roll_probability_ignoring_active_event_suppression": 1.0}}, "offer_snapshots_by_type_and_rank": {"boss": {"A": {"avg_chance": 36.0, "avg_duration_seconds": 6600.0, "avg_gold": 4990.0, "avg_level": 306.0, "avg_power": 21267.0, "avg_xp": 25528.0, "offers": 103}, "B": {"avg_chance": 41.0, "avg_duration_seconds": 5040.0, "avg_gold": 3267.0, "avg_level": 240.0, "avg_power": 15360.0, "avg_xp": 15519.0, "offers": 114}, "C": {"avg_chance": 44.0, "avg_duration_seconds": 4500.0, "avg_gold": 2548.0, "avg_level": 170.0, "avg_power": 10412.0, "avg_xp": 11365.0, "offers": 140}, "D": {"avg_chance": 47.0, "avg_duration_seconds": 4860.0, "avg_gold": 1856.0, "avg_level": 88.0, "avg_power": 4906.0, "avg_xp": 7108.0, "offers": 89}, "E": {"avg_chance": 72.0, "avg_duration_seconds": 2340.0, "avg_gold": 191.0, "avg_level": 1.0, "avg_power": 60.0, "avg_xp": 693.0, "offers": 46}, "S": {"avg_chance": 33.0, "avg_duration_seconds": 6600.0, "avg_gold": 4990.0, "avg_level": 350.0, "avg_power": 24325.0, "avg_xp": 25528.0, "offers": 8}}, "contract": {"A": {"avg_chance": 78.3, "avg_duration_seconds": 318.89, "avg_gold": 23.15, "avg_level": 2.0, "avg_power": 13.35, "avg_xp": 102.53, "offers": 430}, "B": {"avg_chance": 80.02, "avg_duration_seconds": 298.03, "avg_gold": 21.11, "avg_level": 1.99, "avg_power": 12.47, "avg_xp": 93.86, "offers": 753}, "C": {"avg_chance": 80.53, "avg_duration_seconds": 282.1, "avg_gold": 20.05, "avg_level": 1.84, "avg_power": 11.85, "avg_xp": 90.96, "offers": 1179}, "D": {"avg_chance": 80.38, "avg_duration_seconds": 251.6, "avg_gold": 18.9, "avg_level": 1.24, "avg_power": 10.87, "avg_xp": 91.69, "offers": 1248}, "E": {"avg_chance": 81.98, "avg_duration_seconds": 226.13, "avg_gold": 17.01, "avg_level": 1.0, "avg_power": 10.0, "avg_xp": 85.07, "offers": 1330}, "S": {"avg_chance": 76.7, "avg_duration_seconds": 337.88, "avg_gold": 25.02, "avg_level": 2.0, "avg_power": 14.15, "avg_xp": 110.5, "offers": 60}}, "dungeon": {"A": {"avg_chance": 56.93, "avg_duration_seconds": 3367.51, "avg_gold": 2640.32, "avg_level": 265.36, "avg_power": 6546.15, "avg_xp": 12283.14, "offers": 113}, "B": {"avg_chance": 57.71, "avg_duration_seconds": 3286.45, "avg_gold": 2463.24, "avg_level": 243.61, "avg_power": 5826.82, "avg_xp": 11873.78, "offers": 230}, "C": {"avg_chance": 60.16, "avg_duration_seconds": 2978.54, "avg_gold": 2046.98, "avg_level": 202.56, "avg_power": 4836.56, "avg_xp": 9437.4, "offers": 336}, "D": {"avg_chance": 62.79, "avg_duration_seconds": 2709.44, "avg_gold": 1662.85, "avg_level": 154.59, "avg_power": 3606.56, "avg_xp": 7220.28, "offers": 391}, "E": {"avg_chance": 65.39, "avg_duration_seconds": 2417.74, "avg_gold": 1278.14, "avg_level": 114.43, "avg_power": 2587.13, "avg_xp": 5547.1, "offers": 423}, "S": {"avg_chance": 58.14, "avg_duration_seconds": 3274.14, "avg_gold": 2303.29, "avg_level": 250.0, "avg_power": 6404.86, "avg_xp": 11925.14, "offers": 7}}}, "offers_and_cpu_outcomes_by_rank": {"A": {"avg_chance": 67.81, "avg_duration_seconds": 1853.64, "avg_gold": 1272.88, "avg_level": 96.54, "avg_power": 4544.82, "avg_xp": 6287.1, "chance": 43808, "cpu_actions": 135, "cpu_gold": 21204, "cpu_success_rate": 0.8, "cpu_successes": 108, "cpu_xp": 185942, "duration_seconds": 1197452, "expected_chance_points": 10452, "expected_success_rate": 0.7742, "gold": 822281, "level": 62363, "offers": 646, "power": 2935956, "success_rate_minus_expected": 0.0258, "xp": 4061465}, "B": {"avg_chance": 71.29, "avg_duration_seconds": 1417.38, "avg_gold": 870.45, "avg_level": 77.38, "avg_power": 2826.43, "avg_xp": 4166.65, "chance": 78204, "cpu_actions": 166, "cpu_gold": 13071, "cpu_success_rate": 0.759, "cpu_successes": 126, "cpu_xp": 150119, "duration_seconds": 1554862, "expected_chance_points": 13315, "expected_success_rate": 0.8021, "gold": 954882, "level": 84890, "offers": 1097, "power": 3100598, "success_rate_minus_expected": -0.0431, "xp": 4570814}, "C": {"avg_chance": 73.31, "avg_duration_seconds": 1186.34, "avg_gold": 645.4, "avg_level": 56.81, "avg_power": 1871.14, "avg_xp": 2942.18, "chance": 121323, "cpu_actions": 150, "cpu_gold": 9568, "cpu_success_rate": 0.78, "cpu_successes": 117, "cpu_xp": 130363, "duration_seconds": 1963388, "expected_chance_points": 11636, "expected_success_rate": 0.7757, "gold": 1068145, "level": 94026, "offers": 1655, "power": 3096739, "success_rate_minus_expected": 0.0043, "xp": 4869302}, "D": {"avg_chance": 74.68, "avg_duration_seconds": 1045.1, "avg_gold": 485.5, "avg_level": 40.41, "avg_power": 1076.6, "avg_xp": 2066.07, "chance": 129044, "cpu_actions": 135, "cpu_gold": 12051, "cpu_success_rate": 0.8444, "cpu_successes": 114, "cpu_xp": 102281, "duration_seconds": 1805927, "expected_chance_points": 11394, "expected_success_rate": 0.844, "gold": 838948, "level": 69821, "offers": 1728, "power": 1860368, "success_rate_minus_expected": 0.0004, "xp": 3570174}, "E": {"avg_chance": 77.83, "avg_duration_seconds": 795.49, "avg_gold": 317.99, "avg_level": 27.67, "avg_power": 617.24, "avg_xp": 1384.9, "chance": 140013, "cpu_actions": 8, "cpu_gold": 424, "cpu_success_rate": 0.25, "cpu_successes": 2, "cpu_xp": 10518, "duration_seconds": 1431091, "expected_chance_points": 381, "expected_success_rate": 0.4763, "gold": 572068, "level": 49781, "offers": 1799, "power": 1110420, "success_rate_minus_expected": -0.2263, "xp": 2491439}, "S": {"avg_chance": 70.31, "avg_duration_seconds": 1279.89, "avg_gold": 767.25, "avg_level": 62.27, "avg_power": 3203.77, "avg_xp": 3924.4, "chance": 5273, "cpu_actions": 14, "cpu_gold": 282, "cpu_success_rate": 0.8571, "cpu_successes": 12, "cpu_xp": 3262, "duration_seconds": 95992, "expected_chance_points": 1248, "expected_success_rate": 0.8914, "gold": 57544, "level": 4670, "offers": 75, "power": 240283, "success_rate_minus_expected": -0.0343, "xp": 294330}}, "rank_curves_10000_each": {"early": {"b_to_s_per_cycle": 2.47, "b_to_s_percentage": 24.68, "boss_rank_counts": {"A": 1698, "B": 2232, "C": 2788, "D": 2093, "E": 999, "S": 190}, "boss_rank_percentages": {"A": 16.98, "B": 22.32, "C": 27.88, "D": 20.93, "E": 9.99, "S": 1.9}, "cycles": 10000, "dungeon_rank_counts": {"A": 2348, "B": 4268, "C": 7037, "D": 7741, "E": 8309, "S": 297}, "dungeon_rank_percentages": {"A": 7.83, "B": 14.23, "C": 23.46, "D": 25.8, "E": 27.7, "S": 0.99}, "max_contract_rank_slots_in_cycle": 3, "offers": 100000, "rank_counts": {"A": 8770, "B": 14653, "C": 23190, "D": 25401, "E": 26731, "S": 1255}, "rank_percentages": {"A": 8.77, "B": 14.65, "C": 23.19, "D": 25.4, "E": 26.73, "S": 1.25}, "uncapped_regional_rank_counts": {"A": 7032, "B": 12127, "C": 21958, "D": 26928, "E": 30948, "S": 1007}, "uncapped_regional_rank_percentages": {"A": 7.03, "B": 12.13, "C": 21.96, "D": 26.93, "E": 30.95, "S": 1.01}}, "late": {"b_to_s_per_cycle": 5.18, "b_to_s_percentage": 51.81, "boss_rank_counts": {"A": 2735, "B": 3647, "C": 1835, "D": 685, "E": 198, "S": 900}, "boss_rank_percentages": {"A": 27.35, "B": 36.47, "C": 18.35, "D": 6.85, "E": 1.98, "S": 9.0}, "cycles": 10000, "dungeon_rank_counts": {"A": 6052, "B": 9961, "C": 6550, "D": 3659, "E": 2013, "S": 1765}, "dungeon_rank_percentages": {"A": 20.17, "B": 33.2, "C": 21.83, "D": 12.2, "E": 6.71, "S": 5.88}, "max_contract_rank_slots_in_cycle": 3, "offers": 100000, "rank_counts": {"A": 19552, "B": 26358, "C": 22752, "D": 15941, "E": 9492, "S": 5905}, "rank_percentages": {"A": 19.55, "B": 26.36, "C": 22.75, "D": 15.94, "E": 9.49, "S": 5.91}, "uncapped_regional_rank_counts": {"A": 18047, "B": 32041, "C": 22766, "D": 14092, "E": 7974, "S": 5080}, "uncapped_regional_rank_percentages": {"A": 18.05, "B": 32.04, "C": 22.77, "D": 14.09, "E": 7.97, "S": 5.08}}, "mid": {"b_to_s_per_cycle": 3.78, "b_to_s_percentage": 37.83, "boss_rank_counts": {"A": 2185, "B": 3139, "C": 2270, "D": 1196, "E": 508, "S": 702}, "boss_rank_percentages": {"A": 21.85, "B": 31.39, "C": 22.7, "D": 11.96, "E": 5.08, "S": 7.02}, "cycles": 10000, "dungeon_rank_counts": {"A": 4285, "B": 6991, "C": 6904, "D": 5649, "E": 5031, "S": 1140}, "dungeon_rank_percentages": {"A": 14.28, "B": 23.3, "C": 23.01, "D": 18.83, "E": 16.77, "S": 3.8}, "max_contract_rank_slots_in_cycle": 3, "offers": 100000, "rank_counts": {"A": 13145, "B": 21371, "C": 21922, "D": 20101, "E": 20150, "S": 3311}, "rank_percentages": {"A": 13.14, "B": 21.37, "C": 21.92, "D": 20.1, "E": 20.15, "S": 3.31}, "uncapped_regional_rank_counts": {"A": 12176, "B": 21930, "C": 23067, "D": 19711, "E": 20092, "S": 3024}, "uncapped_regional_rank_percentages": {"A": 12.18, "B": 21.93, "C": 23.07, "D": 19.71, "E": 20.09, "S": 3.02}}}, "rank_template_correlation_10000_cycles_each": {"boss": {"A": {"avg_level": 306.0, "avg_power": 21267.0, "offers": 1690}, "B": {"avg_level": 240.0, "avg_power": 15360.0, "offers": 2202}, "C": {"avg_level": 170.0, "avg_power": 10412.0, "offers": 2770}, "D": {"avg_level": 88.0, "avg_power": 4906.0, "offers": 2109}, "E": {"avg_level": 1.0, "avg_power": 60.0, "offers": 1022}, "S": {"avg_level": 350.0, "avg_power": 24325.0, "offers": 207}}, "contract": {"A": {"avg_level": 2.0, "avg_power": 13.37, "offers": 8766}, "B": {"avg_level": 1.99, "avg_power": 12.46, "offers": 14596}, "C": {"avg_level": 1.84, "avg_power": 11.86, "offers": 23134}, "D": {"avg_level": 1.24, "avg_power": 10.85, "offers": 25440}, "E": {"avg_level": 1.0, "avg_power": 10.01, "offers": 26819}, "S": {"avg_level": 2.0, "avg_power": 14.07, "offers": 1245}}, "dungeon": {"A": {"avg_level": 257.68, "avg_power": 6261.86, "offers": 2407}, "B": {"avg_level": 235.19, "avg_power": 5680.32, "offers": 4314}, "C": {"avg_level": 203.36, "avg_power": 4871.02, "offers": 6852}, "D": {"avg_level": 158.97, "avg_power": 3722.59, "offers": 7757}, "E": {"avg_level": 110.77, "avg_power": 2499.8, "offers": 8358}, "S": {"avg_level": 264.12, "avg_power": 6541.27, "offers": 312}}}, "regional_impact_by_rank": {"A": 0.12, "B": 0.1, "C": 0.08, "D": 0.06, "E": 0.04, "S": 0.14}, "regional_state_100_cycles": {"influence_min_max": [52, 74], "regions": 5, "security_min_max": [22.08, 37.58], "threat_min_max": [37.42, 52.92]}}
+OK

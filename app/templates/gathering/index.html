@@ -29,9 +29,15 @@
         <article class="panel gathering-card">
           <div class="gathering-card__heading"><span class="eyebrow">{{ node }}</span><h2>{{ label }}</h2></div>
           {% if assignment %}
-            <p class="gathering-status">Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
+            {% if assignment.capacity_paused %}
+              <p class="gathering-status" role="status">Pausada · Armazém cheio · <strong>{{ assignment.mercenary.name }}</strong></p>
+              <p>Libere espaço no Armazém para retomar a produção. O tempo em pausa não acumula ciclos.</p>
+              <a class="secondary-button" href="{{ inventory_url }}">Abrir inventário e liberar espaço</a>
+            {% else %}
+              <p class="gathering-status">Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
+              <p class="gathering-progress">Próximo ciclo em {{ 60 - assignment.progress_seconds }} s</p>
+            {% endif %}
             <p>1 unidade por ciclo de 60 s{% if assignment.extra_chance %} · +{{ assignment.extra_chance }}% de chance para 1 extra{% endif %}</p>
-            <p class="gathering-progress">Próximo ciclo em {{ 60 - assignment.progress_seconds }} s</p>
             <form method="post" action="/gathering/release/{{ assignment.id }}">
               <button class="secondary-button" type="submit">Liberar trabalhador</button>
             </form>

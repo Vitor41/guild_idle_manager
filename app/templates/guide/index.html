@@ -90,7 +90,7 @@
     <div class="guide-building-grid">
       <article><span>⌂</span><h3>Alojamento</h3><p>Controla a capacidade do elenco. Evolua antes de planejar uma grande contratação.</p></article>
       <article><span>⚔</span><h3>Campo de Treino</h3><p>Acelera XP e participa dos requisitos para evoluções de classe.</p><small>Bônus atual: +{{ building_bonuses.xp_bonus_percent }}% XP</small></article>
-      <article><span>⚒</span><h3>Ferreiro</h3><p>No nível 1, abre a oficina, as receitas rotativas e uma bancada de desmontagem. A segunda bancada chega no nível 25 e a terceira no 50. O refino de equipamentos começa no nível 10.</p><small>Bônus atual: +{{ building_bonuses.equipment_drop_bonus_percent }}%</small></article>
+      <article><span>⚒</span><h3>Ferreiro</h3><p>No nível 1, abre a oficina, as receitas rotativas e uma bancada de desmontagem. A segunda bancada chega no nível 25 e a terceira no 50. O refino de equipamentos começa no nível 10. O total de ouro de cada receita aparece na oficina e é o valor exato debitado; ele pode variar com as ofertas e o nível das Docas quando isso impede lucro garantido ao revender o resultado.</p><small>Bônus atual: +{{ building_bonuses.equipment_drop_bonus_percent }}%</small></article>
       <article><span>▣</span><h3>Armazém</h3><p>Adiciona uma quantidade fixa ao material principal obtido e também contribui para a produção offline.</p><small>Bônus atual: +{{ building_bonuses.material_quantity_bonus }} materiais principais</small></article>
       <article><span>✦</span><h3>Escritório de Missões</h3><p>Permite organizar grupos maiores para desafios que exigem mais membros.</p><small>Grupo atual: até {{ building_bonuses.max_mission_party_size }}</small></article>
       <article><span>◇</span><h3>Exploradores</h3><p>Abre Masmorras e libera multiplicadores que trocam mais tempo por mais recompensas.</p><small>Multiplicador atual: {{ building_bonuses.max_run_multiplier }}x</small></article>
@@ -116,7 +116,7 @@
     </div>
     <div class="guide-note-grid">
       <article><h3>Tier e raridade</h3><p>Tier indica a faixa estrutural do item; raridade representa sua qualidade. Dois itens do mesmo Tier podem ter raridades, bônus gerados e valor bem diferentes.</p></article>
-      <article><h3>Docas e Mercado</h3><p>As Docas ajudam a encontrar recursos e equipamentos rotativos. O Mercado converte excedentes em ouro, mas ocupa espaços até a venda ser coletada.</p></article>
+      <article><h3>Docas e Mercado</h3><p>As Docas ajudam a encontrar recursos e equipamentos rotativos. O Mercado converte excedentes em ouro e ocupa espaços até a venda ser coletada. Materiais vendidos contam para uma janela móvel de 24 horas, desde o início do anúncio; anúncios ativos também contam. No Mercado 1, a cota é 25 unidades; sobe 5 nos níveis 5, 10, 15 e assim por diante (L1–4: 25; L5–9: 30; L10–14: 35; L100: 125). Unidades voltam a ser liberadas depois de cada anúncio completar 24 horas desde o início.</p></article>
       <article><h3>Multiplicadores</h3><p>Multiplicar uma atividade aumenta tempo e recompensas sem elevar a chance de sucesso. Use quando confiar no grupo e quiser reduzir interações.</p></article>
       <article><h3>Desmontagem no Ferreiro</h3><p>Equipamentos livres podem virar materiais de sua composição: madeira, minério, couro, tecido ou gemas. Cada item retorna de 1 a 3 unidades; quantidade, custo e tempo crescem juntos. O equipamento e seus aprimoramentos são consumidos ao iniciar, então compare essa escolha com a venda no Mercado.</p></article>
     </div>

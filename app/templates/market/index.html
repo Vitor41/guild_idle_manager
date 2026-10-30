@@ -12,11 +12,13 @@
 
   <section class="panel market-overview">
     <dl class="inline-stats">
-      <div><dt>Nivel do Mercado</dt><dd>{{ market.level }}</dd></div>
-      <div><dt>Espacos</dt><dd>{{ active_sales|length }}/{{ market.slots }}</dd></div>
-      <div><dt>Reducao de tempo</dt><dd>{{ market.time_reduction_percent }}%</dd></div>
-      <div><dt>Bonus de valor</dt><dd>{{ market.value_bonus_percent }}%</dd></div>
+      <div><dt>Nível do Mercado</dt><dd>{{ market.level }}</dd></div>
+      <div><dt>Espaços</dt><dd>{{ active_sales|length }}/{{ market.slots }}</dd></div>
+      <div><dt>Redução de tempo</dt><dd>{{ market.time_reduction_percent }}%</dd></div>
+      <div><dt>Bônus de valor</dt><dd>{{ market.value_bonus_percent }}%</dd></div>
     </dl>
+    <p class="market-quota-primary"><strong>Materiais: {{ material_sale_quota.used }}/{{ material_sale_quota.limit }} unidades usadas · {{ material_sale_quota.remaining }} restantes</strong></p>
+    <p class="note market-quota-detail">A janela móvel considera cada anúncio iniciado nas últimas 24 horas, mesmo que ainda esteja à venda. O Mercado 1 libera 25 unidades; a cota sobe 5 nos níveis 5, 10, 15 e assim por diante (L1–4: 25; L5–9: 30). Espaços de venda também dependem do nível do Mercado.{% if material_sale_quota.next_release_at %} Próximas unidades liberadas a partir de {{ material_sale_quota.next_release_at.strftime('%d/%m às %H:%M UTC') }}.{% endif %}</p>
   </section>
 
   <section class="panel" aria-labelledby="active-sales-title">
@@ -31,12 +33,12 @@
   </section>
 
   <div class="market-columns">
-    <section class="panel"><h2>Materiais e acumulaveis</h2>
+    <section class="panel"><h2>Materiais e acumuláveis</h2>
       {% if inventory_items %}<div class="market-catalog">{% for item in inventory_items %}
         <article class="market-item-row rarity-{{ item.item_template.rarity }}">
           <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ item.item_template.icon_group or '' }}" data-desktop-item-slot="{{ item.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ item.item_template.material_family or '' }}">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
-          <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Disponivel: {{ item.quantity }} | {{ item.item_template.base_sell_value }} ouro/un.</small></div>
-          <form class="inline-form" method="post" action="/market/sell/material"><input type="hidden" name="item_template_id" value="{{ item.item_template_id }}"><input type="number" name="quantity" min="1" max="{{ item.quantity }}" value="1" aria-label="Quantidade"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button></form>
+          <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Disponível: {{ item.quantity }} | {{ item.item_template.base_sell_value }} ouro/un.</small></div>
+          <div class="market-item-action"><form class="inline-form" method="post" action="/market/sell/material"><input type="hidden" name="item_template_id" value="{{ item.item_template_id }}"><input type="number" name="quantity" min="1" max="{{ [item.quantity, material_sale_quota.remaining]|min }}" value="1" aria-label="Quantidade"><button {% if market.level == 0 or active_sales|length >= market.slots or material_sale_quota.remaining < 1 %}disabled{% endif %}>Vender</button></form>{% if active_sales|length >= market.slots %}<small>Indisponível: todos os espaços de venda estão ocupados.</small>{% endif %}{% if material_sale_quota.remaining < 1 %}<small>Indisponível: cota de materiais esgotada.</small>{% endif %}</div>
         </article>
       {% endfor %}</div>{% else %}<p class="note">Nenhum item acumulavel disponivel.</p>{% endif %}
     </section>

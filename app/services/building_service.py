@@ -141,7 +141,6 @@ EFFECT_LABELS = {
     "market": "Mercado",
 }
 
-
 def get_effect_label(effect_type: str) -> str:
     return EFFECT_LABELS.get(effect_type, effect_type)
 
@@ -244,7 +243,8 @@ def get_upgrade_cost(building: GuildBuilding) -> dict[str, int]:
     template = building.building_template
     if template.effect_type in {"housing", "tavern"} and building.level == 0:
         return {"gold": 10, "wood": 0, "ore": 0, "crystals": 0}
-    multiplier = building_cost_factor(building.level + 1)
+    next_level = building.level + 1
+    multiplier = building_cost_factor(next_level)
     return {
         "gold": ceil(template.base_upgrade_gold_cost * multiplier),
         "wood": ceil(template.base_upgrade_wood_cost * multiplier),
@@ -267,6 +267,8 @@ def upgrade_guild_building(
     guild: Guild,
     resources: GuildResources | None,
     building_id: int,
+    *,
+    commit: bool = True,
 ) -> GuildBuilding:
     if resources is None:
         raise BuildingError("Recursos da guilda indisponiveis.")
@@ -297,8 +299,11 @@ def upgrade_guild_building(
     db.add(resources)
     db.add(building)
     db.add(guild)
-    db.commit()
-    db.refresh(building)
+    if commit:
+        db.commit()
+        db.refresh(building)
+    else:
+        db.flush()
     return building
 
 

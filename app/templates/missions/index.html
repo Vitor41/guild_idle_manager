@@ -117,7 +117,7 @@
                   {% for mercenary in mission_mercenaries[mission.id] %}
                     {% set chance = mission_chances[mission.id][mercenary.id] %}
                     <label class="merc-choice rarity-{{ mercenary.rarity }}">
-                      <input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}">
+                      <input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}" {% if mercenary.id|string in selected_start_mercenary_ids %}checked{% endif %}>
                       <span class="choice-avatar rarity-{{ mercenary.rarity }}">{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="{{ mercenary.class_label }}">{% else %}{{ mercenary.name[:1] }}{% endif %}</span>
                       <span>
                         <strong>{{ mercenary.name }} <span class="merc-level">Nv. {{ mercenary.level }}</span></strong>

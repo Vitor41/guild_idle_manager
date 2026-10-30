@@ -146,6 +146,8 @@ def start_salvage(
     slot_number: str,
     item_template_id: str,
     quantity: str,
+    *,
+    commit: bool = True,
 ) -> GuildSalvageJob:
     if resources is None:
         raise SalvageError("Recursos da guilda indisponíveis.")
@@ -199,15 +201,20 @@ def start_salvage(
         delete_item_instance(db, item)
     db.add(locked_resources)
     try:
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
     except IntegrityError as exc:
-        db.rollback()
+        if commit:
+            db.rollback()
         raise SalvageError("Este espaço acabou de ser ocupado. Atualize e tente outro.") from exc
-    db.refresh(job)
+    if commit:
+        db.refresh(job)
     return job
 
 
-def collect_salvage(db: Session, guild: Guild, job_id: str) -> GuildSalvageJob:
+def collect_salvage(db: Session, guild: Guild, job_id: str, *, commit: bool = True) -> GuildSalvageJob:
     try:
         parsed_job_id = int(job_id)
     except (TypeError, ValueError) as exc:
@@ -228,6 +235,9 @@ def collect_salvage(db: Session, guild: Guild, job_id: str) -> GuildSalvageJob:
     job.status = "completed"
     job.collected_at = now
     db.add(job)
-    db.commit()
-    db.refresh(job)
+    if commit:
+        db.commit()
+        db.refresh(job)
+    else:
+        db.flush()
     return job
