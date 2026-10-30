@@ -1,4 +1,8 @@
-param([string]$OutputRoot)
+param(
+    [string]$OutputRoot,
+    [ValidateSet('DEV', 'stable', 'beta')]
+    [string]$Channel = 'DEV'
+)
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -54,29 +58,30 @@ if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
 & $python -m PyInstaller --noconfirm --clean --distpath $buildRoot --workpath (Join-Path $buildRoot 'pyinstaller-work') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminou com codigo $LASTEXITCODE" }
 
-$packageRoot = Join-Path $buildRoot 'GuildIdleManager-DEV'
+$packageRoot = Join-Path $buildRoot "GuildIdleManager-$Channel"
 $packageRoot = Assert-ContainedNoReparsePoint $stagingRoot $packageRoot
 if (Test-Path -LiteralPath $packageRoot) { Remove-Item -LiteralPath $packageRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $packageRoot | Out-Null
 Copy-Item -LiteralPath (Join-Path $buildRoot 'GuildIdleManager') -Destination $packageRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $repo 'packaging\desktop\Install-Desktop-Dev.ps1') -Destination $packageRoot
 Copy-Item -LiteralPath (Join-Path $repo 'docs\DEV_DESKTOP.md') -Destination $packageRoot
-$zip = Join-Path $buildRoot 'GuildIdleManager-DEV.zip'
+$zipName = "GuildIdleManager-$Channel.zip"
+$zip = Join-Path $buildRoot $zipName
 $zip = Assert-ContainedNoReparsePoint $stagingRoot $zip
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $zip -CompressionLevel Optimal
-Write-Output "Pacote DEV criado: $zip"
+Write-Output "Pacote $Channel criado: $zip"
 
-$installerName = 'GuildIdleManager-DEV-Setup.exe'
+$installerName = "GuildIdleManager-$Channel-Setup.exe"
 $installer = Join-Path $buildRoot $installerName
 $installer = Assert-ContainedNoReparsePoint $stagingRoot $installer
 $iexpressSource = Join-Path $env:TEMP ("gim_iexpress_" + [Guid]::NewGuid().ToString('N'))
 $tempRoot = [System.IO.Path]::GetFullPath($env:TEMP)
 $iexpressSource = Assert-ContainedNoReparsePoint $tempRoot $iexpressSource
 New-Item -ItemType Directory -Path $iexpressSource | Out-Null
-Copy-Item -LiteralPath $zip -Destination (Join-Path $iexpressSource 'GuildIdleManager-DEV.zip')
+Copy-Item -LiteralPath $zip -Destination (Join-Path $iexpressSource $zipName)
 Copy-Item -LiteralPath (Join-Path $repo 'packaging\desktop\Install-Desktop-Dev.ps1') -Destination $iexpressSource
-$sedPath = Join-Path $iexpressSource 'GuildIdleManager-DEV.sed'
+$sedPath = Join-Path $iexpressSource "GuildIdleManager-$Channel.sed"
 $installerTemp = Join-Path $iexpressSource $installerName
 $sed = @"
 [Version]
@@ -106,12 +111,12 @@ InstallPrompt=
 DisplayLicense=
 FinishMessage=
 TargetName=$installerTemp
-FriendlyName=Guild Idle Manager DEV
-AppLaunched=powershell.exe -NoProfile -ExecutionPolicy Bypass -File Install-Desktop-Dev.ps1
+FriendlyName=Guild Idle Manager $Channel
+AppLaunched=powershell.exe -NoProfile -ExecutionPolicy Bypass -File Install-Desktop-Dev.ps1 -Channel $Channel
 PostInstallCmd=<None>
 AdminQuietInstCmd=
 UserQuietInstCmd=
-FILE0="GuildIdleManager-DEV.zip"
+FILE0="$zipName"
 FILE1="Install-Desktop-Dev.ps1"
 [SourceFiles]
 SourceFiles0=$iexpressSource
@@ -162,5 +167,5 @@ Move-Item -LiteralPath $installerTemp -Destination $installer
 Assert-ContainedNoReparsePoint $distRoot $installer | Out-Null
 Assert-ContainedNoReparsePoint $tempRoot $iexpressSource | Out-Null
 Remove-Item -LiteralPath $iexpressSource -Recurse -Force
-Write-Output "Instalador Windows DEV criado: $installer"
+Write-Output "Instalador Windows $Channel criado: $installer"
 Write-Output "Pasta de staging preservada: $buildRoot"
