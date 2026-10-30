@@ -5,7 +5,16 @@
   <p class="eyebrow">VERSÃO LOCAL</p>
   <h1 id="updates-title">Atualizações</h1>
   <p>Esta instalação está na versão <strong>{{ release_version }}</strong>.</p>
-  {% if request.app.state.app_mode == 'desktop' %}
+  {% if request.app.state.app_mode == 'desktop' and is_packaged %}
+  <h2>Aplicativo instalado</h2>
+  <p>Esta cópia não verifica nem baixa atualizações automaticamente. A disponibilidade de uma versão nova é desconhecida porque não há feed configurado neste pacote.</p>
+  <ol>
+    <li>Obtenha o novo <code>GuildIdleManager-DEV-Setup.exe</code> pelo mesmo canal que forneceu esta instalação.</li>
+    <li>Feche completamente o jogo e execute o Setup sobre a instalação DEV gerenciada existente.</li>
+    <li>Não remova a pasta de dados: os saves ficam em <code>%LOCALAPPDATA%\GuildIdleManager\saves</code>.</li>
+  </ol>
+  <p class="note">O instalador DEV copia os arquivos novos para uma pasta temporária e troca a pasta do aplicativo depois de verificar o pacote. A instalação atual só aceita instalações DEV gerenciadas. Não existe instalador de produção/feed assinado neste projeto.</p>
+  {% elif request.app.state.app_mode == 'desktop' %}
   <h2>Canal local de desenvolvimento</h2>
   <p>O modo DEV executa o checkout do projeto diretamente. Inicie com <code>Iniciando_jogo_dev.bat</code>; reinicie o processo para carregar mudanças Python. Para Jinja, CSS e JavaScript, recarregue a janela com <kbd>Ctrl</kbd>+<kbd>R</kbd>. Esse fluxo não reinstala o aplicativo e usa o perfil local existente.</p>
   <button type="button" data-check-local-update>Verificar versão do checkout</button>

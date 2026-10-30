@@ -26,7 +26,13 @@ def updates(request: Request, db: DbSession, current_user=Depends(get_current_pl
     return templates.TemplateResponse(
         request=request,
         name="updates.html",
-        context={"current_user": current_user, "guild": guild, "resources": resources, "release_version": request.app.version},
+        context={
+            "current_user": current_user,
+            "guild": guild,
+            "resources": resources,
+            "release_version": request.app.version,
+            "is_packaged": getattr(sys, "frozen", False),
+        },
     )
 
 
@@ -36,10 +42,16 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
         return JSONResponse({"channel": "unavailable", "available": False, "reason": "Abra uma campanha para consultar atualizações."}, status_code=401)
     if settings.app_env != "local" or getattr(sys, "frozen", False):
         return JSONResponse({
-            "channel": "production",
+            "channel": "installed",
             "current_version": request.app.version,
-            "available": False,
-            "reason": "Esta distribuição não possui feed oficial assinado. Atualizações chegam por um instalador revisado.",
+            "available": None,
+            "reason": "Este pacote não consulta um feed; a disponibilidade de uma versão nova é desconhecida.",
+            "manual_action": (
+                "Obtenha o novo GuildIdleManager-DEV-Setup.exe pelo mesmo canal que forneceu esta instalação, "
+                "feche completamente o jogo e execute o Setup sobre a instalação DEV existente. "
+                "O Setup gerenciado substitui apenas os arquivos do aplicativo; os saves ficam em "
+                "%LOCALAPPDATA%\\GuildIdleManager\\saves."
+            ),
         })
     version_path = SOURCE_ROOT / "app" / "core" / "version.py"
     try:
