@@ -1,8 +1,9 @@
 import ast
 from pathlib import Path
 import sys
+import threading
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.core.config import settings
@@ -32,8 +33,51 @@ def updates(request: Request, db: DbSession, current_user=Depends(get_current_pl
             "resources": resources,
             "release_version": request.app.version,
             "is_packaged": getattr(sys, "frozen", False),
+            "can_restart_local_checkout": (
+                request.app.state.app_mode == "desktop"
+                and settings.app_env == "local"
+                and not getattr(sys, "frozen", False)
+            ),
         },
     )
+
+
+def _local_checkout_update_status(request: Request) -> dict[str, object]:
+    version_path = SOURCE_ROOT / "app" / "core" / "version.py"
+    try:
+        syntax = ast.parse(version_path.read_text(encoding="utf-8"), filename=str(version_path))
+        assignment = next(
+            node for node in syntax.body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "APP_VERSION" for target in node.targets)
+        )
+        disk_version = ast.literal_eval(assignment.value)
+        if not isinstance(disk_version, str):
+            raise ValueError("APP_VERSION deve ser texto.")
+        running = tuple(int(part) for part in request.app.version.split("."))
+        available = tuple(int(part) for part in disk_version.split("."))
+        is_newer = len(running) == len(available) and available > running
+    except (OSError, SyntaxError, StopIteration, ValueError, TypeError):
+        return {
+            "channel": "dev-local",
+            "current_version": request.app.version,
+            "available": False,
+            "reason": "Não foi possível ler uma versão local válida do checkout.",
+        }
+    return {
+        "channel": "dev-local",
+        "current_version": request.app.version,
+        "available_version": disk_version,
+        "available": is_newer,
+        "apply_action": "Reiniciar e aplicar a versão já presente no checkout." if is_newer else None,
+        "reason": "Checkout local já está nesta versão." if not is_newer else None,
+    }
+
+
+def _schedule_local_checkout_restart(callback) -> None:
+    timer = threading.Timer(0.75, callback)
+    timer.daemon = True
+    timer.start()
 
 
 @router.get("/updates/check")
@@ -53,32 +97,36 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
                 "%LOCALAPPDATA%\\GuildIdleManager\\saves."
             ),
         })
-    version_path = SOURCE_ROOT / "app" / "core" / "version.py"
-    try:
-        syntax = ast.parse(version_path.read_text(encoding="utf-8"), filename=str(version_path))
-        assignment = next(
-            node for node in syntax.body
-            if isinstance(node, ast.Assign)
-            and any(isinstance(target, ast.Name) and target.id == "APP_VERSION" for target in node.targets)
-        )
-        disk_version = ast.literal_eval(assignment.value)
-        if not isinstance(disk_version, str):
-            raise ValueError("APP_VERSION deve ser texto.")
-        running = tuple(int(part) for part in request.app.version.split("."))
-        available = tuple(int(part) for part in disk_version.split("."))
-        is_newer = len(running) == len(available) and available > running
-    except (OSError, SyntaxError, StopIteration, ValueError, TypeError):
-        return JSONResponse({
-            "channel": "dev-local",
-            "current_version": request.app.version,
-            "available": False,
-            "reason": "Não foi possível ler uma versão local válida do checkout.",
-        })
+    return JSONResponse(_local_checkout_update_status(request))
+
+
+@router.post("/updates/apply-local")
+def apply_local_checkout_update(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user=Depends(get_current_player),
+):
+    if current_user is None:
+        return JSONResponse({"reason": "Abra uma campanha para aplicar a versão local."}, status_code=401)
+    if (
+        request.app.state.app_mode != "desktop"
+        or settings.app_env != "local"
+        or getattr(sys, "frozen", False)
+    ):
+        return JSONResponse({"reason": "A ação só está disponível no checkout desktop local."}, status_code=404)
+
+    status = _local_checkout_update_status(request)
+    if not status.get("available"):
+        return JSONResponse(status, status_code=409)
+    restart_callback = getattr(request.app.state, "request_local_checkout_restart", None)
+    if not callable(restart_callback):
+        return JSONResponse({"reason": "O launcher não disponibilizou o reinício gracioso."}, status_code=503)
+
+    background_tasks.add_task(_schedule_local_checkout_restart, restart_callback)
     return JSONResponse({
         "channel": "dev-local",
+        "restarting": True,
         "current_version": request.app.version,
-        "available_version": disk_version,
-        "available": is_newer,
-        "apply_action": "Feche o jogo e reinicie Iniciando_jogo_dev.bat; use Ctrl+R somente para Jinja, CSS e JavaScript." if is_newer else None,
-        "reason": "Checkout local já está nesta versão." if not is_newer else None,
+        "available_version": status["available_version"],
+        "reason": "A janela será fechada e o checkout local reiniciado.",
     })

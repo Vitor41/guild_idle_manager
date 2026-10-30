@@ -16,30 +16,60 @@
   <p class="note">O instalador DEV copia os arquivos novos para uma pasta temporária e troca a pasta do aplicativo depois de verificar o pacote. A instalação atual só aceita instalações DEV gerenciadas. Não existe instalador de produção/feed assinado neste projeto.</p>
   {% elif request.app.state.app_mode == 'desktop' %}
   <h2>Canal local de desenvolvimento</h2>
-  <p>O modo DEV executa o checkout do projeto diretamente. Inicie com <code>Iniciando_jogo_dev.bat</code>; reinicie o processo para carregar mudanças Python. Para Jinja, CSS e JavaScript, recarregue a janela com <kbd>Ctrl</kbd>+<kbd>R</kbd>. Esse fluxo não reinstala o aplicativo e usa o perfil local existente.</p>
+  <p>O modo DEV executa este checkout diretamente. A verificação compara a versão carregada com <code>APP_VERSION</code> nos arquivos que já estão no disco; não baixa código nem faz <code>git pull</code>.</p>
+  {% if can_restart_local_checkout %}
   <button type="button" data-check-local-update>Verificar versão do checkout</button>
+  <button type="button" data-apply-local-update hidden>Reiniciar e aplicar versão do projeto</button>
   <p role="status" aria-live="polite" data-local-update-status>Verificação local; nenhuma conexão remota será aberta.</p>
   <script>
+    const checkButton = document.querySelector('[data-check-local-update]');
+    const applyButton = document.querySelector('[data-apply-local-update]');
+    const status = document.querySelector('[data-local-update-status]');
+
     document.querySelector('[data-check-local-update]')?.addEventListener('click', async (event) => {
-      const button = event.currentTarget;
-      const status = document.querySelector('[data-local-update-status]');
-      button.disabled = true;
+      checkButton.disabled = true;
+      applyButton.hidden = true;
       status.textContent = 'Lendo a versão do checkout local…';
       try {
         const response = await fetch('/updates/check', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
         const result = await response.json();
         if (!response.ok) throw new Error(result.reason || 'Verificação indisponível.');
+        applyButton.hidden = !result.available;
         status.textContent = result.available
-          ? `Versão local ${result.available_version} disponível. ${result.apply_action}`
+          ? `Versão ${result.available_version} já está no checkout. Reinicie para carregá-la.`
           : (result.reason || `Checkout local na versão ${result.current_version}.`);
       } catch (error) {
+        applyButton.hidden = true;
         status.textContent = error.message || 'Não foi possível verificar a versão local.';
       } finally {
-        button.disabled = false;
+        checkButton.disabled = false;
+      }
+    });
+
+    applyButton?.addEventListener('click', async () => {
+      applyButton.disabled = true;
+      checkButton.disabled = true;
+      status.textContent = 'Fechando com segurança e reiniciando o checkout local…';
+      try {
+        const response = await fetch('/updates/apply-local', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || 'Não foi possível reiniciar o checkout.');
+        status.textContent = 'Reiniciando para carregar a versão já presente no projeto…';
+      } catch (error) {
+        status.textContent = error.message || 'Não foi possível reiniciar o checkout local.';
+        applyButton.disabled = false;
+        checkButton.disabled = false;
       }
     });
   </script>
+  {% else %}
+  <p>O reinício automático só fica disponível no checkout desktop local. Atualizações de produção dependem de um pacote e canal de distribuição configurados.</p>
   {% endif %}
-  <p class="note">O aplicativo ainda não consulta um canal de lançamentos nem baixa pacotes. Atualizações de produção dependem de uma distribuição revisada do jogo; seus dados de campanha ficam no perfil local.</p>
+  {% endif %}
+  <p class="note">No checkout DEV, reiniciar carrega os arquivos já presentes no projeto e preserva o fluxo normal de encerramento. Para jogadores, distribuição de versão continua dependendo de endpoint/feed ou canal externo e pacote publicado; reiniciar uma instalação empacotada não a atualiza. Os dados de campanha ficam no perfil local.</p>
 </section>
 {% endblock %}

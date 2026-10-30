@@ -4,15 +4,15 @@ Versão local atual: `0.2.0` (`app/core/version.py`, também publicada como `Fas
 
 ## DEV a partir do checkout
 
-A tela `/updates` oferece **Verificar versão do checkout**. O endpoint lê o `APP_VERSION` local sem importar ou executar o arquivo; se a versão do disco for superior à carregada, a aplicação orienta fechar e reiniciar `Iniciando_jogo_dev.bat`. O launcher executa o checkout corrente; mudanças em Jinja/CSS/JS podem ser aplicadas com `Ctrl+R`, e mudanças Python exigem reiniciar o processo. Não há download do código, `git pull` nem substituição da pasta fonte enquanto está em uso.
+A tela `/updates` oferece **Verificar versão do checkout**. O endpoint lê `APP_VERSION` dos arquivos já presentes no checkout, sem importar ou executar o arquivo. Quando a versão em disco for superior à carregada, **Reiniciar e aplicar versão do projeto** solicita o fechamento da janela; o launcher encerra o servidor e executa o hook normal de shutdown/saves, libera o mutex e inicia novamente `sys.executable -m app.desktop` a partir da raiz deste checkout. Assim o processo recarrega os arquivos Python, templates, CSS e JavaScript já existentes no disco. Essa ação não busca código, não executa `git pull`, não baixa nem substitui arquivos. Não há origem Git remota configurada neste checkout. O botão não aparece no modo frozen.
 
 ## Atualizar a cópia instalada DEV
 
-Pacotes `sys.frozen` não têm feed nem atualizador: a aplicação mostra a versão empacotada e declara que não sabe se há versão mais recente. Para atualizar uma instalação DEV gerenciada, o jogador precisa receber `GuildIdleManager-DEV-Setup.exe` por um canal confiável, fechar o jogo e executar o Setup sobre a instalação DEV existente. O script atual instala os arquivos em `%LOCALAPPDATA%\Programs\GuildIdleManager` e os saves permanecem separados em `%LOCALAPPDATA%\GuildIdleManager\saves`; o script não migra nem substitui essa pasta de dados. O Setup troca os arquivos do app com staging e backup temporário, mas só aceita a instalação que contém seu marcador DEV. Este fluxo manual não foi executado nesta entrega.
+Pacotes `sys.frozen` não têm feed nem atualizador: a aplicação mostra a versão empacotada e declara que não sabe se há versão mais recente; ela não oferece a ação de reinício do checkout. Para atualizar uma instalação DEV gerenciada, é necessário receber `GuildIdleManager-DEV-Setup.exe` por um canal confiável, fechar o jogo e executar o Setup sobre a instalação DEV existente. O script atual instala os arquivos em `%LOCALAPPDATA%\Programs\GuildIdleManager` e os saves permanecem separados em `%LOCALAPPDATA%\GuildIdleManager\saves`; o script não migra nem substitui essa pasta de dados. O Setup troca os arquivos do app com staging e backup temporário, mas só aceita a instalação que contém seu marcador DEV. Este fluxo manual não foi executado nesta entrega.
 
 ## Situação
 
-O projeto não contém feed de lançamentos, manifest assinado, verificação de assinatura/checksum, pacote de produção nem serviço de instalação automática. A tela não finge que uma atualização remota foi verificada e não baixa executáveis. A distribuição precisa publicar um novo Setup DEV para o fluxo manual acima; não há URL/canal configurado para obtê-lo.
+O projeto não contém feed de lançamentos, manifest assinado, verificação de assinatura/checksum, pacote de produção nem serviço de instalação automática. A ação local reinicia o checkout já alterado no disco; ela não atualiza a fonte. Distribuição a jogadores continua pendente de definir e configurar uma origem (endpoint/feed ou canal de publicação) e publicar o pacote apropriado. Não há URL/canal configurado para obter o Setup DEV.
 
 ## Requisitos para distribuição
 
