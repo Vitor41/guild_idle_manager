@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import json
+from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -153,3 +154,18 @@ def test_bad_setup_hash_is_rejected(monkeypatch, tmp_path):
 
     assert prepared is None
     assert status["install_enabled"] is False
+
+
+def test_release_install_confirmation_uses_the_shared_accessible_dialog():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "app" / "templates" / "updates.html").read_text(encoding="utf-8")
+    main_js = (root / "app" / "static" / "js" / "main.js").read_text(encoding="utf-8")
+    launcher = (root / "app" / "desktop" / "launcher.py").read_text(encoding="utf-8")
+
+    assert "window.confirm" not in template
+    assert "data-confirm-always" in template
+    assert 'aria-haspopup="dialog" aria-controls="confirmation-dialog"' in template
+    assert "`Instalar versão ${preparedReleaseVersion}?`" in template
+    assert "!form.dataset.confirmAlways" in main_js
+    assert "O arquivo baixado foi preservado para tentativa manual" in launcher
+    assert "Motivo: $($_.Exception.Message)" in launcher

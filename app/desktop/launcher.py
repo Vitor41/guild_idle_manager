@@ -172,7 +172,7 @@ try {
 } catch {
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show(
-        "Não foi possível abrir o Setup validado. O arquivo foi mantido em:`n$setup`n`n$_",
+        "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)",
         'Guild Idle Manager', 'OK', 'Error'
     ) | Out-Null
 } finally {
@@ -284,7 +284,9 @@ def run() -> None:
                 logging.exception("Could not start the verified Setup handoff")
                 ctypes.windll.user32.MessageBoxW(
                     0,
-                    f"Não foi possível preparar a abertura do Setup verificado: {exc}",
+                    "Não foi possível preparar a abertura do Setup verificado. "
+                    f"O arquivo baixado foi preservado para tentativa manual em:\n{installer_path}\n\n"
+                    f"Motivo: {exc}",
                     "Guild Idle Manager",
                     0x10,
                 )

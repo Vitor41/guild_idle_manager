@@ -223,7 +223,7 @@ if (confirmationDialog) {
     }
 
     const preferenceKey = getConfirmationKey(form);
-    if (preferenceKey && confirmationPreferences[preferenceKey] === false) {
+    if (!form.dataset.confirmAlways && preferenceKey && confirmationPreferences[preferenceKey] === false) {
       form.dataset.confirmed = "true";
       return;
     }
