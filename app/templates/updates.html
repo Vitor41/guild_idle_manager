@@ -7,7 +7,8 @@
   <p>Esta instalação está na versão <strong>{{ release_version }}</strong>.</p>
   {% if request.app.state.app_mode == 'desktop' and is_packaged %}
   <h2>Aplicativo instalado</h2>
-  <p>Esta cópia não verifica nem baixa atualizações automaticamente. A disponibilidade de uma versão nova é desconhecida porque não há feed configurado neste pacote.</p>
+  <p>GitHub Releases foi escolhido como origem futura. Nesta versão, consulta e instalação estão desativadas.</p>
+  <p role="status" aria-live="polite">{{ github_releases_status.reason }}</p>
   <ol>
     <li>Obtenha o novo <code>GuildIdleManager-DEV-Setup.exe</code> pelo mesmo canal que forneceu esta instalação.</li>
     <li>Feche completamente o jogo e execute o Setup sobre a instalação DEV gerenciada existente.</li>

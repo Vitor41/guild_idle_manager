@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.core.config import settings
 from app.core.dependencies import DbSession, get_current_player
 from app.services.guild_service import get_current_guild_context
+from app.services.github_releases import provider_status
 
 
 router = APIRouter()
@@ -33,6 +34,7 @@ def updates(request: Request, db: DbSession, current_user=Depends(get_current_pl
             "resources": resources,
             "release_version": request.app.version,
             "is_packaged": getattr(sys, "frozen", False),
+            "github_releases_status": provider_status(),
             "can_restart_local_checkout": (
                 request.app.state.app_mode == "desktop"
                 and settings.app_env == "local"
@@ -85,11 +87,11 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
     if current_user is None:
         return JSONResponse({"channel": "unavailable", "available": False, "reason": "Abra uma campanha para consultar atualizações."}, status_code=401)
     if settings.app_env != "local" or getattr(sys, "frozen", False):
+        release_status = provider_status()
         return JSONResponse({
-            "channel": "installed",
+            **release_status,
             "current_version": request.app.version,
-            "available": None,
-            "reason": "Este pacote não consulta um feed; a disponibilidade de uma versão nova é desconhecida.",
+            "reason": release_status["reason"],
             "manual_action": (
                 "Obtenha o novo GuildIdleManager-DEV-Setup.exe pelo mesmo canal que forneceu esta instalação, "
                 "feche completamente o jogo e execute o Setup sobre a instalação DEV existente. "
