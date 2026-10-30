@@ -167,5 +167,9 @@ def test_release_install_confirmation_uses_the_shared_accessible_dialog():
     assert 'aria-haspopup="dialog" aria-controls="confirmation-dialog"' in template
     assert "`Instalar versão ${preparedReleaseVersion}?`" in template
     assert "!form.dataset.confirmAlways" in main_js
+    message_assignment = template.index("releaseInstallForm.dataset.confirmMessage =")
+    submit_listener = template.index("releaseInstallForm?.addEventListener('submit'")
+    make_button_available = template.index("releaseInstallForm.hidden = false")
+    assert message_assignment < make_button_available < submit_listener
     assert "O arquivo baixado foi preservado para tentativa manual" in launcher
     assert "Motivo: $($_.Exception.Message)" in launcher

@@ -33,6 +33,8 @@
         releaseStatus.textContent = result.reason || 'Consulta concluída.';
         if (result.install_enabled && result.available) {
           preparedReleaseVersion = result.available_version;
+          releaseInstallForm.dataset.confirmTitle = `Instalar versão ${preparedReleaseVersion}?`;
+          releaseInstallForm.dataset.confirmMessage = `Fechar o Guild Idle Manager e abrir o Setup verificado da versão ${preparedReleaseVersion}?`;
           releaseInstallButton.textContent = `Instalar versão ${preparedReleaseVersion}`;
           releaseInstallForm.hidden = false;
         }
@@ -49,8 +51,6 @@
         if (!preparedReleaseVersion) {
           return;
         }
-        releaseInstallForm.dataset.confirmTitle = `Instalar versão ${preparedReleaseVersion}?`;
-        releaseInstallForm.dataset.confirmMessage = `Fechar o Guild Idle Manager e abrir o Setup verificado da versão ${preparedReleaseVersion}?`;
         return;
       }
       event.preventDefault();
