@@ -5,6 +5,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const status = progressBox.querySelector("strong");
     const form = progressBox.closest("form");
     const startButton = form?.querySelector('button[type="submit"]:not([data-prepare-action])');
+    const supplyLabel = form?.querySelector("[data-supply-preparation-label]");
+    const supplyRow = supplyLabel?.closest(".supply-preparation");
     const startedAt = Date.parse(time?.dataset.startsAt || "");
     const endsAt = Date.parse(time?.dataset.endsAt || "");
     if (!time || !bar || !status || !Number.isFinite(endsAt)) return;
@@ -18,7 +20,12 @@ document.addEventListener("DOMContentLoaded", () => {
         bar.value = 100;
         status.textContent = "Preparação concluída · pronta para iniciar";
         time.textContent = "Concluída";
-        if (startButton) startButton.disabled = false;
+        if (supplyLabel) supplyLabel.textContent = "Preparação concluída";
+        supplyRow?.classList.add("is-prepared");
+        if (startButton) {
+          startButton.disabled = false;
+          if (startButton.dataset.readyLabel) startButton.textContent = startButton.dataset.readyLabel;
+        }
         return false;
       }
       status.textContent = "Suprimento em preparo";
