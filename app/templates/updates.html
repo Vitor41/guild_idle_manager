@@ -7,14 +7,58 @@
   <p>Esta instalação está na versão <strong>{{ release_version }}</strong>.</p>
   {% if request.app.state.app_mode == 'desktop' and is_packaged %}
   <h2>Aplicativo instalado</h2>
-  <p>GitHub Releases foi escolhido como origem futura. Nesta versão, consulta e instalação estão desativadas.</p>
-  <p role="status" aria-live="polite">{{ github_releases_status.reason }}</p>
-  <ol>
-    <li>Obtenha o novo <code>GuildIdleManager-DEV-Setup.exe</code> pelo mesmo canal que forneceu esta instalação.</li>
-    <li>Feche completamente o jogo e execute o Setup sobre a instalação DEV gerenciada existente.</li>
-    <li>Não remova a pasta de dados: os saves ficam em <code>%LOCALAPPDATA%\GuildIdleManager\saves</code>.</li>
-  </ol>
-  <p class="note">O instalador DEV copia os arquivos novos para uma pasta temporária e troca a pasta do aplicativo depois de verificar o pacote. A instalação atual só aceita instalações DEV gerenciadas. Não existe instalador de produção/feed assinado neste projeto.</p>
+  <p>O atualizador consulta releases do canal desta instalação, valida o manifesto assinado e o hash do Setup e só o abre após sua confirmação.</p>
+  <p role="status" aria-live="polite" data-release-update-status>{{ github_releases_status.reason }}</p>
+  <button type="button" data-check-release-update {% if not github_releases_status.query_enabled %}disabled{% endif %}>Verificar GitHub Releases</button>
+  <button type="button" data-install-release-update hidden>Fechar e abrir Setup verificado</button>
+  <p class="note">A consulta só acontece quando você solicita e quando a origem, chave e canal desta instalação estão configurados. O Setup atualiza os arquivos do aplicativo com staging e rollback; os saves ficam em <code>%LOCALAPPDATA%\GuildIdleManager\saves</code>.</p>
+  <script>
+    const releaseCheckButton = document.querySelector('[data-check-release-update]');
+    const releaseInstallButton = document.querySelector('[data-install-release-update]');
+    const releaseStatus = document.querySelector('[data-release-update-status]');
+    let preparedReleaseVersion = null;
+
+    releaseCheckButton?.addEventListener('click', async () => {
+      releaseCheckButton.disabled = true;
+      releaseInstallButton.hidden = true;
+      preparedReleaseVersion = null;
+      releaseStatus.textContent = 'Consultando releases e verificando assinatura e hash…';
+      try {
+        const response = await fetch('/updates/check', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || 'Consulta indisponível.');
+        releaseStatus.textContent = result.reason || 'Consulta concluída.';
+        if (result.install_enabled && result.available) {
+          preparedReleaseVersion = result.available_version;
+          releaseInstallButton.textContent = `Instalar versão ${preparedReleaseVersion}`;
+          releaseInstallButton.hidden = false;
+        }
+      } catch (error) {
+        releaseStatus.textContent = error.message || 'Não foi possível consultar GitHub Releases.';
+      } finally {
+        releaseCheckButton.disabled = false;
+      }
+    });
+
+    releaseInstallButton?.addEventListener('click', async () => {
+      if (!preparedReleaseVersion || !window.confirm(`Fechar o Guild Idle Manager e abrir o Setup verificado da versão ${preparedReleaseVersion}?`)) return;
+      releaseInstallButton.disabled = true;
+      releaseCheckButton.disabled = true;
+      releaseStatus.textContent = 'Fechando o aplicativo; o Setup validado será aberto em seguida…';
+      try {
+        const response = await fetch('/updates/install-release', {
+          method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' },
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || 'Não foi possível abrir o Setup.');
+        releaseStatus.textContent = result.reason;
+      } catch (error) {
+        releaseStatus.textContent = error.message || 'Não foi possível abrir o Setup.';
+        releaseInstallButton.disabled = false;
+        releaseCheckButton.disabled = false;
+      }
+    });
+  </script>
   {% elif request.app.state.app_mode == 'desktop' %}
   <h2>Canal local de desenvolvimento</h2>
   <p>O modo DEV executa este checkout diretamente. A verificação compara a versão carregada com <code>APP_VERSION</code> nos arquivos que já estão no disco; não baixa código nem faz <code>git pull</code>.</p>
@@ -71,6 +115,6 @@
   <p>O reinício automático só fica disponível no checkout desktop local. Atualizações de produção dependem de um pacote e canal de distribuição configurados.</p>
   {% endif %}
   {% endif %}
-  <p class="note">No checkout DEV, reiniciar carrega os arquivos já presentes no projeto e preserva o fluxo normal de encerramento. Para jogadores, distribuição de versão continua dependendo de endpoint/feed ou canal externo e pacote publicado; reiniciar uma instalação empacotada não a atualiza. Os dados de campanha ficam no perfil local.</p>
+  <p class="note">No checkout DEV, reiniciar carrega os arquivos já presentes no projeto e preserva o fluxo normal de encerramento. Em instalação empacotada, a atualização depende de releases assinadas publicadas e da configuração do canal. Os dados de campanha ficam no perfil local.</p>
 </section>
 {% endblock %}

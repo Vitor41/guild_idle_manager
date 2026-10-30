@@ -9,12 +9,20 @@ from fastapi.templating import Jinja2Templates
 from app.core.config import settings
 from app.core.dependencies import DbSession, get_current_player
 from app.services.guild_service import get_current_guild_context
-from app.services.github_releases import provider_status
+from app.services.github_releases import (
+    PreparedReleaseUpdate,
+    check_for_update,
+    cleanup_prepared_update,
+    prepared_file_is_valid,
+    provider_status,
+    read_installed_channel,
+)
 
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
+_release_update_lock = threading.Lock()
 
 
 @router.get("/updates")
@@ -34,7 +42,9 @@ def updates(request: Request, db: DbSession, current_user=Depends(get_current_pl
             "resources": resources,
             "release_version": request.app.version,
             "is_packaged": getattr(sys, "frozen", False),
-            "github_releases_status": provider_status(),
+            "github_releases_status": provider_status(
+                read_installed_channel() if getattr(sys, "frozen", False) else None
+            ),
             "can_restart_local_checkout": (
                 request.app.state.app_mode == "desktop"
                 and settings.app_env == "local"
@@ -86,6 +96,17 @@ def _schedule_local_checkout_restart(callback) -> None:
 def check_local_update(request: Request, current_user=Depends(get_current_player)):
     if current_user is None:
         return JSONResponse({"channel": "unavailable", "available": False, "reason": "Abra uma campanha para consultar atualizações."}, status_code=401)
+    if request.app.state.app_mode == "desktop" and getattr(sys, "frozen", False):
+        with _release_update_lock:
+            previous = getattr(request.app.state, "prepared_release_update", None)
+            cleanup_prepared_update(previous)
+            request.app.state.prepared_release_update = None
+            release_status, prepared = check_for_update(
+                request.app.version,
+                read_installed_channel(),
+            )
+            request.app.state.prepared_release_update = prepared
+        return JSONResponse({**release_status, "current_version": request.app.version})
     if settings.app_env != "local" or getattr(sys, "frozen", False):
         release_status = provider_status()
         return JSONResponse({
@@ -100,6 +121,49 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
             ),
         })
     return JSONResponse(_local_checkout_update_status(request))
+
+
+def _schedule_verified_update_install(callback, installer_path: Path) -> None:
+    timer = threading.Timer(0.75, callback, args=(installer_path,))
+    timer.daemon = True
+    timer.start()
+
+
+@router.post("/updates/install-release")
+def install_verified_release_update(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user=Depends(get_current_player),
+):
+    if current_user is None:
+        return JSONResponse({"reason": "Abra uma campanha para instalar a atualização."}, status_code=401)
+    if request.app.state.app_mode != "desktop" or not getattr(sys, "frozen", False):
+        return JSONResponse({"reason": "A instalação via GitHub Releases só está disponível no aplicativo instalado."}, status_code=404)
+
+    with _release_update_lock:
+        prepared: PreparedReleaseUpdate | None = getattr(request.app.state, "prepared_release_update", None)
+        if prepared is None:
+            return JSONResponse({"reason": "Verifique e valide uma atualização antes de solicitar a instalação."}, status_code=409)
+        if not prepared_file_is_valid(prepared, read_installed_channel()):
+            cleanup_prepared_update(prepared)
+            request.app.state.prepared_release_update = None
+            return JSONResponse({"reason": "O Setup preparado não corresponde mais ao hash ou canal verificado. Verifique novamente."}, status_code=409)
+        install_callback = getattr(request.app.state, "request_verified_update_install", None)
+        if not callable(install_callback):
+            return JSONResponse({"reason": "O launcher não disponibilizou a abertura segura do Setup."}, status_code=503)
+        request.app.state.prepared_release_update = None
+
+    background_tasks.add_task(
+        _schedule_verified_update_install,
+        install_callback,
+        prepared.installer_path,
+    )
+    return JSONResponse({
+        "channel": "github-releases",
+        "installing": True,
+        "version": prepared.version,
+        "reason": "O aplicativo será fechado com segurança; depois o Setup validado será aberto para confirmar a instalação.",
+    })
 
 
 @router.post("/updates/apply-local")
