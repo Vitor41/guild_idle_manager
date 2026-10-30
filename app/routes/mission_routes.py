@@ -98,6 +98,8 @@ async def start(
 ):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
+    if request.app.state.app_mode == "desktop":
+        return RedirectResponse("/regional?error=Novos%20contratos%20s%C3%A3o%20iniciados%20pela%20Vig%C3%ADlia%20Regional", status_code=303)
 
     guild, _ = get_current_guild_context(db, current_user.id)
     if guild is None:

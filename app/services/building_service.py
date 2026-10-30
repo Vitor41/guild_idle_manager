@@ -337,12 +337,9 @@ def apply_material_quantity_bonus(quantity: int, db: Session, guild_id: int, *, 
     return max(quantity, quantity + (get_material_quantity_bonus(db, guild_id) if is_primary else 0))
 
 
-def get_max_allowed_mission_party_size(db: Session, guild_id: int) -> int:
-    return mission_office_values(get_building_level(db, guild_id, "contract_office"))["party_size"]
-
-
 def are_dungeons_available(db: Session, guild_id: int) -> bool:
-    return get_building_level(db, guild_id, "scouts") >= 1
+    # The Scouts building improves dungeon outcomes; it no longer gates entry.
+    return True
 
 
 def get_max_run_multiplier(db: Session, guild_id: int) -> int:
@@ -350,11 +347,12 @@ def get_max_run_multiplier(db: Session, guild_id: int) -> int:
 
 
 def get_building_bonus_summary(db: Session, guild_id: int) -> dict[str, int]:
+    office = mission_office_values(get_building_level(db, guild_id, "contract_office"))
     return {
         "xp_bonus_percent": get_training_xp_bonus_percent(db, guild_id),
         "equipment_drop_bonus_percent": get_equipment_drop_bonus_percent(db, guild_id),
         "material_quantity_bonus": get_material_quantity_bonus(db, guild_id),
-        "max_mission_party_size": get_max_allowed_mission_party_size(db, guild_id),
+        "contract_reward_bonus_percent": office["reward_bonus_percent"],
         "max_run_multiplier": get_max_run_multiplier(db, guild_id),
         "tavern_quality_bonus_percent": min(30, (get_building_level(db, guild_id, "tavern") // 5) * 2),
         "offline_bonus_percent": get_building_level(db, guild_id, "warehouse") // 5,
@@ -369,6 +367,6 @@ def get_building_summary(db: Session, guild_id: int) -> dict[str, int]:
         "owned": sum(1 for building in buildings if building.level > 0),
         "level_sum": sum(building.level for building in buildings),
         "mercenary_limit": get_mercenary_limit(db, guild_id),
-        "max_mission_party_size": get_max_allowed_mission_party_size(db, guild_id),
+        "contract_reward_bonus_percent": mission_office_values(get_building_level(db, guild_id, "contract_office"))["reward_bonus_percent"],
         "max_run_multiplier": get_max_run_multiplier(db, guild_id),
     }

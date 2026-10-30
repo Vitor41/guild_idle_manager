@@ -683,7 +683,7 @@ def _materialize_cycle(
     db.flush()
 
     db.execute(
-        text("UPDATE regional_offers SET status = 'expired' WHERE campaign_id = :campaign_id AND cycle_number < :cycle_number AND status = 'available'"),
+        text("UPDATE regional_offers SET status = 'expired' WHERE campaign_id = :campaign_id AND cycle_number < :cycle_number AND status IN ('available', 'supply_preparing')"),
         {"campaign_id": campaign.campaign_id, "cycle_number": cycle_number},
     )
     roster_level = max(db.scalars(select(Mercenary.level).where(
@@ -1206,7 +1206,7 @@ def get_regional_board(
     portal_events = active_portals_for_region(db, campaign.campaign_id, home_code)
     rebellion_event = active_rebellion(db, campaign.campaign_id)
     event_history = event_history_for_campaign(db, campaign.campaign_id)
-    open_offers = [offer for offer in offers["contract"] + offers["dungeon"] + offers["boss"] if offer.status == "available"]
+    open_offers = [offer for offer in offers["contract"] + offers["dungeon"] + offers["boss"] if offer.status in {"available", "supply_preparing"}]
     return {
         "world": db.get(RegionalWorldState, campaign.campaign_id),
         "cycle": active_cycle,

@@ -225,6 +225,10 @@ class RegionalOffer(Base):
     region_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     offer_type: Mapped[str] = mapped_column(String(20), nullable=False)
     slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    supply_preparation_started_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    supply_preparation_ends_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    supply_prepared_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    supply_preparation_snapshot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     mission_template_id: Mapped[int | None] = mapped_column(ForeignKey("mission_templates.id"), nullable=True)
     dungeon_template_id: Mapped[int | None] = mapped_column(ForeignKey("dungeon_templates.id"), nullable=True)
     reserved_by_guild_state_id: Mapped[int | None] = mapped_column(

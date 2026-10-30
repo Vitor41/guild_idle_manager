@@ -8,7 +8,7 @@
       <img src="/static/assets/desktop/evolution/illustrations/gathering-worksite.webp" width="1600" height="900" alt="" fetchpriority="high">
       <div>
         <img class="gathering-kit" src="/static/assets/desktop/evolution/sprites/ui_64/gathering-kit.png" width="48" height="48" alt="" loading="lazy">
-        <p class="eyebrow">Madeira · minério · couro</p>
+        <p class="eyebrow">Madeira · minério · couro · essências · gemas · ervas · relíquias · fibras</p>
         <h1 id="gathering-title">Postos de coleta</h1>
         <p>Designe até três mercenários. Cada pessoa ocupa um posto e continua trabalhando enquanto houver espaço no Armazém.</p>
       </div>
@@ -24,7 +24,8 @@
     </section>
 
     <div class="gathering-grid">
-      {% for family, label, node in [("wood", "Madeira", "Bosque"), ("ore", "Minério", "Pedreira"), ("leather", "Couro", "Terras de caça")] %}
+      {% for family, label in family_labels.items() %}
+        {% set node = node_labels[family] %}
         {% set assignment = assignments|selectattr('resource_family', 'equalto', family)|first %}
         <article class="panel gathering-card">
           <div class="gathering-card__heading"><span class="eyebrow">{{ node }}</span><h2>{{ label }}</h2></div>
@@ -35,7 +36,10 @@
               <a class="secondary-button" href="{{ inventory_url }}">Abrir inventário e liberar espaço</a>
             {% else %}
               <p class="gathering-status">Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
-              <p class="gathering-progress">Próximo ciclo em {{ 60 - assignment.progress_seconds }} s</p>
+              <div class="gathering-cycle" data-gathering-cycle data-progress-seconds="{{ assignment.progress_seconds }}">
+                <progress max="60" value="{{ assignment.progress_seconds }}" aria-label="Progresso do ciclo de {{ label }}">{{ assignment.progress_seconds }} de 60 segundos</progress>
+                <p class="gathering-progress" role="timer" aria-live="off">Próximo ciclo em <strong data-gathering-remaining>{{ 60 - assignment.progress_seconds }}</strong> s</p>
+              </div>
             {% endif %}
             <p>1 unidade por ciclo de 60 s{% if assignment.extra_chance %} · +{{ assignment.extra_chance }}% de chance para 1 extra{% endif %}</p>
             <form method="post" action="/gathering/release/{{ assignment.id }}">
@@ -60,4 +64,25 @@
       {% endfor %}
     </div>
   </section>
+  <script>
+    (() => {
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      document.querySelectorAll('[data-gathering-cycle]').forEach((cycle) => {
+        const progress = cycle.querySelector('progress');
+        const remainingLabel = cycle.querySelector('[data-gathering-remaining]');
+        let elapsed = Number(cycle.dataset.progressSeconds || 0);
+        const update = () => {
+          if (document.hidden) return;
+          elapsed = (elapsed + 1) % 60;
+          progress.value = elapsed;
+          remainingLabel.textContent = String(60 - elapsed);
+        };
+        if (!reducedMotion) window.setInterval(update, 1000);
+        else {
+          const remaining = 60 - elapsed;
+          remainingLabel.textContent = String(remaining);
+        }
+      });
+    })();
+  </script>
 {% endblock %}

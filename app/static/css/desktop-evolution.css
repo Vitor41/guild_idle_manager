@@ -141,6 +141,26 @@
 .regional-rebellion-dialog__actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 20px 0 12px; }
 .regional-rebellion-dialog__actions form { margin: 0; }
 .regional-rebellion-dialog__details { color: var(--e-gold-soft); }
+
+/* Responsive regional leaderboard and compact inventory summary. */
+.evolution-ranking-table-wrap { overflow-x: auto; border: 1px solid var(--e-border, #3d5148); border-radius: 12px; background: var(--e-surface, #14211e); }
+.evolution-ranking-table-wrap:focus-visible { outline: 3px solid var(--e-gold, #d6ae63); outline-offset: 3px; }
+.evolution-ranking-table { width: 100%; min-width: 760px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.evolution-ranking-table caption { padding: 12px 16px; color: var(--e-muted, #bbc8c1); text-align: left; }
+.evolution-ranking-table th, .evolution-ranking-table td { padding: 12px 14px; border-top: 1px solid var(--e-border, #3d5148); text-align: left; }
+.evolution-ranking-table thead th { color: var(--e-gold-soft, #eed29b); font-size: .82rem; }
+.evolution-ranking-table .numeric { text-align: right; white-space: nowrap; }
+.evolution-ranking-table tbody tr.is-player { background: var(--e-surface-hi, #20332e); }
+.evolution-ranking-player-label { display: inline-block; margin-left: 8px; padding: 2px 7px; border: 1px solid var(--e-gold, #d6ae63); border-radius: 999px; color: var(--e-gold-soft, #eed29b); font-size: .72rem; white-space: nowrap; }
+.inventory-summary { display: grid; grid-template-columns: minmax(150px, .35fr) minmax(260px, 1fr); gap: 14px; align-items: center; margin: 18px 0; padding: 14px 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.inventory-summary__equipment { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.inventory-summary__equipment strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.inventory-summary__capacity > div { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.inventory-summary__capacity progress { display: block; width: 100%; height: 8px; margin: 7px 0 4px; accent-color: var(--gold); }
+.inventory-summary__capacity small { color: var(--muted); }
+.gathering-cycle progress { display: block; width: min(100%, 360px); height: 9px; accent-color: var(--gold); }
+.gathering-progress { font-variant-numeric: tabular-nums; }
+@media (max-width: 620px) { .inventory-summary { grid-template-columns: 1fr; } }
 .evolution-dialog fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 15px 0; padding: 12px; border: 1px solid var(--e-line); border-radius: 6px; }
 .evolution-dialog legend { padding: 0 6px; color: var(--e-gold-soft); font-weight: 700; }
 .evolution-dialog fieldset label { display: flex; align-items: center; gap: 7px; min-height: 40px; color: #dce7e1; }

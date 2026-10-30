@@ -33,7 +33,7 @@
             <a href="/gathering"><span class="nav-icon">⚒</span><span>Coleta</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
-            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional#events-title"><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-scroll-top><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
             <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
             <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
@@ -44,9 +44,10 @@
             <a href="/professions"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
             <span class="nav-section-label">Guias e registros</span>
             <a href="/classes"><span class="nav-icon">✧</span><span>Guia de Classes</span></a>
-            <a href="/tiers"><span class="nav-icon">◇</span><span>Guia de Tiers</span></a>
+            <a href="/tiers"><span class="nav-icon">◇</span><span>Guia de Raridades</span></a>
             <a href="/codex"><span class="nav-icon">&#9782;</span><span>Conquistas e Códex</span></a>
             <a href="/guide"><span class="nav-icon">?</span><span>Guia do Jogo</span></a>
+            <a href="/updates"><span class="nav-icon">↻</span><span>Atualizações</span></a>
             {% if current_user.is_admin %}
               <a href="/admin"><span class="nav-icon">⚙</span><span>Admin</span></a>
             {% endif %}

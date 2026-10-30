@@ -15,8 +15,23 @@ from app.services.inventory_capacity_service import add_inventory_quantity_cappe
 
 CYCLE_SECONDS = 60
 OFFLINE_CAP_SECONDS = 8 * 60 * 60
-RESOURCE_FAMILIES = {"wood": "wood", "ore": "ore", "leather": "leather"}
-NODE_CODES = {"wood": "forest", "ore": "quarry", "leather": "hunting_ground"}
+RESOURCE_FAMILIES = {
+    "wood": "wood", "ore": "ore", "leather": "leather", "essence": "essence",
+    "gem": "gem", "herb": "herb", "relic": "relic", "cloth": "cloth",
+}
+NODE_CODES = {
+    "wood": "forest", "ore": "quarry", "leather": "hunting_ground",
+    "essence": "leyline", "gem": "crystal_cavern", "herb": "herb_garden",
+    "relic": "ruins", "cloth": "loom_grove",
+}
+FAMILY_LABELS = {
+    "wood": "Madeira", "ore": "Minério", "leather": "Couro", "essence": "Essências",
+    "gem": "Gemas", "herb": "Ervas", "relic": "Relíquias", "cloth": "Fibras",
+}
+NODE_LABELS = {
+    "wood": "Bosque", "ore": "Pedreira", "leather": "Terras de caça", "essence": "Veios arcanos",
+    "gem": "Caverna de cristais", "herb": "Horta silvestre", "relic": "Ruínas antigas", "cloth": "Bosque de linho",
+}
 
 
 def _utc(value: datetime) -> datetime:
@@ -58,7 +73,7 @@ def assign_worker(
     now: datetime | None = None,
 ) -> GatheringAssignment:
     if resource_family not in RESOURCE_FAMILIES:
-        raise ValueError("Escolha madeira, minério ou couro para a coleta.")
+        raise ValueError("Escolha uma família de recurso disponível para coleta.")
     mercenary = db.scalar(select(Mercenary).where(Mercenary.id == mercenary_id, Mercenary.guild_id == guild.id))
     if mercenary is None:
         raise ValueError("Este mercenário não pertence à guilda.")

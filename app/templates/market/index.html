@@ -46,7 +46,7 @@
       {% if equipment_items %}<div class="market-catalog">{% for item in equipment_items %}
         <article class="market-item-row rarity-{{ item.item_template.rarity }}">
           <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ item.item_template.icon_group or '' }}" data-desktop-item-slot="{{ item.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ item.item_template.material_family or '' }}">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
-          <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Tier {{ item.item_template.tier }} | {{ item.item_template.base_sell_value }} ouro</small></div>
+          <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | {{ item.item_template.base_sell_value }} ouro</small></div>
           <form method="post" action="/market/sell/equipment" data-confirm-title="Anunciar equipamento?" data-confirm-message="O equipamento ficara reservado ate a conclusao da venda." data-confirm-action="Anunciar"><input type="hidden" name="item_instance_id" value="{{ item.id }}"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button></form>
         </article>
       {% endfor %}</div>{% else %}<p class="note">Nenhum equipamento livre para venda.</p>{% endif %}

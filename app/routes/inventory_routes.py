@@ -49,18 +49,10 @@ def inventory_index(
 
     selected_category = request.query_params.get("category", "all")
     selected_rarity = request.query_params.get("rarity", "all")
-    selected_tier = request.query_params.get("tier", "all")
     selected_max_level = request.query_params.get("max_level", "")
     if selected_rarity != "all":
         inventory_items = [item for item in inventory_items if item.item_template.rarity == selected_rarity]
         equipment_items = [item for item in equipment_items if item.item_template.rarity == selected_rarity]
-    if selected_tier != "all":
-        try:
-            tier_value = int(selected_tier)
-        except ValueError:
-            tier_value = 0
-        inventory_items = [item for item in inventory_items if item.item_template.tier == tier_value]
-        equipment_items = [item for item in equipment_items if item.item_template.tier == tier_value]
     if selected_max_level:
         try:
             max_level = max(1, int(selected_max_level))
@@ -89,14 +81,13 @@ def inventory_index(
             "resources": resources,
             "inventory_items": inventory_items,
             "equipment_items": equipment_items,
-            "equipment_count": equipment_count,
             "warehouse_capacity": get_inventory_capacity(db, guild),
             "warehouse_used": get_inventory_usage(db, guild.id),
+            "equipment_count": equipment_count,
             "get_item_icon": get_item_icon,
             "get_equipment_slot_label": get_equipment_slot_label,
             "selected_category": selected_category,
             "selected_rarity": selected_rarity,
-            "selected_tier": selected_tier,
             "selected_max_level": selected_max_level,
             "bonus_attribute_labels": BONUS_ATTRIBUTE_LABELS,
         },

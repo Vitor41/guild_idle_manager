@@ -453,7 +453,7 @@ document.addEventListener("submit", async (event) => {
   }
 
   try {
-    const requestUrl = new URL(form.action, window.location.origin);
+    const requestUrl = new URL(submitter?.formAction || form.action, window.location.origin);
     const requestOptions = {
       method: method.toUpperCase(),
       credentials: "same-origin",

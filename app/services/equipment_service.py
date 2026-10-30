@@ -350,8 +350,9 @@ def get_party_chance_details(
     mercenaries: list[Mercenary],
     recommended_power: int = 0,
     recommended_level: int = 1,
+    power_bonus: int = 0,
 ) -> dict[str, int]:
-    power_score = get_party_power_score(db, guild_id, mercenaries)
+    power_score = get_party_power_score(db, guild_id, mercenaries) + max(0, int(power_bonus))
     bonus_chance = power_success_adjustment(power_score, recommended_power)
     class_bonus = party_class_success_bonus(mercenaries)
     rarity_bonus = rarity_success_bonus(mercenaries, recommended_level)

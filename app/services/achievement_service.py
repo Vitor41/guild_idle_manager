@@ -460,6 +460,9 @@ def get_codex_context(
                            "legendary_equipment_codex"}
     achievement_cards = []
     for template in list_active_achievements(db):
+        # Late-game unique-item rewards have one home: "O Último Desafio" below.
+        if template.reward_item_template is not None:
+            continue
         criterion = template.criterion_type
         achievement_trail = ("events" if criterion in event_criteria or criterion.startswith("regional_")
                              else "collection" if criterion in collection_criteria
@@ -476,6 +479,11 @@ def get_codex_context(
     for template in list_active_achievements(db):
         if template.reward_item_template is None:
             continue
+        set_committed_value(
+            template.reward_item_template,
+            "name",
+            clean_generated_name(template.reward_item_template.name),
+        )
         legendary_achievement_cards.append({
             "template": template,
             "progress": by_template[template.id],
@@ -484,7 +492,16 @@ def get_codex_context(
             ),
         })
     unlocked_ids = {unlock.codex_entry_id for unlock in list_codex_unlocks(db, guild.id)}
-    entries = list_codex_entries(db)
+    reward_item_ids = {
+        template.reward_item_template_id for template in list_active_achievements(db)
+        if template.reward_item_template_id is not None
+    }
+    entries = [entry for entry in list_codex_entries(db) if not (
+        entry.category == "item" and entry.reference_key.isdigit()
+        and int(entry.reference_key) in reward_item_ids
+    )]
+    visible_entry_ids = {entry.id for entry in entries}
+    unlocked_ids &= visible_entry_ids
     catalog_total = len(entries)
     for entry in entries:
         entry.is_unlocked = entry.id in unlocked_ids

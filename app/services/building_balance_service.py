@@ -39,18 +39,7 @@ def warehouse_material_bonus(level: int) -> int:
 
 def mission_office_values(level: int) -> dict[str, int]:
     level = clamp_level(level)
-    if level < 1:
-        party_size = 1
-    elif level < 10:
-        party_size = 2
-    elif level < 25:
-        party_size = 3
-    elif level < 50:
-        party_size = 4
-    else:
-        party_size = 5
     return {
-        "party_size": party_size,
         "reward_bonus_percent": min(20, level // 5),
         "duration_reduction_percent": min(20, level // 5),
     }
@@ -64,6 +53,7 @@ def scouts_values(level: int) -> dict[str, int]:
         "duration_reduction_percent": min(20, (level // 10) * 3),
         "drop_bonus_percentage_points": min(20, level // 5),
         "success_bonus_percentage_points": 5 if level >= 100 else 3 if level >= 50 else 2 if level >= 45 else 0,
+        "portal_detection_bonus_percentage_points": min(5, level // 20),
     }
 
 
@@ -143,10 +133,10 @@ def _benefit_lines(effect_type: str, level: int) -> tuple[list[str], list[str]]:
         return [f"Materiais principais: +{warehouse_material_bonus(level)} adicionais", f"Produção offline: +{level // 5} ouro/h"], ["Coleta", "Loot", "Progresso offline"]
     if effect_type == "contract_office":
         values = mission_office_values(level)
-        return [f"Grupo de missão: até {values['party_size']}", f"Recompensas de missão: +{values['reward_bonus_percent']}%", f"Redução de duração: {values['duration_reduction_percent']}%"], ["Missões"]
+        return [f"Ouro e XP em contratos: +{values['reward_bonus_percent']}%", f"Redução de duração: {values['duration_reduction_percent']}%"], ["Contratos"]
     if effect_type == "scouts":
         values = scouts_values(level)
-        return [f"Multiplicador máximo: {values['max_multiplier']}x", f"Loot de masmorra: +{values['drop_bonus_percentage_points']} p.p.", f"Redução de exploração: {values['duration_reduction_percent']}%"], ["Masmorras", "Chefes"]
+        return [f"Multiplicador máximo: {values['max_multiplier']}x", f"Loot de masmorra: +{values['drop_bonus_percentage_points']} p.p.", f"Detecção de portal: +{values['portal_detection_bonus_percentage_points']} p.p. (capado em 5)", f"Redução de exploração: {values['duration_reduction_percent']}%"], ["Masmorras", "Chefes", "Vigília"]
     if effect_type == "tavern":
         values = tavern_values(level)
         return [f"Aprendiz Incomum: {values['uncommon_final']}%", f"Desconto em contratação: {values['hire_discount_percent']}%"], ["Taverna", "Contratação"]

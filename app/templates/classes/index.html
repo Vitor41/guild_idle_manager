@@ -3,7 +3,7 @@
 {% block title %}Guia de Classes - Guild Idle Manager{% endblock %}
 
 {% block content %}
-  <section class="dashboard" aria-labelledby="classes-title">
+  <section class="dashboard classes-page" aria-labelledby="classes-title">
     <header class="topbar">
       <div>
         <p class="eyebrow">Academia da Guilda</p>
@@ -16,11 +16,12 @@
       </div>
     </header>
 
-    <nav class="filter-tabs guide-nav" aria-label="Seções do guia">
+    <nav class="guide-index guide-nav" aria-label="Índice do Guia de Classes">
       <a href="#guia-classes">Classes</a><a href="#guia-habilidades">Habilidades</a><a href="#guia-atributos">Atributos</a><a href="#guia-combinacoes">Combinações</a><a href="#guia-coleta">Coleta</a><a href="#guia-dungeons">Masmorras</a>
     </nav>
 
-    <div id="guia-classes"></div>
+    <section class="panel table-panel guide-section" id="guia-classes" aria-labelledby="guia-classes-title" tabindex="-1">
+      <header class="guide-section-heading"><span class="guide-number">01</span><div><p class="eyebrow">Academia da Guilda</p><h2 id="guia-classes-title">Caminhos de classe</h2></div></header>
     {% for tier, tier_label in class_tiers.items() %}
       <section class="panel table-panel">
         <h2>{{ tier_label }}</h2>
@@ -59,14 +60,15 @@
         </div>
       </section>
     {% endfor %}
+    </section>
 
-    <section id="guia-habilidades" class="panel table-panel guide-section">
-      <h2>Guia de Habilidades</h2><p class="note">Cada caminho possui uma identidade mecânica. Os bônus de grupo respeitam limites para evitar combinações quebradas.</p>
+    <section id="guia-habilidades" class="panel table-panel guide-section" aria-labelledby="guia-habilidades-title" tabindex="-1">
+      <h2 id="guia-habilidades-title">Guia de Habilidades</h2><p class="note">Cada caminho possui uma identidade mecânica. Os bônus de grupo respeitam limites para evitar combinações quebradas.</p>
       <div class="benefit-grid">{% for card in skill_guide %}<article><span class="tag">{{ card.class_name }}</span><h3>{{ card.skill.name }}</h3><p>{{ card.skill.description }}</p><strong>{{ card.effect_label }} +{{ card.skill.effect_value }}{{ card.effect_suffix }}</strong><p class="note">Onde funciona: {{ card.works_in }}</p><p class="note">Combina com: {{ card.synergy }}</p></article>{% endfor %}</div>
     </section>
-    <section id="guia-atributos" class="panel table-panel guide-section"><h2>Guia de Atributos</h2><div class="benefit-grid">{% for item in attribute_guide %}<article><span class="tag">{{ item.code }}</span><h3>{{ item.name }}</h3><p class="note">{{ item.description }}</p></article>{% endfor %}</div></section>
-    <section id="guia-combinacoes" class="panel table-panel guide-section"><h2>Guia de Combinações</h2><p class="note">São referências para experimentar, não receitas obrigatórias.</p><div class="benefit-grid">{% for item in combination_guide %}<article><h3>{{ item.name }}</h3><strong>{{ item.members }}</strong><p class="note">{{ item.use }}</p></article>{% endfor %}</div></section>
-    <section id="guia-coleta" class="panel table-panel guide-section"><h2>Coleta e Profissões</h2><ul class="guide-list">{% for tip in profession_tips %}<li>{{ tip }}</li>{% endfor %}</ul></section>
-    <section id="guia-dungeons" class="panel table-panel guide-section"><h2>Masmorras</h2><ul class="guide-list">{% for tip in dungeon_tips %}<li>{{ tip }}</li>{% endfor %}</ul></section>
+    <section id="guia-atributos" class="panel table-panel guide-section" aria-labelledby="guia-atributos-title" tabindex="-1"><h2 id="guia-atributos-title">Guia de Atributos</h2><div class="benefit-grid">{% for item in attribute_guide %}<article><span class="tag">{{ item.code }}</span><h3>{{ item.name }}</h3><p class="note">{{ item.description }}</p></article>{% endfor %}</div></section>
+    <section id="guia-combinacoes" class="panel table-panel guide-section" aria-labelledby="guia-combinacoes-title" tabindex="-1"><h2 id="guia-combinacoes-title">Guia de Combinações</h2><p class="note">São referências para experimentar, não receitas obrigatórias.</p><div class="benefit-grid">{% for item in combination_guide %}<article><h3>{{ item.name }}</h3><strong>{{ item.members }}</strong><p class="note">{{ item.use }}</p></article>{% endfor %}</div></section>
+    <section id="guia-coleta" class="panel table-panel guide-section" aria-labelledby="guia-coleta-title" tabindex="-1"><h2 id="guia-coleta-title">Coleta e Profissões</h2><ul class="guide-list">{% for tip in profession_tips %}<li>{{ tip }}</li>{% endfor %}</ul></section>
+    <section id="guia-dungeons" class="panel table-panel guide-section" aria-labelledby="guia-dungeons-title" tabindex="-1"><h2 id="guia-dungeons-title">Masmorras</h2><ul class="guide-list">{% for tip in dungeon_tips %}<li>{{ tip }}</li>{% endfor %}</ul></section>
   </section>
 {% endblock %}

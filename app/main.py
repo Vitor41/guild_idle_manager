@@ -6,8 +6,9 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
+from app.core.version import APP_VERSION
 from app.database.connection import SessionLocal
-from app.routes import session_routes
+from app.routes import session_routes, update_routes
 from app.routes import blacksmith_routes, building_routes, class_change_routes, class_routes, codex_routes, dashboard_routes, dock_routes, dungeon_routes, gathering_routes, guide_routes, home_routes, inventory_routes, market_routes, mercenary_routes, mission_routes, profession_routes, progress_routes, tavern_routes, tier_routes, tutorial_routes
 
 
@@ -26,7 +27,7 @@ async def _desktop_gameplay_ticks() -> None:
 app = FastAPI(
     title="Guild Idle Manager",
     description="Bootstrap local do Guild Idle Manager.",
-    version="0.1.0",
+    version=APP_VERSION,
     docs_url=None if settings.app_mode == "desktop" else "/docs",
     redoc_url=None if settings.app_mode == "desktop" else "/redoc",
 )
@@ -103,6 +104,7 @@ app.include_router(progress_routes.router)
 app.include_router(codex_routes.router)
 app.include_router(guide_routes.router)
 app.include_router(tutorial_routes.router)
+app.include_router(update_routes.router)
 if settings.app_mode != "desktop":
     app.include_router(admin_routes.router)
 else:

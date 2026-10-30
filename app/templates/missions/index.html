@@ -48,7 +48,7 @@
       <p class="error-message">{{ error }}</p>
     {% endif %}
 
-    <section class="panel" aria-labelledby="available-missions-title">
+    {% if request.app.state.app_mode != 'desktop' %}<section class="panel" aria-labelledby="available-missions-title">
       <form class="catalog-toolbar" method="get" action="/missions">
         <input type="hidden" name="band" value="{{ selected_band }}"><input type="hidden" name="category" value="{{ selected_category }}">
         <label>Foco<select name="focus"><option value="all" {% if selected_focus == 'all' %}selected{% endif %}>Todos</option><option value="gold" {% if selected_focus == 'gold' %}selected{% endif %}>Ouro</option><option value="xp" {% if selected_focus == 'xp' %}selected{% endif %}>XP</option><option value="equipment" {% if selected_focus == 'equipment' %}selected{% endif %}>Equipamentos</option></select></label>
@@ -93,12 +93,12 @@
                 </div>
                 <p class="note">Recomendado: nível {{ mission.recommended_level }} · poder {{ mission.recommended_power }}</p>
                 {% if mission.max_party_size > 1 %}
-                  <p class="note subtle-note">Seu limite atual de grupo por construções: {{ max_allowed_party_size }}</p>
+                  <p class="note subtle-note">O tamanho permitido é definido pelo contrato; o Escritório de Missões melhora as recompensas e reduz a duração.</p>
                 {% endif %}
                 <div class="mission-card-info-footer">
                   <div class="bonus-box">
                     <strong>Bônus de construções</strong>
-                    <span>XP +{{ building_bonuses.xp_bonus_percent }}%</span><span>Equip. +{{ building_bonuses.equipment_drop_bonus_percent }} p.p.</span><span>+{{ building_bonuses.material_quantity_bonus }} materiais principais</span><span>Máx. {{ building_bonuses.max_run_multiplier }}x</span>
+                    <span>Contrato: ouro e XP +{{ building_bonuses.contract_reward_bonus_percent }}%</span><span>Equip. +{{ building_bonuses.equipment_drop_bonus_percent }} p.p.</span><span>+{{ building_bonuses.material_quantity_bonus }} materiais principais</span><span>Máx. {{ building_bonuses.max_run_multiplier }}x</span>
                   </div>
                   <div class="loot-preview"><strong>Loot possível</strong><div class="loot-preview-list">{% for drop in mission.visible_drops %}<span class="loot-preview-item rarity-{{ drop.item_template.rarity }}" title="{{ drop.rarity_label }}"><span class="loot-preview-icon">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span><span>{{ drop.display_name }}<small>{{ drop.effective_drop_chance }}%{% if drop.effective_drop_chance > drop.base_drop_chance %} ({{ drop.base_drop_chance }}% + Ferreiro){% endif %} · {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}-{{ drop.max_quantity }}{% endif %}x</small></span></span>{% else %}<span class="subtle-note">{% if mission.is_long_idle %}Sem loot · apenas ouro e XP{% else %}Sem loot cadastrado{% endif %}</span>{% endfor %}</div></div>
                 </div>
@@ -143,7 +143,7 @@
       {% else %}
         <p class="note">Nenhuma missão disponível.</p>
       {% endif %}
-    </section>
+    </section>{% else %}<section class="panel regional-catalog-redirect" aria-labelledby="regional-contracts-title"><h2 id="regional-contracts-title">Novos contratos pela Vigília Regional</h2><p>As ofertas ativas e seus snapshots ficam na Vigília. Esta tela mantém a coleta de resultados e o histórico das atividades já iniciadas.</p><a class="button-link" href="/regional#regional-board">Abrir Vigília Regional</a></section>{% endif %}
 
     <section id="loot-disponivel" class="panel table-panel loot-destination" aria-labelledby="active-missions-title">
       <div class="section-heading"><h2 id="active-missions-title">Em andamento</h2>{% if awaiting_loot_count > 0 %}<form method="post" action="/missions/claim-all"><button>Receber todos os loots ({{ awaiting_loot_count }})</button></form>{% endif %}</div>

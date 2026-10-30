@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Guia de Tiers - Guild Idle Manager{% endblock %}
+{% block title %}Guia de Raridades - Guild Idle Manager{% endblock %}
 
 {% block content %}
   <section class="dashboard" aria-labelledby="tiers-title">
     <header class="topbar">
       <div>
         <p class="eyebrow">Arquivo da Guilda</p>
-        <h1 id="tiers-title">Guia de Tiers</h1>
+        <h1 id="tiers-title">Guia de Raridades</h1>
         <p class="note">Entenda como raridade, potencial e progressão diferenciam mercenários e equipamentos.</p>
       </div>
       <div class="action-row compact">
@@ -27,10 +27,10 @@
         {% for rarity in rarity_cards %}
           <article class="tier-guide-card rarity-card rarity-{{ rarity.code }}">
             <div class="tier-guide-card__head">
-              <span class="tier-gem" aria-hidden="true">{{ loop.index }}</span>
+              <span class="tier-gem" aria-hidden="true">◇</span>
               <div>
                 <span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span>
-                <h3>Tier {{ loop.index }}</h3>
+                <h3>{{ rarity.label }}</h3>
               </div>
             </div>
             <p>{{ rarity.description }}</p>
@@ -56,21 +56,11 @@
       <div class="section-heading">
         <div>
           <p class="eyebrow">Equipamentos</p>
-          <h2>Níveis de item</h2>
-          <p class="note">O tier define a base do equipamento; a raridade define sua qualidade visual e o potencial do bônus aleatório.</p>
+          <h2>Equipamentos: raridade, nível e refino</h2>
+          <p class="note">Equipamentos usam as mesmas seis raridades. O nível mínimo de uso e o refino +N são exibidos em campos separados; faixas internas de balanceamento não são tiers de raridade.</p>
         </div>
       </div>
-      <div class="item-tier-track">
-        {% for item_tier in item_tiers %}
-          <article class="item-tier-card tier-border-{{ item_tier.tier }}">
-            <span class="tier-number">T{{ item_tier.tier }}</span>
-            <div>
-              <h3>{{ item_tier.label }}</h3>
-              <p class="note">{{ item_tier.description }}</p>
-            </div>
-          </article>
-        {% endfor %}
-      </div>
+      <div class="tier-guide-grid">{% for rarity in rarity_cards %}<article class="tier-guide-card rarity-card rarity-{{ rarity.code }}"><span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span><p>{{ rarity.description }}</p><p class="note">O item também informa nível mínimo e refino de forma independente.</p></article>{% endfor %}</div>
     </section>
   </section>
 {% endblock %}

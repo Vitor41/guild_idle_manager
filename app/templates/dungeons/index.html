@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% from "components/result_card.html" import result_card %}
 {% from "components/building_lock.html" import building_lock %}
-
 {% block title %}Masmorras - Guild Idle Manager{% endblock %}
 
 {% block content %}
@@ -28,10 +27,10 @@
       <div>
         <p class="eyebrow">{{ guild.name }} · abaixo da superfície</p>
         <h1 id="dungeons-title">Masmorras</h1>
-        {% if dungeons_available %}<p><strong>Prepare a companhia para a incursão.</strong> Confira requisitos, riscos e recompensas antes de partir.</p>{% else %}<p><strong>O caminho subterrâneo está fechado.</strong> Construa Exploradores nível 1 para liberar Masmorras e Chefes.</p>{% endif %}
+        {% if dungeons_available %}<p><strong>Prepare a companhia para a incursão.</strong> Confira requisitos, riscos e recompensas antes de partir. Novos desafios chegam pela Vigília Regional.</p>{% else %}<p><strong>O caminho subterrâneo está fechado.</strong> Novos desafios chegam pela Vigília Regional.</p>{% endif %}
         <div class="action-row compact">
-          {% if not dungeons_available %}<a class="button-link secondary" href="/buildings">Ver Exploradores</a>{% else %}
-          <a class="button-link secondary" href="#available-dungeons-title">Ver desafios</a>
+          <a class="button-link secondary" href="/regional#regional-board">Ver ofertas da Vigília</a>
+          {% if dungeons_available %}
           {% if awaiting_loot_count > 0 %}<a class="button-link" href="#loot-disponivel">Receber recompensas</a>{% endif %}
           {% endif %}
         </div>
@@ -45,10 +44,9 @@
     </section>
     {% endif %}
 
-    {% if not dungeons_available %}
-      {% if request.app.state.app_mode != 'desktop' %}{{ building_lock('◇', 'As Masmorras ainda não foram liberadas', 'Exploradores', 'Evolua a construção Exploradores para o nível 1 e abra o caminho para Masmorras e Chefes.') }}{% endif %}
-    {% else %}
-
+    {% if not dungeons_available and request.app.state.app_mode != 'desktop' %}{{ building_lock('◇', 'As Masmorras ainda não foram liberadas', 'Exploradores', 'Evolua a construção Exploradores para o nível 1 e abra o caminho para Masmorras e Chefes.') }}{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<p class="note">Os desafios são publicados na Vigília Regional. Esta página reúne suas incursões em andamento e recompensas.</p>{% endif %}
+    {% if request.app.state.app_mode != 'desktop' and dungeons_available %}
     {% if awaiting_loot_count > 0 %}<div class="loot-shortcut"><span>Você possui {{ awaiting_loot_count }} recompensa(s) aguardando coleta.</span><a class="button-link" href="#loot-disponivel">Receber recompensas</a></div>{% endif %}
     {% if message %}<p class="{{ 'error-message' if result_status == 'failed' else 'success-message' }}">{{ message }}</p>{% endif %}
     {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
@@ -99,7 +97,6 @@
                   <strong>{% if dungeon.content_type == 'boss' and dungeon.recommended_level <= 1 %}Recomendações do chefe introdutório{% else %}{{ 'Requisitos do chefe' if dungeon.content_type == 'boss' else 'Recomendações do desafio' }}{% endif %}</strong>
                   <span>Poder do grupo{% if dungeon.content_type == 'boss' and dungeon.recommended_level <= 1 %} recomendado{% endif %}: {{ dungeon.required_total_power }}</span>
                   <span>Composição: {{ dungeon.required_tank_count }} tanque / {{ dungeon.required_support_count }} suporte / {{ dungeon.required_damage_count }} ataque</span>
-                  <span>Equipamento: Tier {{ dungeon.required_equipment_tier }}+</span>
                   {% if dungeon.required_class_code %}<span>Classe obrigatória: {{ dungeon.required_class_code }}</span>{% endif %}
                   <span>Sinergia: até +{{ dungeon.synergy_bonus_max }}% ao atender os papéis recomendados</span>
                   <span>Perfil recomendado: {{ dungeon.recommended_profile }}</span>
@@ -151,6 +148,7 @@
         <p class="note">Nenhuma masmorra disponível.</p>
       {% endif %}
     </section>
+    {% endif %}
 
     <section id="loot-disponivel" class="panel table-panel loot-destination" aria-labelledby="active-dungeons-title">
       <div class="section-heading"><h2 id="active-dungeons-title">Em andamento</h2>{% if awaiting_loot_count > 0 %}<form method="post" action="/dungeons/claim-all"><button>Receber todos os loots ({{ awaiting_loot_count }})</button></form>{% endif %}</div>
@@ -199,7 +197,6 @@
         <p class="note">Nenhuma masmorra finalizada ainda.</p>
       {% endif %}
     </section>
-    {% endif %}
   </section>
   <script src="{{ url_for('static', path='/js/mission_timers.js') }}"></script>
 {% endblock %}
