@@ -357,11 +357,12 @@ function preservePageContext(responseUrl, previousUrl) {
   return merged;
 }
 
-function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState) {
+function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
   const incomingMain = parsedDocument.querySelector(".game-shell");
   const currentMain = document.querySelector(".game-shell");
   if (!incomingMain || !currentMain) {
+    if (scrollToTop) window.scrollTo({ top: 0, behavior: "auto" });
     window.location.assign(responseUrl);
     return;
   }
@@ -376,13 +377,14 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
 
   document.title = parsedDocument.title || document.title;
   const nextUrl = new URL(responseUrl, window.location.origin);
+  document.body.dataset.route = nextUrl.pathname;
   window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   updateGenericCountdowns();
   initializeSalvagePreviews();
   restoreGameFormState(formState);
   showActionToast(currentMain);
 
-  const targetScroll = nextUrl.pathname === previousPath ? scrollPosition : 0;
+  const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
   window.requestAnimationFrame(() => {
     const maximumScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(targetScroll, maximumScroll), behavior: "auto" });
@@ -398,6 +400,7 @@ document.addEventListener("click", async (event) => {
   event.preventDefault();
   const previousPath = window.location.pathname;
   const scrollPosition = window.scrollY;
+  const scrollToTop = link.hasAttribute("data-scroll-top");
   const formState = captureGameFormState();
   link.setAttribute("aria-busy", "true");
   try {
@@ -414,10 +417,17 @@ document.addEventListener("click", async (event) => {
       scrollPosition,
       true,
       formState,
+      scrollToTop,
     );
   } catch (error) {
+    if (scrollToTop) window.scrollTo({ top: 0, behavior: "auto" });
     window.location.assign(targetUrl);
   }
+});
+
+window.addEventListener("pageshow", () => {
+  if (document.body.dataset.route !== "/regional" || window.location.hash) return;
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
 });
 
 document.addEventListener("submit", async (event) => {

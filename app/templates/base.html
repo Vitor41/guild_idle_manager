@@ -33,7 +33,7 @@
             <a href="/gathering"><span class="nav-icon">⚒</span><span>Coleta</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
-            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-scroll-top><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-async-navigation data-scroll-top><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
             <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
             <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
@@ -190,7 +190,7 @@
         <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
-    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261030-1"></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261030-2"></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261030-1" defer></script>
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261030-1" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}

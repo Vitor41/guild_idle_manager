@@ -85,6 +85,23 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn('.compact-navigation[open] .sidebar-nav { display: grid; }', theme)
         self.assertIn('body[data-app-mode="desktop"] :focus-visible', theme)
 
+    def test_regional_menu_navigation_resets_scroll_after_swap_and_page_restore(self):
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
+
+        regional_link = re.search(r'<a href="/regional"[^>]*data-scroll-top[^>]*>', base)
+        self.assertIsNotNone(regional_link)
+        self.assertIn("data-async-navigation", regional_link.group(0))
+        self.assertIn('link.hasAttribute("data-scroll-top")', main)
+        self.assertIn("const targetScroll = scrollToTop ? 0", main)
+        self.assertIn("if (scrollToTop) window.scrollTo({ top: 0", main)
+        self.assertIn("document.body.dataset.route = nextUrl.pathname", main)
+        self.assertIn('window.addEventListener("pageshow"', main)
+        self.assertIn('document.body.dataset.route !== "/regional"', main)
+        self.assertIn("window.location.hash", main)
+        self.assertIn('window.scrollTo({ top: 0, behavior: "auto" })', main)
+        self.assertIn("/js/main.js') }}?v=20261030-2", base)
+
     def test_desktop_button_hover_and_focus_keep_secondary_and_danger_roles(self):
         theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
 
