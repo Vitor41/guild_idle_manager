@@ -64,25 +64,4 @@
       {% endfor %}
     </div>
   </section>
-  <script>
-    (() => {
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      document.querySelectorAll('[data-gathering-cycle]').forEach((cycle) => {
-        const progress = cycle.querySelector('progress');
-        const remainingLabel = cycle.querySelector('[data-gathering-remaining]');
-        let elapsed = Number(cycle.dataset.progressSeconds || 0);
-        const update = () => {
-          if (document.hidden) return;
-          elapsed = (elapsed + 1) % 60;
-          progress.value = elapsed;
-          remainingLabel.textContent = String(60 - elapsed);
-        };
-        if (!reducedMotion) window.setInterval(update, 1000);
-        else {
-          const remaining = 60 - elapsed;
-          remainingLabel.textContent = String(remaining);
-        }
-      });
-    })();
-  </script>
 {% endblock %}

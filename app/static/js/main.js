@@ -367,6 +367,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  window.initializeGatheringCycles?.();
   const incomingTopbar = parsedDocument.querySelector(".game-topbar");
   const currentTopbar = document.querySelector(".game-topbar");
   if (updateTopbar && incomingTopbar && currentTopbar) {
