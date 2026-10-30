@@ -22,7 +22,7 @@ from app.services.balance_service import (
     power_success_adjustment,
     rarity_success_bonus,
 )
-from app.services.display_service import format_attribute_bonus
+from app.services.display_service import clean_generated_name, format_attribute_bonus
 
 
 LEGACY_SLOT_MAP = {
@@ -386,7 +386,7 @@ def get_available_equipment_for_mercenary(
         current_item = min(current, key=get_item_power_score) if len(current) >= get_slot_capacity(slot) else None
         current_score = get_item_power_score(current_item) if current_item else 0
         item.comparison_delta = item.equipment_power_score - current_score
-        item.comparison_current_name = current_item.item_template.name if current_item else None
+        item.comparison_current_name = clean_generated_name(current_item.item_template.name) if current_item else None
         available.append(item)
     return available
 

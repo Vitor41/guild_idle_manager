@@ -274,7 +274,7 @@ def craft_recipe(db: Session, guild: Guild, resources: GuildResources | None, re
     for material in recipe.materials:
         owned = get_inventory_item(db, guild.id, material.item_template_id)
         if owned is None or owned.quantity < material.quantity:
-            raise CraftingError(f"Material insuficiente: {material.item_template.name}.")
+            raise CraftingError(f"Material insuficiente: {clean_generated_name(material.item_template.name)}.")
         owned_materials.append((owned, material.quantity))
     resources.gold -= gold_cost
     for owned, quantity in owned_materials:
@@ -295,7 +295,7 @@ def craft_recipe(db: Session, guild: Guild, resources: GuildResources | None, re
     db.add(resources)
     db.add(guild)
     db.commit()
-    return f"{output.name} criado com sucesso."
+    return f"{clean_generated_name(output.name)} criado com sucesso."
 
 
 def _effective_recipe_gold_cost(db: Session, recipe, docks_level: int) -> int:
@@ -391,4 +391,4 @@ def refine_equipment(db: Session, guild: Guild, resources: GuildResources | None
     db.add(resources)
     db.add(guild)
     db.commit()
-    return {"name": item.item_template.name, "level": item.upgrade_level, "before": before, "after": after}
+    return {"name": clean_generated_name(item.item_template.name), "level": item.upgrade_level, "before": before, "after": after}
