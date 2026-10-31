@@ -6,6 +6,7 @@
 - Registra ações de coleta e ofertas regionais em `%LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log`, com rotação e redação de dados sensíveis.
 - Confirma início de missões, contratos regionais, masmorras e chefes sem prédios construídos; construções continuam concedendo bônus, sem bloquear os inícios.
 - Define `Vitor41/guild_idle_manager` como origem padrão do canal DEV, mantendo atualização desativada enquanto não houver chave pública Ed25519 confiável e release assinada.
+- Empacota owner/repo e chave pública opcional no config de distribuição; builds DEV aceitam overrides explícitos e slugs inválidos são recusados, com compatibilidade para bundles 0.3.1 anteriores.
 - A build 0.3.0 sem chave pública precisa de um Setup bootstrap instalado manualmente antes de receber atualizações assinadas.
 
 ## 0.3.0 — Lote de melhorias 2

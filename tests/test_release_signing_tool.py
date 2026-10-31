@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -121,12 +122,108 @@ class ReleaseSigningToolTests(unittest.TestCase):
         self.assertIsNone(prepared)
         self.assertFalse(status["query_enabled"])
 
+    def test_build_script_keeps_distribution_defaults_and_packages_the_config(self):
+        root = Path(__file__).resolve().parents[1]
+        build_script = (root / "scripts" / "build_desktop_dev.ps1").read_text(encoding="utf-8")
+        spec = (root / "packaging" / "desktop" / "GuildIdleManager.spec").read_text(encoding="utf-8")
+        self.assertIn("[string]$GitHubOwner = 'Vitor41'", build_script)
+        self.assertIn("[string]$GitHubRepo = 'guild_idle_manager'", build_script)
+        self.assertIn("schema_version = 1", build_script)
+        self.assertIn("public_key_b64 = $GitHubPublicKeyBase64", build_script)
+        self.assertIn("'gim-release-config.json'", build_script)
+        self.assertIn("GIM_BUILD_RELEASE_CONFIG_FILE", build_script)
+        self.assertIn('GIM_BUILD_RELEASE_CONFIG_FILE', spec)
+
     def test_packaged_update_channel_is_taken_from_installation_marker(self):
-        with patch.object(github_releases.sys, "frozen", True, create=True), patch.object(
-            github_releases, "read_installed_channel", return_value="stable",
-        ):
+        with patch.object(github_releases, "_packaged_distribution_config_path", return_value=Path("missing-config.json")), \
+                patch.object(github_releases, "_legacy_packaged_key_path", return_value=Path("missing-key.txt")), \
+                patch.object(github_releases.sys, "frozen", True, create=True), \
+                patch.object(github_releases, "read_installed_channel", return_value="stable"):
             config = github_releases.configured_source()
         self.assertEqual(config.channel, "stable")
+        self.assertEqual((config.owner, config.repo), ("Vitor41", "guild_idle_manager"))
+
+    def test_packaged_distribution_config_overrides_owner_repo_and_public_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "gim-release-config.json"
+            public_key = base64.b64encode(bytes(range(32))).decode("ascii")
+            config_path.write_text(json.dumps({
+                "schema_version": 1,
+                "owner": "Chosen-Owner",
+                "repo": "chosen_repo.v2",
+                "public_key_b64": public_key,
+            }), encoding="utf-8")
+            with patch.object(github_releases, "_packaged_distribution_config_path", return_value=config_path), \
+                    patch.object(github_releases.sys, "frozen", True, create=True), \
+                    patch.object(github_releases, "read_installed_channel", return_value="stable"), \
+                    patch.dict(os.environ, {
+                        "GIM_GITHUB_RELEASES_OWNER": "must-not-override",
+                        "GIM_GITHUB_RELEASES_REPO": "must-not-override",
+                        "GIM_GITHUB_RELEASES_PUBLIC_KEY": "must-not-override",
+                    }, clear=False):
+                config = github_releases.configured_source()
+            self.assertEqual((config.owner, config.repo), ("Chosen-Owner", "chosen_repo.v2"))
+            self.assertEqual(config.public_key_b64, public_key)
+            self.assertEqual(config.channel, "stable")
+            self.assertEqual(github_releases.configuration_issues(config), [])
+
+    def test_packaged_dev_environment_can_override_config_but_other_channels_ignore_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "gim-release-config.json"
+            config_path.write_text(json.dumps({
+                "schema_version": 1,
+                "owner": "Bundle-Owner",
+                "repo": "bundle-repo",
+                "public_key_b64": base64.b64encode(bytes(range(32))).decode("ascii"),
+            }), encoding="utf-8")
+            env = {
+                "GIM_GITHUB_RELEASES_OWNER": "Dev-Owner",
+                "GIM_GITHUB_RELEASES_REPO": "dev-repo",
+                "GIM_GITHUB_RELEASES_PUBLIC_KEY": base64.b64encode(bytes(reversed(range(32)))).decode("ascii"),
+            }
+            with patch.object(github_releases, "_packaged_distribution_config_path", return_value=config_path), \
+                    patch.object(github_releases.sys, "frozen", True, create=True), \
+                    patch.dict(os.environ, env, clear=False), \
+                    patch.object(github_releases, "read_installed_channel", return_value="DEV"):
+                dev_config = github_releases.configured_source()
+            self.assertEqual((dev_config.owner, dev_config.repo), ("Dev-Owner", "dev-repo"))
+            self.assertEqual(dev_config.public_key_b64, env["GIM_GITHUB_RELEASES_PUBLIC_KEY"])
+
+            with patch.object(github_releases, "_packaged_distribution_config_path", return_value=config_path), \
+                    patch.object(github_releases.sys, "frozen", True, create=True), \
+                    patch.dict(os.environ, env, clear=False), \
+                    patch.object(github_releases, "read_installed_channel", return_value="beta"):
+                beta_config = github_releases.configured_source()
+            self.assertEqual((beta_config.owner, beta_config.repo), ("Bundle-Owner", "bundle-repo"))
+
+    def test_invalid_packaged_distribution_config_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "gim-release-config.json"
+            config_path.write_text(json.dumps({
+                "schema_version": 1,
+                "owner": "../attacker",
+                "repo": "bad..repo.git",
+                "public_key_b64": base64.b64encode(bytes(range(32))).decode("ascii"),
+            }), encoding="utf-8")
+            with patch.object(github_releases, "_packaged_distribution_config_path", return_value=config_path), \
+                    patch.object(github_releases.sys, "frozen", True, create=True), \
+                    patch.object(github_releases, "read_installed_channel", return_value="stable"):
+                config = github_releases.configured_source()
+            issues = github_releases.configuration_issues(config)
+            self.assertTrue(any("owner" in issue for issue in issues), issues)
+            self.assertTrue(any("repositório" in issue for issue in issues), issues)
+            self.assertIsNone(github_releases.releases_api_url(config))
+
+    def test_legacy_031_bundle_without_distribution_config_keeps_defaults_and_key_file(self):
+        legacy_key = base64.b64encode(bytes(range(32))).decode("ascii")
+        with patch.object(github_releases, "_read_packaged_distribution_config", return_value=None), \
+                patch.object(github_releases, "_read_legacy_packaged_key", return_value=legacy_key), \
+                patch.object(github_releases.sys, "frozen", True, create=True), \
+                patch.object(github_releases, "read_installed_channel", return_value="DEV"):
+            config = github_releases.configured_source()
+        self.assertEqual((config.owner, config.repo), ("Vitor41", "guild_idle_manager"))
+        self.assertEqual(config.public_key_b64, legacy_key)
+        self.assertEqual(config.channel, "DEV")
 
 
 if __name__ == "__main__":

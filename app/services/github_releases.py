@@ -5,6 +5,7 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -20,7 +21,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from app.core.config import settings
 
 
-_GITHUB_COMPONENT = re.compile(r"^[A-Za-z0-9_.-]+$")
+_GITHUB_OWNER = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
+_GITHUB_REPO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$")
 _CHANNELS = {"stable", "beta", "DEV"}
 _MANIFEST_ASSET = re.compile(r"^[A-Za-z0-9_.-]+\.json$")
 _ASSET_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -67,21 +69,73 @@ class GitHubReleasesError(ValueError):
 
 
 def configured_source() -> GitHubReleasesConfig:
-    installed_channel = read_installed_channel() if getattr(sys, "frozen", False) else None
-    packaged_key_path = Path(__file__).resolve().parents[1] / "data" / "gim-release-public-key.txt"
-    packaged_key = None
-    if getattr(sys, "frozen", False):
-        try:
-            packaged_key = packaged_key_path.read_text(encoding="ascii").strip() or None
-        except OSError:
-            packaged_key = None
+    frozen = getattr(sys, "frozen", False)
+    installed_channel = read_installed_channel() if frozen else None
+    if frozen:
+        bundled = _read_packaged_distribution_config()
+        if bundled is None:
+            # 0.3.1 packages predate the distribution config. Retain their
+            # default repository and optional legacy public-key file.
+            owner, repo = "Vitor41", "guild_idle_manager"
+            public_key = _read_legacy_packaged_key()
+        else:
+            owner = bundled.get("owner", "")
+            repo = bundled.get("repo", "")
+            public_key = bundled.get("public_key_b64", "")
+
+        if installed_channel == "DEV":
+            owner = os.environ.get("GIM_GITHUB_RELEASES_OWNER", owner)
+            repo = os.environ.get("GIM_GITHUB_RELEASES_REPO", repo)
+            public_key = os.environ.get("GIM_GITHUB_RELEASES_PUBLIC_KEY", public_key)
+            channel = os.environ.get("GIM_GITHUB_RELEASES_CHANNEL", installed_channel)
+            manifest_asset = os.environ.get("GIM_GITHUB_RELEASES_MANIFEST_ASSET", "gim-release.json")
+        else:
+            channel = installed_channel
+            manifest_asset = "gim-release.json"
+    else:
+        owner = settings.github_releases_owner or "Vitor41"
+        repo = settings.github_releases_repo or "guild_idle_manager"
+        public_key = settings.github_releases_public_key
+        channel = settings.github_releases_channel or "DEV"
+        manifest_asset = settings.github_releases_manifest_asset
+
     return GitHubReleasesConfig(
-        owner=settings.github_releases_owner or "Vitor41",
-        repo=settings.github_releases_repo or "guild_idle_manager",
-        channel=settings.github_releases_channel or installed_channel or "DEV",
-        public_key_b64=settings.github_releases_public_key or packaged_key,
-        manifest_asset=settings.github_releases_manifest_asset,
+        owner=owner,
+        repo=repo,
+        channel=channel,
+        public_key_b64=public_key,
+        manifest_asset=manifest_asset,
     )
+
+
+def _packaged_distribution_config_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "data" / "gim-release-config.json"
+
+
+def _legacy_packaged_key_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "data" / "gim-release-public-key.txt"
+
+
+def _read_packaged_distribution_config() -> dict[str, str] | None:
+    try:
+        payload = json.loads(_packaged_distribution_config_path().read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, TypeError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        return {}
+    return {
+        field: payload.get(field, "") if isinstance(payload.get(field, ""), str) else ""
+        for field in ("owner", "repo", "public_key_b64")
+    }
+
+
+def _read_legacy_packaged_key() -> str:
+    try:
+        return _legacy_packaged_key_path().read_text(encoding="ascii").strip()
+    except OSError:
+        return ""
 
 
 def _decode_public_key(value: str) -> bytes:
@@ -98,9 +152,11 @@ def configuration_issues(config: GitHubReleasesConfig | None = None) -> list[str
     """Validate every value needed before constructing a request URL."""
     config = config or configured_source()
     issues: list[str] = []
-    if not config.owner or not _GITHUB_COMPONENT.fullmatch(config.owner):
+    if (not isinstance(config.owner, str) or not _GITHUB_OWNER.fullmatch(config.owner)
+            or "--" in config.owner):
         issues.append("owner GitHub ausente ou inválido")
-    if not config.repo or not _GITHUB_COMPONENT.fullmatch(config.repo):
+    if (not isinstance(config.repo, str) or not _GITHUB_REPO.fullmatch(config.repo)
+            or ".." in config.repo or config.repo.lower().endswith(".git")):
         issues.append("repositório GitHub ausente ou inválido")
     if config.channel not in _CHANNELS:
         issues.append("canal de release ausente ou não suportado (stable, beta ou DEV)")

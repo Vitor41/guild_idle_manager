@@ -13,12 +13,12 @@ datas = [
     (str(root / "alembic.ini"), "."),
     *webview_datas,
 ]
-public_key_file = os.environ.get("GIM_BUILD_RELEASE_PUBLIC_KEY_FILE")
-if public_key_file:
-    key_path = Path(public_key_file).resolve()
-    if not key_path.is_file():
-        raise RuntimeError("The configured GitHub Releases public key file is missing.")
-    datas.append((str(key_path), "app/data"))
+release_config_file = os.environ.get("GIM_BUILD_RELEASE_CONFIG_FILE")
+if release_config_file:
+    config_path = Path(release_config_file).resolve()
+    if not config_path.is_file():
+        raise RuntimeError("The configured GitHub Releases distribution config is missing.")
+    datas.append((str(config_path), "app/data"))
 
 a = Analysis(
     [str(root / "app/desktop/__main__.py")],
