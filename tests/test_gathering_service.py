@@ -43,7 +43,9 @@ class GatheringServiceTests(unittest.TestCase):
         self.engine.dispose()
 
     def test_assignment_is_exclusive_and_cycles_are_idempotent(self):
+        self.assertEqual(self.db.query(GuildBuilding).filter_by(guild_id=self.guild.id).count(), 0)
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
+        self.assertEqual(self.db.query(GuildBuilding).filter_by(guild_id=self.guild.id).count(), 0)
         with self.assertRaisesRegex(ValueError, "mercenário precisa estar disponível"):
             assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
         first = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(seconds=125))

@@ -26,6 +26,17 @@ O POST delegado de `main.js` já seguia redirects 303 e substituía a tela, mas 
 - `/regional/offers/{id}/start` não tem gate de prédio: valida ciclo, região, oferta/preparo, equipe e depois chama missão ou masmorra. A cotação pode ler bônus de escritório/Exploradores, com nível zero como valor padrão.
 - `_select_contract_templates()` prefere dois contratos iniciais sem requisitos de prédio quando disponíveis; isso é seleção de catálogo, não bloqueio do início. O teste ainda iniciou um contrato cujo template declara escritório nível 1 com a guilda sem construções.
 
+### Evidência explícita por fluxo sem construções
+
+O teste `tests.test_building_gate_contract.BuildingGateContractTests` contém quatro casos nomeados para contrato regional, missão normal, masmorra e chefe. Cada template declara um prédio legado de nível 100, e os validadores passam usando DB stub sem acesso à tabela de construções. O smoke HTTP também apaga todas as linhas `GuildBuilding`, reduz os requisitos legados dos templates a nível 1 e inicia cada execução de verdade:
+
+- Contrato regional: `POST /regional/offers/{id}/start` chama `start_mission`; oferta vira `in_progress`, `MissionRun` persiste e mercenário fica `busy` com zero prédios.
+- Missão normal: `start_mission` + `validate_mission_requirements`; `MissionRun` persiste com zero prédios.
+- Masmorra: `start_dungeon` + `validate_dungeon_requirements` + `are_dungeons_available`; `DungeonRun` persiste com zero prédios.
+- Chefe: `start_dungeon` + os mesmos validadores; `DungeonRun` persiste com zero prédios. A fixture satisfaz os requisitos de nível/grupo do conteúdo, sem criar construções.
+
+`POST /gathering/assign` e `assign_worker()` também passam na campanha sem construções; o teste do serviço em memória confirma zero linhas antes e depois da atribuição. As rotas desktop legadas `/missions/start` e `/dungeons/start` encaminham à Vigília por design e não adicionam gates.
+
 ## Cliente, redirects e segurança
 
 `window.initializeRegionalSupply(root)` é chamado no carregamento inicial e após `restoreGameFormState()` em cada troca de `.game-shell`; o formulário fica ligado só uma vez por nó. O teste de contrato confirma listener de checkbox, desmarcação de suprimento no botão sem suprimento, uso de `submitter.formAction`, seguimento de redirect, toast, registro de erro do cliente e mensagem inline quando a requisição falha. Desktop envia `Origin` same-origin; o smoke HTTP cobre os POSTs pelo middleware que valida host/origem. A API de diagnóstico aceita somente rotas de gameplay permitidas e nunca recebe conteúdo do formulário.
@@ -41,6 +52,8 @@ Texto simples com timestamp UTC, ação, rota sem query, referência, status HTT
 ## Atualizador GitHub Releases
 
 Owner/repo padrão resolvido pelo código: `Vitor41/guild_idle_manager`; canal de bundle vem do marcador DEV/beta/stable. Sem `.env` para esses valores. O teste de release usa uma chave Ed25519 efêmera, executa o signer, valida assinatura do manifesto e SHA-256 no cliente que prepara o Setup. Teste também comprova que, sem chave pública, nenhuma requisição é feita e `query_enabled/install_enabled` seguem falsos.
+
+Nos próximos builds, `-GitHubOwner` e `-GitHubRepo` permitem selecionar o destino no momento da distribuição; os valores e a chave pública são gravados em `app/data/gim-release-config.json`. Slugs inválidos são rejeitados pelo build e pelo runtime. O bundle 0.3.1 anterior ao config mantém defaults atuais e a leitura opcional do arquivo de chave legado. Depois que o repositório for escolhido, é necessário reconstruir o Setup com os valores escolhidos; nenhum build foi feito nesta atualização preparatória.
 
 A revisão Git local tem `origin` configurado para esse remoto. A integração GitHub disponível respondeu 404 tanto ao consultar metadata como releases; não se pode concluir se o repo é privado ou se a conta conectada carece de acesso. O updater atual faz consulta anônima e não tem token; para ele funcionar o repo precisa estar público. Não foi observada release real com manifesto, assinatura, Setup e hash validados.
 
@@ -64,5 +77,7 @@ Execução final: 23 testes passaram em 49,746 s no runtime desktop, com `APP_MO
 | `tests.test_gameplay_diagnostics` | 2 |
 | `tests.test_stage5_ui_contracts` | 16 |
 | `tests.test_desktop_http_smoke` | 1 |
+
+Verificação preparatória final: 20 testes passaram em 42,345 s nos módulos `tests.test_release_signing_tool` (9), `tests.test_building_gate_contract` (4), `tests.test_gathering_service` (6) e `tests.test_desktop_http_smoke` (1). O parser PowerShell aceitou o script, e o próprio build rejeitou inputs inválidos (`bad/name`, `../repo`, `repo.git` e `bad--owner`) antes de iniciar qualquer build.
 
 `git diff --check` passou após as alterações documentais. Não houve inspeção visual, instalação, execução de Setup, push ou PR.
