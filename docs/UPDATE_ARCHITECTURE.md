@@ -1,6 +1,6 @@
 # Atualização do aplicativo
 
-Versão local atual: `0.2.0` (`app/core/version.py`, também publicada como `FastAPI.version`), primeiro incremento menor desde `0.1.0`. Incrementos seguintes de funcionalidade usam `0.1` na versão menor; a versão major fica reservada a mudança arquitetural/de design relevante ou lançamento de plataforma.
+Versão local atual: `0.3.0` (`app/core/version.py`, também publicada como `FastAPI.version`), incremento menor da rodada de melhorias de outubro de 2026. Incrementos seguintes de funcionalidade usam `0.1` na versão menor; a versão major fica reservada a mudança arquitetural/de design relevante ou lançamento de plataforma.
 
 ## DEV a partir do checkout
 
