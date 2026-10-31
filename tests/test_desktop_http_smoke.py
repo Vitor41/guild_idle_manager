@@ -59,9 +59,10 @@ with tempfile.TemporaryDirectory() as data_dir:
     app.state.clock_guard = guard
     app.state.suspended_campaigns = set()
 
-    def request(path, method="GET", body=None):
+    def request(path, method="GET", body=None, extra_headers=None):
         client = http.client.HTTPConnection("127.0.0.1", port, timeout=40)
         headers = {"Host": host}
+        headers.update(extra_headers or {})
         if method not in {"GET", "HEAD"}:
             headers["Origin"] = origin
         if body is not None:
@@ -71,6 +72,11 @@ with tempfile.TemporaryDirectory() as data_dir:
         result = response.status, response.getheader("location"), response.read()
         client.close()
         return result
+
+    async def fail_gameplay_action():
+        raise RuntimeError("password=do-not-log Authorization=Bearer do-not-log-this")
+
+    app.add_api_route("/regional/test-diagnostic", fail_gameplay_action, methods=["POST"])
 
     create_status, _create_location, create_body = request(
         "/desktop/api/campaigns", method="POST", body=json.dumps({"guild_name": "Smoke desktop"}),
@@ -100,12 +106,21 @@ with tempfile.TemporaryDirectory() as data_dir:
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
         regional_no_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato sem suprimento")
         regional_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato preparado")
+        no_building_mission_worker = create_mercenary(db, guild.id, mercenary_class, "Missão sem prédios")
+        no_building_dungeon_worker = create_mercenary(db, guild.id, mercenary_class, "Masmorra sem prédios")
+        no_building_boss_worker = create_mercenary(db, guild.id, mercenary_class, "Chefe sem prédios")
         db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=item_template.id, quantity=1))
         db.flush()
         mercenary_id = mercenary.id
         gathering_worker_id = gathering_worker.id
         regional_no_supply_worker_id = regional_no_supply_worker.id
         regional_supply_worker_id = regional_supply_worker.id
+        no_building_mission_worker_id = no_building_mission_worker.id
+        no_building_dungeon_worker_id = no_building_dungeon_worker.id
+        no_building_boss_worker_id = no_building_boss_worker.id
+        for worker in (regional_no_supply_worker, regional_supply_worker):
+            worker.level = 1
+            worker.power, worker.vitality, worker.agility, worker.intelligence, worker.luck = 6, 4, 4, 2, 3
         now = datetime.now(timezone.utc)
         later = now + timedelta(hours=1)
         mission_template = db.query(MissionTemplate).filter(
@@ -120,8 +135,44 @@ with tempfile.TemporaryDirectory() as data_dir:
         mission_template.max_party_size = 1
         mission_template.required_guild_level = 1
         mission_template.required_min_mercenary_level = 1
-        mission_template.required_building_type = None
-        mission_template.required_building_level = 0
+        # Deliberately require a level-one Contract Office in the template:
+        # regional contract start must still work with no buildings at all.
+        mission_template.required_building_type = "contract_office"
+        mission_template.required_building_level = 1
+        no_building_mission_template = db.query(MissionTemplate).filter(
+            MissionTemplate.is_active.is_(True), MissionTemplate.id != mission_template.id,
+            MissionTemplate.mission_type.notin_(("gathering", "long_idle")),
+        ).order_by(MissionTemplate.id).first()
+        no_building_dungeon_template = db.query(DungeonTemplate).filter(
+            DungeonTemplate.is_active.is_(True), DungeonTemplate.id != dungeon_template.id,
+            DungeonTemplate.content_type == "dungeon",
+        ).order_by(DungeonTemplate.id).first()
+        no_building_boss_template = db.query(DungeonTemplate).filter(
+            DungeonTemplate.is_active.is_(True), DungeonTemplate.content_type == "boss",
+        ).order_by(DungeonTemplate.id).first()
+        assert no_building_mission_template and no_building_dungeon_template and no_building_boss_template
+        no_building_mission_template.required_guild_level = 1
+        no_building_mission_template.required_min_mercenary_level = 1
+        no_building_mission_template.min_party_size = 1
+        no_building_mission_template.max_party_size = 1
+        no_building_mission_template.required_building_type = "contract_office"
+        no_building_mission_template.required_building_level = 1
+        for content_template in (no_building_dungeon_template, no_building_boss_template):
+            content_template.required_guild_level = 1
+            content_template.required_min_mercenary_level = 1
+            content_template.min_party_size = 1
+            content_template.max_party_size = 1
+            content_template.required_total_power = 0
+            content_template.required_class_code = None
+            content_template.required_tank_count = 0
+            content_template.required_support_count = 0
+            content_template.required_damage_count = 0
+            content_template.required_equipment_tier = 0
+            content_template.required_building_type = "scouts"
+            content_template.required_building_level = 1
+        no_building_mission_template_id = no_building_mission_template.id
+        no_building_dungeon_template_id = no_building_dungeon_template.id
+        no_building_boss_template_id = no_building_boss_template.id
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="scouts").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="market").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="blacksmith").one().id, level=1))
@@ -167,6 +218,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             rendered_pages[path] = body
 
         with SessionLocal() as db:
+            db.query(GuildBuilding).filter_by(guild_id=guild_id).delete(synchronize_session=False)
             active_cycle = db.query(RegionalCycle).filter_by(
                 campaign_id=campaign.campaign_id, status="open",
             ).order_by(RegionalCycle.cycle_number.desc()).first()
@@ -179,7 +231,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 cycle_number=active_cycle.cycle_number, region_code=home_region_code,
                 offer_type="contract", slot=9001, mission_template_id=regional_mission_template_id,
                 rank="E", name_snapshot="Contrato de teste sem suprimento",
-                recommended_level_snapshot=1, recommended_power_snapshot=1000000,
+                recommended_level_snapshot=1, recommended_power_snapshot=10,
                 min_party_size_snapshot=1, max_party_size_snapshot=1,
                 duration_seconds_snapshot=60, gold_reward_snapshot=100,
                 xp_reward_snapshot=10, success_chance_snapshot=80,
@@ -189,7 +241,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 cycle_number=active_cycle.cycle_number, region_code=home_region_code,
                 offer_type="contract", slot=9002, mission_template_id=regional_mission_template_id,
                 rank="E", name_snapshot="Contrato de teste preparado",
-                recommended_level_snapshot=1, recommended_power_snapshot=1000000,
+                recommended_level_snapshot=1, recommended_power_snapshot=10,
                 min_party_size_snapshot=1, max_party_size_snapshot=1,
                 duration_seconds_snapshot=60, gold_reward_snapshot=100,
                 xp_reward_snapshot=10, success_chance_snapshot=80,
@@ -200,6 +252,16 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.commit()
 
         no_supply_gold_before = 1000
+        rejected_supply_status, rejected_supply_location, _rejected_supply_body = request(
+            f"/regional/offers/{no_supply_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_no_supply_worker_id}&supply=1",
+        )
+        assert rejected_supply_status == 303 and rejected_supply_location.startswith("/regional?error="), (
+            rejected_supply_status, rejected_supply_location,
+        )
+        rejected_supply_page_status, _rejected_supply_page_location, rejected_supply_page = request(rejected_supply_location)
+        assert rejected_supply_page_status == 200 and b"Prepare o suprimento antes de iniciar" in rejected_supply_page
+
         no_supply_status, no_supply_location, no_supply_body = request(
             f"/regional/offers/{no_supply_offer_id}/start", method="POST",
             body=f"mercenary_ids={regional_no_supply_worker_id}",
@@ -215,6 +277,8 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert no_supply_run.preparation_snapshot_json is None
             assert no_supply_run.rank_snapshot == "E"
             assert no_supply_worker.status == "busy"
+            assert db.query(GuildBuilding).filter_by(guild_id=guild_id).count() == 0
+            assert db.get(Guild, guild_id).level == 1
             assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == no_supply_gold_before
 
         quote_status, _quote_location, quote_body = request(
@@ -224,6 +288,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         supply_quote = json.loads(quote_body)
         assert quote_status == 200 and supply_quote["available"] is True, (quote_status, supply_quote)
         assert supply_quote["chance_bonus_pp"] == 5 and supply_quote["cost_gold"] > 0, supply_quote
+        assert supply_quote["base_final_chance"] >= 86, supply_quote
+        assert supply_quote["final_chance"] == min(95, supply_quote["base_final_chance"] + 5), supply_quote
+        assert supply_quote["cost_gold"] == 1, supply_quote
         prepare_status, prepare_location, prepare_body = request(
             f"/regional/offers/{prepared_offer_id}/prepare", method="POST",
             body=f"mercenary_ids={regional_supply_worker_id}&supply=1",
@@ -241,8 +308,16 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert preparation["chance_bonus_pp"] == 5
             assert preparation["cost_gold"] == supply_quote["cost_gold"]
             assert resources_after_prepare == 1000 - supply_quote["cost_gold"]
-            prepared_offer.supply_preparation_ends_at_utc = datetime.now(timezone.utc) - timedelta(seconds=1)
-            db.commit()
+
+        preparation_deadline = time.monotonic() + 4
+        while time.monotonic() < preparation_deadline:
+            progress_status, _progress_location, progress_body = request("/regional")
+            assert progress_status == 200
+            if "Preparação concluída · pronta para iniciar".encode("utf-8") in progress_body:
+                break
+            time.sleep(0.1)
+        assert "Preparação concluída · pronta para iniciar".encode("utf-8") in progress_body, "the server countdown must reach prepared state"
+        assert re.search(rb'<progress max="100" value="100"', progress_body), progress_body[:2000]
 
         prepared_start_status, prepared_start_location, prepared_start_body = request(
             f"/regional/offers/{prepared_offer_id}/start", method="POST",
@@ -270,7 +345,65 @@ with tempfile.TemporaryDirectory() as data_dir:
         with SessionLocal() as db:
             assignment = db.query(GatheringAssignment).filter_by(mercenary_id=gathering_worker_id, resource_family="wood").one_or_none()
             assert assignment is not None, "gathering form POST must persist its worker assignment"
-        assert b"/static/js/regional-supply.js?v=20261030-2" in rendered_pages["/dungeons"]
+            gathering_worker = db.get(Mercenary, gathering_worker_id)
+            assert gathering_worker.status == "gathering"
+            from app.services.gathering_service import advance_all_assignments
+            guild_row = db.get(Guild, guild_id)
+            cycle_result = advance_all_assignments(
+                db, guild_row, now=assignment.started_at_utc.replace(tzinfo=timezone.utc) + timedelta(seconds=60),
+            )
+            assert cycle_result["wood"]["cycles"] == 1, cycle_result
+            db.commit()
+            db.refresh(assignment)
+            assert assignment.cycle_count == 1 and assignment.progress_seconds == 0
+
+        with SessionLocal() as db:
+            from app.services.dungeon_service import start_dungeon
+            from app.services.mission_service import start_mission
+            guild_row = db.get(Guild, guild_id)
+            assert db.query(GuildBuilding).filter_by(guild_id=guild_id).count() == 0
+            normal_run = start_mission(
+                db, guild_row, str(no_building_mission_template_id), [str(no_building_mission_worker_id)],
+                commit=False,
+            )
+            dungeon_run_without_building = start_dungeon(
+                db, guild_row, str(no_building_dungeon_template_id), [str(no_building_dungeon_worker_id)],
+                commit=False,
+            )
+            boss_run_without_building = start_dungeon(
+                db, guild_row, str(no_building_boss_template_id), [str(no_building_boss_worker_id)],
+                commit=False,
+            )
+            db.commit()
+            assert normal_run.id and dungeon_run_without_building.id and boss_run_without_building.id
+            assert db.get(Mercenary, no_building_mission_worker_id).status == "busy"
+            assert db.get(Mercenary, no_building_dungeon_worker_id).status == "busy"
+            assert db.get(Mercenary, no_building_boss_worker_id).status == "busy"
+
+        error_status, error_location, _error_body = request(
+            "/regional/test-diagnostic", method="POST", body="",
+            extra_headers={"X-GIM-Diagnostic-ID": "0123456789abcdef"},
+        )
+        assert error_status == 303 and error_location.startswith("/regional?"), (error_status, error_location)
+        diagnostic_status, _diagnostic_location, diagnostic_page = request(error_location)
+        assert diagnostic_status == 200
+        assert b"A a\xc3\xa7\xc3\xa3o n\xc3\xa3o foi conclu\xc3\xadda" in diagnostic_page
+        assert b"0123456789abcdef" in diagnostic_page
+        client_failure_status, _client_failure_location, client_failure_body = request(
+            "/desktop/api/diagnostics/client-error", method="POST",
+            body=json.dumps({"route": f"/regional/offers/{prepared_offer_id}/prepare"}),
+            extra_headers={"X-GIM-Diagnostic-ID": "fedcba9876543210"},
+        )
+        assert client_failure_status == 200 and json.loads(client_failure_body)["recorded"] is True
+        gameplay_log = Path(os.environ["LOCALAPPDATA"]) / "GuildIdleManager" / "logs" / "gameplay-actions.log"
+        gameplay_log_text = gameplay_log.read_text(encoding="utf-8")
+        for action_name in ("gathering.assign", "regional.offer.start", "regional.offer.prepare"):
+            assert f"action={action_name}" in gameplay_log_text
+        assert "status=500 outcome=unexpected_exception" in gameplay_log_text
+        assert "status=0 outcome=client_request_failed" in gameplay_log_text
+        assert "Traceback (most recent call last)" in gameplay_log_text
+        assert "do-not-log" not in gameplay_log_text and "do-not-log-this" not in gameplay_log_text
+        assert b"/static/js/regional-supply.js?v=20261031-1" in rendered_pages["/dungeons"]
         assert b"Modo Offline" in rendered_pages["/dashboard"]
         assert b"Estamina 8h 0min / 8h" in rendered_pages["/dashboard"]
         assert b"2h de estamina por 1h online" in rendered_pages["/dashboard"]

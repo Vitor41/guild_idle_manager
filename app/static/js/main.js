@@ -338,6 +338,20 @@ function showActionToast(container) {
   window.setTimeout(() => toast.remove(), 5000);
 }
 
+window.reportGameplayClientFailure = (route, diagnosticId) => {
+  const target = new URL(route, window.location.origin);
+  if (target.origin !== window.location.origin) return;
+  fetch("/desktop/api/diagnostics/client-error", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      "X-GIM-Diagnostic-ID": diagnosticId,
+    },
+    body: JSON.stringify({ route: target.pathname }),
+  }).catch(() => {});
+};
+
 function getFormStateKey(form) {
   const actionPath = new URL(form.action, window.location.origin).pathname;
   const identity = Array.from(form.querySelectorAll('input[type="hidden"][name]'))
@@ -428,6 +442,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   updateGenericCountdowns();
   initializeSalvagePreviews();
   restoreGameFormState(formState);
+  window.initializeRegionalSupply?.(currentMain);
   showActionToast(currentMain);
 
   const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
@@ -503,6 +518,7 @@ document.addEventListener("submit", async (event) => {
   const previousPath = window.location.pathname;
   const scrollPosition = window.scrollY;
   const formState = captureGameFormState();
+  const diagnosticId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   form.setAttribute("aria-busy", "true");
   if (submitter) {
     submitter.disabled = true;
@@ -514,7 +530,11 @@ document.addEventListener("submit", async (event) => {
     const requestOptions = {
       method: method.toUpperCase(),
       credentials: "same-origin",
-      headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
+      headers: {
+        "Accept": "text/html",
+        "X-Requested-With": "fetch",
+        "X-GIM-Diagnostic-ID": diagnosticId,
+      },
     };
     if (method === "get") {
       requestUrl.search = new URLSearchParams(formData).toString();
@@ -545,7 +565,14 @@ document.addEventListener("submit", async (event) => {
       submitter.disabled = false;
       submitter.classList.remove("is-loading");
     }
-    form.submit();
+    form.querySelector("[data-client-action-error]")?.remove();
+    window.reportGameplayClientFailure?.(submitter?.formAction || form.action, diagnosticId);
+    const notice = document.createElement("p");
+    notice.className = "form-error";
+    notice.setAttribute("role", "alert");
+    notice.dataset.clientActionError = "true";
+    notice.textContent = `Não foi possível confirmar a ação. Tente novamente e informe a referência ${diagnosticId}.`;
+    form.prepend(notice);
   }
 });
 

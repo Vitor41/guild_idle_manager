@@ -159,6 +159,27 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("prepare_supply_snapshot(", self.read("app/services/dungeon_service.py"))
         self.assertIn('supply_selected=(form.get("supply") or [""])[0] == "1"', self.read("app/routes/dungeon_routes.py"))
 
+    def test_async_navigation_rebinds_regional_actions_and_surfaces_request_failures(self):
+        main = self.read("app/static/js/main.js")
+        supply = self.read("app/static/js/regional-supply.js")
+        base = self.read("app/templates/base.html")
+        self.assertIn("window.initializeRegionalSupply?.(currentMain)", main)
+        self.assertLess(main.index("restoreGameFormState(formState);"), main.index("window.initializeRegionalSupply?.(currentMain)"))
+        self.assertIn('window.initializeRegionalSupply = (root = document) =>', supply)
+        self.assertIn('form.dataset.regionalSupplyInitialized === "true"', supply)
+        self.assertIn('document.addEventListener("DOMContentLoaded", () => window.initializeRegionalSupply())', supply)
+        self.assertIn('event.target.closest("[data-start-without-supply]")', supply)
+        self.assertIn('supply.checked = false', supply)
+        self.assertIn('submitter?.formAction || form.action', main)
+        self.assertIn('"X-GIM-Diagnostic-ID": diagnosticId', main)
+        self.assertIn('data-client-action-error', main)
+        self.assertIn('window.reportGameplayClientFailure?.(submitter?.formAction || form.action, diagnosticId)', main)
+        self.assertIn('/desktop/api/diagnostics/client-error', main)
+        self.assertIn('window.reportGameplayClientFailure?.(form.dataset.supplyQuoteUrl, diagnosticId)', supply)
+        submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
+        self.assertNotIn('form.submit()', submit_catch)
+        self.assertIn("?v=20261031-1", base)
+
     def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
         gathering = self.read("app/templates/gathering/index.html")
         route = self.read("app/routes/gathering_routes.py")

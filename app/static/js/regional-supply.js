@@ -1,5 +1,7 @@
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll(".supply-preparation-progress").forEach((progressBox) => {
+window.initializeRegionalSupply = (root = document) => {
+  root.querySelectorAll(".supply-preparation-progress").forEach((progressBox) => {
+    if (progressBox.dataset.regionalTimerInitialized === "true") return;
+    progressBox.dataset.regionalTimerInitialized = "true";
     const time = progressBox.querySelector("time[data-ends-at]");
     const bar = progressBox.querySelector("progress");
     const status = progressBox.querySelector("strong");
@@ -42,7 +44,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 1000);
   });
 
-  document.querySelectorAll("form[data-supply-quote-url]").forEach((form) => {
+  root.querySelectorAll("form[data-supply-quote-url]").forEach((form) => {
+    if (form.dataset.regionalSupplyInitialized === "true") return;
+    form.dataset.regionalSupplyInitialized = "true";
     const supply = form.querySelector('input[name="supply"]');
     const summary = form.querySelector(".supply-preparation small");
     if (!supply || !summary) return;
@@ -74,11 +78,15 @@ document.addEventListener("DOMContentLoaded", () => {
       // the request, FormData must still carry their current choice; the start
       // endpoint recalculates availability and cost from server state.
       summary.textContent = "Calculando chance e custo para esta equipe…";
+      const diagnosticId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       try {
         const response = await fetch(form.dataset.supplyQuoteUrl, {
           method: "POST",
           body: new FormData(form),
-          headers: { "X-Requested-With": "fetch" },
+        headers: {
+          "X-Requested-With": "fetch",
+          "X-GIM-Diagnostic-ID": diagnosticId,
+        },
           credentials: "same-origin",
         });
         const quote = await response.json();
@@ -96,6 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
         syncPrepareButton();
       } catch (_error) {
         if (version !== requestVersion) return;
+        window.reportGameplayClientFailure?.(form.dataset.supplyQuoteUrl, diagnosticId);
         quoteState = "unavailable";
         summary.textContent = `Não foi possível consultar a disponibilidade. Tente novamente.${supply.checked ? " Desmarque o suprimento para iniciar sem ele." : ""}`;
         syncPrepareButton();
@@ -121,4 +130,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     refreshQuote();
   });
-});
+};
+
+document.addEventListener("DOMContentLoaded", () => window.initializeRegionalSupply());
