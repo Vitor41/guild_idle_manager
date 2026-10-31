@@ -58,4 +58,3 @@ class GameplayDiagnosticsTests(unittest.TestCase):
                 self.assertEqual((handler.maxBytes, handler.backupCount), (1_000_000, 2))
             finally:
                 close_gameplay_logger(path)
-
