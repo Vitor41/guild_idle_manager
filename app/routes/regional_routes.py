@@ -329,6 +329,7 @@ def regional_index(
             "guild": guild,
             "resources": resources,
             "error": request.query_params.get("error"),
+            "diagnostic_id": request.query_params.get("diagnostic"),
             "selected_start_mercenary_ids": request.query_params.getlist("selected_mercenary_id"),
             "selected_start_supply": request.query_params.get("selected_supply") == "1",
             "message": request.query_params.get("message"),

@@ -2,7 +2,7 @@
 {% block title %}Vigília Regional · Guild Idle Manager{% endblock %}
 {% block content %}
 <section class="evolution-page" aria-labelledby="evolution-title">
-  {% if error %}<p class="evolution-notice evolution-notice--error" role="alert">{{ error }}</p>{% endif %}
+  {% if error %}<p class="evolution-notice evolution-notice--error" role="alert">{{ error }}{% if diagnostic_id %} Referência de diagnóstico: {{ diagnostic_id }}. Log: %LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log{% endif %}</p>{% endif %}
   {% if message %}<p class="evolution-notice" role="status">{{ message }}</p>{% endif %}
 
   <header class="evolution-heading"><div><p class="evolution-eyebrow">CAMPANHA · {{ home_region.region_name|upper }}</p><h1 id="evolution-title">A fronteira reage à sua guilda</h1><p>Ofertas, estado regional e rivais persistem nesta campanha. O ciclo avança mesmo quando você está ausente.</p></div><a class="evolution-button evolution-button--secondary" href="#regional-board">Ver ofertas</a></header>

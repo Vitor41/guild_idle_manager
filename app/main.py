@@ -1,12 +1,16 @@
 from pathlib import Path
 import asyncio
+import re
+import uuid
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.version import APP_VERSION
+from app.desktop.gameplay_diagnostics import log_gameplay_action
 from app.database.connection import SessionLocal
 from app.routes import session_routes, update_routes
 from app.routes import blacksmith_routes, building_routes, class_change_routes, class_routes, codex_routes, dashboard_routes, dock_routes, dungeon_routes, gathering_routes, guide_routes, home_routes, inventory_routes, market_routes, mercenary_routes, mission_routes, profession_routes, progress_routes, tavern_routes, tier_routes, tutorial_routes
@@ -42,6 +46,31 @@ app.mount(
 app.state.app_mode = settings.app_mode
 
 
+_GAMEPLAY_POST_PREFIXES = (
+    "/gathering/", "/regional/", "/missions/", "/dungeons/", "/market/",
+    "/blacksmith/", "/professions/", "/class-change/", "/tutorial/",
+)
+
+
+def _gameplay_action_for_path(path: str) -> str:
+    if path == "/gathering/assign":
+        return "gathering.assign"
+    if path.startswith("/regional/offers/"):
+        return "regional.offer." + ("prepare" if path.endswith("/prepare") else "start" if path.endswith("/start") else "action")
+    if path.startswith("/regional/"):
+        return "regional.action"
+    return path.strip("/").replace("/", ".") or "gameplay.action"
+
+
+def _diagnostic_error_redirect(path: str, diagnostic_id: str) -> str:
+    destination = "/gathering" if path.startswith("/gathering/") else "/regional" if path.startswith("/regional/") else "/dashboard"
+    query = urlencode({
+        "error": f"A ação não foi concluída. Consulte o log e informe a referência {diagnostic_id}.",
+        "diagnostic": diagnostic_id,
+    })
+    return f"{destination}?{query}"
+
+
 @app.middleware("http")
 async def protect_desktop_loopback(request: Request, call_next):
     if request.app.state.app_mode == "desktop":
@@ -56,7 +85,38 @@ async def protect_desktop_loopback(request: Request, call_next):
         if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
             if request.headers.get("origin") != allowed_origin:
                 return PlainTextResponse("Requisicao sem origem local valida.", status_code=403)
-    response = await call_next(request)
+    is_gameplay_post = (
+        request.method.upper() == "POST"
+        and request.url.path.startswith(_GAMEPLAY_POST_PREFIXES)
+    )
+    diagnostic_id = None
+    if request.app.state.app_mode == "desktop" and is_gameplay_post:
+        supplied_id = request.headers.get("x-gim-diagnostic-id", "")
+        diagnostic_id = supplied_id if re.fullmatch(r"[a-fA-F0-9-]{16,40}", supplied_id) else uuid.uuid4().hex
+        request.state.diagnostic_id = diagnostic_id
+        action = _gameplay_action_for_path(request.url.path)
+        try:
+            response = await call_next(request)
+        except Exception as error:
+            log_gameplay_action(
+                action=action, route=request.url.path, diagnostic_id=diagnostic_id,
+                status_code=500, outcome="unexpected_exception", exception=error,
+            )
+            response = RedirectResponse(_diagnostic_error_redirect(request.url.path, diagnostic_id), status_code=303)
+        else:
+            status_code = response.status_code
+            location = urlsplit(response.headers.get("location", ""))
+            redirected_with_error = "error" in parse_qs(location.query)
+            outcome = "error" if status_code >= 400 or redirected_with_error else "redirect" if 300 <= status_code < 400 else "success"
+            log_gameplay_action(
+                action=action, route=request.url.path, diagnostic_id=diagnostic_id,
+                status_code=status_code, outcome=outcome,
+            )
+            if status_code >= 400:
+                response = RedirectResponse(_diagnostic_error_redirect(request.url.path, diagnostic_id), status_code=303)
+        response.headers["X-GIM-Diagnostic-ID"] = diagnostic_id
+    else:
+        response = await call_next(request)
     if request.app.state.app_mode == "desktop":
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (

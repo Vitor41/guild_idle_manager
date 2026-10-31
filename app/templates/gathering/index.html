@@ -14,7 +14,7 @@
       </div>
     </header>
 
-    {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+    {% if error %}<p class="form-error" role="alert">{{ error }}{% if diagnostic_id %} Referência de diagnóstico: {{ diagnostic_id }}. Log: %LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log{% endif %}</p>{% endif %}
     {% if message %}<p class="form-success" role="status">{{ message }}</p>{% endif %}
 
     <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">

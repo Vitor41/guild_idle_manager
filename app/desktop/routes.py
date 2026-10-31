@@ -1,6 +1,7 @@
 """Campaign manager pages and local-only campaign actions."""
 
 from pathlib import Path
+import re
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -8,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app.desktop.lifecycle import open_campaign, open_campaign_with_migration, suspend_campaign
+from app.desktop.gameplay_diagnostics import log_gameplay_action
 
 
 router = APIRouter(prefix="/desktop")
@@ -33,6 +35,36 @@ def _services(request: Request):
 @router.get("/health", include_in_schema=False)
 def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+@router.post("/api/diagnostics/client-error")
+async def report_gameplay_client_error(request: Request) -> JSONResponse:
+    diagnostic_id = request.headers.get("x-gim-diagnostic-id", "")
+    if not re.fullmatch(r"[a-fA-F0-9-]{16,40}", diagnostic_id):
+        return JSONResponse({"recorded": False}, status_code=400)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return JSONResponse({"recorded": False}, status_code=400)
+    route = payload.get("route") if isinstance(payload, dict) else None
+    if not isinstance(route, str) or len(route) > 200 or "?" in route:
+        return JSONResponse({"recorded": False}, status_code=400)
+    if route == "/gathering/assign":
+        action = "gathering.assign.client_request_failed"
+    elif re.fullmatch(r"/regional/offers/\d+/(start|prepare|supply-quote)", route):
+        action = "regional.offer.client_request_failed"
+    elif route in {"/missions/start", "/dungeons/start"}:
+        action = route.strip("/").replace("/", ".") + ".client_request_failed"
+    else:
+        return JSONResponse({"recorded": False}, status_code=400)
+    log_gameplay_action(
+        action=action,
+        route=route,
+        diagnostic_id=diagnostic_id,
+        status_code=0,
+        outcome="client_request_failed",
+    )
+    return JSONResponse({"recorded": True})
 
 
 @router.get("/api/stamina-status")

@@ -52,6 +52,7 @@ def gathering_index(
             "used": get_inventory_usage(db, guild.id),
             "inventory_url": "/inventory",
             "error": request.query_params.get("error"),
+            "diagnostic_id": request.query_params.get("diagnostic"),
             "message": request.query_params.get("message"),
         },
     )
