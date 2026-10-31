@@ -21,8 +21,8 @@ class Settings:
     )
     secret_key: str = os.getenv("SECRET_KEY", "change-this-secret")
     app_env: str = os.getenv("APP_ENV", "local")
-    github_releases_owner: str | None = os.getenv("GIM_GITHUB_RELEASES_OWNER")
-    github_releases_repo: str | None = os.getenv("GIM_GITHUB_RELEASES_REPO")
+    github_releases_owner: str | None = os.getenv("GIM_GITHUB_RELEASES_OWNER", "Vitor41")
+    github_releases_repo: str | None = os.getenv("GIM_GITHUB_RELEASES_REPO", "guild_idle_manager")
     github_releases_channel: str | None = os.getenv("GIM_GITHUB_RELEASES_CHANNEL")
     github_releases_public_key: str | None = os.getenv("GIM_GITHUB_RELEASES_PUBLIC_KEY")
     github_releases_manifest_asset: str = os.getenv(

@@ -67,11 +67,19 @@ class GitHubReleasesError(ValueError):
 
 
 def configured_source() -> GitHubReleasesConfig:
+    installed_channel = read_installed_channel() if getattr(sys, "frozen", False) else None
+    packaged_key_path = Path(__file__).resolve().parents[1] / "data" / "gim-release-public-key.txt"
+    packaged_key = None
+    if getattr(sys, "frozen", False):
+        try:
+            packaged_key = packaged_key_path.read_text(encoding="ascii").strip() or None
+        except OSError:
+            packaged_key = None
     return GitHubReleasesConfig(
-        owner=settings.github_releases_owner,
-        repo=settings.github_releases_repo,
-        channel=settings.github_releases_channel,
-        public_key_b64=settings.github_releases_public_key,
+        owner=settings.github_releases_owner or "Vitor41",
+        repo=settings.github_releases_repo or "guild_idle_manager",
+        channel=settings.github_releases_channel or installed_channel or "DEV",
+        public_key_b64=settings.github_releases_public_key or packaged_key,
         manifest_asset=settings.github_releases_manifest_asset,
     )
 

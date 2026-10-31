@@ -1,22 +1,30 @@
 # PyInstaller one-folder build. Assets, Alembic migrations, and templates remain local/offline.
+import os
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
 root = Path(SPECPATH).resolve().parents[1]
 webview_datas, webview_binaries, webview_hiddenimports = collect_all("webview")
+datas = [
+    (str(root / "app/templates"), "app/templates"),
+    (str(root / "app/static"), "app/static"),
+    (str(root / "app/data"), "app/data"),
+    (str(root / "alembic"), "alembic"),
+    (str(root / "alembic.ini"), "."),
+    *webview_datas,
+]
+public_key_file = os.environ.get("GIM_BUILD_RELEASE_PUBLIC_KEY_FILE")
+if public_key_file:
+    key_path = Path(public_key_file).resolve()
+    if not key_path.is_file():
+        raise RuntimeError("The configured GitHub Releases public key file is missing.")
+    datas.append((str(key_path), "app/data"))
 
 a = Analysis(
     [str(root / "app/desktop/__main__.py")],
     pathex=[str(root)],
     binaries=webview_binaries,
-    datas=[
-        (str(root / "app/templates"), "app/templates"),
-        (str(root / "app/static"), "app/static"),
-        (str(root / "app/data"), "app/data"),
-        (str(root / "alembic"), "alembic"),
-        (str(root / "alembic.ini"), "."),
-        *webview_datas,
-    ],
+    datas=datas,
     hiddenimports=webview_hiddenimports + ["webview.platforms.edgechromium"],
     hookspath=[],
     hooksconfig={},

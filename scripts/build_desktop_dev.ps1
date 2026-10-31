@@ -1,7 +1,8 @@
 param(
     [string]$OutputRoot,
     [ValidateSet('DEV', 'stable', 'beta')]
-    [string]$Channel = 'DEV'
+    [string]$Channel = 'DEV',
+    [string]$GitHubPublicKeyBase64
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,8 +56,25 @@ $python = Join-Path $repo '.venv-desktop\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw 'Crie .venv-desktop e instale requirements-desktop-dev.txt antes do build.'
 }
-& $python -m PyInstaller --noconfirm --clean --distpath $buildRoot --workpath (Join-Path $buildRoot 'pyinstaller-work') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
-if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminou com codigo $LASTEXITCODE" }
+$publicKeyFile = $null
+$previousPublicKeyFile = $env:GIM_BUILD_RELEASE_PUBLIC_KEY_FILE
+if (-not [string]::IsNullOrWhiteSpace($GitHubPublicKeyBase64)) {
+    try { $publicKeyBytes = [Convert]::FromBase64String($GitHubPublicKeyBase64) }
+    catch { throw 'GitHubPublicKeyBase64 precisa ser Base64 válido.' }
+    if ($publicKeyBytes.Length -ne 32) { throw 'A chave pública Ed25519 precisa conter 32 bytes.' }
+    $publicKeyFile = Join-Path $buildRoot 'gim-release-public-key.txt'
+    [System.IO.File]::WriteAllText($publicKeyFile, $GitHubPublicKeyBase64, [System.Text.Encoding]::ASCII)
+    $env:GIM_BUILD_RELEASE_PUBLIC_KEY_FILE = $publicKeyFile
+}
+try {
+    & $python -m PyInstaller --noconfirm --clean --distpath $buildRoot --workpath (Join-Path $buildRoot 'pyinstaller-work') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
+    if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminou com codigo $LASTEXITCODE" }
+}
+finally {
+    if ($null -eq $previousPublicKeyFile) { Remove-Item Env:GIM_BUILD_RELEASE_PUBLIC_KEY_FILE -ErrorAction SilentlyContinue }
+    else { $env:GIM_BUILD_RELEASE_PUBLIC_KEY_FILE = $previousPublicKeyFile }
+    if ($publicKeyFile -and (Test-Path -LiteralPath $publicKeyFile)) { Remove-Item -LiteralPath $publicKeyFile -Force }
+}
 
 $packageRoot = Join-Path $buildRoot "GuildIdleManager-$Channel"
 $packageRoot = Assert-ContainedNoReparsePoint $stagingRoot $packageRoot
