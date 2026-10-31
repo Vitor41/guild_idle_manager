@@ -12,10 +12,27 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from app.services import github_releases
+from scripts.generate_release_key import generate_key
 from scripts.sign_github_release import create_signed_manifest
 
 
 class ReleaseSigningToolTests(unittest.TestCase):
+    def test_key_generation_returns_public_key_matching_private_key_saved_outside_repository(self):
+        with tempfile.TemporaryDirectory() as directory:
+            private_key_file = Path(directory) / "release-private-key.base64"
+            public_key_b64 = generate_key(private_key_file)
+            private_key_bytes = base64.b64decode(private_key_file.read_text(encoding="ascii").strip(), validate=True)
+            private_key = Ed25519PrivateKey.from_private_bytes(private_key_bytes)
+            derived_public_key = private_key.public_key().public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+            self.assertEqual(base64.b64decode(public_key_b64, validate=True), derived_public_key)
+
+    def test_key_generation_refuses_private_key_inside_repository(self):
+        with self.assertRaisesRegex(ValueError, "fora da pasta do repositório"):
+            generate_key(Path(__file__).resolve().parents[1] / "not-a-real-key.txt")
+
     def test_manifest_signature_and_setup_hash_match_release_client_contract(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -33,6 +50,17 @@ class ReleaseSigningToolTests(unittest.TestCase):
             manifest_bytes, signature_b64, public_key_b64 = create_signed_manifest(
                 setup, private_key_file, "0.3.1", "DEV", "0.3.1",
             )
+            self.assertEqual(
+                create_signed_manifest(
+                    setup, private_key_file, "0.3.1", "DEV", "0.3.1", public_key_b64,
+                )[2],
+                public_key_b64,
+            )
+            with self.assertRaisesRegex(ValueError, "não corresponde"):
+                create_signed_manifest(
+                    setup, private_key_file, "0.3.1", "DEV", "0.3.1",
+                    base64.b64encode(bytes(32)).decode("ascii"),
+                )
 
             manifest = json.loads(manifest_bytes)
             self.assertEqual(manifest["app_id"], "guild-idle-manager")

@@ -1,0 +1,114 @@
+name: Publicar release DEV assinada
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag DEV existente para publicar (ex.: DEV-v0.3.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: windows-latest
+    environment: release-signing
+    steps:
+      - name: Validar referência e configuração da assinatura
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_PUBLIC_KEY_B64: ${{ vars.GIM_RELEASE_PUBLIC_KEY_B64 }}
+          RELEASE_PRIVATE_KEY_B64: ${{ secrets.GIM_RELEASE_PRIVATE_KEY_B64 }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^DEV-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+            throw 'A tag precisa seguir DEV-vMAJOR.MINOR.PATCH.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_PUBLIC_KEY_B64)) {
+            throw 'Configure a variável Actions GIM_RELEASE_PUBLIC_KEY_B64 antes de publicar.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_PRIVATE_KEY_B64)) {
+            throw 'Configure o segredo Actions GIM_RELEASE_PRIVATE_KEY_B64 antes de publicar.'
+          }
+      - name: Obter código da tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Validar tag e selecionar código versionado
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          git fetch --no-tags origin "refs/tags/$env:RELEASE_TAG:refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Não foi possível buscar a tag indicada.' }
+          git merge-base --is-ancestor $env:RELEASE_TAG HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'A tag precisa apontar para um commit já integrado ao branch principal.' }
+          git checkout --detach $env:RELEASE_TAG
+          if ($LASTEXITCODE -ne 0) { throw 'Não foi possível selecionar a revisão da tag.' }
+      - name: Conferir versão do app com a tag
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $expected = $env:RELEASE_TAG.Substring(5)
+          $version = Select-String -Path app/core/version.py -Pattern '^APP_VERSION\s*=\s*"([^"]+)"$'
+          if (-not $version -or $version.Matches[0].Groups[1].Value -ne $expected) {
+            throw "A versão em app/core/version.py não corresponde à tag $env:RELEASE_TAG."
+          }
+      - name: Preparar Python e dependências
+        shell: pwsh
+        run: |
+          py -3.12 -m venv .venv-desktop
+          .\.venv-desktop\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv-desktop\Scripts\python.exe -m pip install -r requirements-desktop-dev.txt
+      - name: Empacotar instalador bootstrap
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PUBLIC_KEY_B64: ${{ vars.GIM_RELEASE_PUBLIC_KEY_B64 }}
+        run: |
+          $output = "dist/staging/release-$env:RELEASE_TAG"
+          ./scripts/build_desktop_dev.ps1 -Channel DEV -GitHubPublicKeyBase64 $env:RELEASE_PUBLIC_KEY_B64 -OutputRoot $output
+      - name: Assinar manifesto do Setup
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PRIVATE_KEY_B64: ${{ secrets.GIM_RELEASE_PRIVATE_KEY_B64 }}
+          RELEASE_PUBLIC_KEY_B64: ${{ vars.GIM_RELEASE_PUBLIC_KEY_B64 }}
+        run: |
+          $version = $env:RELEASE_TAG.Substring(5)
+          $output = "dist/staging/release-$env:RELEASE_TAG"
+          $keyFile = Join-Path $env:RUNNER_TEMP 'gim-ed25519-private-key.b64'
+          try {
+            [System.IO.File]::WriteAllText($keyFile, $env:RELEASE_PRIVATE_KEY_B64, [System.Text.Encoding]::ASCII)
+            .\.venv-desktop\Scripts\python.exe scripts/sign_github_release.py `
+              --setup "$output/GuildIdleManager-DEV-Setup.exe" `
+              --private-key-file $keyFile `
+              --version $version `
+              --channel DEV `
+              --minimum-supported-version 0.3.1 `
+              --expected-public-key-base64 $env:RELEASE_PUBLIC_KEY_B64 `
+              --output-directory $output
+            if ($LASTEXITCODE -ne 0) { throw 'Falha ao assinar o manifesto.' }
+          }
+          finally {
+            Remove-Item -LiteralPath $keyFile -Force -ErrorAction SilentlyContinue
+          }
+      - name: Publicar release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $output = "dist/staging/release-$env:RELEASE_TAG"
+          gh release create $env:RELEASE_TAG `
+            "$output/GuildIdleManager-DEV-Setup.exe" `
+            "$output/gim-release.json" `
+            "$output/gim-release.json.sig" `
+            --verify-tag `
+            --prerelease `
+            --title "Guild Idle Manager $env:RELEASE_TAG" `
+            --notes "Release DEV assinada. O atualizador valida assinatura Ed25519 e SHA-256 antes de oferecer o Setup."

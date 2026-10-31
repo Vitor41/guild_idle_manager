@@ -33,7 +33,7 @@ $env:GIM_TEST_BUILT_PACKAGE = Join-Path $candidate.FullName 'GuildIdleManager-DE
 Remove-Item Env:GIM_TEST_BUILT_PACKAGE
 ```
 
-Para validar novamente em um computador limpo, extraia o ZIP, execute o instalador e abra `Guild Idle Manager DEV`. O aplicativo não consulta serviços externos durante a abertura. Atualizações DEV substituem os arquivos do aplicativo no diretório de instalação; os saves permanecem separados. O canal padrão aponta para `Vitor41/guild_idle_manager`, agora público; a verificação permanece desabilitada até uma chave pública Ed25519 ser incluída no build e existir uma release assinada validada. A instalação 0.3.1, também sem chave pública, precisa primeiro de um Setup bootstrap obtido manualmente. Para assinatura e configuração do build, consulte [UPDATE_ARCHITECTURE.md](UPDATE_ARCHITECTURE.md).
+Para validar novamente em um computador limpo, extraia o ZIP, execute o instalador e abra `Guild Idle Manager DEV`. O aplicativo não consulta serviços externos durante a abertura. Atualizações DEV substituem os arquivos do aplicativo no diretório de instalação; os saves permanecem separados. O canal padrão aponta para `Vitor41/guild_idle_manager`, agora público; a instalação 0.3.1, sem chave pública, precisa primeiro do Setup bootstrap 0.3.2 instalado manualmente. A nova instalação só verificará releases depois da publicação da primeira release DEV assinada. Para assinatura e configuração do build, consulte [UPDATE_ARCHITECTURE.md](UPDATE_ARCHITECTURE.md).
 
 ## Preparação única neste checkout
 
