@@ -42,7 +42,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          git fetch --no-tags origin "refs/tags/$env:RELEASE_TAG:refs/tags/$env:RELEASE_TAG"
+          git fetch --no-tags origin "refs/tags/${env:RELEASE_TAG}:refs/tags/${env:RELEASE_TAG}"
           if ($LASTEXITCODE -ne 0) { throw 'Não foi possível buscar a tag indicada.' }
           git merge-base --is-ancestor $env:RELEASE_TAG HEAD
           if ($LASTEXITCODE -ne 0) { throw 'A tag precisa apontar para um commit já integrado ao branch principal.' }
