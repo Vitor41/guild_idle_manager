@@ -38,8 +38,9 @@ function formatGenericRemaining(ms) {
 
 function updateGenericCountdowns() {
   document.querySelectorAll("[data-ends-at]").forEach((element) => {
-    const endsAt = new Date(element.dataset.endsAt);
-    const remaining = endsAt.getTime() - Date.now();
+    const raw = element.dataset.endsAt || "";
+    const endsAt = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+    const remaining = endsAt - Date.now();
     if (!(element instanceof HTMLButtonElement)) {
       element.textContent = remaining <= 0 ? "Pronto" : formatGenericRemaining(remaining);
     }
@@ -54,6 +55,50 @@ function updateGenericCountdowns() {
     }
   });
 }
+
+window.parseUtcTimestamp = (value) => {
+  const raw = value || "";
+  return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+};
+
+function initializeClassGuideIndex() {
+  const nav = document.querySelector(".classes-page .classes-guide-index");
+  if (!nav) return;
+  const links = [...nav.querySelectorAll('a[href^="#"]')];
+  const sections = links.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1)))).filter(Boolean);
+  const setActive = (target) => {
+    links.forEach((link) => {
+      if (link.hash === `#${target.id}`) {
+        link.setAttribute("aria-current", "location");
+        link.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } else link.removeAttribute("aria-current");
+    });
+  };
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (visible) setActive(visible.target);
+  }, { rootMargin: "-120px 0px -65% 0px", threshold: [0, 0.2, 0.5] });
+  sections.forEach((section) => observer.observe(section));
+  nav.addEventListener("click", (event) => {
+    const link = event.target.closest('a[href^="#"]');
+    const target = link && document.getElementById(decodeURIComponent(link.hash.slice(1)));
+    if (target) window.setTimeout(() => target.focus({ preventScroll: true }), 0);
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const help = document.querySelector(".offline-action:hover .offline-help, .offline-action:focus-within .offline-help");
+  if (!help) return;
+  help.open = false;
+  help.classList.add("escape-dismissed");
+  help.querySelector("summary")?.blur();
+});
+document.querySelectorAll(".offline-help").forEach((help) => {
+  help.addEventListener("toggle", () => { if (help.open) help.classList.remove("escape-dismissed"); });
+  help.addEventListener("pointerleave", () => help.classList.remove("escape-dismissed"));
+  help.addEventListener("focusin", () => help.classList.remove("escape-dismissed"));
+});
 
 const offlineDialog = document.querySelector("#offline-dialog[data-auto-open]");
 if (offlineDialog) {
@@ -145,6 +190,7 @@ if (sessionFrame) {
 
 updateGenericCountdowns();
 setInterval(updateGenericCountdowns, 1000);
+document.addEventListener("DOMContentLoaded", initializeClassGuideIndex);
 
 function updateSalvagePreview(form) {
   const itemSelect = form.querySelector("[data-salvage-item]");

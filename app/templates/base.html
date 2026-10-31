@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261029-1">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261030-2">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261027-1">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261030-1">{% endif %}
@@ -79,7 +79,14 @@
               <span><small>XP</small>{{ guild.xp if guild is defined and guild and guild.xp is defined else 0 }}</span>
               {% if resources is defined and resources %}{{ treasury(resources) }}{% endif %}
             </div>
-            {% if request.app.state.app_mode == 'desktop' %}<form method="post" action="/desktop/return-to-campaigns"><button class="topbar-back-button" type="submit" title="Registrar o início do modo offline e voltar à seleção">Modo Offline</button></form>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}
+              {% set active_campaign = request.app.state.active_campaign %}
+              {% if active_campaign and active_campaign.stamina_seconds is not none %}{% set stamina_seconds = [active_campaign.stamina_seconds|int, 28800]|min %}{% set stamina_label = ((stamina_seconds // 3600)|string) ~ 'h ' ~ (((stamina_seconds % 3600) // 60)|string) ~ 'min' %}{% set recharge_remaining = [3600 - (active_campaign.stamina_recharge_remainder_seconds|int), 0]|max %}{% endif %}
+              <div class="offline-action">
+                <form method="post" action="/desktop/return-to-campaigns"><button class="topbar-back-button" type="submit" aria-describedby="offline-stamina-description">Modo Offline{% if stamina_label is defined %}<span class="offline-stamina-value">Estamina {{ stamina_label }} / 8h</span>{% else %}<span class="offline-stamina-value">Saldo temporariamente indisponível</span>{% endif %}</button></form>
+                <details class="offline-help"><summary aria-label="Ajuda sobre o Modo Offline" aria-controls="offline-stamina-description">i</summary><div class="offline-help__popover" id="offline-stamina-description" role="note"><strong>Modo Offline</strong>{% if stamina_label is defined %}<p>Disponível: {{ stamina_label }} de 8h. Recarrega 2h de estamina por 1h online nesta campanha, até 8h.{% if stamina_seconds < 28800 %} Próxima recarga de 2h em {{ ((recharge_remaining + 59) // 60) }} min online.{% endif %}</p><p>Ao entrar no Modo Offline, o progresso reconhecido usa o menor valor entre tempo ausente, estamina disponível e limite de 8h.</p>{% else %}<p>Saldo temporariamente indisponível. A disponibilidade será confirmada ao salvar a campanha.</p>{% endif %}<p>Esta ação salva e retorna à seleção de campanhas.</p></div></details>
+              </div>
+            {% endif %}
             {% if request.app.state.app_mode != 'desktop' %}<a class="topbar-power-button" href="/logout" title="Sair" aria-label="Sair"><span aria-hidden="true">&#x23FB;</span></a>{% endif %}
           </header>
           <main class="page-shell game-shell">
@@ -190,11 +197,11 @@
         <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
-    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261030-3"></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261030-4"></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261030-1" defer></script>
-    <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261030-1" defer></script>
+    <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261030-2" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261029-1" defer></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261030-2" defer></script>{% endif %}
   </body>
 </html>

@@ -1,5 +1,7 @@
 function secondsRemaining(endsAt) {
-  return Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 1000));
+  const raw = endsAt || "";
+  const deadline = window.parseUtcTimestamp ? window.parseUtcTimestamp(raw) : Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
 }
 
 function formatRemaining(seconds) {

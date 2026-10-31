@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.core.time import as_utc
 from app.models.guild import Guild
 from app.models.campaign import CampaignMetadata
 from app.models.user import User
@@ -90,7 +91,7 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
                         request.state.pending_rebellion_invite = {
                             "event_id": event.id,
                             "region_name": event_region_name(event.region_code),
-                            "priority_ends_at_iso": event.priority_ends_at_utc.isoformat(),
+                            "priority_ends_at_iso": as_utc(event.priority_ends_at_utc).isoformat(),
                         }
             # A campaign-wide route can be the first open request after a
             # cycle boundary; persist the one-time roll before rendering.

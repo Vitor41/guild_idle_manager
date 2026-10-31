@@ -44,6 +44,8 @@ class CampaignInfo:
     last_session_state: str = "created"
     tutorial_status: str = "pending"
     confirmation_preferences: str = "{}"
+    stamina_seconds: int = 8 * 60 * 60
+    stamina_recharge_remainder_seconds: int = 0
 
 
 @dataclass(frozen=True)
@@ -641,4 +643,6 @@ class CampaignService:
             last_session_state=metadata.last_session_state,
             tutorial_status=metadata.tutorial_status,
             confirmation_preferences=metadata.confirmation_preferences,
+            stamina_seconds=metadata.stamina_seconds,
+            stamina_recharge_remainder_seconds=metadata.stamina_recharge_remainder_seconds,
         )

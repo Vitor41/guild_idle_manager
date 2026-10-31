@@ -141,12 +141,13 @@ class Stage5UiContractTests(unittest.TestCase):
         script = self.read("app/static/js/regional-supply.js")
         pending = script.split("const refreshQuote = async () => {", 1)[1].split("try {", 1)[0]
         pending_with_team = pending.split("return;", 1)[1]
-        self.assertIn("supply.disabled = false", pending_with_team)
-        self.assertNotIn("supply.disabled = true", pending_with_team)
+        self.assertIn("supply.disabled = false", pending)
+        self.assertNotIn("supply.disabled = true", script)
+        self.assertNotIn("supply.checked = false", pending)
 
         unavailable = script.split('if (!response.ok || !quote.available) {', 1)[1].split("return;", 1)[0]
         self.assertIn('quoteState = "unavailable"', unavailable)
-        self.assertIn("supply.disabled = !supply.checked", unavailable)
+        self.assertNotIn("supply.disabled", unavailable)
         self.assertNotIn("supply.checked = false", unavailable)
         self.assertIn('quoteState = "available"', script)
         self.assertNotIn("supply.checked = wanted", script)
@@ -157,6 +158,44 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('supply.addEventListener("change"', script)
         self.assertIn("prepare_supply_snapshot(", self.read("app/services/dungeon_service.py"))
         self.assertIn('supply_selected=(form.get("supply") or [""])[0] == "1"', self.read("app/routes/dungeon_routes.py"))
+
+    def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
+        gathering = self.read("app/templates/gathering/index.html")
+        route = self.read("app/routes/gathering_routes.py")
+        self.assertIn('action="/gathering/assign"', gathering)
+        self.assertIn('name="mercenary_id"', gathering)
+        self.assertIn('name="resource_family"', gathering)
+        self.assertIn('message=Designa%C3%A7%C3%A3o+iniciada.', route)
+        self.assertIn("assign_worker(db, guild", route)
+
+        base = self.read("app/templates/base.html")
+        self.assertIn("Estamina {{ stamina_label }} / 8h", base)
+        self.assertIn("2h de estamina por 1h online", base)
+        self.assertIn("Próxima recarga de 2h em", base)
+        self.assertIn('aria-describedby="offline-stamina-description"', base)
+        offline_css = self.read("app/static/css/main.css")
+        self.assertIn(".offline-action:hover .offline-help__popover", offline_css)
+        self.assertIn(".offline-action:focus-within .offline-help__popover", offline_css)
+        self.assertIn("offline-help__popover", offline_css)
+
+        classes = self.read("app/templates/classes/index.html")
+        self.assertIn('class="guide-index classes-guide-index"', classes)
+        for anchor in ("classes", "habilidades", "atributos", "combinacoes", "coleta", "dungeons"):
+            self.assertIn(f'id="guia-{anchor}"', classes)
+        self.assertIn("aria-current", self.read("app/static/js/main.js"))
+        self.assertIn("escape-dismissed", self.read("app/static/js/main.js"))
+        self.assertIn("prefers-reduced-motion: reduce", self.read("app/static/css/main.css"))
+
+    def test_naive_sqlite_utc_timestamps_are_parsed_as_utc(self):
+        main = self.read("app/static/js/main.js")
+        regional = self.read("app/static/js/evolution-dialogs.js")
+        supply = self.read("app/static/js/regional-supply.js")
+        self.assertIn("`${raw}Z`", main)
+        self.assertIn("window.parseUtcTimestamp", regional)
+        self.assertIn("window.parseUtcTimestamp", supply)
+        self.assertIn('utc_iso(cycle.ends_at_utc)', self.read("app/templates/regional/index.html"))
+        self.assertIn('utc_iso(offer.supply_preparation_started_at_utc)', self.read("app/templates/regional/index.html"))
+        self.assertIn("as_utc(event.priority_ends_at_utc).isoformat()", self.read("app/core/dependencies.py"))
 
     def test_blacksmith_shows_effective_craft_cost_and_explains_when_it_changes(self):
         blacksmith = self.read("app/templates/blacksmith/index.html")

@@ -22,6 +22,7 @@ async def _desktop_gameplay_ticks() -> None:
         guard = getattr(app.state, "clock_guard", None)
         if active is not None and guard is not None:
             guard.checkpoint_active_session(active.campaign_id)
+            app.state.active_campaign = app.state.campaign_service.inspect_campaign(active.campaign_id)
 
 
 app = FastAPI(

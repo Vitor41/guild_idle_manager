@@ -7,8 +7,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const startButton = form?.querySelector('button[type="submit"]:not([data-prepare-action])');
     const supplyLabel = form?.querySelector("[data-supply-preparation-label]");
     const supplyRow = supplyLabel?.closest(".supply-preparation");
-    const startedAt = Date.parse(time?.dataset.startsAt || "");
-    const endsAt = Date.parse(time?.dataset.endsAt || "");
+    const parseTimestamp = window.parseUtcTimestamp || ((value) => Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`));
+    const startedAt = parseTimestamp(time?.dataset.startsAt || "");
+    const endsAt = parseTimestamp(time?.dataset.endsAt || "");
     if (!time || !bar || !status || !Number.isFinite(endsAt)) return;
     const updatePreparation = () => {
       const now = Date.now();
@@ -59,10 +60,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const version = ++requestVersion;
       quoteState = "pending";
       const selected = form.querySelectorAll('input[name="mercenary_ids"]:checked').length;
+      // Keep the optional checkbox interactive before and during quoting.
+      // The prepare action stays gated until the server returns a valid quote.
+      supply.disabled = false;
       if (!selected) {
         quoteState = "unavailable";
-        supply.checked = false;
-        supply.disabled = true;
         syncPrepareButton();
         summary.textContent = "Escolha uma equipe para consultar a chance final e o custo do suprimento.";
         return;
@@ -71,7 +73,6 @@ document.addEventListener("DOMContentLoaded", () => {
       // Keep the checkbox enabled while quoting. If the player submits during
       // the request, FormData must still carry their current choice; the start
       // endpoint recalculates availability and cost from server state.
-      supply.disabled = false;
       summary.textContent = "Calculando chance e custo para esta equipe…";
       try {
         const response = await fetch(form.dataset.supplyQuoteUrl, {
@@ -84,22 +85,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (version !== requestVersion) return;
         if (!response.ok || !quote.available) {
           quoteState = "unavailable";
-          // Preserve an explicit selection so it is never silently omitted
-          // from FormData. Leave a selected checkbox enabled so it can be
-          // unchecked; an unchecked one stays disabled until a new quote.
-          supply.disabled = !supply.checked;
+          // Keep the control enabled so the player can clear it and start
+          // without supply even when the quote is unavailable.
           summary.textContent = `${quote.reason || "Suprimento indisponível para esta equipe."}${supply.checked ? " Desmarque o suprimento para iniciar sem ele." : ""}`;
           syncPrepareButton();
           return;
         }
         quoteState = "available";
-        supply.disabled = false;
         summary.textContent = `Chance ${quote.base_final_chance}% → ${quote.final_chance}% (+${quote.chance_bonus_pp} p.p.) · ${quote.cost_gold} ouro · retorno incremental esperado ${quote.incremental_ev_gold} ouro.`;
         syncPrepareButton();
       } catch (_error) {
         if (version !== requestVersion) return;
         quoteState = "unavailable";
-        supply.disabled = !supply.checked;
         summary.textContent = `Não foi possível consultar a disponibilidade. Tente novamente.${supply.checked ? " Desmarque o suprimento para iniciar sem ele." : ""}`;
         syncPrepareButton();
       }

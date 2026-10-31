@@ -52,6 +52,9 @@ def _datetime_iso(value: datetime | None) -> str | None:
     return normalized.isoformat()
 
 
+templates.env.globals["utc_iso"] = _datetime_iso
+
+
 def _annotate_supply_preparation(offer: RegionalOffer, now: datetime) -> None:
     started = offer.supply_preparation_started_at_utc
     ends = offer.supply_preparation_ends_at_utc

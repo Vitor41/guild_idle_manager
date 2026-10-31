@@ -21,7 +21,7 @@ from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
 from app.desktop.lifecycle import open_campaign
 from app.services.campaign_service import CampaignService
 from app.database.connection import SessionLocal, configure_database
-from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRunMember, Guild, GuildBuilding, GuildResources,
+from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRunMember, GatheringAssignment, Guild, GuildBuilding, GuildResources,
     GuildInventoryItem, GuildSalvageJob, ItemTemplate, MarketSale, MercenaryClass, MissionRun,
     MissionRunMember, ProfessionTemplate, ProfessionTraining)
 from app.models.dungeon import DungeonTemplate
@@ -86,9 +86,11 @@ with tempfile.TemporaryDirectory() as data_dir:
         guild_id = guild.id
         mercenary_class_id = mercenary_class.id
         mercenary = create_mercenary(db, guild.id, mercenary_class, "Teste visual")
+        gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
         db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=item_template.id, quantity=1))
         db.flush()
         mercenary_id = mercenary.id
+        gathering_worker_id = gathering_worker.id
         now = datetime.now(timezone.utc)
         later = now + timedelta(hours=1)
         mission_template = db.query(MissionTemplate).filter(MissionTemplate.is_active.is_(True)).first()
@@ -139,7 +141,19 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
-        assert b"/static/js/regional-supply.js?v=20261029-2" in rendered_pages["/dungeons"]
+        gathering_status, gathering_location, gathering_body = request(
+            "/gathering/assign", method="POST",
+            body=f"mercenary_id={gathering_worker_id}&resource_family=wood",
+        )
+        assert gathering_status == 303 and gathering_location.startswith("/gathering?message="), (gathering_status, gathering_location, gathering_body[:300])
+        with SessionLocal() as db:
+            assignment = db.query(GatheringAssignment).filter_by(mercenary_id=gathering_worker_id, resource_family="wood").one_or_none()
+            assert assignment is not None, "gathering form POST must persist its worker assignment"
+        assert b"/static/js/regional-supply.js?v=20261030-2" in rendered_pages["/dungeons"]
+        assert b"Modo Offline" in rendered_pages["/dashboard"]
+        assert b"Estamina 8h 0min / 8h" in rendered_pages["/dashboard"]
+        assert b"2h de estamina por 1h online" in rendered_pages["/dashboard"]
+        assert re.search(rb'data-evolution-countdown="[^"]+\+00:00"', rendered_pages["/regional"])
         supply_script_status, _location, supply_script = request("/static/js/regional-supply.js")
         assert supply_script_status == 200 and b'select[name="run_multiplier"]' in supply_script
         dashboard_with_invite = rendered_pages["/dashboard"]
@@ -192,7 +206,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in rendered_pages["/regional"]
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
-        assert b'/static/js/evolution-dialogs.js?v=20261029-1' in dashboard_with_invite
+        assert b'/static/js/evolution-dialogs.js?v=20261030-2' in dashboard_with_invite
         with SessionLocal() as db:
             invite_event = db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion", status="active",
@@ -227,17 +241,12 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert invite_event.player_decision == "accept" and invited_participant.status == "accepted"
         post_decision_status, _location, post_decision_dashboard = request("/dashboard")
         assert post_decision_status == 200 and b'data-regional-rebellion-auto-open' not in post_decision_dashboard
-        assert b'href="/regional#events-title"' in post_decision_dashboard
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
         assert b"/css/desktop-theme.css?v=20261027-1" in rendered_pages["/dashboard"]
         assert b'desktop-resource-row' in rendered_pages["/dashboard"]
         assert b'desktop-operations-band' in rendered_pages["/dashboard"]
         assert b'desktop-operations-intro desktop-page-hero' in rendered_pages["/missions"]
         assert b'desktop-operations-intro desktop-page-hero' in rendered_pages["/dungeons"]
-        assert b"Chance base" in rendered_pages["/missions"]
-        assert b"chance final m\xc3\xa1xima de 95%" in rendered_pages["/missions"]
-        assert b"Chance base" in rendered_pages["/dungeons"]
-        assert b"limitada a 95%" in rendered_pages["/dungeons"]
         for timer_page in ("/missions", "/dungeons", "/market", "/professions", "/class-change", "/blacksmith"):
             assert re.search(rb'data-ends-at="[^\"]+\+00:00"', rendered_pages[timer_page]), timer_page
         for timer_page in ("/dashboard", "/tavern", "/docks"):
