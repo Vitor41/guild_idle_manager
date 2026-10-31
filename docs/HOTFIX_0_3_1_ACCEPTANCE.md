@@ -1,6 +1,6 @@
 # Aceite técnico do hotfix 0.3.1
 
-Branch local `hotfix/gameplay-actions-dev-diagnostics`, iniciada em `c6b18fb` da `melhorias-lote-2`. Nenhum save real, WebView GUI, instalação ou Setup do usuário foi aberto. As campanhas HTTP foram SQLite temporárias descartadas ao fim dos testes.
+Branch local `hotfix/gameplay-actions-dev-diagnostics`, iniciada em `c6b18fb` da `melhorias-lote-2`. Nenhum save real, WebView GUI ou instalação foi aberto; o Setup gerado abaixo foi apenas inspecionado como arquivo, sem execução. As campanhas HTTP foram SQLite temporárias descartadas ao fim dos testes.
 
 ## Causa reproduzida
 
@@ -44,7 +44,15 @@ Owner/repo padrão resolvido pelo código: `Vitor41/guild_idle_manager`; canal d
 
 A revisão Git local tem `origin` configurado para esse remoto. A integração GitHub disponível respondeu 404 tanto ao consultar metadata como releases; não se pode concluir se o repo é privado ou se a conta conectada carece de acesso. O updater atual faz consulta anônima e não tem token; para ele funcionar o repo precisa estar público. Não foi observada release real com manifesto, assinatura, Setup e hash validados.
 
-A instalação 0.3.0 sem chave pública não pode aceitar atualização assinada retroativamente. Ainda não foi construído Setup bootstrap: falta provisionar uma chave Ed25519 real, guardar a privada fora do Git e tornar o repositório acessível à consulta anônima. Não se configurou chave falsa nem se ativou a consulta sem confiança. Depois desse passo, `scripts/build_desktop_dev.ps1 -GitHubPublicKeyBase64 <chave-publica>` inclui a chave pública no bundle e `scripts/sign_github_release.py` assina manifesto/Setup. O Setup deve ser entregue para instalação manual, nunca executado por esta rodada.
+A instalação 0.3.0 não implementa bootstrap pelo GitHub e não pode aceitar atualização assinada retroativamente. O Setup 0.3.1 abaixo é uma primeira atualização de instalação manual; ele foi construído sem chave pública e mantém o updater fail-closed. Falta provisionar uma chave Ed25519 real, guardar a privada fora do Git e tornar o repositório acessível à consulta anônima para habilitar atualizações futuras. Não se configurou chave falsa nem se ativou a consulta sem confiança. O Setup foi criado apenas como artefato; não foi executado nem instalado.
+
+### Setup DEV 0.3.1 validado
+
+- Arquivo: `dist/staging/hotfix-0.3.1-DEV-20261031/GuildIdleManager-DEV-Setup.exe` (60,98 MiB; 63.946.752 bytes).
+- SHA-256: `a41bfaf8538e8cfb8b1d8b4463e3e4a05cefdd481dfd3064f64da9a184aad184`.
+- Build: `.venv-desktop` com Python 3.12.14 e PyInstaller 6.22.3.
+- Validação sem execução: assinatura DOS `MZ` e cabeçalho PE válidos; ZIP de 61,41 MiB com 941 entradas passou `testzip`, contendo launcher de instalação, executável, templates e JS; arquivo versionado do PyInstaller contém `APP_VERSION=0.3.1`; nome, default e marcador do instalador são DEV.
+- Nenhum `gim-release-public-key.txt` foi incluído. O updater não consulta nem instala releases. Este artefato não é bootstrap para o 0.3.0; a transição inicial é manual.
 
 ## Testes registrados
 
@@ -57,4 +65,4 @@ Execução final: 23 testes passaram em 49,746 s no runtime desktop, com `APP_MO
 | `tests.test_stage5_ui_contracts` | 16 |
 | `tests.test_desktop_http_smoke` | 1 |
 
-`git diff --check` também passou. Não houve build, inspeção visual, instalação, execução de Setup, push ou PR.
+`git diff --check` passou após as alterações documentais. Não houve inspeção visual, instalação, execução de Setup, push ou PR.
