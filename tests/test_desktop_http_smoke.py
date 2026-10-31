@@ -26,13 +26,14 @@ from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRun
     MissionRunMember, ProfessionTemplate, ProfessionTraining)
 from app.models.dungeon import DungeonTemplate
 from app.models.item import DungeonTemplateItemDrop
-from app.models.regional import RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalRegionState
+from app.models.regional import RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState
+from app.models.mercenary import Mercenary
 from app.models.achievement import AchievementTemplate, GuildAchievement
 from app.models.item import GuildItemInstance
 from app.models.mission import MissionTemplate
 from app.models.building import BuildingTemplate
 from app.repositories.mercenary_repository import create_mercenary
-from app.services.regional_cycle_service import ensure_campaign_world
+from app.services.regional_cycle_service import REGIONS, ensure_campaign_world
 from app.services.regional_event_service import expire_due_events
 from sqlalchemy import select
 import uvicorn
@@ -78,6 +79,16 @@ with tempfile.TemporaryDirectory() as data_dir:
     created_campaign = json.loads(create_body)
     campaign = saves.inspect_campaign(created_campaign["campaign_id"])
     assert created_campaign["redirect"] == "/dashboard"
+    stamina_status, _stamina_location, stamina_body = request("/desktop/api/stamina-status")
+    stamina_payload = json.loads(stamina_body)
+    assert stamina_status == 200 and stamina_payload["available"] is True, stamina_payload
+    assert stamina_payload["stamina_seconds"] == 8 * 3600
+    with closing(sqlite3.connect(campaign.database_path)) as connection:
+        persisted_stamina = connection.execute(
+            "SELECT stamina_seconds FROM campaign_metadata WHERE campaign_id = ?",
+            (campaign.campaign_id,),
+        ).fetchone()[0]
+    assert persisted_stamina == 8 * 3600, "the status endpoint must not mutate the saved balance"
     with SessionLocal() as db:
         guild = db.query(Guild).first()
         mercenary_class = db.query(MercenaryClass).order_by(MercenaryClass.id).first()
@@ -87,17 +98,30 @@ with tempfile.TemporaryDirectory() as data_dir:
         mercenary_class_id = mercenary_class.id
         mercenary = create_mercenary(db, guild.id, mercenary_class, "Teste visual")
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
+        regional_no_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato sem suprimento")
+        regional_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato preparado")
         db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=item_template.id, quantity=1))
         db.flush()
         mercenary_id = mercenary.id
         gathering_worker_id = gathering_worker.id
+        regional_no_supply_worker_id = regional_no_supply_worker.id
+        regional_supply_worker_id = regional_supply_worker.id
         now = datetime.now(timezone.utc)
         later = now + timedelta(hours=1)
-        mission_template = db.query(MissionTemplate).filter(MissionTemplate.is_active.is_(True)).first()
+        mission_template = db.query(MissionTemplate).filter(
+            MissionTemplate.is_active.is_(True), MissionTemplate.mission_type.notin_(("gathering", "long_idle")),
+        ).order_by(MissionTemplate.id).first()
         dungeon_template = db.query(DungeonTemplate).filter(DungeonTemplate.is_active.is_(True)).first()
         profession = db.query(ProfessionTemplate).filter(ProfessionTemplate.is_active.is_(True)).first()
         target_class = db.query(MercenaryClass).filter(MercenaryClass.id != mercenary.class_id).first()
         assert mission_template and dungeon_template and profession and target_class
+        regional_mission_template_id = mission_template.id
+        mission_template.min_party_size = 1
+        mission_template.max_party_size = 1
+        mission_template.required_guild_level = 1
+        mission_template.required_min_mercenary_level = 1
+        mission_template.required_building_type = None
+        mission_template.required_building_level = 0
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="scouts").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="market").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="blacksmith").one().id, level=1))
@@ -141,6 +165,103 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
+
+        with SessionLocal() as db:
+            active_cycle = db.query(RegionalCycle).filter_by(
+                campaign_id=campaign.campaign_id, status="open",
+            ).order_by(RegionalCycle.cycle_number.desc()).first()
+            resources = db.query(GuildResources).filter_by(guild_id=guild_id).one()
+            assert active_cycle is not None
+            resources.gold = 1000
+            home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
+            no_supply_offer = RegionalOffer(
+                campaign_id=campaign.campaign_id, cycle_id=active_cycle.id,
+                cycle_number=active_cycle.cycle_number, region_code=home_region_code,
+                offer_type="contract", slot=9001, mission_template_id=regional_mission_template_id,
+                rank="E", name_snapshot="Contrato de teste sem suprimento",
+                recommended_level_snapshot=1, recommended_power_snapshot=1000000,
+                min_party_size_snapshot=1, max_party_size_snapshot=1,
+                duration_seconds_snapshot=60, gold_reward_snapshot=100,
+                xp_reward_snapshot=10, success_chance_snapshot=80,
+            )
+            prepared_offer = RegionalOffer(
+                campaign_id=campaign.campaign_id, cycle_id=active_cycle.id,
+                cycle_number=active_cycle.cycle_number, region_code=home_region_code,
+                offer_type="contract", slot=9002, mission_template_id=regional_mission_template_id,
+                rank="E", name_snapshot="Contrato de teste preparado",
+                recommended_level_snapshot=1, recommended_power_snapshot=1000000,
+                min_party_size_snapshot=1, max_party_size_snapshot=1,
+                duration_seconds_snapshot=60, gold_reward_snapshot=100,
+                xp_reward_snapshot=10, success_chance_snapshot=80,
+            )
+            db.add_all([no_supply_offer, prepared_offer])
+            db.flush()
+            no_supply_offer_id, prepared_offer_id = no_supply_offer.id, prepared_offer.id
+            db.commit()
+
+        no_supply_gold_before = 1000
+        no_supply_status, no_supply_location, no_supply_body = request(
+            f"/regional/offers/{no_supply_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_no_supply_worker_id}",
+        )
+        assert no_supply_status == 303 and no_supply_location.startswith("/missions?message="), (
+            no_supply_status, no_supply_location, no_supply_body[:300],
+        )
+        with SessionLocal() as db:
+            no_supply_offer = db.get(RegionalOffer, no_supply_offer_id)
+            no_supply_run = db.query(MissionRun).filter_by(regional_offer_id=no_supply_offer_id).one()
+            no_supply_worker = db.get(Mercenary, regional_no_supply_worker_id)
+            assert no_supply_offer.status == "in_progress"
+            assert no_supply_run.preparation_snapshot_json is None
+            assert no_supply_run.rank_snapshot == "E"
+            assert no_supply_worker.status == "busy"
+            assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == no_supply_gold_before
+
+        quote_status, _quote_location, quote_body = request(
+            f"/regional/offers/{prepared_offer_id}/supply-quote", method="POST",
+            body=f"mercenary_ids={regional_supply_worker_id}",
+        )
+        supply_quote = json.loads(quote_body)
+        assert quote_status == 200 and supply_quote["available"] is True, (quote_status, supply_quote)
+        assert supply_quote["chance_bonus_pp"] == 5 and supply_quote["cost_gold"] > 0, supply_quote
+        prepare_status, prepare_location, prepare_body = request(
+            f"/regional/offers/{prepared_offer_id}/prepare", method="POST",
+            body=f"mercenary_ids={regional_supply_worker_id}&supply=1",
+        )
+        assert prepare_status == 303 and prepare_location.startswith("/regional?message="), (
+            prepare_status, prepare_location, prepare_body[:300],
+        )
+        with SessionLocal() as db:
+            prepared_offer = db.get(RegionalOffer, prepared_offer_id)
+            resources_after_prepare = db.query(GuildResources).filter_by(guild_id=guild_id).one().gold
+            preparation = json.loads(prepared_offer.supply_preparation_snapshot_json)
+            assert prepared_offer.status == "supply_preparing"
+            assert preparation["prepared_for_offer_id"] == prepared_offer_id
+            assert preparation["mercenary_ids"] == [str(regional_supply_worker_id)]
+            assert preparation["chance_bonus_pp"] == 5
+            assert preparation["cost_gold"] == supply_quote["cost_gold"]
+            assert resources_after_prepare == 1000 - supply_quote["cost_gold"]
+            prepared_offer.supply_preparation_ends_at_utc = datetime.now(timezone.utc) - timedelta(seconds=1)
+            db.commit()
+
+        prepared_start_status, prepared_start_location, prepared_start_body = request(
+            f"/regional/offers/{prepared_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_supply_worker_id}",
+        )
+        assert prepared_start_status == 303 and prepared_start_location.startswith("/missions?message="), (
+            prepared_start_status, prepared_start_location, prepared_start_body[:300],
+        )
+        with SessionLocal() as db:
+            prepared_offer = db.get(RegionalOffer, prepared_offer_id)
+            prepared_run = db.query(MissionRun).filter_by(regional_offer_id=prepared_offer_id).one()
+            prepared_worker = db.get(Mercenary, regional_supply_worker_id)
+            run_snapshot = json.loads(prepared_run.preparation_snapshot_json)
+            assert prepared_offer.status == "in_progress" and prepared_offer.supply_prepared_at_utc is not None
+            assert run_snapshot["chance_bonus_pp"] == 5
+            assert run_snapshot["cost_gold"] == supply_quote["cost_gold"]
+            assert prepared_worker.status == "busy"
+            assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == resources_after_prepare
+
         gathering_status, gathering_location, gathering_body = request(
             "/gathering/assign", method="POST",
             body=f"mercenary_id={gathering_worker_id}&resource_family=wood",
@@ -153,6 +274,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Modo Offline" in rendered_pages["/dashboard"]
         assert b"Estamina 8h 0min / 8h" in rendered_pages["/dashboard"]
         assert b"2h de estamina por 1h online" in rendered_pages["/dashboard"]
+        assert b"/static/js/offline-stamina.js?v=20261030-1" in rendered_pages["/dashboard"]
         assert re.search(rb'data-evolution-countdown="[^"]+\+00:00"', rendered_pages["/regional"])
         supply_script_status, _location, supply_script = request("/static/js/regional-supply.js")
         assert supply_script_status == 200 and b'select[name="run_multiplier"]' in supply_script

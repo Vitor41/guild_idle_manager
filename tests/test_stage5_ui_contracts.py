@@ -197,6 +197,19 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('utc_iso(offer.supply_preparation_started_at_utc)', self.read("app/templates/regional/index.html"))
         self.assertIn("as_utc(event.priority_ends_at_utc).isoformat()", self.read("app/core/dependencies.py"))
 
+    def test_offline_stamina_status_polls_live_preview_without_refresh(self):
+        base = self.read("app/templates/base.html")
+        script = self.read("app/static/js/offline-stamina.js")
+        route = self.read("app/desktop/routes.py")
+        clock = self.read("app/desktop/clock_guard.py")
+        self.assertIn('data-offline-stamina-value', base)
+        self.assertIn('data-offline-stamina-next', base)
+        self.assertIn('window.setInterval(refresh, 15000)', script)
+        self.assertIn('fetch("/desktop/api/stamina-status"', script)
+        self.assertIn('@router.get("/api/stamina-status")', route)
+        self.assertIn("preview_active_stamina", clock)
+        self.assertIn("project_stamina_after_active_seconds", clock)
+
     def test_blacksmith_shows_effective_craft_cost_and_explains_when_it_changes(self):
         blacksmith = self.read("app/templates/blacksmith/index.html")
         guide = self.read("app/templates/guide/index.html")

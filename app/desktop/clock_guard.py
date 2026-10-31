@@ -442,8 +442,45 @@ class ClockGuard:
             db.commit()
         return active_seconds
 
+    def preview_active_stamina(
+        self,
+        campaign_id: str,
+        stamina_seconds: int,
+        recharge_remainder_seconds: int,
+    ) -> dict[str, int]:
+        started = self._session_started.get(campaign_id)
+        active_seconds = max(0, floor(self.monotonic_clock() - started)) if started is not None else 0
+        projected_stamina, projected_remainder = project_stamina_after_active_seconds(
+            stamina_seconds, recharge_remainder_seconds, active_seconds,
+        )
+        seconds_until_recharge = (
+            max(0, 3600 - projected_remainder) if projected_stamina < OFFLINE_CAP_SECONDS else 0
+        )
+        return {
+            "stamina_seconds": projected_stamina,
+            "recharge_remainder_seconds": projected_remainder,
+            "active_seconds_since_checkpoint": active_seconds,
+            "seconds_until_recharge": seconds_until_recharge,
+            "cap_seconds": OFFLINE_CAP_SECONDS,
+        }
+
 
 def _format_elapsed(seconds: int) -> str:
     hours, remainder = divmod(max(0, seconds), 3600)
     minutes, _ = divmod(remainder, 60)
     return f"{hours}h {minutes}min" if hours else f"{minutes}min"
+
+
+def project_stamina_after_active_seconds(
+    stamina_seconds: int,
+    recharge_remainder_seconds: int,
+    active_seconds: int,
+) -> tuple[int, int]:
+    """Preview earned stamina without changing persisted campaign state."""
+    stamina = min(OFFLINE_CAP_SECONDS, max(0, int(stamina_seconds)))
+    if stamina >= OFFLINE_CAP_SECONDS:
+        return OFFLINE_CAP_SECONDS, 0
+    accumulated = max(0, int(recharge_remainder_seconds)) + max(0, int(active_seconds))
+    completed_hours, remainder = divmod(accumulated, 3600)
+    stamina = min(OFFLINE_CAP_SECONDS, stamina + completed_hours * 2 * 3600)
+    return stamina, 0 if stamina >= OFFLINE_CAP_SECONDS else remainder

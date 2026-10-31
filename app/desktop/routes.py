@@ -35,6 +35,20 @@ def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+@router.get("/api/stamina-status")
+def stamina_status(request: Request) -> JSONResponse:
+    _campaigns, clock_guard = _services(request)
+    active = getattr(request.app.state, "active_campaign", None)
+    if active is None:
+        return JSONResponse({"available": False}, status_code=409)
+    status = clock_guard.preview_active_stamina(
+        active.campaign_id,
+        active.stamina_seconds,
+        active.stamina_recharge_remainder_seconds,
+    )
+    return JSONResponse({"available": True, **status})
+
+
 @router.get("/campaigns", response_class=HTMLResponse, include_in_schema=False)
 def campaigns_page(request: Request):
     campaigns, _ = _services(request)
