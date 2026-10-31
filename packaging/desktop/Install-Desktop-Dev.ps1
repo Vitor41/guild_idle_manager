@@ -1,25 +1,29 @@
-param([switch]$NoShortcut)
+param(
+    [ValidateSet('DEV', 'stable', 'beta')]
+    [string]$Channel = 'DEV',
+    [switch]$NoShortcut
+)
 
 $ErrorActionPreference = 'Stop'
 $source = Join-Path $PSScriptRoot 'GuildIdleManager'
 $extractedBundle = $null
 if (-not (Test-Path -LiteralPath (Join-Path $source 'GuildIdleManager.exe') -PathType Leaf)) {
-    $archive = Join-Path $PSScriptRoot 'GuildIdleManager-DEV.zip'
+    $archive = Join-Path $PSScriptRoot ("GuildIdleManager-$Channel.zip")
     if (Test-Path -LiteralPath $archive -PathType Leaf) {
-        $extractedBundle = Join-Path $env:TEMP ("GuildIdleManager-DEV-" + [Guid]::NewGuid().ToString('N'))
+        $extractedBundle = Join-Path $env:TEMP ("GuildIdleManager-$Channel-" + [Guid]::NewGuid().ToString('N'))
         Expand-Archive -LiteralPath $archive -DestinationPath $extractedBundle
         $source = Join-Path $extractedBundle 'GuildIdleManager'
     }
 }
 $exe = Join-Path $source 'GuildIdleManager.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
-    throw "Pacote Guild Idle Manager DEV nao encontrado ao lado deste instalador: $source"
+    throw "Pacote Guild Idle Manager $Channel nao encontrado ao lado deste instalador: $source"
 }
 
 $programs = [System.IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs'))
 $target = Join-Path $programs 'GuildIdleManager'
 $markerName = '.gim-desktop-install.json'
-$markerValue = '{"product":"org.guildidlemanager.desktop","channel":"DEV"}'
+$markerValue = (@{ product = 'org.guildidlemanager.desktop'; channel = $Channel } | ConvertTo-Json -Compress)
 
 function Assert-NoReparsePoint([string]$Path) {
     $resolved = [System.IO.Path]::GetFullPath($Path)
@@ -45,8 +49,8 @@ function Assert-ManagedInstall([string]$Path) {
     }
     Assert-NoReparsePoint $marker
     $identity = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json
-    if ($identity.product -ne 'org.guildidlemanager.desktop' -or $identity.channel -ne 'DEV') {
-        throw "Instalacao recusada: o marcador de $Path nao identifica uma instalacao DEV gerenciada."
+    if ($identity.product -ne 'org.guildidlemanager.desktop' -or $identity.channel -ne $Channel) {
+        throw "Instalacao recusada: o marcador de $Path nao identifica uma instalacao $Channel gerenciada."
     }
 }
 
@@ -98,13 +102,13 @@ try {
     }
 
     if (-not $NoShortcut -and $env:GIM_SETUP_NO_SHORTCUT -ne '1') {
-        $shortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Guild Idle Manager DEV.lnk'
+        $shortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "Guild Idle Manager $Channel.lnk"
         $shell = New-Object -ComObject WScript.Shell
         $shortcut = $shell.CreateShortcut($shortcutPath)
         $shortcut.TargetPath = Join-Path $target 'GuildIdleManager.exe'
         $shortcut.WorkingDirectory = $target
         $shortcut.IconLocation = "$($shortcut.TargetPath),0"
-        $shortcut.Description = 'Guild Idle Manager - build DEV local e offline'
+        $shortcut.Description = "Guild Idle Manager - canal $Channel"
         $shortcut.Save()
         Write-Output "Atalho criado em $shortcutPath"
     }

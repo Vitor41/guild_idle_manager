@@ -21,6 +21,13 @@ class Settings:
     )
     secret_key: str = os.getenv("SECRET_KEY", "change-this-secret")
     app_env: str = os.getenv("APP_ENV", "local")
+    github_releases_owner: str | None = os.getenv("GIM_GITHUB_RELEASES_OWNER", "Vitor41")
+    github_releases_repo: str | None = os.getenv("GIM_GITHUB_RELEASES_REPO", "guild_idle_manager")
+    github_releases_channel: str | None = os.getenv("GIM_GITHUB_RELEASES_CHANNEL")
+    github_releases_public_key: str | None = os.getenv("GIM_GITHUB_RELEASES_PUBLIC_KEY")
+    github_releases_manifest_asset: str = os.getenv(
+        "GIM_GITHUB_RELEASES_MANIFEST_ASSET", "gim-release.json"
+    )
     debug: bool = os.getenv("DEBUG", "true").lower() in {"1", "true", "yes", "on"}
     session_global_seconds: int = int(os.getenv("SESSION_GLOBAL_SECONDS", "18000"))
     session_idle_seconds: int = int(os.getenv("SESSION_IDLE_SECONDS", "3600"))

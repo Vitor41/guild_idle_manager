@@ -141,12 +141,13 @@ class Stage5UiContractTests(unittest.TestCase):
         script = self.read("app/static/js/regional-supply.js")
         pending = script.split("const refreshQuote = async () => {", 1)[1].split("try {", 1)[0]
         pending_with_team = pending.split("return;", 1)[1]
-        self.assertIn("supply.disabled = false", pending_with_team)
-        self.assertNotIn("supply.disabled = true", pending_with_team)
+        self.assertIn("supply.disabled = false", pending)
+        self.assertNotIn("supply.disabled = true", script)
+        self.assertNotIn("supply.checked = false", pending)
 
         unavailable = script.split('if (!response.ok || !quote.available) {', 1)[1].split("return;", 1)[0]
         self.assertIn('quoteState = "unavailable"', unavailable)
-        self.assertIn("supply.disabled = !supply.checked", unavailable)
+        self.assertNotIn("supply.disabled", unavailable)
         self.assertNotIn("supply.checked = false", unavailable)
         self.assertIn('quoteState = "available"', script)
         self.assertNotIn("supply.checked = wanted", script)
@@ -157,6 +158,78 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('supply.addEventListener("change"', script)
         self.assertIn("prepare_supply_snapshot(", self.read("app/services/dungeon_service.py"))
         self.assertIn('supply_selected=(form.get("supply") or [""])[0] == "1"', self.read("app/routes/dungeon_routes.py"))
+
+    def test_async_navigation_rebinds_regional_actions_and_surfaces_request_failures(self):
+        main = self.read("app/static/js/main.js")
+        supply = self.read("app/static/js/regional-supply.js")
+        base = self.read("app/templates/base.html")
+        self.assertIn("window.initializeRegionalSupply?.(currentMain)", main)
+        self.assertLess(main.index("restoreGameFormState(formState);"), main.index("window.initializeRegionalSupply?.(currentMain)"))
+        self.assertIn('window.initializeRegionalSupply = (root = document) =>', supply)
+        self.assertIn('form.dataset.regionalSupplyInitialized === "true"', supply)
+        self.assertIn('document.addEventListener("DOMContentLoaded", () => window.initializeRegionalSupply())', supply)
+        self.assertIn('event.target.closest("[data-start-without-supply]")', supply)
+        self.assertIn('supply.checked = false', supply)
+        self.assertIn('submitter?.formAction || form.action', main)
+        self.assertIn('"X-GIM-Diagnostic-ID": diagnosticId', main)
+        self.assertIn('data-client-action-error', main)
+        self.assertIn('window.reportGameplayClientFailure?.(submitter?.formAction || form.action, diagnosticId)', main)
+        self.assertIn('/desktop/api/diagnostics/client-error', main)
+        self.assertIn('window.reportGameplayClientFailure?.(form.dataset.supplyQuoteUrl, diagnosticId)', supply)
+        submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
+        self.assertNotIn('form.submit()', submit_catch)
+        self.assertIn("?v=20261031-1", base)
+
+    def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
+        gathering = self.read("app/templates/gathering/index.html")
+        route = self.read("app/routes/gathering_routes.py")
+        self.assertIn('action="/gathering/assign"', gathering)
+        self.assertIn('name="mercenary_id"', gathering)
+        self.assertIn('name="resource_family"', gathering)
+        self.assertIn('message=Designa%C3%A7%C3%A3o+iniciada.', route)
+        self.assertIn("assign_worker(db, guild", route)
+
+        base = self.read("app/templates/base.html")
+        self.assertIn("Estamina {{ stamina_label }} / 8h", base)
+        self.assertIn("2h de estamina por 1h online", base)
+        self.assertIn("Próxima recarga de 2h em", base)
+        self.assertIn('aria-describedby="offline-stamina-description"', base)
+        offline_css = self.read("app/static/css/main.css")
+        self.assertIn(".offline-action:hover .offline-help__popover", offline_css)
+        self.assertIn(".offline-action:focus-within .offline-help__popover", offline_css)
+        self.assertIn("offline-help__popover", offline_css)
+
+        classes = self.read("app/templates/classes/index.html")
+        self.assertIn('class="guide-index classes-guide-index"', classes)
+        for anchor in ("classes", "habilidades", "atributos", "combinacoes", "coleta", "dungeons"):
+            self.assertIn(f'id="guia-{anchor}"', classes)
+        self.assertIn("aria-current", self.read("app/static/js/main.js"))
+        self.assertIn("escape-dismissed", self.read("app/static/js/main.js"))
+        self.assertIn("prefers-reduced-motion: reduce", self.read("app/static/css/main.css"))
+
+    def test_naive_sqlite_utc_timestamps_are_parsed_as_utc(self):
+        main = self.read("app/static/js/main.js")
+        regional = self.read("app/static/js/evolution-dialogs.js")
+        supply = self.read("app/static/js/regional-supply.js")
+        self.assertIn("`${raw}Z`", main)
+        self.assertIn("window.parseUtcTimestamp", regional)
+        self.assertIn("window.parseUtcTimestamp", supply)
+        self.assertIn('utc_iso(cycle.ends_at_utc)', self.read("app/templates/regional/index.html"))
+        self.assertIn('utc_iso(offer.supply_preparation_started_at_utc)', self.read("app/templates/regional/index.html"))
+        self.assertIn("as_utc(event.priority_ends_at_utc).isoformat()", self.read("app/core/dependencies.py"))
+
+    def test_offline_stamina_status_polls_live_preview_without_refresh(self):
+        base = self.read("app/templates/base.html")
+        script = self.read("app/static/js/offline-stamina.js")
+        route = self.read("app/desktop/routes.py")
+        clock = self.read("app/desktop/clock_guard.py")
+        self.assertIn('data-offline-stamina-value', base)
+        self.assertIn('data-offline-stamina-next', base)
+        self.assertIn('window.setInterval(refresh, 15000)', script)
+        self.assertIn('fetch("/desktop/api/stamina-status"', script)
+        self.assertIn('@router.get("/api/stamina-status")', route)
+        self.assertIn("preview_active_stamina", clock)
+        self.assertIn("project_stamina_after_active_seconds", clock)
 
     def test_blacksmith_shows_effective_craft_cost_and_explains_when_it_changes(self):
         blacksmith = self.read("app/templates/blacksmith/index.html")

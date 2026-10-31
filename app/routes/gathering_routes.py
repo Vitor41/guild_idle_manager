@@ -10,14 +10,13 @@ from app.core.dependencies import DbSession, get_current_player
 from app.core.forms import read_form_fields
 from app.models.mercenary import Mercenary
 from app.models.user import User
-from app.services.gathering_service import advance_all_assignments, assign_worker, list_assignments, release_worker
+from app.services.gathering_service import advance_all_assignments, assign_worker, list_assignments, release_worker, FAMILY_LABELS, NODE_LABELS
 from app.services.guild_service import get_current_guild_context
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 
 
 router = APIRouter(prefix="/gathering")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
-FAMILY_LABELS = {"wood": "Madeira", "ore": "Minério", "leather": "Couro"}
 
 
 @router.get("")
@@ -48,10 +47,12 @@ def gathering_index(
             "assignments": assignments,
             "workers": [worker for worker in workers if worker.id not in assigned_ids and worker.status == "available"],
             "family_labels": FAMILY_LABELS,
+            "node_labels": NODE_LABELS,
             "capacity": get_inventory_capacity(db, guild),
             "used": get_inventory_usage(db, guild.id),
             "inventory_url": "/inventory",
             "error": request.query_params.get("error"),
+            "diagnostic_id": request.query_params.get("diagnostic"),
             "message": request.query_params.get("message"),
         },
     )

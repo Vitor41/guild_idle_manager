@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from app.database.connection import SessionLocal, configure_database, get_engine
-from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
+from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore, project_stamina_after_active_seconds
 from app.desktop.lifecycle import (
     close_campaign,
     close_suspended_campaigns,
@@ -64,6 +64,22 @@ def temporary_campaign_saves():
 
 
 class ClockGuardTests(unittest.TestCase):
+    def test_stamina_status_projects_active_recharge_without_mutating_balance(self):
+        balance = 4 * 3600
+        remainder = 1800
+        clock = [1800.0]
+        guard = ClockGuard(MemoryAnchorStore(), monotonic_clock=lambda: clock[0])
+        guard._session_started["campaign-preview"] = 0.0
+
+        status = guard.preview_active_stamina("campaign-preview", balance, remainder)
+
+        self.assertEqual(project_stamina_after_active_seconds(balance, remainder, 1799), (balance, 3599))
+        self.assertEqual(status["stamina_seconds"], 6 * 3600)
+        self.assertEqual(status["recharge_remainder_seconds"], 0)
+        self.assertEqual(status["seconds_until_recharge"], 3600)
+        self.assertEqual(project_stamina_after_active_seconds(7 * 3600, 3599, 1), (8 * 3600, 0))
+        self.assertEqual((balance, remainder), (4 * 3600, 1800))
+
     def tearDown(self):
         configure_database("sqlite:///:memory:")
         gc.collect()

@@ -35,7 +35,6 @@ from app.services.building_service import (
     get_building_level,
     get_equipment_drop_bonus_percent,
     get_max_run_multiplier,
-    get_max_allowed_mission_party_size,
 )
 from app.services.equipment_service import (
     create_equipment_instance_from_template,
@@ -381,7 +380,6 @@ def get_missions_page_context(
         "awaiting_loot_count": sum(
             1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
-        "max_allowed_party_size": get_max_allowed_mission_party_size(db, guild.id),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
         "max_run_multiplier": get_max_run_multiplier(db, guild.id),
         "long_idle_active_count": count_active_long_idle_runs(db, guild.id),
@@ -439,10 +437,6 @@ def parse_mercenary_ids(values: list[str]) -> list[int]:
 def validate_mission_requirements(db: Session, guild: Guild, mission_template: MissionTemplate) -> None:
     if guild.level < mission_template.required_guild_level:
         raise MissionError("Nível da guilda insuficiente para esta missão.")
-    if mission_template.required_building_type and mission_template.required_building_level > 0:
-        current_level = get_building_level(db, guild.id, mission_template.required_building_type)
-        if current_level < mission_template.required_building_level:
-            raise MissionError("Construção necessária indisponível para esta missão.")
 
 
 def mission_is_unlocked(db: Session, guild: Guild, mission_template: MissionTemplate) -> bool:
@@ -468,6 +462,7 @@ def start_mission(
     regional_recommended_power: int | None = None,
     regional_recommended_level: int | None = None,
     allow_regional_supply: bool = False,
+    supply_snapshot_override: dict[str, object] | None = None,
 ) -> MissionRun:
     if not mission_template_id:
         raise MissionError("Missao e obrigatoria.")
@@ -502,9 +497,6 @@ def start_mission(
         raise MissionError("Grupo menor que o mínimo exigido para esta missão.")
     if len(parsed_mercenary_ids) > mission_template.max_party_size:
         raise MissionError("Grupo maior que o máximo permitido para esta missão.")
-    if len(parsed_mercenary_ids) > get_max_allowed_mission_party_size(db, guild.id):
-        raise MissionError("O Escritório de Missões não permite um grupo deste tamanho.")
-
     mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_mercenary_ids)
     if len(mercenaries) != len(parsed_mercenary_ids):
         raise MissionError("Mercenário indisponível.")
@@ -520,9 +512,9 @@ def start_mission(
         * (100 - min(30, skill_effects.get("duration_reduction", 0) + office["duration_reduction_percent"])) / 100
     )
     ends_at = started_at + timedelta(seconds=max(1, duration))
-    supply_snapshot = None
+    supply_snapshot = supply_snapshot_override
     supply_cost = 0
-    if supply_selected:
+    if supply_selected and supply_snapshot_override is None:
         if not allow_regional_supply or mission_template.mission_type in {"gathering", "long_idle"}:
             raise MissionError("Suprimento disponível apenas em contratos regionais.")
         if supply_rank is None:

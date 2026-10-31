@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import base64
 import ctypes
 import hashlib
 import http.client
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+from pathlib import Path
 import socket
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 from urllib.parse import urlsplit
@@ -143,6 +148,55 @@ def _skip_pywebview_early_webview_focus(webview_module=None) -> None:
     logging.info("Applied WinForms WebView2 early-focus compatibility for pywebview")
 
 
+def _verified_update_handoff(installer_path: Path, parent_pid: int) -> None:
+    """Wait for this app to exit, then open only the already verified Setup."""
+    if os.name != "nt":
+        raise RuntimeError("A instalação de releases só está disponível no Windows.")
+    installer = installer_path.resolve(strict=True)
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    staging = installer.parent
+    if staging.parent != temp_root or not staging.name.startswith("gim-release-update-"):
+        raise RuntimeError("O Setup não está na pasta temporária esperada.")
+
+    helper = r"""
+$ErrorActionPreference = 'Stop'
+$setup = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__SETUP__'))
+$staging = [IO.Path]::GetDirectoryName($setup)
+$parentPid = __PID__
+$setupStarted = $false
+try {
+    $parent = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
+    if ($parent) { $parent.WaitForExit() }
+    $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait
+    $setupStarted = $true
+} catch {
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show(
+        "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)",
+        'Guild Idle Manager', 'OK', 'Error'
+    ) | Out-Null
+} finally {
+    $temp = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
+    $full = [IO.Path]::GetFullPath($staging)
+    if ($setupStarted -and $full.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -and
+        (Split-Path -Leaf $full).StartsWith('gim-release-update-')) {
+        Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+""".replace("__SETUP__", base64.b64encode(str(installer).encode("utf-8")).decode("ascii"))
+    helper = helper.replace("__PID__", str(parent_pid))
+    encoded = base64.b64encode(helper.encode("utf-16le")).decode("ascii")
+    windows = Path(os.environ.get("WINDIR", r"C:\Windows"))
+    powershell = windows / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if not powershell.is_file():
+        raise RuntimeError("Windows PowerShell não está disponível para abrir o Setup.")
+    subprocess.Popen(
+        [str(powershell), "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+        close_fds=True,
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+    )
+
+
 def run() -> None:
     if os.name != "nt":
         raise RuntimeError("O aplicativo desktop exige o Windows.")
@@ -159,6 +213,7 @@ def run() -> None:
     listener = None
     server: uvicorn.Server | None = None
     server_thread: threading.Thread | None = None
+    restart_requested = threading.Event()
 
     try:
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -210,6 +265,40 @@ def run() -> None:
             confirm_close=True,
             text_select=True,
         )
+
+        def request_local_checkout_restart() -> None:
+            restart_requested.set()
+            if server is not None:
+                server.should_exit = True
+            try:
+                window.destroy()
+            except Exception:
+                logging.exception("Could not close the desktop window for local checkout restart")
+
+        app.state.request_local_checkout_restart = request_local_checkout_restart
+
+        def request_verified_update_install(installer_path: Path) -> None:
+            try:
+                _verified_update_handoff(installer_path, os.getpid())
+            except Exception as exc:
+                logging.exception("Could not start the verified Setup handoff")
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    "Não foi possível preparar a abertura do Setup verificado. "
+                    f"O arquivo baixado foi preservado para tentativa manual em:\n{installer_path}\n\n"
+                    f"Motivo: {exc}",
+                    "Guild Idle Manager",
+                    0x10,
+                )
+                return
+            if server is not None:
+                server.should_exit = True
+            try:
+                window.destroy()
+            except Exception:
+                logging.exception("Could not close the desktop window for verified Setup")
+
+        app.state.request_verified_update_install = request_verified_update_install
         bridge._window = window
         window.events.closed += lambda: setattr(server, "should_exit", True)
         webview_storage = user_data_directory() / "webview"
@@ -231,6 +320,27 @@ def run() -> None:
                 listener.close()
         finally:
             _release_single_instance_mutex(instance_mutex)
+
+    if restart_requested.is_set():
+        if server_thread is not None and server_thread.is_alive():
+            logging.error("O servidor local ainda está ativo; o checkout não será reiniciado para evitar duas instâncias.")
+            _show_startup_error("O aplicativo não encerrou completamente. Feche-o antes de reiniciar a versão local.")
+            return
+        try:
+            environment = os.environ.copy()
+            environment["APP_MODE"] = "desktop"
+            repository_root = Path(__file__).resolve().parents[2]
+            subprocess.Popen(
+                [sys.executable, "-m", "app.desktop"],
+                cwd=repository_root,
+                env=environment,
+                close_fds=True,
+                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+            logging.info("Restarted the desktop app from the current local checkout")
+        except Exception as exc:
+            logging.exception("Could not restart the desktop app from the local checkout")
+            _show_startup_error(f"Não foi possível reiniciar o checkout local: {exc}")
 
 
 if __name__ == "__main__":

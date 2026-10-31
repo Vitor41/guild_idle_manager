@@ -38,8 +38,9 @@ function formatGenericRemaining(ms) {
 
 function updateGenericCountdowns() {
   document.querySelectorAll("[data-ends-at]").forEach((element) => {
-    const endsAt = new Date(element.dataset.endsAt);
-    const remaining = endsAt.getTime() - Date.now();
+    const raw = element.dataset.endsAt || "";
+    const endsAt = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+    const remaining = endsAt - Date.now();
     if (!(element instanceof HTMLButtonElement)) {
       element.textContent = remaining <= 0 ? "Pronto" : formatGenericRemaining(remaining);
     }
@@ -54,6 +55,50 @@ function updateGenericCountdowns() {
     }
   });
 }
+
+window.parseUtcTimestamp = (value) => {
+  const raw = value || "";
+  return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+};
+
+function initializeClassGuideIndex() {
+  const nav = document.querySelector(".classes-page .classes-guide-index");
+  if (!nav) return;
+  const links = [...nav.querySelectorAll('a[href^="#"]')];
+  const sections = links.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1)))).filter(Boolean);
+  const setActive = (target) => {
+    links.forEach((link) => {
+      if (link.hash === `#${target.id}`) {
+        link.setAttribute("aria-current", "location");
+        link.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } else link.removeAttribute("aria-current");
+    });
+  };
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (visible) setActive(visible.target);
+  }, { rootMargin: "-120px 0px -65% 0px", threshold: [0, 0.2, 0.5] });
+  sections.forEach((section) => observer.observe(section));
+  nav.addEventListener("click", (event) => {
+    const link = event.target.closest('a[href^="#"]');
+    const target = link && document.getElementById(decodeURIComponent(link.hash.slice(1)));
+    if (target) window.setTimeout(() => target.focus({ preventScroll: true }), 0);
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const help = document.querySelector(".offline-action:hover .offline-help, .offline-action:focus-within .offline-help");
+  if (!help) return;
+  help.open = false;
+  help.classList.add("escape-dismissed");
+  help.querySelector("summary")?.blur();
+});
+document.querySelectorAll(".offline-help").forEach((help) => {
+  help.addEventListener("toggle", () => { if (help.open) help.classList.remove("escape-dismissed"); });
+  help.addEventListener("pointerleave", () => help.classList.remove("escape-dismissed"));
+  help.addEventListener("focusin", () => help.classList.remove("escape-dismissed"));
+});
 
 const offlineDialog = document.querySelector("#offline-dialog[data-auto-open]");
 if (offlineDialog) {
@@ -145,6 +190,7 @@ if (sessionFrame) {
 
 updateGenericCountdowns();
 setInterval(updateGenericCountdowns, 1000);
+document.addEventListener("DOMContentLoaded", initializeClassGuideIndex);
 
 function updateSalvagePreview(form) {
   const itemSelect = form.querySelector("[data-salvage-item]");
@@ -223,7 +269,7 @@ if (confirmationDialog) {
     }
 
     const preferenceKey = getConfirmationKey(form);
-    if (preferenceKey && confirmationPreferences[preferenceKey] === false) {
+    if (!form.dataset.confirmAlways && preferenceKey && confirmationPreferences[preferenceKey] === false) {
       form.dataset.confirmed = "true";
       return;
     }
@@ -292,6 +338,20 @@ function showActionToast(container) {
   window.setTimeout(() => toast.remove(), 5000);
 }
 
+window.reportGameplayClientFailure = (route, diagnosticId) => {
+  const target = new URL(route, window.location.origin);
+  if (target.origin !== window.location.origin) return;
+  fetch("/desktop/api/diagnostics/client-error", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      "X-GIM-Diagnostic-ID": diagnosticId,
+    },
+    body: JSON.stringify({ route: target.pathname }),
+  }).catch(() => {});
+};
+
 function getFormStateKey(form) {
   const actionPath = new URL(form.action, window.location.origin).pathname;
   const identity = Array.from(form.querySelectorAll('input[type="hidden"][name]'))
@@ -357,16 +417,18 @@ function preservePageContext(responseUrl, previousUrl) {
   return merged;
 }
 
-function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState) {
+function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
   const incomingMain = parsedDocument.querySelector(".game-shell");
   const currentMain = document.querySelector(".game-shell");
   if (!incomingMain || !currentMain) {
+    if (scrollToTop) window.scrollTo({ top: 0, behavior: "auto" });
     window.location.assign(responseUrl);
     return;
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  window.initializeGatheringCycles?.();
   const incomingTopbar = parsedDocument.querySelector(".game-topbar");
   const currentTopbar = document.querySelector(".game-topbar");
   if (updateTopbar && incomingTopbar && currentTopbar) {
@@ -375,13 +437,15 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
 
   document.title = parsedDocument.title || document.title;
   const nextUrl = new URL(responseUrl, window.location.origin);
+  document.body.dataset.route = nextUrl.pathname;
   window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   updateGenericCountdowns();
   initializeSalvagePreviews();
   restoreGameFormState(formState);
+  window.initializeRegionalSupply?.(currentMain);
   showActionToast(currentMain);
 
-  const targetScroll = nextUrl.pathname === previousPath ? scrollPosition : 0;
+  const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
   window.requestAnimationFrame(() => {
     const maximumScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(targetScroll, maximumScroll), behavior: "auto" });
@@ -397,6 +461,7 @@ document.addEventListener("click", async (event) => {
   event.preventDefault();
   const previousPath = window.location.pathname;
   const scrollPosition = window.scrollY;
+  const scrollToTop = link.hasAttribute("data-scroll-top");
   const formState = captureGameFormState();
   link.setAttribute("aria-busy", "true");
   try {
@@ -413,10 +478,17 @@ document.addEventListener("click", async (event) => {
       scrollPosition,
       true,
       formState,
+      scrollToTop,
     );
   } catch (error) {
+    if (scrollToTop) window.scrollTo({ top: 0, behavior: "auto" });
     window.location.assign(targetUrl);
   }
+});
+
+window.addEventListener("pageshow", () => {
+  if (document.body.dataset.route !== "/regional" || window.location.hash) return;
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
 });
 
 document.addEventListener("submit", async (event) => {
@@ -446,6 +518,7 @@ document.addEventListener("submit", async (event) => {
   const previousPath = window.location.pathname;
   const scrollPosition = window.scrollY;
   const formState = captureGameFormState();
+  const diagnosticId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   form.setAttribute("aria-busy", "true");
   if (submitter) {
     submitter.disabled = true;
@@ -453,11 +526,15 @@ document.addEventListener("submit", async (event) => {
   }
 
   try {
-    const requestUrl = new URL(form.action, window.location.origin);
+    const requestUrl = new URL(submitter?.formAction || form.action, window.location.origin);
     const requestOptions = {
       method: method.toUpperCase(),
       credentials: "same-origin",
-      headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
+      headers: {
+        "Accept": "text/html",
+        "X-Requested-With": "fetch",
+        "X-GIM-Diagnostic-ID": diagnosticId,
+      },
     };
     if (method === "get") {
       requestUrl.search = new URLSearchParams(formData).toString();
@@ -488,7 +565,14 @@ document.addEventListener("submit", async (event) => {
       submitter.disabled = false;
       submitter.classList.remove("is-loading");
     }
-    form.submit();
+    form.querySelector("[data-client-action-error]")?.remove();
+    window.reportGameplayClientFailure?.(submitter?.formAction || form.action, diagnosticId);
+    const notice = document.createElement("p");
+    notice.className = "form-error";
+    notice.setAttribute("role", "alert");
+    notice.dataset.clientActionError = "true";
+    notice.textContent = `Não foi possível confirmar a ação. Tente novamente e informe a referência ${diagnosticId}.`;
+    form.prepend(notice);
   }
 });
 

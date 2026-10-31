@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Atualizações · Guild Idle Manager{% endblock %}
+{% block content %}
+<section class="panel table-panel" aria-labelledby="updates-title">
+  <p class="eyebrow">VERSÃO LOCAL</p>
+  <h1 id="updates-title">Atualizações</h1>
+  <p>Esta instalação está na versão <strong>{{ release_version }}</strong>.</p>
+  {% if request.app.state.app_mode == 'desktop' and is_packaged %}
+  <h2>Aplicativo instalado</h2>
+  <p>O atualizador consulta releases do canal desta instalação, valida o manifesto assinado e o hash do Setup e só o abre após sua confirmação.</p>
+  <p role="status" aria-live="polite" data-release-update-status>{{ github_releases_status.reason }}</p>
+  <button type="button" data-check-release-update {% if not github_releases_status.query_enabled %}disabled{% endif %}>Verificar GitHub Releases</button>
+  <form data-release-install-confirm data-confirm-always="true" data-confirm-title="Confirmar atualização" data-confirm-action="Fechar e abrir Setup" hidden>
+    <button type="submit" data-install-release-update aria-haspopup="dialog" aria-controls="confirmation-dialog">Fechar e abrir Setup verificado</button>
+  </form>
+  <p class="note">A consulta só acontece quando você solicita e quando a origem, chave e canal desta instalação estão configurados. O Setup atualiza os arquivos do aplicativo com staging e rollback; os saves ficam em <code>%LOCALAPPDATA%\GuildIdleManager\saves</code>.</p>
+  <script>
+    const releaseCheckButton = document.querySelector('[data-check-release-update]');
+    const releaseInstallForm = document.querySelector('[data-release-install-confirm]');
+    const releaseInstallButton = document.querySelector('[data-install-release-update]');
+    const releaseStatus = document.querySelector('[data-release-update-status]');
+    let preparedReleaseVersion = null;
+
+    releaseCheckButton?.addEventListener('click', async () => {
+      releaseCheckButton.disabled = true;
+      releaseInstallForm.hidden = true;
+      preparedReleaseVersion = null;
+      releaseStatus.textContent = 'Consultando releases e verificando assinatura e hash…';
+      try {
+        const response = await fetch('/updates/check', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || 'Consulta indisponível.');
+        releaseStatus.textContent = result.reason || 'Consulta concluída.';
+        if (result.install_enabled && result.available) {
+          preparedReleaseVersion = result.available_version;
+          releaseInstallForm.dataset.confirmTitle = `Instalar versão ${preparedReleaseVersion}?`;
+          releaseInstallForm.dataset.confirmMessage = `Fechar o Guild Idle Manager e abrir o Setup verificado da versão ${preparedReleaseVersion}?`;
+          releaseInstallButton.textContent = `Instalar versão ${preparedReleaseVersion}`;
+          releaseInstallForm.hidden = false;
+        }
+      } catch (error) {
+        releaseStatus.textContent = error.message || 'Não foi possível consultar GitHub Releases.';
+      } finally {
+        releaseCheckButton.disabled = false;
+      }
+    });
+
+    releaseInstallForm?.addEventListener('submit', async (event) => {
+      if (releaseInstallForm.dataset.confirmed !== 'true') {
+        event.preventDefault();
+        if (!preparedReleaseVersion) {
+          return;
+        }
+        return;
+      }
+      event.preventDefault();
+      releaseInstallButton.disabled = true;
+      releaseCheckButton.disabled = true;
+      releaseStatus.textContent = 'Fechando o aplicativo; o Setup validado será aberto em seguida…';
+      try {
+        const response = await fetch('/updates/install-release', {
+          method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' },
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || 'Não foi possível abrir o Setup.');
+        releaseStatus.textContent = result.reason;
+      } catch (error) {
+        releaseStatus.textContent = error.message || 'Não foi possível abrir o Setup.';
+        releaseInstallForm.dataset.confirmed = 'false';
+        releaseInstallButton.disabled = false;
+        releaseCheckButton.disabled = false;
+      }
+    });
+  </script>
+  {% elif request.app.state.app_mode == 'desktop' %}
+  <h2>Canal local de desenvolvimento</h2>
+  <p>O modo DEV executa este checkout diretamente. A verificação compara a versão carregada com <code>APP_VERSION</code> nos arquivos que já estão no disco; não baixa código nem faz <code>git pull</code>.</p>
+  {% if can_restart_local_checkout %}
+  <button type="button" data-check-local-update>Verificar versão do checkout</button>
+  <button type="button" data-apply-local-update hidden>Reiniciar e aplicar versão do projeto</button>
+  <p role="status" aria-live="polite" data-local-update-status>Verificação local; nenhuma conexão remota será aberta.</p>
+  <script>
+    const checkButton = document.querySelector('[data-check-local-update]');
+    const applyButton = document.querySelector('[data-apply-local-update]');
+    const status = document.querySelector('[data-local-update-status]');
+
+    document.querySelector('[data-check-local-update]')?.addEventListener('click', async (event) => {
+      checkButton.disabled = true;
+      applyButton.hidden = true;
+      status.textContent = 'Lendo a versão do checkout local…';
+      try {
+        const response = await fetch('/updates/check', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || 'Verificação indisponível.');
+        applyButton.hidden = !result.available;
+        status.textContent = result.available
+          ? `Versão ${result.available_version} já está no checkout. Reinicie para carregá-la.`
+          : (result.reason || `Checkout local na versão ${result.current_version}.`);
+      } catch (error) {
+        applyButton.hidden = true;
+        status.textContent = error.message || 'Não foi possível verificar a versão local.';
+      } finally {
+        checkButton.disabled = false;
+      }
+    });
+
+    applyButton?.addEventListener('click', async () => {
+      applyButton.disabled = true;
+      checkButton.disabled = true;
+      status.textContent = 'Fechando com segurança e reiniciando o checkout local…';
+      try {
+        const response = await fetch('/updates/apply-local', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || 'Não foi possível reiniciar o checkout.');
+        status.textContent = 'Reiniciando para carregar a versão já presente no projeto…';
+      } catch (error) {
+        status.textContent = error.message || 'Não foi possível reiniciar o checkout local.';
+        applyButton.disabled = false;
+        checkButton.disabled = false;
+      }
+    });
+  </script>
+  {% else %}
+  <p>O reinício automático só fica disponível no checkout desktop local. Atualizações de produção dependem de um pacote e canal de distribuição configurados.</p>
+  {% endif %}
+  {% endif %}
+  <p class="note">No checkout DEV, reiniciar carrega os arquivos já presentes no projeto e preserva o fluxo normal de encerramento. Em instalação empacotada, a atualização depende de releases assinadas publicadas e da configuração do canal. Os dados de campanha ficam no perfil local.</p>
+</section>
+{% endblock %}

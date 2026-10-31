@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import floor
 from types import SimpleNamespace
 from urllib.parse import quote, urlencode
@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from app.core.dependencies import DbSession, get_current_campaign, get_current_player
 from app.core.forms import read_form_multi_fields
 from app.models.campaign import CampaignMetadata
+from app.models.guild import GuildResources
 from app.models.dungeon import DungeonTemplate
 from app.models.mission import MissionTemplate
 from app.models.regional import RegionalEvent, RegionalEventParticipant, RegionalGuildState, RegionalOffer
@@ -49,6 +50,25 @@ def _datetime_iso(value: datetime | None) -> str | None:
         return None
     normalized = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
     return normalized.isoformat()
+
+
+templates.env.globals["utc_iso"] = _datetime_iso
+
+
+def _annotate_supply_preparation(offer: RegionalOffer, now: datetime) -> None:
+    started = offer.supply_preparation_started_at_utc
+    ends = offer.supply_preparation_ends_at_utc
+    offer.supply_preparation_ends_at_iso = _datetime_iso(ends)
+    if started is None or ends is None:
+        offer.supply_preparation_progress_percent = 0
+        return
+    started = started.replace(tzinfo=timezone.utc) if started.tzinfo is None else started.astimezone(timezone.utc)
+    ends = ends.replace(tzinfo=timezone.utc) if ends.tzinfo is None else ends.astimezone(timezone.utc)
+    duration = max(1.0, (ends - started).total_seconds())
+    elapsed = max(0.0, (now - started).total_seconds())
+    offer.supply_preparation_progress_percent = max(0, min(100, int(elapsed * 100 / duration)))
+    if now >= ends and offer.supply_prepared_at_utc is None:
+        offer.supply_prepared_at_utc = ends
 
 
 def _start_error_redirect(error: object, form: dict[str, list[str]], anchor: str = "") -> RedirectResponse:
@@ -94,7 +114,7 @@ def _quote_offer_supply(db, guild, offer: RegionalOffer, mercenary_ids: list[str
         drops = list_active_drops_for_mission(db, template.id)
     else:
         from app.services.dungeon_service import (
-            get_group_synergy_bonus, scouts_values, validate_advanced_party_requirements,
+            get_group_synergy_bonus, get_group_synergy_power_bonus, scouts_values, validate_advanced_party_requirements,
             validate_dungeon_requirements,
         )
         from app.models.dungeon import DungeonTemplate
@@ -110,7 +130,8 @@ def _quote_offer_supply(db, guild, offer: RegionalOffer, mercenary_ids: list[str
         if not template.min_party_size <= len(members) <= template.max_party_size:
             return {"available": False, "reason": "O grupo não atende ao tamanho exigido pela masmorra."}
         details = get_party_chance_details(db, guild.id, offer.success_chance_snapshot, members,
-                                           offer.recommended_power_snapshot, offer.recommended_level_snapshot)
+                                           offer.recommended_power_snapshot, offer.recommended_level_snapshot,
+                                           power_bonus=get_group_synergy_power_bonus(members, template))
         base_final = max(5, min(95, details["final_chance"] + skills.get("success_chance", 0)
                                 + skills.get("dungeon_power", 0) // 10 + get_group_synergy_bonus(members, template)))
         base_final = min(95, base_final + scouts_values(get_building_level(db, guild.id, "scouts"))["success_bonus_percentage_points"])
@@ -156,7 +177,7 @@ async def regional_supply_quote(
     offer = db.scalar(select(RegionalOffer).where(
         RegionalOffer.id == offer_id,
         RegionalOffer.campaign_id == campaign.campaign_id,
-        RegionalOffer.status == "available",
+        RegionalOffer.status.in_(("available", "supply_preparing")),
     ))
     if offer is None:
         return JSONResponse({"available": False, "reason": "Oferta indisponível."}, status_code=409)
@@ -177,9 +198,15 @@ def regional_index(
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     board = get_regional_board(db, campaign, guild)
+    region_now = datetime.now(timezone.utc)
     for offer_list in board.get("offers", {}).values():
         for offer in offer_list:
-            offer.supply_quote = _initial_offer_supply_quote(db, guild, offer, resources.gold if resources else 0)
+            _annotate_supply_preparation(offer, region_now)
+            try:
+                saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                saved_quote = {}
+            offer.supply_quote = saved_quote or _initial_offer_supply_quote(db, guild, offer, resources.gold if resources else 0)
     advance_all_assignments(db, guild)
     db.commit()
     assignments = list_assignments(db, guild.id)
@@ -240,10 +267,15 @@ def regional_index(
             rebellion_offers = list(db.scalars(select(RegionalOffer).where(
                 RegionalOffer.cycle_id == board["cycle"].id,
                 RegionalOffer.region_code == rebellion.region_code,
-                RegionalOffer.status == "available",
+                RegionalOffer.status.in_(("available", "supply_preparing")),
             ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
             for offer in rebellion_offers:
-                offer.supply_quote = _initial_offer_supply_quote(db, guild, offer, resources.gold if resources else 0)
+                _annotate_supply_preparation(offer, region_now)
+                try:
+                    saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
+                except (TypeError, json.JSONDecodeError):
+                    saved_quote = {}
+                offer.supply_quote = saved_quote or _initial_offer_supply_quote(db, guild, offer, resources.gold if resources else 0)
     for event in board.get("event_history", []):
         summary = event_history_summary(event)
         raw_rows = summary.get("participant_results", []) if event.event_type == "portal" else summary.get("activities", [])
@@ -297,6 +329,7 @@ def regional_index(
             "guild": guild,
             "resources": resources,
             "error": request.query_params.get("error"),
+            "diagnostic_id": request.query_params.get("diagnostic"),
             "selected_start_mercenary_ids": request.query_params.getlist("selected_mercenary_id"),
             "selected_start_supply": request.query_params.get("selected_supply") == "1",
             "message": request.query_params.get("message"),
@@ -337,13 +370,37 @@ async def start_offer(
     offer = db.scalar(select(RegionalOffer).where(
         RegionalOffer.id == offer_id,
         RegionalOffer.campaign_id == campaign.campaign_id,
-        RegionalOffer.status == "available",
+        RegionalOffer.status.in_(("available", "supply_preparing")),
     ))
     if offer is None:
         return RedirectResponse("/regional?error=Oferta%20indispon%C3%ADvel", status_code=303)
+    form = await read_form_multi_fields(request)
+    if offer.supply_preparation_ends_at_utc is not None:
+        prep_end = offer.supply_preparation_ends_at_utc
+        prep_end = prep_end.replace(tzinfo=timezone.utc) if prep_end.tzinfo is None else prep_end.astimezone(timezone.utc)
+        if datetime.now(timezone.utc) < prep_end:
+            return _start_error_redirect("O suprimento ainda está sendo preparado.", form)
+        if not offer.supply_prepared_at_utc:
+            offer.supply_prepared_at_utc = prep_end
+        try:
+            supply_snapshot = json.loads(offer.supply_preparation_snapshot_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            supply_snapshot = {}
+        if not supply_snapshot:
+            return _start_error_redirect("A preparação não possui um snapshot válido. Inicie sem suprimento.", form)
+        prepared_team = sorted(str(value) for value in supply_snapshot.get("mercenary_ids", []))
+        submitted_team = sorted(set(str(value) for value in form.get("mercenary_ids", [])))
+        if not prepared_team or submitted_team != prepared_team:
+            return _start_error_redirect("Use a mesma equipe escolhida durante a preparação do suprimento.", form)
+    else:
+        supply_snapshot = None
+        if (form.get("supply") or [""])[0] == "1":
+            return _start_error_redirect("Prepare o suprimento antes de iniciar ou desmarque a opção.", form)
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
     if player_state is None:
         return RedirectResponse("/regional?error=Estado%20regional%20indispon%C3%ADvel", status_code=303)
+    if offer.status == "supply_preparing" and offer.reserved_by_guild_state_id != player_state.id:
+        return RedirectResponse("/regional?error=Oferta%20em%20prepara%C3%A7%C3%A3o%20por%20outra%20guilda", status_code=303)
     current_time = datetime.now(timezone.utc)
     rebellion = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign.campaign_id,
@@ -365,7 +422,7 @@ async def start_offer(
             update(RegionalOffer)
             .where(
                 RegionalOffer.id == offer.id,
-                RegionalOffer.status == "available",
+                RegionalOffer.status == offer.status,
                 RegionalOffer.campaign_id == campaign.campaign_id,
             )
             .values(status="player_reserved", reserved_by_guild_state_id=player_state.id)
@@ -378,19 +435,19 @@ async def start_offer(
         return RedirectResponse("/regional?error=Oferta%20j%C3%A1%20reservada", status_code=303)
     offer.status = "player_reserved"
     offer.reserved_by_guild_state_id = player_state.id
-    form = await read_form_multi_fields(request)
     mercenary_ids = form.get("mercenary_ids", [])
     try:
         if offer.offer_type == "contract":
             run = start_mission(
                 db, guild, str(offer.mission_template_id), mercenary_ids, commit=False,
                 regional_duration_seconds=offer.duration_seconds_snapshot,
-                supply_selected=(form.get("supply") or [""])[0] == "1",
+                supply_selected=False,
                 supply_rank=offer.rank,
                 regional_success_chance=offer.success_chance_snapshot,
                 regional_recommended_power=offer.recommended_power_snapshot,
                 regional_recommended_level=offer.recommended_level_snapshot,
                 allow_regional_supply=True,
+                supply_snapshot_override=supply_snapshot,
             )
             run.regional_offer_id = offer.id
             run.rank_snapshot = offer.rank
@@ -399,11 +456,12 @@ async def start_offer(
             run = start_dungeon(
                 db, guild, str(offer.dungeon_template_id), mercenary_ids, commit=False,
                 regional_duration_seconds=offer.duration_seconds_snapshot,
-                supply_selected=(form.get("supply") or [""])[0] == "1",
+                supply_selected=False,
                 supply_rank=offer.rank,
                 regional_success_chance=offer.success_chance_snapshot,
                 regional_recommended_power=offer.recommended_power_snapshot,
                 regional_recommended_level=offer.recommended_level_snapshot,
+                supply_snapshot_override=supply_snapshot,
             )
             run.regional_offer_id = offer.id
             run.rank_snapshot = offer.rank
@@ -432,6 +490,79 @@ async def start_offer(
         db.rollback()
         return RedirectResponse("/regional?error=Oferta%20j%C3%A1%20reservada", status_code=303)
     return RedirectResponse(f"/{source}?message=Contrato%20regional%20iniciado", status_code=303)
+
+
+@router.post("/offers/{offer_id}/prepare")
+async def prepare_regional_offer_supply(
+    offer_id: int,
+    request: Request,
+    db: DbSession,
+    current_user: User | None = Depends(get_current_player),
+    campaign: CampaignMetadata | None = Depends(get_current_campaign),
+):
+    if current_user is None or campaign is None:
+        return RedirectResponse("/login", status_code=303)
+    guild, resources = get_current_guild_context(db, current_user.id)
+    if guild is None or resources is None:
+        return RedirectResponse("/regional?error=Guilda%20indispon%C3%ADvel", status_code=303)
+    form = await read_form_multi_fields(request)
+    offer = db.scalar(select(RegionalOffer).where(
+        RegionalOffer.id == offer_id,
+        RegionalOffer.campaign_id == campaign.campaign_id,
+        RegionalOffer.status == "available",
+    ).with_for_update())
+    if offer is None:
+        return _start_error_redirect("Oferta indisponível para preparação.", form)
+    if offer.supply_preparation_started_at_utc is not None:
+        return _start_error_redirect("O suprimento já está em preparação ou foi preparado.", form)
+    if (form.get("supply") or [""])[0] != "1":
+        return _start_error_redirect("Marque o suprimento opcional para começar a preparação.", form)
+    quote = _quote_offer_supply(db, guild, offer, form.get("mercenary_ids", []))
+    if not quote.get("available"):
+        return _start_error_redirect(quote.get("reason", "Suprimento indisponível."), form)
+    cost = int(quote["cost_gold"])
+    cycle = db.get(RegionalCycle, offer.cycle_id)
+    now = datetime.now(timezone.utc)
+    prep_seconds = max(1, int(offer.duration_seconds_snapshot * 0.015))
+    cycle_end = cycle.ends_at_utc if cycle else now
+    cycle_end = cycle_end.replace(tzinfo=timezone.utc) if cycle_end.tzinfo is None else cycle_end.astimezone(timezone.utc)
+    if cycle is None or cycle.status != "open" or now + timedelta(seconds=prep_seconds) >= cycle_end:
+        return _start_error_redirect("Não há tempo suficiente nesta Vigília para concluir a preparação.", form)
+    player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
+    if player_state is None:
+        return _start_error_redirect("Estado regional indisponível.", form)
+    preparation_snapshot = json.dumps({
+        "schema": 1,
+        "supply": "regional_group_supply",
+        "prepared_for_offer_id": offer.id,
+        "mercenary_ids": sorted(set(str(value) for value in form.get("mercenary_ids", []))),
+        "base_final_chance": int(quote.get("base_final_chance", offer.success_chance_snapshot)),
+        "preparation_seconds": prep_seconds,
+        **quote,
+    }, ensure_ascii=False, sort_keys=True)
+    reserved = db.execute(update(RegionalOffer).where(
+        RegionalOffer.id == offer.id,
+        RegionalOffer.status == "available",
+        RegionalOffer.supply_preparation_started_at_utc.is_(None),
+    ).values(status="supply_preparing", reserved_by_guild_state_id=player_state.id))
+    if reserved.rowcount != 1:
+        db.rollback()
+        return _start_error_redirect("Esta oferta já está sendo preparada.", form)
+    debit = db.execute(update(GuildResources).where(
+        GuildResources.guild_id == guild.id,
+        GuildResources.gold >= cost,
+    ).values(gold=GuildResources.gold - cost))
+    if debit.rowcount != 1:
+        db.rollback()
+        return _start_error_redirect("Saldo insuficiente para preparar o suprimento.", form)
+    offer.status = "supply_preparing"
+    offer.reserved_by_guild_state_id = player_state.id
+    offer.supply_preparation_started_at_utc = now
+    offer.supply_preparation_ends_at_utc = now + timedelta(seconds=prep_seconds)
+    offer.supply_preparation_snapshot_json = preparation_snapshot
+    db.add(offer)
+    db.commit()
+    return RedirectResponse("/regional?message=Preparo%20de%20suprimento%20iniciado", status_code=303)
 
 
 @router.post("/events/{event_id}/decision")

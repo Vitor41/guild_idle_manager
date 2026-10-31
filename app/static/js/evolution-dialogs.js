@@ -30,8 +30,9 @@ document.querySelectorAll(".evolution-page img").forEach((image) => {
 
 function updateVigilCountdowns() {
   document.querySelectorAll("[data-evolution-countdown]").forEach((element) => {
-    const deadline = Date.parse(element.dataset.evolutionCountdown);
-    const seconds = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+    const raw = element.dataset.evolutionCountdown || "";
+    const deadline = window.parseUtcTimestamp ? window.parseUtcTimestamp(raw) : Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+    const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const remainder = seconds % 60;

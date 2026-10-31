@@ -2443,6 +2443,30 @@ tr:hover td {
 html { scroll-behavior: smooth; }
 .guide-nav { position: sticky; top: 76px; z-index: 4; padding: 10px; border: 1px solid var(--border); background: rgba(18,15,12,.96); }
 .guide-section { scroll-margin-top: 140px; }
+.classes-guide-index { position: relative; top: auto; z-index: 1; gap: 8px; padding: 0; border: 0; background: transparent; }
+.classes-guide-index a { min-height: 40px; padding: 9px 13px; white-space: nowrap; }
+.classes-guide-index a[aria-current="location"] { background: var(--surface-3); border-color: var(--gold); color: var(--gold-2); }
+.guide-index a:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
+.guide-section { scroll-margin-top: 112px; }
+.offline-action { display: flex; align-items: center; gap: 6px; position: relative; }
+.offline-action form { margin: 0; }
+.offline-action .topbar-back-button { display: grid; justify-items: center; gap: 2px; }
+.offline-stamina-value { color: var(--gold-2); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.offline-help { position: relative; }
+.offline-help summary { display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer; list-style: none; border: 1px solid var(--border); border-radius: 50%; color: var(--gold-2); }
+.offline-help summary::-webkit-details-marker { display: none; }
+.offline-help summary:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
+.offline-help__popover { display: none; position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: min(340px, calc(100vw - 32px)); padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: #171b21; box-shadow: 0 12px 36px #0009; }
+.offline-action:hover .offline-help__popover, .offline-action:focus-within .offline-help__popover, .offline-help[open] .offline-help__popover { display: block; }
+.offline-help.escape-dismissed .offline-help__popover { display: none; }
+.offline-help__popover p { margin: 8px 0 0; }
+@media (max-width: 700px) {
+  .classes-guide-index { overflow-x: auto; flex-wrap: nowrap; }
+  .offline-help__popover { position: fixed; top: 74px; right: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
 .guide-list { display: grid; gap: 10px; margin: 0; padding-left: 22px; color: var(--muted); }
 .salvage-slot-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .salvage-slot-card { display: grid; align-content: start; gap: 14px; min-height: 300px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(12,9,7,.42); }

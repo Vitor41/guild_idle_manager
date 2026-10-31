@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as SqlAlchemySession
 from sqlalchemy.orm import Session
 
 from app.models.campaign import CampaignMetadata
+from app.models.building import BuildingTemplate, GuildBuilding
 from app.models.dungeon import DungeonTemplate
 from app.models.item import ItemTemplate
 from app.models.regional import (
@@ -21,6 +22,7 @@ from app.models.regional import (
     RegionalGuildState,
     RegionalRegionState,
 )
+from app.services.building_balance_service import scouts_values
 from app.services.regional_cycle_service import (
     REGIONS,
     _rng,
@@ -392,9 +394,24 @@ def _create_cycle_portals_locked(
         ).limit(1))
         if active_id is not None:
             continue
+        player_state = db.scalar(select(RegionalGuildState).where(
+            RegionalGuildState.campaign_id == campaign_id,
+            RegionalGuildState.region_code == region.region_code,
+            RegionalGuildState.guild_id.is_not(None),
+        ).limit(1))
+        scouts_level = 0
+        if player_state is not None and player_state.guild_id is not None:
+            scouts_level = int(db.scalar(select(GuildBuilding.level).join(
+                BuildingTemplate, BuildingTemplate.id == GuildBuilding.building_template_id,
+            ).where(
+                GuildBuilding.guild_id == player_state.guild_id,
+                BuildingTemplate.effect_type == "scouts",
+            )) or 0)
+        detection_bonus_pp = scouts_values(scouts_level)["portal_detection_bonus_percentage_points"]
         chance = min(
-            PORTAL_MAX_CHANCE,
-            PORTAL_BASE_CHANCE + (float(region.threat) - PORTAL_MIN_THREAT) * (0.20 / 30.0),
+            PORTAL_MAX_CHANCE + 0.05,
+            PORTAL_BASE_CHANCE + (float(region.threat) - PORTAL_MIN_THREAT) * (0.20 / 30.0)
+            + detection_bonus_pp / 100.0,
         )
         seed = _seed_text(
             campaign_id, cycle.cycle_number, region.region_code, EVENT_RULES_VERSION, "portal",
@@ -419,6 +436,7 @@ def _create_cycle_portals_locked(
             expires_at_utc=cycle_end + PORTAL_TTL,
             summary_json=json.dumps({
                 "chance": round(chance, 6),
+                "scouts_detection_bonus_pp": detection_bonus_pp,
                 "threat_snapshot": round(region.threat, 4),
                 "deadline_policy": "continues_offline",
                 "content_policy": "active_portal_biome_boss_template",

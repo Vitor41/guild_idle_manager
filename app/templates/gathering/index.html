@@ -8,13 +8,13 @@
       <img src="/static/assets/desktop/evolution/illustrations/gathering-worksite.webp" width="1600" height="900" alt="" fetchpriority="high">
       <div>
         <img class="gathering-kit" src="/static/assets/desktop/evolution/sprites/ui_64/gathering-kit.png" width="48" height="48" alt="" loading="lazy">
-        <p class="eyebrow">Madeira · minério · couro</p>
+        <p class="eyebrow">Madeira · minério · couro · essências · gemas · ervas · relíquias · fibras</p>
         <h1 id="gathering-title">Postos de coleta</h1>
         <p>Designe até três mercenários. Cada pessoa ocupa um posto e continua trabalhando enquanto houver espaço no Armazém.</p>
       </div>
     </header>
 
-    {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+    {% if error %}<p class="form-error" role="alert">{{ error }}{% if diagnostic_id %} Referência de diagnóstico: {{ diagnostic_id }}. Log: %LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log{% endif %}</p>{% endif %}
     {% if message %}<p class="form-success" role="status">{{ message }}</p>{% endif %}
 
     <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">
@@ -24,7 +24,8 @@
     </section>
 
     <div class="gathering-grid">
-      {% for family, label, node in [("wood", "Madeira", "Bosque"), ("ore", "Minério", "Pedreira"), ("leather", "Couro", "Terras de caça")] %}
+      {% for family, label in family_labels.items() %}
+        {% set node = node_labels[family] %}
         {% set assignment = assignments|selectattr('resource_family', 'equalto', family)|first %}
         <article class="panel gathering-card">
           <div class="gathering-card__heading"><span class="eyebrow">{{ node }}</span><h2>{{ label }}</h2></div>
@@ -35,7 +36,10 @@
               <a class="secondary-button" href="{{ inventory_url }}">Abrir inventário e liberar espaço</a>
             {% else %}
               <p class="gathering-status">Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
-              <p class="gathering-progress">Próximo ciclo em {{ 60 - assignment.progress_seconds }} s</p>
+              <div class="gathering-cycle" data-gathering-cycle data-progress-seconds="{{ assignment.progress_seconds }}">
+                <progress max="60" value="{{ assignment.progress_seconds }}" aria-label="Progresso do ciclo de {{ label }}">{{ assignment.progress_seconds }} de 60 segundos</progress>
+                <p class="gathering-progress" role="timer" aria-live="off">Próximo ciclo em <strong data-gathering-remaining>{{ 60 - assignment.progress_seconds }}</strong> s</p>
+              </div>
             {% endif %}
             <p>1 unidade por ciclo de 60 s{% if assignment.extra_chance %} · +{{ assignment.extra_chance }}% de chance para 1 extra{% endif %}</p>
             <form method="post" action="/gathering/release/{{ assignment.id }}">

@@ -15,18 +15,6 @@ RARITY_DESCRIPTIONS = {
     "mythic": "O ápice atual de raridade para mercenários e equipamentos.",
 }
 
-ITEM_TIER_GUIDE = [
-    {"tier": 1, "label": "Inicial", "description": "Equipamentos básicos e requisitos baixos."},
-    {"tier": 2, "label": "Aprimorado", "description": "Base de atributos superior para progressão intermediária."},
-    {"tier": 3, "label": "Avançado", "description": "Itens voltados a missões e masmorras mais exigentes."},
-    {"tier": 4, "label": "Superior", "description": "Faixas de bônus altas e requisitos avançados."},
-    {"tier": 5, "label": "Excepcional", "description": "Referência preparada para equipamentos de fim de jogo."},
-    {"tier": 6, "label": "Heroico", "description": "Equipamentos de regiões perigosas e desafios heroicos."},
-    {"tier": 7, "label": "Lendário", "description": "Poder elevado para expedições de elite e chefes."},
-    {"tier": 8, "label": "Primordial", "description": "O patamar máximo atual para conteúdos de nível 301 a 350."},
-]
-
-
 def get_tier_guide_context() -> dict[str, object]:
     rarity_cards: list[dict[str, object]] = []
     for rarity in RARITY_ORDER:
@@ -41,4 +29,4 @@ def get_tier_guide_context() -> dict[str, object]:
                 "maximum_power": maximum_power,
             }
         )
-    return {"rarity_cards": rarity_cards, "item_tiers": ITEM_TIER_GUIDE}
+    return {"rarity_cards": rarity_cards}

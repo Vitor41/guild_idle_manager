@@ -104,6 +104,23 @@ def _utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
+def _normalize_open_cycle_boundaries(campaign: CampaignMetadata, cycle: RegionalCycle) -> bool:
+    """Align legacy open-cycle timestamps to the canonical six-hour campaign calendar."""
+    if cycle.status != "open":
+        return False
+    epoch = _utc(campaign.created_at_utc)
+    starts_at = epoch + timedelta(seconds=cycle.cycle_number * CYCLE_SECONDS)
+    ends_at = starts_at + timedelta(seconds=CYCLE_SECONDS)
+    changed = False
+    if _utc(cycle.starts_at_utc) != starts_at:
+        cycle.starts_at_utc = starts_at
+        changed = True
+    if _utc(cycle.ends_at_utc) != ends_at:
+        cycle.ends_at_utc = ends_at
+        changed = True
+    return changed
+
+
 def _now(value: datetime | None = None) -> datetime:
     return _utc(value or datetime.now(timezone.utc))
 
@@ -658,6 +675,7 @@ def _materialize_cycle(
         RegionalCycle.cycle_number == cycle_number,
     ))
     if existing is not None:
+        _normalize_open_cycle_boundaries(campaign, existing)
         return existing
     epoch = _utc(campaign.created_at_utc)
     starts_at = epoch + timedelta(seconds=cycle_number * CYCLE_SECONDS)
@@ -683,7 +701,7 @@ def _materialize_cycle(
     db.flush()
 
     db.execute(
-        text("UPDATE regional_offers SET status = 'expired' WHERE campaign_id = :campaign_id AND cycle_number < :cycle_number AND status = 'available'"),
+        text("UPDATE regional_offers SET status = 'expired' WHERE campaign_id = :campaign_id AND cycle_number < :cycle_number AND status IN ('available', 'supply_preparing')"),
         {"campaign_id": campaign.campaign_id, "cycle_number": cycle_number},
     )
     roster_level = max(db.scalars(select(Mercenary.level).where(
@@ -1123,6 +1141,7 @@ def advance_regional_world(
                 ))
                 if previous is None:
                     raise RegionalCycleError("Falta um snapshot anterior; o calendário regional não avançou.")
+                _normalize_open_cycle_boundaries(campaign, previous)
                 _process_cycle(db, campaign.campaign_id, previous, world)
             current = _materialize_cycle(db, campaign, guild, world, cycle_number)
             world.last_materialized_cycle = cycle_number
@@ -1141,6 +1160,11 @@ def advance_regional_world(
         active_cycle = _materialize_cycle(db, campaign, guild, world, max(0, world.last_materialized_cycle))
         world.last_materialized_cycle = active_cycle.cycle_number
         db.add(world)
+        db.commit()
+        db.refresh(active_cycle)
+    elif _normalize_open_cycle_boundaries(campaign, active_cycle):
+        # The board renders this cycle's end time, so persist the canonical window first.
+        db.add(active_cycle)
         db.commit()
         db.refresh(active_cycle)
     return active_cycle
@@ -1206,7 +1230,7 @@ def get_regional_board(
     portal_events = active_portals_for_region(db, campaign.campaign_id, home_code)
     rebellion_event = active_rebellion(db, campaign.campaign_id)
     event_history = event_history_for_campaign(db, campaign.campaign_id)
-    open_offers = [offer for offer in offers["contract"] + offers["dungeon"] + offers["boss"] if offer.status == "available"]
+    open_offers = [offer for offer in offers["contract"] + offers["dungeon"] + offers["boss"] if offer.status in {"available", "supply_preparing"}]
     return {
         "world": db.get(RegionalWorldState, campaign.campaign_id),
         "cycle": active_cycle,

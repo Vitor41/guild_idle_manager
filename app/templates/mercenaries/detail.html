@@ -116,7 +116,7 @@
           <div class="equipment-slot {{ slot_class }} {{ 'filled' if equipped else '' }}">
             <span class="slot-icon" data-desktop-item-slot="{{ slot_key }}" data-desktop-item-group="{{ equipped.item_template.icon_group if equipped else '' }}" data-desktop-item-family="{{ equipped.item_template.material_family if equipped else '' }}">
               {% if equipped and equipped.icon_path %}
-                <img class="asset-icon item-icon-img slot-item-icon" src="{{ url_for('static', path=equipped.icon_path) }}" alt="{{ equipped.item_template.name }}" loading="lazy">
+                <img class="asset-icon item-icon-img slot-item-icon" src="{{ url_for('static', path=equipped.icon_path) }}" alt="{{ equipped.display_name }}" loading="lazy">
               {% else %}
                 <span aria-hidden="true">{{ equipped.view_icon if equipped and equipped.view_icon is defined else slot_icons.get(slot_key, '◇') }}</span>
               {% endif %}
@@ -124,7 +124,7 @@
             <span class="slot-name">{{ slot_label }}</span>
             {% if equipped %}
               <strong>{{ equipped.display_name }}{% if equipped.upgrade_level > 0 %} +{{ equipped.upgrade_level }}{% endif %}</strong>
-              <small>{{ equipped.rarity_label }} · T{{ equipped.item_template.tier }}</small>
+              <small>{{ equipped.rarity_label }} · nível mínimo {{ equipped.required_level }}</small>
               <form method="post" action="/mercenaries/{{ mercenary.id }}/unequip">
                 <input type="hidden" name="item_instance_id" value="{{ equipped.id }}">
                 <button type="submit">Remover</button>
@@ -161,7 +161,7 @@
             <option value="">Escolha um equipamento</option>
             {% for item in available_equipment %}
               <option value="{{ item.id }}">
-                {{ item.view_icon if item.view_icon is defined else '◇' }} {{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} | {{ item.slot_label }} | T{{ item.item_template.tier }} {{ item.rarity_label }} | nível {{ item.required_level }}
+                {{ item.view_icon if item.view_icon is defined else '◇' }} {{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} | {{ item.slot_label }} | {{ item.rarity_label }} | nível mínimo {{ item.required_level }}
                 {% if item.rng_bonus_attribute %}| Bônus +{{ item.rng_bonus_value }} {{ bonus_attribute_labels.get(item.rng_bonus_attribute, item.rng_bonus_attribute) }}{% endif %}
                 | Poder {{ item.equipment_power_score }} | {{ '+' if item.comparison_delta >= 0 else '' }}{{ item.comparison_delta }}{% if item.comparison_current_name %} vs. {{ item.comparison_current_name }}{% endif %}
                 | {{ item.class_restriction_label }}

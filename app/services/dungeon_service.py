@@ -182,14 +182,8 @@ def seed_initial_dungeon_drops(db: Session) -> None:
 
 
 def validate_dungeon_requirements(db: Session, guild: Guild, dungeon_template: DungeonTemplate) -> None:
-    if not are_dungeons_available(db, guild.id):
-        raise DungeonError("Masmorras ainda não estão disponíveis para esta guilda.")
     if guild.level < dungeon_template.required_guild_level:
         raise DungeonError("Nível da guilda insuficiente para esta masmorra.")
-    if dungeon_template.required_building_type and dungeon_template.required_building_level > 0:
-        current_level = get_building_level(db, guild.id, dungeon_template.required_building_type)
-        if current_level < dungeon_template.required_building_level:
-            raise DungeonError("Construção necessária indisponível para esta masmorra.")
 
 
 def _party_roles(mercenaries) -> dict[str, int]:
@@ -219,11 +213,26 @@ def get_group_synergy_bonus(mercenaries, template: DungeonTemplate | None = None
     return 5 if present == 3 else 2 if present == 2 else 0
 
 
+def get_group_synergy_power_bonus(mercenaries, template: DungeonTemplate | None = None) -> int:
+    """A complete tank/support/damage formation contributes +200 group power."""
+    roles = _party_roles(mercenaries)
+    if template is not None and any((template.required_tank_count, template.required_support_count, template.required_damage_count)):
+        required = {
+            "tank": template.required_tank_count,
+            "support": template.required_support_count,
+            "damage": template.required_damage_count,
+        }
+        satisfied = all(roles[role] >= count for role, count in required.items())
+    else:
+        satisfied = all(roles[role] > 0 for role in ("tank", "support", "damage"))
+    return 200 if satisfied else 0
+
+
 def validate_advanced_party_requirements(db: Session, guild: Guild, template: DungeonTemplate, mercenaries) -> None:
     if template.content_type != "boss":
         return
     introductory_boss = template.level_band == "1-20" and template.recommended_level <= 1
-    total_power = get_party_power_score(db, guild.id, mercenaries)
+    total_power = get_party_power_score(db, guild.id, mercenaries) + get_group_synergy_power_bonus(mercenaries, template)
     if not introductory_boss and total_power < template.required_total_power:
         raise DungeonError(f"O grupo precisa de Poder Total {template.required_total_power}.")
     if introductory_boss:
@@ -274,6 +283,7 @@ def get_advanced_dungeon_chance(db: Session, guild_id: int, template: DungeonTem
     base = get_party_chance_details(
         db, guild_id, template.base_success_chance, mercenaries,
         template.required_total_power, template.recommended_level,
+        power_bonus=get_group_synergy_power_bonus(mercenaries, template),
     )
     skills = get_party_skill_effects(db, mercenaries)
     synergy = get_group_synergy_bonus(mercenaries, template)
@@ -302,6 +312,7 @@ def get_final_dungeon_chance(
             db, guild_id, regional_success_chance, mercenaries,
             regional_recommended_power if regional_recommended_power is not None else template.recommended_power,
             regional_recommended_level if regional_recommended_level is not None else template.recommended_level,
+            power_bonus=get_group_synergy_power_bonus(mercenaries, template),
         )
         skills = get_party_skill_effects(db, mercenaries)
         synergy = get_group_synergy_bonus(mercenaries, template)
@@ -514,6 +525,7 @@ def start_dungeon(
     regional_recommended_power: int | None = None,
     regional_recommended_level: int | None = None,
     supply_include_drops: bool = True,
+    supply_snapshot_override: dict[str, object] | None = None,
 ) -> DungeonRun:
     if not are_dungeons_available(db, guild.id):
         raise DungeonError("Evolua Exploradores para o nível 1 antes de acessar Masmorras.")
@@ -567,9 +579,9 @@ def start_dungeon(
     if regional_min_duration_seconds is not None:
         duration = max(int(regional_min_duration_seconds), duration)
     ends_at = started_at + timedelta(seconds=max(1, duration))
-    supply_snapshot = None
+    supply_snapshot = supply_snapshot_override
     supply_cost = 0
-    if supply_selected:
+    if supply_selected and supply_snapshot_override is None:
         rank = supply_rank or _legacy_supply_rank(dungeon_template.recommended_level)
         preview_chance = get_final_dungeon_chance(
             db, guild.id, dungeon_template, mercenaries,
