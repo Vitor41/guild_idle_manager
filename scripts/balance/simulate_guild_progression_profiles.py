@@ -47,7 +47,6 @@ from app.services.building_balance_service import (
     building_cost_factor,
     housing_capacity,
     market_values,
-    mission_office_values,
     required_guild_level_for_upgrade,
 )
 from app.services.guild_progression_service import guild_xp_required_for_level
@@ -430,21 +429,11 @@ def build_economy_audit(db) -> dict[str, object]:
 
 
 def _profile_investment_policy(db, profile: Profile, catalog: dict[int, list[object]]) -> dict[str, object]:
-    """Cost a staffed profile with current building gates, hiring and upgrade formulas."""
+    """Cost staffing and housing; building bonuses are not access prerequisites."""
     templates = {row.effect_type: row for row in db.scalars(select(BuildingTemplate).where(BuildingTemplate.is_active.is_(True)))}
     roster_size = profile.slots * profile.party_size + profile.gathering_workers
     housing_level = next((level for level in range(1, 101) if housing_capacity(level) >= roster_size), 100)
     required_levels = {"tavern": 1, "housing": housing_level}
-    if profile.mode != "dungeon":
-        office_level = next((level for level in range(1, 101) if mission_office_values(level)["party_size"] >= profile.party_size), 100)
-        required_levels["contract_office"] = office_level
-    for rows in catalog.values():
-        if not rows:
-            continue
-        template = rows[0]
-        if template.required_building_type:
-            code = str(template.required_building_type)
-            required_levels[code] = max(required_levels.get(code, 0), int(template.required_building_level))
 
     building_costs = []
     gold_total = 0
@@ -493,7 +482,7 @@ def _profile_investment_policy(db, profile: Profile, catalog: dict[int, list[obj
         hire_cost = next_apprentice_cost(hire_cost, config)
     hire_total = sum(hires)
     return {
-        "policy": "Pay one Tavern upgrade, housing/contract/dungeon building gates and recruit enough mercenaries for the profile; invest as each guild/building requirement unlocks. Materials are shown as required stock; the simulation does not model how the profile acquires/uses them.",
+        "policy": "Pay one Tavern upgrade, housing capacity for the profile roster, and recruit enough mercenaries. Contract Office and Explorers provide optional bonuses and do not gate mission, contract, dungeon, or boss access. Materials are shown as required stock; the simulation does not model how the profile acquires/uses them.",
         "roster_size": roster_size,
         "building_costs": building_costs,
         "building_gold": gold_total,
@@ -697,7 +686,7 @@ def _cycle_outcome(
             for offer in eligible:
                 if offer["offer_type"] == "dungeon":
                     # Production advanced-party checks apply to bosses only;
-                    # normal dungeons still use party/level/building gates.
+                    # normal dungeons use their content party/level requirements.
                     combat_eligible.append(offer)
                 elif (offer["offer_type"] == "boss"
                       and int(player_power_snapshot * _selected_party_size(profile, offer)

@@ -1,10 +1,13 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from scripts.balance.simulate_guild_progression_profiles import (
     Profile,
     _build_profile_catalog,
     _cycle_outcome,
     _offline_cycle_window,
+    _profile_investment_policy,
     _simulate_regional_progression,
     apply_candidate_upkeep,
     build_controlled_activity_audit,
@@ -14,6 +17,24 @@ from app.seeds.campaign_content import apply_initial_campaign_content
 
 
 class RegionalEconomySimulationTests(unittest.TestCase):
+    def test_profile_investment_cost_does_not_gate_party_on_contract_office(self):
+        db = Mock()
+        db.scalars.return_value = []
+        db.scalar.return_value = None
+        profile = Profile("office_optional", "mission", 2, 2, 3)
+        legacy_template = SimpleNamespace(
+            required_building_type="contract_office",
+            required_building_level=100,
+        )
+
+        setup = _profile_investment_policy(db, profile, {1: [legacy_template]})
+
+        building_cost_types = {row["effect_type"] for row in setup["building_costs"]}
+        self.assertIn("housing", building_cost_types)
+        self.assertNotIn("contract_office", building_cost_types)
+        self.assertNotIn("scouts", building_cost_types)
+        self.assertIn("do not gate", setup["policy"])
+
     def test_candidate_upkeep_charges_per_vigilia_and_never_exceeds_treasury(self):
         balance, first_charge = apply_candidate_upkeep(100, 0.02)
         self.assertEqual((balance, first_charge), (98, 2))

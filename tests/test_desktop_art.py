@@ -100,7 +100,7 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn('document.body.dataset.route !== "/regional"', main)
         self.assertIn("window.location.hash", main)
         self.assertIn('window.scrollTo({ top: 0, behavior: "auto" })', main)
-        self.assertIn("/js/main.js') }}?v=20261030-2", base)
+        self.assertIn("url_for('static', path='/js/main.js') }}?v=", base)
 
     def test_desktop_button_hover_and_focus_keep_secondary_and_danger_roles(self):
         theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")

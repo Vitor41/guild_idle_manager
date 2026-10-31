@@ -161,6 +161,11 @@ def _roster_party_minimum_level(roster: list[Mercenary], party_size: int, *,
     return levels[int(party_size) - 1]
 
 
+def _simulated_party_size(target_party_size: int, active_roster_size: int) -> int:
+    """Party size is limited by the profile and roster, never by a building."""
+    return min(int(target_party_size), max(1, int(active_roster_size)))
+
+
 def wilson_interval_95(successes: int, trials: int) -> dict[str, float | int | None]:
     """Wilson score interval for a binomial rate; safe for zero/all successes."""
     n = int(trials)
@@ -277,8 +282,8 @@ def _next_purchase(
     housing = buildings["housing"]
     office = buildings["contract_office"]
     path_variant = str(strategy.get("path_variant", "roster_first"))
-    # Alternative funded route: build only a viable party first, then invest
-    # in Office capacity before filling the profile's full roster target.
+    # Alternative funded route: invest in optional Office bonuses after the
+    # profile can already field its minimum party, before filling its roster.
     if (path_variant == "office_after_minimum_party"
             and roster_count >= int(strategy["party_size"])
             and office.level < int(strategy.get("office_target", 1))):
@@ -461,8 +466,7 @@ def _run_trajectory(db, strategy: dict[str, object], seed: int, run_index: int,
             if window_kind == "unattended":
                 continue
             if integrate_item_sources and buildings["scouts"].level >= 1:
-                office_cap_now = mission_office_values(buildings["contract_office"].level)["party_size"]
-                current_party_size = min(int(strategy["party_size"]), office_cap_now, max(1, active_roster_size))
+                current_party_size = _simulated_party_size(strategy["party_size"], active_roster_size)
                 current_party_min_level = _roster_party_minimum_level(
                     roster, current_party_size, active_count=active_roster_size,
                 )
@@ -470,11 +474,7 @@ def _run_trajectory(db, strategy: dict[str, object], seed: int, run_index: int,
                     if (offer["offer_type"] == "dungeon"
                             and int(offer["min_party_size"]) <= current_party_size <= int(offer["max_party_size"])
                             and int(offer["required_guild_level"]) <= guild.level
-                            and int(offer["required_min_mercenary_level"]) <= current_party_min_level
-                            and (not offer["required_building_type"]
-                                 or int(offer["required_building_level"]) <= buildings.get(
-                                     str(offer["required_building_type"]), buildings["scouts"],
-                                 ).level)):
+                            and int(offer["required_min_mercenary_level"]) <= current_party_min_level):
                         first_dungeon_offer_day = first_dungeon_offer_day or day
                         break
             if sink_policy and sink_policy["type"] == "wallet_dues":
@@ -488,8 +488,7 @@ def _run_trajectory(db, strategy: dict[str, object], seed: int, run_index: int,
                 sink_due_total += due
                 sink_unpaid_total += due - paid
             office_level = buildings["contract_office"].level
-            party_cap = mission_office_values(office_level)["party_size"]
-            max_party = min(int(strategy["party_size"]), party_cap, max(1, active_roster_size))
+            max_party = _simulated_party_size(strategy["party_size"], active_roster_size)
             party_min_level = _roster_party_minimum_level(
                 roster, max_party, active_count=active_roster_size,
             )
@@ -754,9 +753,7 @@ def _run_trajectory(db, strategy: dict[str, object], seed: int, run_index: int,
         if guild.level >= 50 and level50_day is None:
             level50_day = day
         if integrate_item_sources and strategy.get("include_scouts_objective") and buildings["scouts"].level >= 1:
-            dungeon_party_size = min(int(strategy["party_size"]),
-                                     mission_office_values(buildings["contract_office"].level)["party_size"],
-                                     max(1, active_roster_size))
+            dungeon_party_size = _simulated_party_size(strategy["party_size"], active_roster_size)
             dungeon_party_min_level = _roster_party_minimum_level(
                 roster, dungeon_party_size, active_count=active_roster_size,
             )
@@ -764,9 +761,6 @@ def _run_trajectory(db, strategy: dict[str, object], seed: int, run_index: int,
                 int(template.required_guild_level) <= guild.level
                 and int(template.required_min_mercenary_level) <= dungeon_party_min_level
                 and int(template.min_party_size) <= dungeon_party_size <= int(template.max_party_size)
-                and (not template.required_building_type
-                     or buildings.get(str(template.required_building_type), buildings["scouts"]).level
-                     >= int(template.required_building_level))
                 for template in dungeon_templates
             )
             if gate_open:
