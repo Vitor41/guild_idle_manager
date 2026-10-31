@@ -33,7 +33,7 @@ $env:GIM_TEST_BUILT_PACKAGE = Join-Path $candidate.FullName 'GuildIdleManager-DE
 Remove-Item Env:GIM_TEST_BUILT_PACKAGE
 ```
 
-Para validar novamente em um computador limpo, extraia o ZIP, execute o instalador e abra `Guild Idle Manager DEV`. O aplicativo não consulta serviços externos durante a abertura. Atualizações DEV substituem os arquivos do aplicativo no diretório de instalação; os saves permanecem separados.
+Para validar novamente em um computador limpo, extraia o ZIP, execute o instalador e abra `Guild Idle Manager DEV`. O aplicativo não consulta serviços externos durante a abertura. Atualizações DEV substituem os arquivos do aplicativo no diretório de instalação; os saves permanecem separados. O canal padrão aponta para `Vitor41/guild_idle_manager`; a verificação permanece desabilitada até uma chave pública Ed25519 ser incluída no build e existir uma release assinada validada. A versão 0.3.0 sem chave pública precisa primeiro do Setup bootstrap 0.3.1, obtido manualmente. Para assinatura e configuração do build, consulte [UPDATE_ARCHITECTURE.md](UPDATE_ARCHITECTURE.md).
 
 ## Preparação única neste checkout
 
@@ -73,6 +73,12 @@ O smoke HTTP local e os testes de campanha cobrem persistência SQLite, abertura
 ```
 
 Ou execute `Iniciando_jogo_dev.bat`. O launcher escolhe uma porta local disponível, mantém o servidor ligado em `127.0.0.1`, aguarda `/desktop/health` e abre a janela. A saída técnica fica em `%LOCALAPPDATA%\GuildIdleManager\logs\desktop.log`.
+
+### Diagnóstico de ações do jogo
+
+Ao designar coleta ou iniciar/preparar uma oferta, o app registra rota, ação, horário UTC, status HTTP e uma referência em `%LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log`. Exceções inesperadas incluem stack trace sanitizado. O arquivo não registra corpo do formulário, senha, cookie, token ou cabeçalho de autorização. A rotação mantém até 1 MB no arquivo atual e dois arquivos anteriores (`gameplay-actions.log.1` e `.2`).
+
+Quando uma ação falhar, a tela mostra a referência e o caminho do arquivo. Para anexar o diagnóstico, feche o jogo e envie `gameplay-actions.log`; se necessário, inclua `.1` e `.2` também. A pasta é independente do diretório instalado e dos saves, então funciona com o app congelado sem gravar em `Program Files`.
 
 Fechar a janela pede confirmação e encerra o servidor. `Ctrl+R` atualiza a página atual; CSS, JavaScript e templates são enviados sem cache. Mudanças Python exigem reiniciar o launcher.
 
