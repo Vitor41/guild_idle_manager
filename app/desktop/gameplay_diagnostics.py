@@ -84,6 +84,6 @@ def log_gameplay_action(
         line += "\n" + _sanitize(stack)
     try:
         _logger_for(log_path or gameplay_log_path()).info("%s", line)
-    except OSError:
+    except (OSError, RuntimeError):
         # Logging must not prevent the game action or hide its visible response.
         return

@@ -63,10 +63,10 @@ async def report_gameplay_client_error(request: Request) -> JSONResponse:
     else:
         return JSONResponse({"recorded": False}, status_code=400)
     payload_phase = payload.get("phase") if isinstance(payload, dict) else None
-    if payload_phase not in {None, "submit_started", "client_request_failed"}:
+    if payload_phase not in {None, "click_received", "submit_started", "client_request_failed"}:
         return JSONResponse({"recorded": False}, status_code=400)
-    phase = "start" if payload_phase == "submit_started" else "client_error"
-    outcome = "client_submit_started" if phase == "start" else "client_request_failed"
+    phase = "click" if payload_phase == "click_received" else "start" if payload_phase == "submit_started" else "client_error"
+    outcome = "client_click_received" if phase == "click" else "client_submit_started" if phase == "start" else "client_request_failed"
     log_gameplay_action(
         action=action,
         route=route,

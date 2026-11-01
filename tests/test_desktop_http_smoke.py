@@ -255,6 +255,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         rejected_supply_status, rejected_supply_location, _rejected_supply_body = request(
             f"/regional/offers/{no_supply_offer_id}/start", method="POST",
             body=f"mercenary_ids={regional_no_supply_worker_id}&supply=1",
+            extra_headers={"X-GIM-Diagnostic-ID": "3333333333333333"},
         )
         assert rejected_supply_status == 303 and rejected_supply_location.startswith("/regional?error="), (
             rejected_supply_status, rejected_supply_location,
@@ -265,6 +266,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         no_supply_status, no_supply_location, no_supply_body = request(
             f"/regional/offers/{no_supply_offer_id}/start", method="POST",
             body=f"mercenary_ids={regional_no_supply_worker_id}",
+            extra_headers={"X-GIM-Diagnostic-ID": "4444444444444444"},
         )
         assert no_supply_status == 303 and no_supply_location.startswith("/missions?message="), (
             no_supply_status, no_supply_location, no_supply_body[:300],
@@ -284,6 +286,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         quote_status, _quote_location, quote_body = request(
             f"/regional/offers/{prepared_offer_id}/supply-quote", method="POST",
             body=f"mercenary_ids={regional_supply_worker_id}",
+            extra_headers={"X-GIM-Diagnostic-ID": "5555555555555555"},
         )
         supply_quote = json.loads(quote_body)
         assert quote_status == 200 and supply_quote["available"] is True, (quote_status, supply_quote)
@@ -294,6 +297,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         prepare_status, prepare_location, prepare_body = request(
             f"/regional/offers/{prepared_offer_id}/prepare", method="POST",
             body=f"mercenary_ids={regional_supply_worker_id}&supply=1",
+            extra_headers={"X-GIM-Diagnostic-ID": "6666666666666666"},
         )
         assert prepare_status == 303 and prepare_location.startswith("/regional?message="), (
             prepare_status, prepare_location, prepare_body[:300],
@@ -322,6 +326,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         prepared_start_status, prepared_start_location, prepared_start_body = request(
             f"/regional/offers/{prepared_offer_id}/start", method="POST",
             body=f"mercenary_ids={regional_supply_worker_id}",
+            extra_headers={"X-GIM-Diagnostic-ID": "7777777777777777"},
         )
         assert prepared_start_status == 303 and prepared_start_location.startswith("/missions?message="), (
             prepared_start_status, prepared_start_location, prepared_start_body[:300],
@@ -340,6 +345,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         gathering_status, gathering_location, gathering_body = request(
             "/gathering/assign", method="POST",
             body=f"mercenary_id={gathering_worker_id}&resource_family=wood",
+            extra_headers={"X-GIM-Diagnostic-ID": "8888888888888888"},
         )
         assert gathering_status == 303 and gathering_location.startswith("/gathering?message="), (gathering_status, gathering_location, gathering_body[:300])
         with SessionLocal() as db:
@@ -449,6 +455,12 @@ with tempfile.TemporaryDirectory() as data_dir:
             extra_headers={"X-GIM-Diagnostic-ID": "abcdef0123456789"},
         )
         assert client_start_status == 200 and json.loads(client_start_body)["recorded"] is True
+        client_click_status, _client_click_location, client_click_body = request(
+            "/desktop/api/diagnostics/client-event", method="POST",
+            body=json.dumps({"route": "/buildings/8/upgrade", "phase": "click_received"}),
+            extra_headers={"X-GIM-Diagnostic-ID": "0123456789abcdef0"},
+        )
+        assert client_click_status == 200 and json.loads(client_click_body)["recorded"] is True
         gameplay_log = Path(os.environ["LOCALAPPDATA"]) / "GuildIdleManager" / "logs" / "gameplay-actions.log"
         gameplay_log_text = gameplay_log.read_text(encoding="utf-8")
         for action_name in ("gathering.assign", "regional.offer.start", "regional.offer.prepare", f"buildings.{tavern_building_id}.upgrade"):
@@ -457,6 +469,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert "status=500 outcome=unexpected_exception" in gameplay_log_text
         assert "status=0 outcome=client_request_failed" in gameplay_log_text
         assert "event=start action=buildings.8.upgrade route=/buildings/8/upgrade ref=abcdef0123456789 status=0 outcome=client_submit_started" in gameplay_log_text
+        assert "event=click action=buildings.8.upgrade route=/buildings/8/upgrade ref=0123456789abcdef0 status=0 outcome=client_click_received" in gameplay_log_text
         assert "event=start action=gathering.assign" in gameplay_log_text
         assert "event=result action=gathering.assign" in gameplay_log_text
         assert "Traceback (most recent call last)" in gameplay_log_text
@@ -716,6 +729,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         status, location, portal_start_body = request(
             f"/regional/events/{portal_event_id}/portals/start", method="POST",
             body=f"mercenary_ids={portal_mercenary_id}",
+            extra_headers={"X-GIM-Diagnostic-ID": "9999999999999999"},
         )
         assert status == 303 and location == "/dungeons?message=Expedi%C3%A7%C3%A3o%20de%20portal%20iniciada", (status, location, portal_start_body)
         with SessionLocal() as db:
@@ -877,6 +891,29 @@ with tempfile.TemporaryDirectory() as data_dir:
         status, _location, next_dashboard_body = request("/dashboard")
         assert status == 200
         assert b"save-migration-notice" not in next_dashboard_body
+        gameplay_log_after_portal = Path(os.environ["LOCALAPPDATA"]) / "GuildIdleManager" / "logs" / "gameplay-actions.log"
+        gameplay_trace = gameplay_log_after_portal.read_text(encoding="utf-8")
+        for diagnostic_id in (
+            "3333333333333333", "4444444444444444", "5555555555555555",
+            "6666666666666666", "7777777777777777", "8888888888888888",
+            "9999999999999999",
+        ):
+            assert f"ref={diagnostic_id}" in gameplay_trace, f"missing correlated trace for {diagnostic_id}"
+        for route, diagnostic_id, expected_status in (
+            (f"/regional/offers/{no_supply_offer_id}/start", "3333333333333333", "status=303 outcome=error"),
+            (f"/regional/offers/{no_supply_offer_id}/start", "4444444444444444", "status=303 outcome=redirect"),
+            (f"/regional/offers/{prepared_offer_id}/supply-quote", "5555555555555555", "status=200 outcome=success"),
+            (f"/regional/offers/{prepared_offer_id}/prepare", "6666666666666666", "status=303 outcome=redirect"),
+            (f"/regional/offers/{prepared_offer_id}/start", "7777777777777777", "status=303 outcome=redirect"),
+            ("/gathering/assign", "8888888888888888", "status=303 outcome=redirect"),
+            (f"/regional/events/{portal_event_id}/portals/start", "9999999999999999", "status=303 outcome=redirect"),
+        ):
+            assert f"event=start " in gameplay_trace and f"route={route} ref={diagnostic_id}" in gameplay_trace
+            assert any(
+                line.startswith("20") and f"event=result " in line and f"route={route} ref={diagnostic_id} " in line
+                and expected_status in line
+                for line in gameplay_trace.splitlines()
+            ), f"missing result trace for {route} ({diagnostic_id}): {expected_status}"
     finally:
         from app.desktop.lifecycle import close_campaign
         close_campaign(app, saves, guard)
