@@ -338,17 +338,17 @@ function showActionToast(container) {
   window.setTimeout(() => toast.remove(), 5000);
 }
 
-window.reportGameplayClientFailure = (route, diagnosticId) => {
+window.reportGameplayClientFailure = (route, diagnosticId, phase = "client_request_failed") => {
   const target = new URL(route, window.location.origin);
   if (target.origin !== window.location.origin) return;
-  fetch("/desktop/api/diagnostics/client-error", {
+  return fetch(phase === "submit_started" ? "/desktop/api/diagnostics/client-event" : "/desktop/api/diagnostics/client-error", {
     method: "POST",
     credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
       "X-GIM-Diagnostic-ID": diagnosticId,
     },
-    body: JSON.stringify({ route: target.pathname }),
+    body: JSON.stringify({ route: target.pathname, phase }),
   }).catch(() => {});
 };
 
@@ -524,8 +524,10 @@ document.addEventListener("submit", async (event) => {
     submitter.disabled = true;
     submitter.classList.add("is-loading");
   }
-
   try {
+    if (method === "post") {
+      await window.reportGameplayClientFailure?.(submitter?.formAction || form.action, diagnosticId, "submit_started");
+    }
     const requestUrl = new URL(submitter?.formAction || form.action, window.location.origin);
     const requestOptions = {
       method: method.toUpperCase(),

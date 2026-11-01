@@ -69,13 +69,14 @@ def log_gameplay_action(
     diagnostic_id: str,
     status_code: int,
     outcome: str,
+    event: str = "result",
     exception: BaseException | None = None,
     log_path: Path | None = None,
 ) -> None:
     """Write one bounded, credential-free text record. Request bodies are never logged."""
     timestamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     line = (
-        f"{timestamp} action={_sanitize(action)} route={_sanitize(route)} "
+        f"{timestamp} event={_sanitize(event)} action={_sanitize(action)} route={_sanitize(route)} "
         f"ref={_sanitize(diagnostic_id)} status={int(status_code)} outcome={_sanitize(outcome)}"
     )
     if exception is not None:

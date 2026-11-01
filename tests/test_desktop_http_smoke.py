@@ -380,6 +380,54 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert db.get(Mercenary, no_building_dungeon_worker_id).status == "busy"
             assert db.get(Mercenary, no_building_boss_worker_id).status == "busy"
 
+        with SessionLocal() as db:
+            guild_row = db.get(Guild, guild_id)
+            resources = db.query(GuildResources).filter_by(guild_id=guild_id).one()
+            resources.gold = 1000
+            for family in ("wood", "ore"):
+                material = db.query(ItemTemplate).filter_by(item_type="material", material_family=family).first()
+                assert material is not None, f"test content must seed {family}"
+                inventory_material = db.query(GuildInventoryItem).filter_by(
+                    guild_id=guild_id, item_template_id=material.id,
+                ).one_or_none()
+                if inventory_material is None:
+                    inventory_material = GuildInventoryItem(
+                        guild_id=guild_id, item_template_id=material.id, quantity=100,
+                    )
+                    db.add(inventory_material)
+                else:
+                    inventory_material.quantity += 100
+            db.flush()
+            from app.repositories.item_repository import sync_inventory_resource_totals
+            sync_inventory_resource_totals(db, resources)
+            from app.services.building_service import ensure_guild_buildings
+            tavern_building = next(
+                building for building in ensure_guild_buildings(db, guild_id)
+                if building.building_template.effect_type == "tavern"
+            )
+            tavern_building_id = tavern_building.id
+            db.commit()
+        first_upgrade_status, first_upgrade_location, _first_upgrade_body = request(
+            f"/buildings/{tavern_building_id}/upgrade", method="POST", body="",
+            extra_headers={"X-GIM-Diagnostic-ID": "1111111111111111"},
+        )
+        assert first_upgrade_status == 303 and first_upgrade_location.startswith("/buildings?message="), (
+            first_upgrade_status, first_upgrade_location,
+        )
+        with SessionLocal() as db:
+            tavern_building = db.get(GuildBuilding, tavern_building_id)
+            assert tavern_building.level == 1, "building purchase must persist through the desktop route"
+        second_upgrade_status, second_upgrade_location, _second_upgrade_body = request(
+            f"/buildings/{tavern_building_id}/upgrade", method="POST", body="",
+            extra_headers={"X-GIM-Diagnostic-ID": "2222222222222222"},
+        )
+        assert second_upgrade_status == 303 and second_upgrade_location.startswith("/buildings?message="), (
+            second_upgrade_status, second_upgrade_location,
+        )
+        with SessionLocal() as db:
+            tavern_building = db.get(GuildBuilding, tavern_building_id)
+            assert tavern_building.level == 2, "building upgrade must persist through the desktop route"
+
         error_status, error_location, _error_body = request(
             "/regional/test-diagnostic", method="POST", body="",
             extra_headers={"X-GIM-Diagnostic-ID": "0123456789abcdef"},
@@ -391,16 +439,26 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"0123456789abcdef" in diagnostic_page
         client_failure_status, _client_failure_location, client_failure_body = request(
             "/desktop/api/diagnostics/client-error", method="POST",
-            body=json.dumps({"route": f"/regional/offers/{prepared_offer_id}/prepare"}),
+            body=json.dumps({"route": f"/regional/offers/{prepared_offer_id}/prepare", "phase": "client_request_failed"}),
             extra_headers={"X-GIM-Diagnostic-ID": "fedcba9876543210"},
         )
         assert client_failure_status == 200 and json.loads(client_failure_body)["recorded"] is True
+        client_start_status, _client_start_location, client_start_body = request(
+            "/desktop/api/diagnostics/client-event", method="POST",
+            body=json.dumps({"route": "/buildings/8/upgrade", "phase": "submit_started"}),
+            extra_headers={"X-GIM-Diagnostic-ID": "abcdef0123456789"},
+        )
+        assert client_start_status == 200 and json.loads(client_start_body)["recorded"] is True
         gameplay_log = Path(os.environ["LOCALAPPDATA"]) / "GuildIdleManager" / "logs" / "gameplay-actions.log"
         gameplay_log_text = gameplay_log.read_text(encoding="utf-8")
-        for action_name in ("gathering.assign", "regional.offer.start", "regional.offer.prepare"):
+        for action_name in ("gathering.assign", "regional.offer.start", "regional.offer.prepare", f"buildings.{tavern_building_id}.upgrade"):
             assert f"action={action_name}" in gameplay_log_text
+        assert f"event=start action=buildings.{tavern_building_id}.upgrade route=/buildings/{tavern_building_id}/upgrade ref=1111111111111111" in gameplay_log_text
         assert "status=500 outcome=unexpected_exception" in gameplay_log_text
         assert "status=0 outcome=client_request_failed" in gameplay_log_text
+        assert "event=start action=buildings.8.upgrade route=/buildings/8/upgrade ref=abcdef0123456789 status=0 outcome=client_submit_started" in gameplay_log_text
+        assert "event=start action=gathering.assign" in gameplay_log_text
+        assert "event=result action=gathering.assign" in gameplay_log_text
         assert "Traceback (most recent call last)" in gameplay_log_text
         assert "do-not-log" not in gameplay_log_text and "do-not-log-this" not in gameplay_log_text
         assert b"/static/js/regional-supply.js?v=20261031-1" in rendered_pages["/dungeons"]

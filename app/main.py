@@ -49,6 +49,7 @@ app.state.app_mode = settings.app_mode
 _GAMEPLAY_POST_PREFIXES = (
     "/gathering/", "/regional/", "/missions/", "/dungeons/", "/market/",
     "/blacksmith/", "/professions/", "/class-change/", "/tutorial/",
+    "/buildings/", "/tavern/", "/mercenaries/", "/docks/", "/codex/",
 )
 
 
@@ -73,34 +74,47 @@ def _diagnostic_error_redirect(path: str, diagnostic_id: str) -> str:
 
 @app.middleware("http")
 async def protect_desktop_loopback(request: Request, call_next):
+    is_gameplay_post = (
+        request.method.upper() == "POST"
+        and request.url.path.startswith(_GAMEPLAY_POST_PREFIXES)
+    )
+    diagnostic_id = None
+    action = None
+    if request.app.state.app_mode == "desktop" and is_gameplay_post:
+        supplied_id = request.headers.get("x-gim-diagnostic-id", "")
+        diagnostic_id = supplied_id if re.fullmatch(r"[a-fA-F0-9-]{16,40}", supplied_id) else uuid.uuid4().hex
+        request.state.diagnostic_id = diagnostic_id
+        action = _gameplay_action_for_path(request.url.path)
     if request.app.state.app_mode == "desktop":
         allowed_host = getattr(request.app.state, "desktop_allowed_host", None)
         allowed_origin = getattr(request.app.state, "desktop_allowed_origin", None)
         if not allowed_host or not allowed_origin:
             return PlainTextResponse("O servidor desktop local nao foi inicializado pelo launcher.", status_code=503)
         if request.headers.get("host", "").lower() != allowed_host.lower():
+            if diagnostic_id and action:
+                log_gameplay_action(action=action, route=request.url.path, diagnostic_id=diagnostic_id,
+                                    status_code=403, outcome="host_rejected", event="rejected")
             return PlainTextResponse("Origem local nao autorizada.", status_code=403)
         if request.headers.get("sec-fetch-site", "").lower() == "cross-site":
+            if diagnostic_id and action:
+                log_gameplay_action(action=action, route=request.url.path, diagnostic_id=diagnostic_id,
+                                    status_code=403, outcome="cross_site_rejected", event="rejected")
             return PlainTextResponse("Acesso entre sites bloqueado.", status_code=403)
         if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
             if request.headers.get("origin") != allowed_origin:
+                if diagnostic_id and action:
+                    log_gameplay_action(action=action, route=request.url.path, diagnostic_id=diagnostic_id,
+                                        status_code=403, outcome="origin_rejected", event="rejected")
                 return PlainTextResponse("Requisicao sem origem local valida.", status_code=403)
-    is_gameplay_post = (
-        request.method.upper() == "POST"
-        and request.url.path.startswith(_GAMEPLAY_POST_PREFIXES)
-    )
-    diagnostic_id = None
-    if request.app.state.app_mode == "desktop" and is_gameplay_post:
-        supplied_id = request.headers.get("x-gim-diagnostic-id", "")
-        diagnostic_id = supplied_id if re.fullmatch(r"[a-fA-F0-9-]{16,40}", supplied_id) else uuid.uuid4().hex
-        request.state.diagnostic_id = diagnostic_id
-        action = _gameplay_action_for_path(request.url.path)
+    if request.app.state.app_mode == "desktop" and is_gameplay_post and diagnostic_id and action:
+        log_gameplay_action(action=action, route=request.url.path, diagnostic_id=diagnostic_id,
+                            status_code=0, outcome="request_received", event="start")
         try:
             response = await call_next(request)
         except Exception as error:
             log_gameplay_action(
                 action=action, route=request.url.path, diagnostic_id=diagnostic_id,
-                status_code=500, outcome="unexpected_exception", exception=error,
+                status_code=500, outcome="unexpected_exception", event="exception", exception=error,
             )
             response = RedirectResponse(_diagnostic_error_redirect(request.url.path, diagnostic_id), status_code=303)
         else:

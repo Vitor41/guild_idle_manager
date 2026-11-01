@@ -175,6 +175,8 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('data-client-action-error', main)
         self.assertIn('window.reportGameplayClientFailure?.(submitter?.formAction || form.action, diagnosticId)', main)
         self.assertIn('/desktop/api/diagnostics/client-error', main)
+        self.assertIn('/desktop/api/diagnostics/client-event', main)
+        self.assertIn('"submit_started"', main)
         self.assertIn('window.reportGameplayClientFailure?.(form.dataset.supplyQuoteUrl, diagnosticId)', supply)
         submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
         self.assertNotIn('form.submit()', submit_catch)
