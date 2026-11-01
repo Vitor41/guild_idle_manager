@@ -38,6 +38,7 @@ def health() -> JSONResponse:
 
 
 @router.post("/api/diagnostics/client-error")
+@router.post("/api/diagnostics/client-event")
 async def report_gameplay_client_error(request: Request) -> JSONResponse:
     diagnostic_id = request.headers.get("x-gim-diagnostic-id", "")
     if not re.fullmatch(r"[a-fA-F0-9-]{16,40}", diagnostic_id):
@@ -50,19 +51,29 @@ async def report_gameplay_client_error(request: Request) -> JSONResponse:
     if not isinstance(route, str) or len(route) > 200 or "?" in route:
         return JSONResponse({"recorded": False}, status_code=400)
     if route == "/gathering/assign":
-        action = "gathering.assign.client_request_failed"
+        action = "gathering.assign"
     elif re.fullmatch(r"/regional/offers/\d+/(start|prepare|supply-quote)", route):
-        action = "regional.offer.client_request_failed"
+        action = "regional.offer"
     elif route in {"/missions/start", "/dungeons/start"}:
-        action = route.strip("/").replace("/", ".") + ".client_request_failed"
+        action = route.strip("/").replace("/", ".")
+    elif (building_match := re.fullmatch(r"/buildings/(\d+)/upgrade", route)):
+        action = f"buildings.{building_match.group(1)}.upgrade"
+    elif route in {"/tavern/hire-apprentice", "/tavern/hire-apprentices-bulk", "/tavern/refresh-special", "/tavern/hire-special"}:
+        action = route.strip("/").replace("/", ".")
     else:
         return JSONResponse({"recorded": False}, status_code=400)
+    payload_phase = payload.get("phase") if isinstance(payload, dict) else None
+    if payload_phase not in {None, "click_received", "submit_started", "client_request_failed"}:
+        return JSONResponse({"recorded": False}, status_code=400)
+    phase = "click" if payload_phase == "click_received" else "start" if payload_phase == "submit_started" else "client_error"
+    outcome = "client_click_received" if phase == "click" else "client_submit_started" if phase == "start" else "client_request_failed"
     log_gameplay_action(
         action=action,
         route=route,
         diagnostic_id=diagnostic_id,
         status_code=0,
-        outcome="client_request_failed",
+        outcome=outcome,
+        event=phase,
     )
     return JSONResponse({"recorded": True})
 

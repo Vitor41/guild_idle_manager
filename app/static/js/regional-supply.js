@@ -82,11 +82,11 @@ window.initializeRegionalSupply = (root = document) => {
       try {
         const response = await fetch(form.dataset.supplyQuoteUrl, {
           method: "POST",
-          body: new FormData(form),
-        headers: {
-          "X-Requested-With": "fetch",
-          "X-GIM-Diagnostic-ID": diagnosticId,
-        },
+          body: new URLSearchParams(new FormData(form)),
+          headers: {
+            "X-Requested-With": "fetch",
+            "X-GIM-Diagnostic-ID": diagnosticId,
+          },
           credentials: "same-origin",
         });
         const quote = await response.json();

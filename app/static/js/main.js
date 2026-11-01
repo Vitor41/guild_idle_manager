@@ -338,19 +338,55 @@ function showActionToast(container) {
   window.setTimeout(() => toast.remove(), 5000);
 }
 
-window.reportGameplayClientFailure = (route, diagnosticId) => {
+window.reportGameplayClientFailure = (route, diagnosticId, phase = "client_request_failed") => {
   const target = new URL(route, window.location.origin);
   if (target.origin !== window.location.origin) return;
-  fetch("/desktop/api/diagnostics/client-error", {
+  const endpoint = ["click_received", "submit_started"].includes(phase)
+    ? "/desktop/api/diagnostics/client-event"
+    : "/desktop/api/diagnostics/client-error";
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 750);
+  return fetch(endpoint, {
     method: "POST",
     credentials: "same-origin",
+    signal: controller.signal,
     headers: {
       "Content-Type": "application/json",
       "X-GIM-Diagnostic-ID": diagnosticId,
     },
-    body: JSON.stringify({ route: target.pathname }),
-  }).catch(() => {});
+    body: JSON.stringify({ route: target.pathname, phase }),
+  }).catch(() => {}).finally(() => window.clearTimeout(timeoutId));
 };
+
+function createGameplayDiagnosticId() {
+  return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getFormSubmitAction(form, submitter) {
+  return submitter && submitter.hasAttribute("formaction")
+    ? submitter.formAction
+    : form.action;
+}
+
+function isGameplayDiagnosticPath(path) {
+  return path === "/gathering/assign"
+    || /^\/regional\/offers\/\d+\/(start|prepare|supply-quote)$/.test(path)
+    || path === "/missions/start"
+    || path === "/dungeons/start"
+    || /^\/buildings\/\d+\/upgrade$/.test(path)
+    || ["/tavern/hire-apprentice", "/tavern/hire-apprentices-bulk", "/tavern/refresh-special", "/tavern/hire-special"].includes(path);
+}
+
+document.addEventListener("click", (event) => {
+  const submitter = event.target.closest('button[type="submit"], input[type="submit"], button:not([type])');
+  const form = submitter?.form;
+  if (!form || !form.closest(".game-shell") || (form.method || "get").toLowerCase() !== "post") return;
+  const route = new URL(getFormSubmitAction(form, submitter), window.location.origin).pathname;
+  if (!isGameplayDiagnosticPath(route)) return;
+  const diagnosticId = createGameplayDiagnosticId();
+  form.dataset.gimDiagnosticId = diagnosticId;
+  window.reportGameplayClientFailure?.(route, diagnosticId, "click_received");
+});
 
 function getFormStateKey(form) {
   const actionPath = new URL(form.action, window.location.origin).pathname;
@@ -518,15 +554,18 @@ document.addEventListener("submit", async (event) => {
   const previousPath = window.location.pathname;
   const scrollPosition = window.scrollY;
   const formState = captureGameFormState();
-  const diagnosticId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const diagnosticId = form.dataset.gimDiagnosticId || createGameplayDiagnosticId();
+  delete form.dataset.gimDiagnosticId;
   form.setAttribute("aria-busy", "true");
   if (submitter) {
     submitter.disabled = true;
     submitter.classList.add("is-loading");
   }
-
   try {
-    const requestUrl = new URL(submitter?.formAction || form.action, window.location.origin);
+    if (method === "post") {
+      window.reportGameplayClientFailure?.(getFormSubmitAction(form, submitter), diagnosticId, "submit_started");
+    }
+    const requestUrl = new URL(getFormSubmitAction(form, submitter), window.location.origin);
     const requestOptions = {
       method: method.toUpperCase(),
       credentials: "same-origin",
@@ -566,7 +605,7 @@ document.addEventListener("submit", async (event) => {
       submitter.classList.remove("is-loading");
     }
     form.querySelector("[data-client-action-error]")?.remove();
-    window.reportGameplayClientFailure?.(submitter?.formAction || form.action, diagnosticId);
+    window.reportGameplayClientFailure?.(getFormSubmitAction(form, submitter), diagnosticId);
     const notice = document.createElement("p");
     notice.className = "form-error";
     notice.setAttribute("role", "alert");

@@ -4,11 +4,22 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from app.desktop.gameplay_diagnostics import close_gameplay_logger, gameplay_log_path, log_gameplay_action
 
 
 class GameplayDiagnosticsTests(unittest.TestCase):
+    def test_invalid_user_data_path_does_not_block_gameplay_logging(self):
+        install_directory = Path(__file__).resolve().parents[1]
+        with patch.dict(os.environ, {"LOCALAPPDATA": str(install_directory)}):
+            with self.assertRaises(RuntimeError):
+                gameplay_log_path()
+            log_gameplay_action(
+                action="buildings.1.upgrade", route="/buildings/1/upgrade",
+                diagnostic_id="abcdef0123456789", status_code=303, outcome="redirect",
+            )
+
     def test_gameplay_log_is_in_stable_user_data_outside_install_and_saves(self):
         with tempfile.TemporaryDirectory() as directory:
             local_app_data = Path(directory) / "LocalAppData"
