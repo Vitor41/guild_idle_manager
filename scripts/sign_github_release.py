@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import hmac
 import json
 from pathlib import Path
 import re
@@ -23,6 +24,7 @@ def create_signed_manifest(
     version: str,
     channel: str,
     minimum_supported_version: str,
+    expected_public_key_b64: str | None = None,
 ) -> tuple[bytes, bytes, str]:
     setup_path = setup_path.resolve()
     private_key_path = private_key_path.resolve()
@@ -55,7 +57,15 @@ def create_signed_manifest(
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw,
     )
-    return manifest_bytes, signature_bytes, base64.b64encode(public_key_bytes).decode("ascii")
+    public_key_b64 = base64.b64encode(public_key_bytes).decode("ascii")
+    if expected_public_key_b64 is not None:
+        try:
+            expected_public_key = base64.b64decode(expected_public_key_b64, validate=True)
+        except ValueError as exc:
+            raise ValueError("A chave pública esperada precisa ser Base64 válido.") from exc
+        if len(expected_public_key) != 32 or not hmac.compare_digest(public_key_bytes, expected_public_key):
+            raise ValueError("A chave privada não corresponde à chave pública configurada no pacote.")
+    return manifest_bytes, signature_bytes, public_key_b64
 
 
 def main() -> None:
@@ -65,12 +75,14 @@ def main() -> None:
     parser.add_argument("--version", required=True)
     parser.add_argument("--channel", required=True, choices=sorted(_CHANNELS))
     parser.add_argument("--minimum-supported-version", required=True)
+    parser.add_argument("--expected-public-key-base64")
     parser.add_argument("--output-directory", type=Path)
     arguments = parser.parse_args()
 
     manifest, signature, public_key = create_signed_manifest(
         arguments.setup, arguments.private_key_file, arguments.version,
         arguments.channel, arguments.minimum_supported_version,
+        arguments.expected_public_key_base64,
     )
     output = (arguments.output_directory or arguments.setup.resolve().parent).resolve()
     output.mkdir(parents=True, exist_ok=True)

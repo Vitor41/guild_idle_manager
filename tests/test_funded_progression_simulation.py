@@ -10,10 +10,11 @@ from scripts.balance.funded_progression_simulation import (
     offline_stamina_restored,
     run_funded_simulation,
     wilson_interval_95,
-    _next_purchase, _roster_party_minimum_level,
+    _next_purchase, _roster_party_minimum_level, _simulated_party_size,
 )
 from scripts.balance.simulate_integrated_stage5_paths import _trajectory_recovery
 from scripts.balance.simulate_guild_progression_profiles import Profile, _cycle_outcome
+from app.services.building_balance_service import mission_office_values
 
 
 class FundedProgressionSimulationTests(unittest.TestCase):
@@ -60,6 +61,13 @@ class FundedProgressionSimulationTests(unittest.TestCase):
                          "apprentice_hire")
         self.assertEqual(_next_purchase({**strategy, "path_variant": "office_after_minimum_party"}, 3, buildings)[0],
                          "contract_office_upgrade")
+
+    def test_contract_office_bonuses_do_not_cap_simulated_party_size(self):
+        self.assertEqual(set(mission_office_values(0)), {
+            "reward_bonus_percent", "duration_reduction_percent",
+        })
+        self.assertEqual(_simulated_party_size(3, 9), 3)
+        self.assertEqual(_simulated_party_size(3, 2), 2)
 
     def test_gathering_uses_worker_rate_and_shared_capacity(self):
         materials = {"wood": 0, "ore": 0, "leather": 0, "crystals": 0}
