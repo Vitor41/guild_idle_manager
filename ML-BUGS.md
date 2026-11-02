@@ -136,7 +136,9 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Segurança de ML-011/BUG-001:** `start_offer` rejeita nível inferior ao snapshot antes de reservar oferta, inclusive no caminho comum a ofertas de rebelião; serviços de missão e masmorra mantêm validação defensiva. `test_requirement_overrides_remain_defensive_in_services` e o smoke HTTP exercitam o bloqueio sem reserva, o grupo abaixo do snapshot e o início elegível após o template mudar para nível 99 e grupo 1–1.
 - **Cristais em contratos:** contratos regionais Rank A/S usam chance rara de 2%/1% e gravam um Cristal no saldo `crystals` e em `crystal_reserve`. `test_regional_run_uses_frozen_duration_chance_and_rewards` força sucesso Rank A, sucesso Rank C e falha Rank A para verificar drop somente no primeiro cenário.
 - **Meta finita com Armazém:** `test_finite_assignment_counts_only_stored_units_and_completes_after_capacity_resume` força bônus extra com uma vaga restante, confirma que só a unidade armazenada conta, libera espaço e verifica a conclusão/liberação do mercenário ao encher o Armazém no ciclo final.
-- **Comandos de reteste:** os três testes focados de serviços passaram; `tests.test_desktop_http_smoke` passou (1 teste, 65,955 s); `git diff --check` passou. A aprovação final do CR ainda está pendente.
+- **Comandos/evidências finais:** os testes focados de serviços passaram; `tests.test_gathering_service` passou (9 testes); `tests.test_desktop_http_smoke` passou (1 teste, 65,955 s); `compileall` e `git diff --check` passaram. O smoke HTTP cobre a rejeição sem reserva por nível, os limites de grupo congelados e início após alteração do template.
+- **Revisão independente:** CR aprovou tecnicamente o commit `05797a1811a189292c635e1492e7951503f6c855`.
+- **Riscos/limitações restantes:** a suíte completa não foi executada; validação visual não foi realizada. Build e instalação também não foram realizados conforme a decisão do usuário.
 
 ## Convenção de status
 
