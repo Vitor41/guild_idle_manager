@@ -10,7 +10,7 @@ class DesktopHttpSmokeTests(unittest.TestCase):
     def test_gameplay_pages_and_mutations_work_through_loopback_without_http_sessions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             script = r'''
-import gc, http.client, json, os, re, socket, sqlite3, tempfile, threading, time
+import gc, http.client, json, logging, os, re, socket, sqlite3, tempfile, threading, time
 from contextlib import closing
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -39,6 +39,14 @@ from sqlalchemy import select
 import uvicorn
 
 with tempfile.TemporaryDirectory() as data_dir:
+    desktop_log = Path(data_dir) / "logs" / "desktop.log"
+    desktop_log.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        handlers=[logging.FileHandler(desktop_log, encoding="utf-8")],
+        force=True,
+    )
     saves = CampaignService(Path(data_dir) / "saves")
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
@@ -76,11 +84,7 @@ with tempfile.TemporaryDirectory() as data_dir:
     async def fail_gameplay_action():
         raise RuntimeError("password=do-not-log Authorization=Bearer do-not-log-this")
 
-    async def fail_activity_page():
-        raise RuntimeError("Falha de consulta da tela de atividades")
-
     app.add_api_route("/regional/test-diagnostic", fail_gameplay_action, methods=["POST"])
-    app.add_api_route("/guild/test-activity-page", fail_activity_page, methods=["GET"])
 
     create_status, _create_location, create_body = request(
         "/desktop/api/campaigns", method="POST", body=json.dumps({"guild_name": "Smoke desktop"}),
@@ -222,16 +226,30 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.commit()
 
     try:
-        with patch("app.main.logging.getLogger") as technical_logger:
-            failed_status, _failed_location, failed_body = request("/guild/test-activity-page")
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+            handlers=[logging.FileHandler(desktop_log, encoding="utf-8")],
+            force=True,
+        )
+        with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0), patch(
+            "app.routes.regional_routes.get_regional_board",
+            side_effect=RuntimeError("Falha de consulta da tela de atividades"),
+        ):
+            failed_status, _failed_location, failed_body = request("/regional")
             assert failed_status == 500
             assert "Não foi possível abrir esta tela".encode("utf-8") in failed_body
             assert "Tentar novamente".encode("utf-8") in failed_body
-            technical_logger.return_value.exception.assert_called_once()
+            diagnostic_match = re.search(rb"Refer\xc3\xaancia: <code>([a-f0-9]{32})</code>", failed_body)
+            assert diagnostic_match, failed_body
+            regional_diagnostic_id = diagnostic_match.group(1).decode("ascii")
+        desktop_trace = desktop_log.read_text(encoding="utf-8")
+        assert f"Unhandled desktop request method=GET route=/regional ref={regional_diagnostic_id}" in desktop_trace, desktop_trace
+        assert "RuntimeError: Falha de consulta da tela de atividades" in desktop_trace
         rendered_pages = {}
         page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", f"/regional/regions/{REGIONS[0][0]}", "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
         for path in page_paths:
-            if path == "/dashboard":
+            if path in {"/dashboard", "/regional"}:
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
                     status, _location, body = request(path)
             else:
@@ -997,6 +1015,10 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert str(backup_files[0]).encode("utf-8") not in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in migration_body
         assert b"offline-dialog" not in dashboard_body
+        status, _location, migrated_regional_body = request("/regional")
+        assert status == 200, ("/regional after migration", status, migrated_regional_body[:400])
+        assert b"Internal Server Error" not in migrated_regional_body
+        assert b'id="evolution-title"' in migrated_regional_body
         status, _location, next_dashboard_body = request("/dashboard")
         assert status == 200
         assert b"save-migration-notice" not in next_dashboard_body
@@ -1031,6 +1053,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         sock.close()
         configure_database("sqlite:///:memory:")
         gc.collect()
+        logging.shutdown()
 '''
             environment = os.environ.copy()
             environment["APP_MODE"] = "desktop"

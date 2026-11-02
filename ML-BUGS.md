@@ -161,11 +161,13 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 ### BUG-002 — Atividades da guilda retornam erro interno sem registro útil no log
 
 - **Origem:** relato do usuário e captura de tela enviados em 2026-11-02.
-- **Status:** Validada. Requisições desktop GET inesperadamente falhas recebem página recuperável com referência de diagnóstico; rota, método e stack trace são registrados em `desktop.log`. `tests.test_desktop_http_smoke` simula a exceção e confirma resposta 500, botão de tentativa novamente e chamada do logger.
+- **Status:** Parcialmente corrigida; causa original pendente. A instrumentação de GET desktop e o fallback recuperável estão verificados na rota real `/regional`, mas a exceção reportada pelo usuário ainda não foi reproduzida nem isolada.
 - **Problema observado:** ao abrir as atividades da guilda, a janela do jogo exibe apenas `Internal Server Error` em uma página em branco.
-- **Problema de diagnóstico:** o arquivo `%LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log` não registra a falha correspondente, impedindo identificar a rota, ação e exceção que causaram o erro.
-- **Evidência:** captura `codex-clipboard-fe81c85d-1fe1-4c69-a0d7-fe9acfd0411f.png`; rota e detalhes da exceção ainda não foram coletados.
-- **Critério para investigação:** reproduzir na tela de atividades da guilda, registrar no log o contexto mínimo da requisição com stack trace no log técnico apropriado, corrigir a causa do erro 500 e adicionar teste de regressão. Não registrar segredos nem dados sensíveis no log.
+- **Problema de diagnóstico:** o arquivo `%LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log` não registrava a falha correspondente, impedindo identificar a rota, ação e exceção que causaram o erro.
+- **Evidência original:** captura `codex-clipboard-fe81c85d-1fe1-4c69-a0d7-fe9acfd0411f.png`; rota e detalhes da exceção do perfil afetado ainda não foram coletados.
+- **Investigação desta rodada:** `/regional` retornou 200 em campanha descartável nova e após migrar uma campanha descartável de schema 1 para 7. Uma exceção controlada injetada na função de consulta da própria rota `/regional` confirmou o fallback 500 recuperável e registrou em `desktop.log` método GET, rota, referência de diagnóstico e stack trace correlacionados. Esta sonda verifica a instrumentação, não reproduz a causa observada na captura.
+- **Limitação:** sem o estado de campanha que originou a captura, não foi possível reproduzir a exceção original. Nenhuma causa foi atribuída e nenhum conserto da causa subjacente é alegado. A falha permanece pendente até obter uma reprodução ou os dados diagnósticos correlacionados do perfil afetado.
+- **Critério para fechamento:** reproduzir a falha original em estado de campanha representativo, identificar e corrigir sua causa e adicionar regressão da causa. Não registrar segredos nem dados sensíveis no log.
 
 ## Validação desta rodada
 
