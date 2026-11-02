@@ -1,6 +1,6 @@
 # Atualização do aplicativo
 
-Versão local atual: `0.3.3` (`app/core/version.py`, também publicada como `FastAPI.version`), bootstrap do atualizador para o canal DEV com correção do envio de ações da interface. Incrementos seguintes de funcionalidade usam `0.1` na versão menor; a versão major fica reservada a mudança arquitetural/de design relevante ou lançamento de plataforma.
+Versão local atual: `0.4.0` (`app/core/version.py`, também publicada como `FastAPI.version`). O versionamento desta entrega segue a convenção `major.release.minor`; a tag correspondente planejada é `DEV-v0.4.0`.
 
 ## DEV a partir do checkout
 
