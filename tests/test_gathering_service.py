@@ -93,6 +93,50 @@ class GatheringServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "meta de coleta"):
             assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start, target_quantity=0)
 
+    def test_finite_assignment_counts_only_stored_units_and_completes_after_capacity_resume(self):
+        assignment = assign_worker(
+            self.db, self.guild, self.worker.id, "wood", now=self.start, target_quantity=2,
+        )
+        assignment.extra_chance = 45
+        assignment.rng_seed = 4  # First cycle rolls the bonus unit.
+        inventory = GuildInventoryItem(
+            guild_id=self.guild.id, item_template_id=self.wood.id, quantity=1499,
+        )
+        self.db.add(inventory)
+        self.db.flush()
+
+        first = advance_assignment(
+            self.db, self.guild, assignment, now=self.start + timedelta(seconds=60),
+        )
+        self.assertEqual(first["produced"], 2)
+        self.assertEqual(first["stored"], 1)
+        self.assertEqual(first["discarded"], 1)
+        self.assertEqual(first["quantity_collected"], 1)
+        self.assertFalse(first["completed"])
+        self.assertTrue(first["paused"])
+        self.assertEqual(self.worker.status, "gathering")
+
+        inventory.quantity -= 1
+        resumed = advance_assignment(
+            self.db, self.guild, assignment, now=self.start + timedelta(minutes=10),
+        )
+        self.assertFalse(resumed["paused"])
+        self.assertEqual(resumed["cycles"], 0)
+        self.assertEqual(resumed["paused_seconds"], 9 * 60)
+
+        final_cycle = advance_assignment(
+            self.db, self.guild, assignment, now=self.start + timedelta(minutes=11),
+        )
+        self.assertEqual(final_cycle["stored"], 1)
+        self.assertEqual(final_cycle["quantity_collected"], 2)
+        self.assertTrue(final_cycle["completed"])
+        self.assertEqual(final_cycle["used"], 1500)
+        self.assertEqual(self.worker.status, "available")
+        self.db.flush()
+        self.assertIsNone(self.db.scalar(select(GatheringAssignment.id).where(
+            GatheringAssignment.id == assignment.id,
+        )))
+
     def test_filling_cycle_loses_only_its_overflow_and_leaves_later_cycle_pending(self):
         self.assertEqual(get_inventory_capacity(self.db, self.guild), 1500)
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)

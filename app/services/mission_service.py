@@ -657,6 +657,19 @@ def claim_mission_loot(
     guild_messages = add_guild_xp_from_mercenary_xp(guild, xp_reward * len(mercenaries))
 
     item_results: list[str] = []
+    crystal_rank = (mission_run.rank_snapshot or (regional_offer.rank if regional_offer else "")).upper()
+    crystal_chance = 2 if crystal_rank == "A" else 1 if crystal_rank == "S" else 0
+    crystal_drop = bool(
+        success
+        and regional_offer is not None
+        and regional_offer.offer_type == "contract"
+        and crystal_chance
+        and randint(1, 100) <= crystal_chance
+    )
+    if crystal_drop:
+        resources.crystal_reserve += 1
+        resources.crystals += 1
+        item_results.append("Cristais x1")
     profession_bonus = get_profession_drop_bonus_percentage_points(mercenaries, mission_template.profession_code)
     if success:
         active_drops = list_active_drops_for_mission(db, mission_template.id)

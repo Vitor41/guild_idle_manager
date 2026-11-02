@@ -66,7 +66,7 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 ### ML-008 — Unificar Cristais e remover Cristais Especiais
 
 - **Origem:** anotação 8.
-- **Status:** Validada; há um único saldo visível de Cristais. Testes cobrem migração e persistência; o prêmio offline e drops raros A–S entram no mesmo saldo, sem consumir capacidade do Armazém.
+- **Status:** Validada; há um único saldo visível de Cristais. Testes cobrem migração e persistência; o prêmio offline e drops raros de contratos, masmorras e chefes A–S entram no mesmo saldo, sem consumir capacidade do Armazém.
 - **Regra confirmada:** existe apenas o recurso `Cristais`. Ao completar 8 horas offline, o jogador recebe Cristais normais; além disso, Cristais devem ser escassos, com chance de drop em chefes e masmorras de Rank A–S. Não existe uma categoria separada de “Cristais especiais”.
 - **Implementação/evidência:** `app/models/guild.py`, `app/templates/components/treasury.html`, `app/services/offline_progress_service.py`, `app/desktop/clock_guard.py` e migração `c7d8e9f0a1b2`. O teste de migração verifica preservação do saldo total e dos timers legados da Taverna; teste do clock guard verifica a persistência do saldo unificado. O teto offline continua em 8h; drops A/S são raros.
 
@@ -130,6 +130,13 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 | ML-010 | Intervalo de grupo visível e usado ao iniciar oferta | `test_regional_run_uses_frozen_duration_chance_and_rewards`; rota regional exercitada pelo teste HTTP desktop |
 | ML-011 | Nível mínimo visível e ação bloqueada sem elegibilidade | Snapshot persistido em `RegionalOffer`; início usa `regional_required_guild_level`; cobertura de fluxo regional pelo teste HTTP desktop |
 | BUG-001 | Alterações posteriores do template não mudam os requisitos congelados | `test_regional_run_uses_frozen_duration_chance_and_rewards` altera requisitos após a oferta e inicia pelo snapshot |
+
+### Reteste após revisão independente
+
+- **Segurança de ML-011/BUG-001:** `start_offer` rejeita nível inferior ao snapshot antes de reservar oferta, inclusive no caminho comum a ofertas de rebelião; serviços de missão e masmorra mantêm validação defensiva. `test_requirement_overrides_remain_defensive_in_services` e o smoke HTTP exercitam o bloqueio sem reserva, o grupo abaixo do snapshot e o início elegível após o template mudar para nível 99 e grupo 1–1.
+- **Cristais em contratos:** contratos regionais Rank A/S usam chance rara de 2%/1% e gravam um Cristal no saldo `crystals` e em `crystal_reserve`. `test_regional_run_uses_frozen_duration_chance_and_rewards` força sucesso Rank A, sucesso Rank C e falha Rank A para verificar drop somente no primeiro cenário.
+- **Meta finita com Armazém:** `test_finite_assignment_counts_only_stored_units_and_completes_after_capacity_resume` força bônus extra com uma vaga restante, confirma que só a unidade armazenada conta, libera espaço e verifica a conclusão/liberação do mercenário ao encher o Armazém no ciclo final.
+- **Comandos de reteste:** os três testes focados de serviços passaram; `tests.test_desktop_http_smoke` passou (1 teste, 65,955 s); `git diff --check` passou. A aprovação final do CR ainda está pendente.
 
 ## Convenção de status
 

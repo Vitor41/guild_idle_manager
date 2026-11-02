@@ -106,6 +106,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
         regional_no_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato sem suprimento")
         regional_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato preparado")
+        regional_snapshot_worker_a = create_mercenary(db, guild.id, mercenary_class, "Snapshot equipe A")
+        regional_snapshot_worker_b = create_mercenary(db, guild.id, mercenary_class, "Snapshot equipe B")
+        regional_ineligible_worker = create_mercenary(db, guild.id, mercenary_class, "Snapshot inelegível")
         no_building_mission_worker = create_mercenary(db, guild.id, mercenary_class, "Missão sem prédios")
         no_building_dungeon_worker = create_mercenary(db, guild.id, mercenary_class, "Masmorra sem prédios")
         no_building_boss_worker = create_mercenary(db, guild.id, mercenary_class, "Chefe sem prédios")
@@ -115,6 +118,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         gathering_worker_id = gathering_worker.id
         regional_no_supply_worker_id = regional_no_supply_worker.id
         regional_supply_worker_id = regional_supply_worker.id
+        regional_snapshot_worker_a_id = regional_snapshot_worker_a.id
+        regional_snapshot_worker_b_id = regional_snapshot_worker_b.id
+        regional_ineligible_worker_id = regional_ineligible_worker.id
         no_building_mission_worker_id = no_building_mission_worker.id
         no_building_dungeon_worker_id = no_building_dungeon_worker.id
         no_building_boss_worker_id = no_building_boss_worker.id
@@ -247,10 +253,80 @@ with tempfile.TemporaryDirectory() as data_dir:
                 duration_seconds_snapshot=60, gold_reward_snapshot=100,
                 xp_reward_snapshot=10, success_chance_snapshot=80,
             )
-            db.add_all([no_supply_offer, prepared_offer])
+            ineligible_snapshot_offer = RegionalOffer(
+                campaign_id=campaign.campaign_id, cycle_id=active_cycle.id,
+                cycle_number=active_cycle.cycle_number, region_code=home_region_code,
+                offer_type="contract", slot=9003, mission_template_id=regional_mission_template_id,
+                rank="E", name_snapshot="Contrato com nível congelado",
+                recommended_level_snapshot=1, recommended_power_snapshot=10,
+                min_party_size_snapshot=1, max_party_size_snapshot=1,
+                required_guild_level_snapshot=5, duration_seconds_snapshot=60,
+                gold_reward_snapshot=100, xp_reward_snapshot=10, success_chance_snapshot=80,
+            )
+            party_snapshot_offer = RegionalOffer(
+                campaign_id=campaign.campaign_id, cycle_id=active_cycle.id,
+                cycle_number=active_cycle.cycle_number, region_code=home_region_code,
+                offer_type="contract", slot=9004, mission_template_id=regional_mission_template_id,
+                rank="E", name_snapshot="Contrato com grupo congelado",
+                recommended_level_snapshot=1, recommended_power_snapshot=10,
+                min_party_size_snapshot=2, max_party_size_snapshot=2,
+                required_guild_level_snapshot=1, duration_seconds_snapshot=60,
+                gold_reward_snapshot=100, xp_reward_snapshot=10, success_chance_snapshot=80,
+            )
+            db.add_all([no_supply_offer, prepared_offer, ineligible_snapshot_offer, party_snapshot_offer])
             db.flush()
             no_supply_offer_id, prepared_offer_id = no_supply_offer.id, prepared_offer.id
+            ineligible_snapshot_offer_id = ineligible_snapshot_offer.id
+            party_snapshot_offer_id = party_snapshot_offer.id
+            # Simulate admin edits after offer creation: the offer's frozen level and party bounds win.
+            db.get(MissionTemplate, regional_mission_template_id).required_guild_level = 99
+            db.get(MissionTemplate, regional_mission_template_id).min_party_size = 1
+            db.get(MissionTemplate, regional_mission_template_id).max_party_size = 1
             db.commit()
+
+        ineligible_start_status, ineligible_start_location, _ineligible_start_body = request(
+            f"/regional/offers/{ineligible_snapshot_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_ineligible_worker_id}",
+        )
+        assert ineligible_start_status == 303 and ineligible_start_location.startswith("/regional?error="), (
+            ineligible_start_status, ineligible_start_location,
+        )
+        with SessionLocal() as db:
+            ineligible_offer = db.get(RegionalOffer, ineligible_snapshot_offer_id)
+            ineligible_worker = db.get(Mercenary, regional_ineligible_worker_id)
+            assert ineligible_offer.status == "available" and ineligible_offer.reserved_by_guild_state_id is None
+            assert ineligible_worker.status == "available"
+            assert db.query(MissionRun).filter_by(regional_offer_id=ineligible_snapshot_offer_id).count() == 0
+
+        party_rejected_status, party_rejected_location, _party_rejected_body = request(
+            f"/regional/offers/{party_snapshot_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_snapshot_worker_a_id}",
+        )
+        assert party_rejected_status == 303 and party_rejected_location.startswith("/regional?error="), (
+            party_rejected_status, party_rejected_location,
+        )
+        with SessionLocal() as db:
+            party_offer = db.get(RegionalOffer, party_snapshot_offer_id)
+            party_worker_a = db.get(Mercenary, regional_snapshot_worker_a_id)
+            assert party_offer.status == "available" and party_offer.reserved_by_guild_state_id is None
+            assert party_worker_a.status == "available"
+            assert db.query(MissionRun).filter_by(regional_offer_id=party_snapshot_offer_id).count() == 0
+
+        party_started_status, party_started_location, party_started_body = request(
+            f"/regional/offers/{party_snapshot_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_snapshot_worker_a_id}&mercenary_ids={regional_snapshot_worker_b_id}",
+        )
+        assert party_started_status == 303 and party_started_location.startswith("/missions?message="), (
+            party_started_status, party_started_location, party_started_body[:300],
+        )
+        with SessionLocal() as db:
+            party_offer = db.get(RegionalOffer, party_snapshot_offer_id)
+            party_run = db.query(MissionRun).filter_by(regional_offer_id=party_snapshot_offer_id).one()
+            team_ids = {member.mercenary_id for member in db.query(MissionRunMember).filter_by(mission_run_id=party_run.id)}
+            assert party_offer.status == "in_progress"
+            assert team_ids == {regional_snapshot_worker_a_id, regional_snapshot_worker_b_id}
+            assert db.get(Mercenary, regional_snapshot_worker_a_id).status == "busy"
+            assert db.get(Mercenary, regional_snapshot_worker_b_id).status == "busy"
 
         no_supply_gold_before = 1000
         rejected_supply_status, rejected_supply_location, _rejected_supply_body = request(

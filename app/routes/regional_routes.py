@@ -462,6 +462,12 @@ async def start_offer(
     if offer is None:
         return RedirectResponse("/regional?error=Oferta%20indispon%C3%ADvel", status_code=303)
     form = await read_form_multi_fields(request)
+    required_guild_level = int(offer.required_guild_level_snapshot or 1)
+    if guild.level < required_guild_level:
+        return _start_error_redirect(
+            f"Nível da guilda insuficiente para esta oferta. Nível mínimo: {required_guild_level}.",
+            form,
+        )
     if offer.supply_preparation_ends_at_utc is not None:
         prep_end = offer.supply_preparation_ends_at_utc
         prep_end = prep_end.replace(tzinfo=timezone.utc) if prep_end.tzinfo is None else prep_end.astimezone(timezone.utc)
