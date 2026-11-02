@@ -181,8 +181,15 @@ def seed_initial_dungeon_drops(db: Session) -> None:
         db.commit()
 
 
-def validate_dungeon_requirements(db: Session, guild: Guild, dungeon_template: DungeonTemplate) -> None:
-    if guild.level < dungeon_template.required_guild_level:
+def validate_dungeon_requirements(
+    db: Session,
+    guild: Guild,
+    dungeon_template: DungeonTemplate,
+    *,
+    required_guild_level: int | None = None,
+) -> None:
+    minimum_level = dungeon_template.required_guild_level if required_guild_level is None else required_guild_level
+    if guild.level < minimum_level:
         raise DungeonError("Nível da guilda insuficiente para esta masmorra.")
 
 
@@ -524,6 +531,8 @@ def start_dungeon(
     regional_success_chance: int | None = None,
     regional_recommended_power: int | None = None,
     regional_recommended_level: int | None = None,
+    regional_party_bounds: tuple[int, int] | None = None,
+    regional_required_guild_level: int | None = None,
     supply_include_drops: bool = True,
     supply_snapshot_override: dict[str, object] | None = None,
 ) -> DungeonRun:
@@ -548,7 +557,9 @@ def start_dungeon(
         dungeon_template = get_active_dungeon_template(db, parsed_template_id)
         if dungeon_template is None:
             raise DungeonError("Masmorra indisponível.")
-    validate_dungeon_requirements(db, guild, dungeon_template)
+    validate_dungeon_requirements(
+        db, guild, dungeon_template, required_guild_level=regional_required_guild_level,
+    )
     if db.bind is not None and db.bind.dialect.name == "postgresql":
         db.execute(select(func.pg_advisory_xact_lock(guild.id, dungeon_template.id)))
     elif db.bind is not None and db.bind.dialect.name == "sqlite":
@@ -557,9 +568,12 @@ def start_dungeon(
     if get_active_dungeon_run_for_template(db, guild.id, dungeon_template.id) is not None:
         raise DungeonError("Esta masmorra está fechada enquanto outro grupo da guilda está em exploração.")
 
-    if len(parsed_ids) < dungeon_template.min_party_size:
+    minimum_party, maximum_party = regional_party_bounds or (
+        dungeon_template.min_party_size, dungeon_template.max_party_size,
+    )
+    if len(parsed_ids) < minimum_party:
         raise DungeonError("Grupo menor que o mínimo exigido para esta masmorra.")
-    if len(parsed_ids) > dungeon_template.max_party_size:
+    if len(parsed_ids) > maximum_party:
         raise DungeonError("Grupo maior que o máximo permitido para esta masmorra.")
 
     mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_ids)
@@ -711,6 +725,22 @@ def claim_dungeon_loot(
         xp_reward = apply_xp_bonus(floor((regional_offer.xp_reward_snapshot if regional_offer else template.base_xp_reward) * run_multiplier * 0.25), db, guild.id)
 
     resources.gold += gold_reward
+    crystal_rank = dungeon_run.rank_snapshot or (
+        "E" if int(getattr(template, "recommended_level", 1)) <= 10 else
+        "D" if int(getattr(template, "recommended_level", 1)) <= 20 else
+        "C" if int(getattr(template, "recommended_level", 1)) <= 30 else
+        "B" if int(getattr(template, "recommended_level", 1)) <= 40 else
+        "A" if int(getattr(template, "recommended_level", 1)) <= 50 else "S"
+    )
+    crystal_drop = int(
+        success
+        and getattr(template, "content_type", "dungeon") in {"dungeon", "boss"}
+        and crystal_rank in {"A", "S"}
+        and randint(1, 100) <= (2 if crystal_rank == "A" else 1)
+    )
+    if crystal_drop:
+        resources.crystal_reserve += crystal_drop
+        resources.crystals += crystal_drop
     xp_messages: list[str] = []
     level_up_messages: list[str] = []
     for mercenary in mercenaries:
@@ -721,6 +751,8 @@ def claim_dungeon_loot(
     guild_messages = add_guild_xp_from_mercenary_xp(guild, xp_reward * len(mercenaries))
 
     item_results: list[str] = []
+    if crystal_drop:
+        item_results.append("Cristais x1")
     portal_loot_result: dict[str, object] | None = None
     if success and portal_event is not None:
         portal_summary = portal_event_summary

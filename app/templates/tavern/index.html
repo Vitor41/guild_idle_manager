@@ -37,7 +37,7 @@
         <h2>Contratar Aprendiz</h2>
         <div class="asset-placeholder">♜</div>
         <dl class="stat-list">
-          <div><dt>Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
+          <div><dt>Ouro</dt><dd data-resource-total="gold">{{ resources.gold if resources else 0 }}</dd></div>
           <div><dt>Custo base</dt><dd>{{ current_apprentice_base_cost }}</dd></div>
           <div><dt>Desconto da Taverna</dt><dd>-{{ apprentice_chances.hire_discount_percent }}%</dd></div>
           <div><dt>Custo final</dt><dd>{{ current_apprentice_final_cost }}</dd></div>
@@ -116,6 +116,7 @@
             <div><dt>Nível</dt><dd>{{ active_offer.level }}</dd></div>
             <div><dt>Poder Total</dt><dd>{{ active_offer.power_score }}</dd></div>
             <div><dt>Custo</dt><dd>{{ active_offer.gold_cost }}</dd></div>
+            <div><dt>Vagas no Alojamento</dt><dd>{{ mercenary_count }}/{{ mercenary_limit }}</dd></div>
           </dl>
           <p class="note">Expira em: <strong class="countdown" data-ends-at="{{ active_offer_until_iso }}">calculando...</strong></p>
           <div class="bonus-list">
@@ -135,8 +136,9 @@
             data-confirm-key="hire_special"
           >
             <input type="hidden" name="offer_id" value="{{ active_offer.id }}">
-            <button type="submit">Contratar Mercenário</button>
+            <button type="submit" {% if not resources or resources.gold < active_offer.gold_cost or mercenary_count >= mercenary_limit %}disabled{% endif %}>Contratar Mercenário</button>
           </form>
+          {% if mercenary_count >= mercenary_limit %}<p class="note">Indisponível: abra uma vaga no Alojamento antes de contratar.</p>{% elif not resources or resources.gold < active_offer.gold_cost %}<p class="note">Indisponível: ouro insuficiente para esta oferta.</p>{% endif %}
         {% else %}
           <div class="empty-state">
             <strong>Nenhum mercenário especial disponível.</strong>

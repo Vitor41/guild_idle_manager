@@ -147,7 +147,7 @@ def _audit(db) -> dict[str, object]:
             "active_seeded_building_base_costs": building_costs,
             "any_nonzero_crystal_base_cost": any(row["base_crystals_cost"] > 0 for row in building_costs),
             "interpretation": (
-                "O catálogo consultado não exige cristais de prédio em custos-base; a ausência de drops de `crystal` não prova softlock de cristal. `gem`, `essence` e `crystal` são aliases reais para pagar o recurso crystals. `special_crystals` de retorno offline é uma moeda separada."
+                "O catálogo consultado não exige cristais de prédio em custos-base; a ausência de drops de `crystal` não prova softlock de cristal. `gem`, `essence` e `crystal` são aliases reais para pagar o recurso crystals, que também é concedido ao atingir o limite offline."
                 if not any(row["base_crystals_cost"] > 0 for row in building_costs) else
                 "Há custo-base de cristais em prédios; investigar as rotas `gem`/`essence`/`crystal` e os demais sistemas antes de concluir alcance global."
             ),

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.dependencies import DbSession, get_current_player
@@ -17,6 +18,24 @@ from app.services.tavern_service import tavern_summary
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+
+
+@router.get("/api/resources")
+def resource_totals(
+    db: DbSession,
+    current_user: User | None = Depends(get_current_player),
+):
+    if current_user is None:
+        return JSONResponse({"error": "authentication_required"}, status_code=401)
+    _guild, resources = get_current_guild_context(db, current_user.id)
+    if resources is None:
+        return JSONResponse({"error": "guild_resources_unavailable"}, status_code=404)
+    return JSONResponse({
+        "gold": resources.gold,
+        "wood": resources.wood,
+        "ore": resources.ore,
+        "crystal": resources.crystals,
+    })
 
 
 @router.get("/dashboard")

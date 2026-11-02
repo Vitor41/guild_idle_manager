@@ -546,10 +546,10 @@ def _run_trajectory(db, strategy: dict[str, object], seed: int, run_index: int,
         # the actual 8h credit cap. Offline awards no ordinary materials.
         passive_rate = get_passive_gold_rate(db, guild)["total"]
         passive_gold = passive_rate * credited_offline_seconds // 3600
-        special_crystals_earned = int(
+        offline_crystals_earned = int(
             integrate_item_sources and credited_offline_seconds >= OFFLINE_CAP_SECONDS
         )
-        resources.special_crystals += special_crystals_earned
+        resources.crystals += offline_crystals_earned
         gross_gold_today = gold_today + passive_gold
         if sink_policy and sink_policy["type"] == "earnings_levy":
             due = ceil(gross_gold_today * float(sink_policy["rate"]))
@@ -741,7 +741,7 @@ def _run_trajectory(db, strategy: dict[str, object], seed: int, run_index: int,
                          "next_purchase_requirements": next_req,
                          "gather_workers_available": max(0, len(roster) - len(continuous_families)),
                          "gather_seconds_available": credited_offline_seconds,
-                         "special_crystals_earned": special_crystals_earned,
+                         "offline_crystals_earned": offline_crystals_earned,
                          "scouts_level": buildings["scouts"].level,
                          "dungeon_gate_open": first_dungeon_gate_day is not None,
                          "first_dungeon_offer_seen": first_dungeon_offer_day == day,

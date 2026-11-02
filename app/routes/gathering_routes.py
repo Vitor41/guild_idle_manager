@@ -71,7 +71,8 @@ async def gathering_assign(
         return RedirectResponse("/guild/create", status_code=303)
     form = await read_form_fields(request)
     try:
-        assign_worker(db, guild, int(form.get("mercenary_id", "0")), form.get("resource_family", ""))
+        target_quantity = int(form["target_quantity"]) if form.get("target_quantity", "").strip() else None
+        assign_worker(db, guild, int(form.get("mercenary_id", "0")), form.get("resource_family", ""), target_quantity=target_quantity)
         db.commit()
     except (TypeError, ValueError) as exc:
         db.rollback()

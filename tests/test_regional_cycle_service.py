@@ -17,6 +17,7 @@ from app.models.guild import Guild
 from app.models.mercenary import MercenaryClass
 from app.models.dungeon import DungeonTemplate
 from app.models.mission import MissionTemplate
+from app.services.dungeon_service import DungeonError, validate_dungeon_requirements
 from app.models.regional import (
     RegionalCpuCyclePlan,
     RegionalCpuMercenary,
@@ -31,7 +32,7 @@ from app.models.regional import (
 from app.services.campaign_service import CampaignService
 from app.services.guild_service import get_current_guild_context
 from app.repositories.mercenary_repository import create_mercenary
-from app.services.mission_service import claim_mission_loot, start_mission
+from app.services.mission_service import MissionError, claim_mission_loot, start_mission, validate_mission_requirements
 from app.services import mission_service, regional_cycle_service
 from app.services.regional_cycle_service import (
     CYCLE_SECONDS,
@@ -48,6 +49,31 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
+    def test_requirement_overrides_remain_defensive_in_services(self):
+        class Stub:
+            level = 1
+            required_guild_level = 1
+
+        with self.assertRaisesRegex(MissionError, "Nível da guilda insuficiente"):
+            validate_mission_requirements(None, Stub(), Stub(), required_guild_level=5)
+        with self.assertRaisesRegex(DungeonError, "Nível da guilda insuficiente"):
+            validate_dungeon_requirements(None, Stub(), Stub(), required_guild_level=5)
+
+    def test_cpu_action_cadence_is_above_initial_baseline(self):
+        states = [
+            RegionalGuildState(region_code="sample", slot=slot, name=f"Rival {slot}", profile=profile, archetype="balanced")
+            for slot, profile in enumerate(("strong", "medium", "new", "new"))
+        ]
+        expected_actions = sum(
+            regional_cycle_service.regional_cpu_action_probability("cadence-test", state)
+            * (2 if state.profile == "strong" else 1)
+            for state in states
+        )
+
+        self.assertGreater(expected_actions, 1.25)
+        self.assertGreaterEqual(expected_actions, 1.38)
+        self.assertLessEqual(expected_actions, 1.48)
+
     def test_seeded_cpu_simulation_100_cycles_and_campaign_isolation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
@@ -1015,12 +1041,15 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         offer_type="contract",
                         slot=11,
                         mission_template_id=template.id,
-                        rank="S",
+                        rank="A",
                         name_snapshot=template.name,
                         description_snapshot=template.description,
                         level_band_snapshot="1-20",
                         recommended_level_snapshot=1,
                         recommended_power_snapshot=1,
+                        min_party_size_snapshot=1,
+                        max_party_size_snapshot=1,
+                        required_guild_level_snapshot=1,
                         duration_seconds_snapshot=5400,
                         gold_reward_snapshot=321,
                         xp_reward_snapshot=123,
@@ -1032,9 +1061,14 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     apprentice = db.scalar(select(MercenaryClass).where(MercenaryClass.code == "apprentice"))
                     mercenary = create_mercenary(db, guild.id, apprentice, "Snapshot Runner")
                     db.flush()
+                    template.min_party_size = 2
+                    template.max_party_size = 3
+                    template.required_guild_level = 99
                     run = start_mission(
                         db, guild, str(template.id), [str(mercenary.id)], commit=False,
                         regional_duration_seconds=offer.duration_seconds_snapshot,
+                        regional_party_bounds=(offer.min_party_size_snapshot, offer.max_party_size_snapshot),
+                        regional_required_guild_level=offer.required_guild_level_snapshot,
                     )
                     run.regional_offer_id = offer.id
                     run.rank_snapshot = offer.rank
@@ -1058,10 +1092,13 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertEqual(resolved.gold_reward, 321)
                     self.assertGreaterEqual(resolved.xp_reward, 123)
                     self.assertLess(resolved.xp_reward, 500)
+                    self.assertEqual(resources.crystals, 1)
+                    self.assertEqual(resources.crystal_reserve, 1)
+                    self.assertIn("Cristais x1", json.loads(resolved.result_details)["items"])
                     result = db.scalar(select(RegionalRunOutcome).where(
                         RegionalRunOutcome.source_run_id == run.id,
                     ))
-                    self.assertEqual(result.rank, "S")
+                    self.assertEqual(result.rank, "A")
                     self.assertEqual(result.gold_earned, 321)
                     self.assertEqual(result.xp_earned, resolved.xp_reward)
                     self.assertEqual(offer.status, "completed")
@@ -1069,8 +1106,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         regional_cycle_service.RegionalRegionState.campaign_id == info.campaign_id,
                         regional_cycle_service.RegionalRegionState.region_code == home_code,
                     ))
-                    self.assertAlmostEqual(region.security, 50.14)
-                    self.assertAlmostEqual(region.threat, 24.86)
+                    self.assertAlmostEqual(region.security, 50.12)
+                    self.assertAlmostEqual(region.threat, 24.88)
 
                     failed_offer = RegionalOffer(
                         campaign_id=info.campaign_id,
@@ -1080,7 +1117,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         offer_type="contract",
                         slot=12,
                         mission_template_id=template.id,
-                        rank="C",
+                        rank="A",
                         name_snapshot=template.name,
                         description_snapshot=template.description,
                         level_band_snapshot="1-20",
@@ -1098,6 +1135,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     failed_run = start_mission(
                         db, guild, str(template.id), [str(mercenary.id)], commit=False,
                         regional_duration_seconds=failed_offer.duration_seconds_snapshot,
+                        regional_party_bounds=(failed_offer.min_party_size_snapshot, failed_offer.max_party_size_snapshot),
+                        regional_required_guild_level=failed_offer.required_guild_level_snapshot,
                     )
                     failed_run.regional_offer_id = failed_offer.id
                     failed_run.rank_snapshot = failed_offer.rank
@@ -1106,8 +1145,54 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     with patch("app.services.mission_service.randint", return_value=100):
                         failed_result = claim_mission_loot(db, guild, resources, failed_run.id)
                     self.assertFalse(failed_result.success)
-                    self.assertAlmostEqual(region.security, 50.06)
-                    self.assertAlmostEqual(region.threat, 24.94)
+                    self.assertEqual(resources.crystals, 1)
+                    self.assertEqual(resources.crystal_reserve, 1)
+                    self.assertAlmostEqual(region.security, 50.0)
+                    self.assertAlmostEqual(region.threat, 25.0)
+
+                    low_rank_offer = RegionalOffer(
+                        campaign_id=info.campaign_id,
+                        cycle_id=active_cycle.id,
+                        cycle_number=active_cycle.cycle_number,
+                        region_code=home_code,
+                        offer_type="contract",
+                        slot=13,
+                        mission_template_id=template.id,
+                        rank="C",
+                        name_snapshot=template.name,
+                        description_snapshot=template.description,
+                        level_band_snapshot="1-20",
+                        recommended_level_snapshot=1,
+                        recommended_power_snapshot=1,
+                        min_party_size_snapshot=1,
+                        max_party_size_snapshot=1,
+                        required_guild_level_snapshot=1,
+                        duration_seconds_snapshot=5400,
+                        gold_reward_snapshot=321,
+                        xp_reward_snapshot=123,
+                        success_chance_snapshot=95,
+                        status="in_progress",
+                        reserved_by_guild_state_id=player_state.id,
+                    )
+                    db.add(low_rank_offer)
+                    db.flush()
+                    low_rank_run = start_mission(
+                        db, guild, str(template.id), [str(mercenary.id)], commit=False,
+                        regional_duration_seconds=low_rank_offer.duration_seconds_snapshot,
+                        regional_party_bounds=(low_rank_offer.min_party_size_snapshot, low_rank_offer.max_party_size_snapshot),
+                        regional_required_guild_level=low_rank_offer.required_guild_level_snapshot,
+                    )
+                    low_rank_run.regional_offer_id = low_rank_offer.id
+                    low_rank_run.rank_snapshot = low_rank_offer.rank
+                    low_rank_run.ends_at = low_rank_run.started_at - timedelta(seconds=1)
+                    db.flush()
+                    with patch("app.services.mission_service.randint", return_value=1):
+                        low_rank_result = claim_mission_loot(db, guild, resources, low_rank_run.id)
+                    self.assertTrue(low_rank_result.success)
+                    self.assertEqual(resources.crystals, 1)
+                    self.assertEqual(resources.crystal_reserve, 1)
+                    self.assertAlmostEqual(region.security, 50.08)
+                    self.assertAlmostEqual(region.threat, 24.92)
                     self.assertEqual(regional_cycle_service.REGION_BASELINE_PRESSURE, 1)
                     with patch.object(regional_cycle_service, "regional_cpu_action_probability", return_value=0.0):
                         advance_regional_world(
@@ -1119,16 +1204,16 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     ))
                     summary = json.loads(cycle_summary.summary_json)
                     self.assertFalse(summary["baseline"]["applied"])
-                    self.assertEqual(summary["player_actions"], 2)
-                    self.assertEqual(summary["player_successes"], 1)
+                    self.assertEqual(summary["player_actions"], 3)
+                    self.assertEqual(summary["player_successes"], 2)
                     self.assertEqual(summary["player_failures"], 1)
                     self.assertAlmostEqual(cycle_summary.security_before, 50)
                     self.assertTrue(summary["rival_calm"]["active"])
                     self.assertTrue(summary["rival_calm"]["applied"])
                     self.assertAlmostEqual(summary["rival_calm"]["security"], 0.25)
-                    self.assertAlmostEqual(cycle_summary.security_after, 50.31)
+                    self.assertAlmostEqual(cycle_summary.security_after, 50.33)
                     self.assertAlmostEqual(cycle_summary.threat_before, 25)
-                    self.assertAlmostEqual(cycle_summary.threat_after, 24.69)
+                    self.assertAlmostEqual(cycle_summary.threat_after, 24.67)
             finally:
                 configure_database("sqlite:///:memory:")
                 gc.collect()

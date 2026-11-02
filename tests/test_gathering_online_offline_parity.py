@@ -85,7 +85,7 @@ class GatheringOnlineOfflineParityTests(unittest.TestCase):
                 stamina_seconds=OFFLINE_CAP,
             )
             guild = Guild(campaign_id=campaign_id, name=f"Guild {mode}", level=1)
-            guild.resources = GuildResources(gold=100, wood=0, ore=0, crystals=0, special_crystals=0)
+            guild.resources = GuildResources(gold=100, wood=0, ore=0, crystals=0)
             db.add_all([metadata, guild])
             db.flush()
             worker = Mercenary(

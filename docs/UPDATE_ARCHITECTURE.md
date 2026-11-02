@@ -1,6 +1,6 @@
 # Atualização do aplicativo
 
-Versão local atual: `0.3.3` (`app/core/version.py`, também publicada como `FastAPI.version`), bootstrap do atualizador para o canal DEV com correção do envio de ações da interface. Incrementos seguintes de funcionalidade usam `0.1` na versão menor; a versão major fica reservada a mudança arquitetural/de design relevante ou lançamento de plataforma.
+Versão local atual: `0.4.0` (`app/core/version.py`, também publicada como `FastAPI.version`). O versionamento desta entrega segue a convenção `major.release.minor`; a tag correspondente planejada é `DEV-v0.4.0`.
 
 ## DEV a partir do checkout
 
@@ -36,4 +36,4 @@ Antes de distribuição, confirmar acesso anônimo ao repositório, gerar e prot
 
 O checkout prepara o bootstrap 0.3.3. Instalações anteriores sem chave pública embutida não podem aceitar confiança retroativamente e precisam receber o novo Setup manualmente uma vez. A chave privada deve ficar fora do repositório e ser armazenada como segredo do ambiente Actions `release-signing` (`GIM_RELEASE_PRIVATE_KEY_B64`); nunca deve ser commitada. Cadastre a chave pública correspondente como variável do repositório (`GIM_RELEASE_PUBLIC_KEY_B64`).
 
-O workflow `.github/workflows/publish-dev-release.yml` só roda manualmente a partir do branch principal e valida que a tag `DEV-vX.Y.Z` aponta para um commit já integrado nele, além de exigir que `app/core/version.py` corresponda à tag. Antes de rodar, crie o ambiente Actions `release-signing`, configure o segredo privado e a variável pública. O build embute a chave pública; o signer confirma que a privada corresponde à pública antes de assinar; o workflow publica Setup, manifesto e assinatura como prerelease. A release 0.3.3 só poderá ser publicada depois que esse commit estiver integrado ao branch padrão e o ambiente Actions estiver configurado. Use a tag `DEV-v0.3.3` para publicar esta versão.
+O workflow `.github/workflows/publish-dev-release.yml` só roda manualmente a partir do branch principal e valida que a tag `DEV-vX.Y.Z` aponta para um commit já integrado nele, além de exigir que `app/core/version.py` corresponda à tag. Antes de rodar, crie o ambiente Actions `release-signing`, configure o segredo privado e a variável pública. O build embute a chave pública; o signer confirma que a privada corresponde à pública antes de assinar; o workflow publica Setup, manifesto e assinatura como prerelease. Para esta entrega, a release 0.4.0 só poderá ser publicada depois que este commit estiver integrado ao branch padrão e o ambiente Actions estiver configurado. Use a tag `DEV-v0.4.0` para publicar esta versão.

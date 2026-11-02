@@ -84,6 +84,7 @@
                   {% if locked %}<span class="status-badge status-busy">Em exploração</span>{% endif %}
                   <span class="tag">{{ difficulty_labels.get(dungeon.difficulty, dungeon.difficulty) }}</span>
                   <span class="tag">Nível {{ dungeon.level_band }}</span>
+                  <span class="tag">Guilda nível {{ dungeon.required_guild_level }}+</span>
                   <span class="tag content-role-tag">{{ dungeon.gameplay_role }}</span>
                   <span class="tag {% if dungeon.content_type == 'boss' %}risk-badge-boss{% else %}risk-badge{% endif %}">{{ dungeon.risk_label }}</span>
                 </div>

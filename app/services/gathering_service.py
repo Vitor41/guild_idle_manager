@@ -71,9 +71,12 @@ def assign_worker(
     resource_family: str,
     *,
     now: datetime | None = None,
+    target_quantity: int | None = None,
 ) -> GatheringAssignment:
     if resource_family not in RESOURCE_FAMILIES:
         raise ValueError("Escolha uma família de recurso disponível para coleta.")
+    if target_quantity is not None and (int(target_quantity) < 1 or int(target_quantity) > 100_000):
+        raise ValueError("A meta de coleta deve ficar entre 1 e 100.000 unidades.")
     mercenary = db.scalar(select(Mercenary).where(Mercenary.id == mercenary_id, Mercenary.guild_id == guild.id))
     if mercenary is None:
         raise ValueError("Este mercenário não pertence à guilda.")
@@ -95,6 +98,8 @@ def assign_worker(
         node_code=NODE_CODES[resource_family],
         progress_seconds=0,
         cycle_count=0,
+        target_quantity=int(target_quantity) if target_quantity is not None else None,
+        quantity_collected=0,
         extra_chance=min(45, max(0, mercenary.profession.bonus_percent if mercenary.profession and mercenary.profession.material_family == resource_family else 0)),
         rng_seed=int.from_bytes(seed_bytes, "big"),
         started_at_utc=timestamp,
@@ -180,12 +185,21 @@ def advance_assignment(
     cycles_processed = 0
     progress = remainder
     if cycles_available and template is not None:
+        if assignment.target_quantity is not None:
+            remaining_target = max(0, assignment.target_quantity - assignment.quantity_collected)
+            # Every cycle yields at least one unit, so a finite job never needs
+            # to process more cycles than units remaining toward its target.
+            cycles_available = min(cycles_available, remaining_target)
         remaining_capacity = max(0, capacity - used)
         for cycle in range(assignment.cycle_count, assignment.cycle_count + cycles_available):
             quantity = 1
             cycle_rng = random.Random(f"{assignment.rng_seed}:{cycle}")
             if cycle_rng.randrange(100) < min(45, max(0, assignment.extra_chance)):
                 quantity += 1
+            if assignment.target_quantity is not None:
+                quantity = min(quantity, max(0, assignment.target_quantity - assignment.quantity_collected - produced))
+                if quantity <= 0:
+                    break
             produced += quantity
             remaining_capacity -= quantity
             cycles_processed += 1
@@ -208,13 +222,21 @@ def advance_assignment(
                 progress = 0
     assignment.progress_seconds = progress
     assignment.checkpoint_at_utc = timestamp
+    if assignment.target_quantity is not None:
+        assignment.quantity_collected += stored
     if cycles_processed:
         from app.services.achievement_service import record_guild_stat
 
         record_guild_stat(
             db, guild.id, f"gathering_cycles_{assignment.resource_family}", cycles_processed,
         )
-    db.add(assignment)
+    completed = assignment.target_quantity is not None and assignment.quantity_collected >= assignment.target_quantity
+    if completed:
+        assignment.mercenary.status = "available"
+        db.add(assignment.mercenary)
+        db.delete(assignment)
+    else:
+        db.add(assignment)
     return {
         "cycles": cycles_processed,
         "produced": produced,
@@ -225,6 +247,9 @@ def advance_assignment(
         "capacity": capacity,
         "used": get_inventory_usage(db, guild.id),
         "paused": assignment.capacity_paused,
+        "completed": completed,
+        "target_quantity": assignment.target_quantity or 0,
+        "quantity_collected": assignment.quantity_collected,
     }
 
 

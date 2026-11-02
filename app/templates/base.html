@@ -166,7 +166,7 @@
           <dl class="offline-reward-grid">
             <div><dt>Ouro</dt><dd>+{{ offline.gold }}</dd></div>
             {% if offline.gold_sources %}<div><dt>Produção da guilda (base, nível e equipe)</dt><dd>+{{ offline.gold_sources.guild_production }}</dd></div><div><dt>Bônus do Armazém</dt><dd>+{{ offline.gold_sources.warehouse }}</dd></div>{% endif %}
-            <div><dt>Cristal especial</dt><dd>+{{ offline.special_crystals or 0 }}</dd></div>
+            <div><dt>Cristais</dt><dd>+{{ offline.crystals or offline.special_crystals or 0 }}</dd></div>
             <div><dt>Estamina consumida</dt><dd>{{ ((offline.stamina_spent_seconds or 0) // 3600) }}h</dd></div>
             <div><dt>Estamina restante</dt><dd>{{ ((offline.stamina_remaining_seconds or 0) // 3600) }}h</dd></div>
           </dl>
@@ -197,7 +197,7 @@
         <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
-    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261101-1"></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261101-2"></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261030-1" defer></script>
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261031-1" defer></script>
     <script src="{{ url_for('static', path='/js/offline-stamina.js') }}?v=20261030-1" defer></script>

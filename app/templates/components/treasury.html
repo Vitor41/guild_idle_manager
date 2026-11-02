@@ -1,14 +1,13 @@
 {% macro treasury(resources) %}
   <details class="treasury-menu">
-    <summary title="Tesouro da Guilda"><small>Tesouro</small><strong>{{ resources.gold }}</strong></summary>
+    <summary title="Tesouro da Guilda"><small>Tesouro</small><strong data-resource-total="gold">{{ resources.gold }}</strong></summary>
     <div class="treasury-popover">
       <h3>Tesouro da Guilda</h3>
       <dl>
-        <div><dt data-desktop-resource="gold">Ouro</dt><dd>{{ resources.gold }}</dd></div>
-        <div><dt data-desktop-resource="wood">Madeira</dt><dd>{{ resources.wood }}</dd></div>
-        <div><dt data-desktop-resource="ore">Minério</dt><dd>{{ resources.ore }}</dd></div>
-        <div><dt data-desktop-resource="crystal">Cristais</dt><dd>{{ resources.crystals }}</dd></div>
-        <div><dt data-desktop-resource="special-crystal">Cristal especial</dt><dd>{{ resources.special_crystals }}</dd></div>
+        <div><dt data-desktop-resource="gold">Ouro</dt><dd data-resource-total="gold">{{ resources.gold }}</dd></div>
+        <div><dt data-desktop-resource="wood">Madeira</dt><dd data-resource-total="wood">{{ resources.wood }}</dd></div>
+        <div><dt data-desktop-resource="ore">Minério</dt><dd data-resource-total="ore">{{ resources.ore }}</dd></div>
+        <div><dt data-desktop-resource="crystal">Cristais</dt><dd data-resource-total="crystal">{{ resources.crystals }}</dd></div>
       </dl>
     </div>
   </details>

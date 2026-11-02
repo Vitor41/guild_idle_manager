@@ -30,6 +30,7 @@ def get_inventory_resource_totals(db: Session, guild_id: int) -> dict[str, int]:
 
 def sync_inventory_resource_totals(db: Session, resources: GuildResources) -> bool:
     totals = get_inventory_resource_totals(db, resources.guild_id)
+    totals["crystals"] += max(0, int(resources.crystal_reserve or 0))
     changed = False
     for resource_name, total in totals.items():
         if getattr(resources, resource_name) != total:
@@ -330,6 +331,12 @@ def consume_inventory_resource(
         remaining -= consumed
         if remaining == 0:
             break
+    if remaining and resource_name == "crystals":
+        from_reserve = min(max(0, int(resources.crystal_reserve or 0)), remaining)
+        resources.crystal_reserve -= from_reserve
+        resources.crystals -= from_reserve
+        remaining -= from_reserve
+        db.add(resources)
     return remaining == 0
 
 

@@ -29,6 +29,8 @@ class GatheringAssignment(Base):
     node_code: Mapped[str] = mapped_column(String(80), nullable=False)
     progress_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cycle_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    target_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quantity_collected: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     capacity_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     extra_chance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rng_seed: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

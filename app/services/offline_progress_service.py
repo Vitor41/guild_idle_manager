@@ -75,8 +75,7 @@ def calculate_offline_material_rewards(
         "warehouse_bonus": 0,
         "wood_total": 0,
         "ore_total": 0,
-        "crystals": 0,
-        "special_crystals": 1 if credited_seconds >= cap_seconds else 0,
+        "crystals": 1 if credited_seconds >= cap_seconds else 0,
     }
 
 
@@ -125,7 +124,8 @@ def process_offline_progress(db: Session, guild: Guild) -> dict[str, object] | N
         resources.gold += gold
         db.add(resources)
     if resources is not None:
-        resources.special_crystals += materials["special_crystals"]
+        resources.crystal_reserve += materials["crystals"]
+        resources.crystals += materials["crystals"]
         db.add(resources)
     db.commit()
     return {
@@ -133,7 +133,7 @@ def process_offline_progress(db: Session, guild: Guild) -> dict[str, object] | N
         "credited_label": _format_elapsed(credited_seconds),
         "gold": gold,
         "materials": materials,
-        "special_crystals": materials["special_crystals"],
+        "crystals": materials["crystals"],
         "cap_reached": credited_seconds >= OFFLINE_CAP_SECONDS,
         "cap_hours": OFFLINE_CAP_SECONDS // 3600,
         "rate": rate,

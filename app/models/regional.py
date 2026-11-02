@@ -242,6 +242,7 @@ class RegionalOffer(Base):
     recommended_power_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     min_party_size_snapshot: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     max_party_size_snapshot: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    required_guild_level_snapshot: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     duration_seconds_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     gold_reward_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     xp_reward_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)

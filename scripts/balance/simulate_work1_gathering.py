@@ -64,14 +64,14 @@ def _render_report(rows: list[dict[str, object]]) -> str:
         "",
         "`Ativos` aplica a regra atual de até três atividades por guilda (uma por família). Perfis com elenco de 5 ou 20 mercenários são medidos com três coletores ativos e os demais sem designação; não representam capacidade de coleta acima do limite atual.",
         "",
-        "| Elenco | Ativos | Profissão | Armazém | Ausência pedida | Tempo reconhecido | Ciclos | Produzido | Guardado | Excedente | Uso/capacidade | Pausou | Bônus por família | Madeira/minério/cristal comum | Cristal especial concedido |",
+        "| Elenco | Ativos | Profissão | Armazém | Ausência pedida | Tempo reconhecido | Ciclos | Produzido | Guardado | Excedente | Uso/capacidade | Pausou | Bônus por família | Madeira/minério/cristais | Cristais offline concedidos |",
         "|---:|---:|---|---:|---|---:|---:|---:|---:|---:|---:|:---:|---|---:|---:|",
     ]
     for row in rows:
         lines.append(
             f"| {row['roster']} | {row['assigned']} | {row['profession']} | {row['warehouse_level']} | {row['requested']} | "
             f"{row['credited']} s | {row['cycles']} | {row['produced']} | {row['stored']} | {row['discarded']} | "
-            f"{row['usage']}/{row['capacity']} | {'sim' if row['paused'] else 'não'} | {row['family_bonus']} | {row['resource_totals']} | {row['special_crystals']} |"
+            f"{row['usage']}/{row['capacity']} | {'sim' if row['paused'] else 'não'} | {row['family_bonus']} | {row['resource_totals']} | {row['crystals']} |"
         )
     lines.extend([
         "",
@@ -80,7 +80,7 @@ def _render_report(rows: list[dict[str, object]]) -> str:
         "- As quatro durações passam pelo `ClockGuard` real. Com estamina inicial de 8 h: 5 min reconhece 300 s; 6 h reconhece 21.600 s; 8 h reconhece 28.800 s; 24 h reconhece somente 28.800 s. Os casos de 8 h e 24 h usam a mesma seed de ciclo e devem produzir o mesmo resultado.",
         "- Os perfis 5/20 verificam o limite estrutural, não extrapolam cinco/vinte postos: só madeira, minério e couro têm atividades compatíveis no GDD e cada uma admite um trabalhador.",
         "- O ensaio é uma trajetória determinística por combinação, não Monte Carlo. Serve para reproduzir o gate atual, validar teto/pausa e comparar entradas pareadas; não fecha a distribuição p50/p90 nem o balanceamento final. O GDD mantém os números como hipótese sujeita a simulação mais ampla.",
-        "- Madeira, minério e cristal comum passivos ficam em zero. A última coluna registra cristal especial novo: zero abaixo de 8 h e exatamente um em 8 h e 24 h (24 h é limitado a 8 h). Cada cenário reabre a campanha uma segunda vez antes do reconhecimento do relatório e valida que o grant e o relatório não duplicam. Os contadores `GuildResources` da penúltima coluna acompanham o inventário e incluem somente as atividades de coleta nesta fixture; o cristal especial fica fora da capacidade.",
+        "- Madeira e minério passivos ficam em zero. O prêmio offline de Cristais é zero abaixo de 8 h e exatamente um em 8 h e 24 h (24 h é limitado a 8 h). Cada cenário reabre a campanha uma segunda vez antes do reconhecimento do relatório e valida que o grant e o relatório não duplicam. Os contadores `GuildResources` acompanham o inventário e incluem somente as atividades de coleta e o prêmio de Cristais nesta fixture; Cristais continuam fora da capacidade do inventário.",
         "",
     ])
     return "\n".join(lines)
@@ -150,7 +150,7 @@ def run_matrix() -> list[dict[str, object]]:
                             stamina_seconds=8 * 3600,
                         )
                         guild = Guild(campaign_id=campaign_id, name=f"Guilda fixture {case_index}", level=1)
-                        guild.resources = GuildResources(gold=100, wood=0, ore=0, crystals=0, special_crystals=0)
+                        guild.resources = GuildResources(gold=100, wood=0, ore=0, crystals=0)
                         db.add_all([metadata, guild])
                         db.flush()
                         if warehouse_level:
@@ -214,15 +214,14 @@ def run_matrix() -> list[dict[str, object]]:
                             "paused": any(result.get("paused", False) for result in gathering.values()),
                             "family_bonus": ", ".join(bonuses) or "—",
                             "resource_totals": f"{resources.wood}/{resources.ore}/{resources.crystals}",
-                            "special_crystals": resources.special_crystals,
+                            "crystals": resources.crystals,
                             "stamina_remaining": metadata.stamina_seconds,
                         })
                         assert summary["materials"]["wood_total"] == summary["materials"]["ore_total"] == 0
-                        expected_special_crystals = 1 if summary["credited_seconds"] >= 8 * 3600 else 0
-                        assert summary["materials"]["crystals"] == 0
-                        assert summary["special_crystals"] == expected_special_crystals
-                        assert resources.crystals == 0
-                        assert resources.special_crystals == expected_special_crystals
+                        expected_crystals = 1 if summary["credited_seconds"] >= 8 * 3600 else 0
+                        assert summary["materials"]["crystals"] == expected_crystals
+                        assert summary["crystals"] == expected_crystals
+                        assert resources.crystals == expected_crystals
                         assert summary["credited_seconds"] == min(requested_seconds, 8 * 3600)
                         assert metadata.stamina_seconds == 8 * 3600 - summary["stamina_spent_seconds"]
                         assert sum(family_totals.values()) <= capacity
@@ -232,8 +231,7 @@ def run_matrix() -> list[dict[str, object]]:
                         reopened_guild = db.query(Guild).filter_by(campaign_id=campaign_id).one()
                         reopened_resources = db.query(GuildResources).filter_by(guild_id=reopened_guild.id).one()
                         assert reopened_summary["report_id"] == summary["report_id"]
-                        assert reopened_resources.special_crystals == expected_special_crystals
-                        assert reopened_resources.crystals == 0
+                        assert reopened_resources.crystals == expected_crystals
 
     configure_database("sqlite:///:memory:")
     return rows
