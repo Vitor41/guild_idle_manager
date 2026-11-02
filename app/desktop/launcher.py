@@ -69,6 +69,12 @@ def _release_single_instance_mutex(mutex) -> None:
         kernel32.CloseHandle(handle)
 
 
+def _destroy_window_for_shutdown(window) -> None:
+    """Skip pywebview's interactive quit prompt for an already-confirmed shutdown."""
+    window.confirm_close = False
+    window.destroy()
+
+
 def _configure_logging() -> None:
     log_file = user_log_directory() / "desktop.log"
     handler = RotatingFileHandler(log_file, maxBytes=2_000_000, backupCount=4, encoding="utf-8")
@@ -271,7 +277,7 @@ def run() -> None:
             if server is not None:
                 server.should_exit = True
             try:
-                window.destroy()
+                _destroy_window_for_shutdown(window)
             except Exception:
                 logging.exception("Could not close the desktop window for local checkout restart")
 
@@ -294,7 +300,7 @@ def run() -> None:
             if server is not None:
                 server.should_exit = True
             try:
-                window.destroy()
+                _destroy_window_for_shutdown(window)
             except Exception:
                 logging.exception("Could not close the desktop window for verified Setup")
 
