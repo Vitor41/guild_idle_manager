@@ -31,6 +31,7 @@
             <a href="/mercenaries"><span class="nav-icon">⚔</span><span>Mercenários</span></a>
             <a href="/missions"><span class="nav-icon">✦</span><span>Missões</span></a>
             <a href="/gathering"><span class="nav-icon">⚒</span><span>Coleta</span></a>
+            <a href="/workshops"><span class="nav-icon">⚗</span><span>Oficinas</span></a>
             <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
             {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-async-navigation data-scroll-top><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
@@ -174,7 +175,7 @@
             <h3>Produção por tarefa</h3>
             <ul class="offline-gathering-list">
               {% for family, result in offline.gathering.items() %}
-                <li><strong>{{ {'wood': 'Madeira', 'ore': 'Minério', 'leather': 'Couro'}.get(family, family) }}</strong><span>{{ result.cycles }} ciclos{% if result.extra_chance %} · +{{ result.extra_chance }}% de chance extra{% endif %} · {{ result.stored }} guardadas{% if result.discarded %} · {{ result.discarded }} excedente descartado{% endif %}</span></li>
+                <li><strong>{{ {'wood': 'Madeira', 'ore': 'Minério', 'leather': 'Couro', 'meat': 'Carne', 'herb': 'Ervas'}.get(family, family) }}</strong><span>{{ result.cycles }} ciclos{% if result.extra_chance %} · +{{ result.extra_chance }}% de chance extra{% endif %} · {{ result.stored }} guardadas{% if result.discarded %} · {{ result.discarded }} excedente descartado{% endif %}</span></li>
               {% endfor %}
             </ul>
           {% endif %}
@@ -189,7 +190,7 @@
             </section>
           {% endif %}
           <footer class="offline-summary__notice">
-            <span>Madeira, minério e couro dependem das tarefas de coleta designadas.</span>
+            <span>Os materiais dependem das tarefas de coleta designadas.</span>
             <span>Para mais detalhes, acesse o <a href="/guide#idle">Guia do Jogo</a>.</span>
           </footer>
         </div>
@@ -200,6 +201,7 @@
     <script src="{{ url_for('static', path='/js/main.js') }}?v=20261101-2"></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261030-1" defer></script>
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261031-1" defer></script>
+    {% if request.url.path == '/market' %}<script src="{{ url_for('static', path='/js/market-max.js') }}?v=20261102-1" defer></script>{% endif %}
     <script src="{{ url_for('static', path='/js/offline-stamina.js') }}?v=20261030-1" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}

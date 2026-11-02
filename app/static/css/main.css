@@ -1933,7 +1933,8 @@ textarea {
 .market-sale-card { display: grid; gap: 12px; padding: 16px; }
 .market-item-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; }
 .market-item-row small { display: block; margin-top: 3px; color: var(--muted); }
-.market-item-row .inline-form { grid-template-columns: 76px auto; }
+.market-item-row .inline-form { grid-template-columns: minmax(64px, 76px) 48px auto; }
+.market-max-button { min-width: 40px; min-height: 40px; padding: 6px; }
 .market-quota-primary { margin: 12px 0 3px; color: var(--parchment); }
 .market-quota-detail { margin-top: 0; overflow-wrap: anywhere; }
 .market-item-action { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }

@@ -116,6 +116,15 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         ))
                         successes = sum(plan.successes for plan in plans)
                         actions = sum(plan.actions for plan in plans)
+                        planned = sum(plan.planned_actions for plan in plans)
+                        eligible = sum(plan.eligible_actions for plan in plans)
+                        started = sum(plan.started_actions for plan in plans)
+                        resolved = sum(plan.resolved_actions for plan in plans)
+                        self.assertGreaterEqual(planned, eligible)
+                        self.assertGreaterEqual(eligible, started)
+                        self.assertEqual(started, actions)
+                        self.assertEqual(resolved, actions)
+                        self.assertGreaterEqual(started / max(1, planned), 0.70)
                         by_profile = {}
                         for plan in plans:
                             state = db.get(RegionalGuildState, plan.guild_state_id)

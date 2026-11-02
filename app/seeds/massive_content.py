@@ -16,7 +16,7 @@ from app.models.regional import RegionalOffer
 
 
 PACK_KEY = "conteudo_massivo_pos_mvp026"
-PACK_VERSION = 3
+PACK_VERSION = 4
 BANDS = (
     ("1-20", 1, 20, 1, (10, 25, 45)),
     ("21-50", 21, 50, 2, (45, 90, 150)),
@@ -73,6 +73,7 @@ def _material_rows() -> list[dict[str, object]]:
         "leather": ("Couro", 35, ["Cru", "Curtido", "de Fera", "Dracônico", "Ancestral"]),
         "cloth": ("Fibra", 35, ["Silvestre", "de Linho", "Prateada", "Arcana", "Celestial"]),
         "herb": ("Erva", 45, ["Verde", "Curativa", "Sombria", "Lunar", "do Eclipse"]),
+        "meat": ("Carne", 12, ["Fresca", "de Caça", "Temperada", "de Javali", "de Basilisco"]),
         "essence": ("Essência", 40, ["Natural", "Ígnea", "Sombria", "Astral", "Primordial"]),
         "gem": ("Gema", 35, ["Bruta", "Azul", "Rúnica", "Estelar", "do Vazio"]),
         "beast": ("Parte de Criatura", 35, ["Presa", "Garra", "Osso", "Escama", "Chifre"]),
@@ -108,6 +109,7 @@ def _material_rows() -> list[dict[str, object]]:
 
 
 def _equipment_rows() -> list[dict[str, object]]:
+    from app.services.economy_pricing_service import equipment_base_sell_value
     categories = (
         (700, [
             ("Espada", "main_hand", "sword", "warrior", "power"),
@@ -166,7 +168,7 @@ def _equipment_rows() -> list[dict[str, object]]:
                 "item_type": "equipment", "rarity": rarity, "item_level": level, "level_band": band,
                 "tier": tier, "content_pack": PACK_KEY, "equipment_slot": slot, "icon_group": icon,
                 "required_level": level, "favored_class_code": class_code, "favored_attribute": attribute,
-                "base_sell_value": max(20, tier * tier * 35), "bonus_power": bonus if attribute == "power" else max(1, tier),
+                "base_sell_value": equipment_base_sell_value(slot, rarity), "bonus_power": bonus if attribute == "power" else max(1, tier),
                 "bonus_vitality": bonus if attribute == "vitality" else 0,
                 "bonus_agility": bonus if attribute == "agility" else 0,
                 "bonus_intelligence": bonus if attribute == "intelligence" else 0,
@@ -310,12 +312,22 @@ def run_massive_content_seed(
     if deactivate_legacy_defaults:
         deactivate_obsolete_legacy_missions(db)
 
-    family_labels = {"wood": "madeiras", "ore": "minérios", "herb": "ervas", "leather": "couros", "cloth": "fibras", "gem": "gemas", "relic": "relíquias", "essence": "essências"}
+    family_labels = {"wood": "madeiras", "ore": "minérios", "herb": "ervas", "meat": "carnes", "leather": "couros", "cloth": "fibras", "gem": "gemas", "relic": "relíquias", "essence": "essências"}
 
     materials = _material_rows()
     equipment = _equipment_rows()
     _insert_missing(db, ItemTemplate, materials + equipment, "slug")
+    from app.services.workshop_service import ensure_supply_kit
+    ensure_supply_kit(db)
     item_map = {item.slug: item for item in db.scalars(select(ItemTemplate).where(ItemTemplate.content_pack == PACK_KEY))}
+    from app.services.economy_pricing_service import equipment_base_sell_value
+    for item in item_map.values():
+        if item.item_type == "equipment":
+            legacy_value = max(2, int((item.item_level + 4) * max(1, item.tier) * 1.8))
+            # Reprice generated legacy rows, while retaining admin-edited prices.
+            if item.base_sell_value != legacy_value:
+                continue
+            item.base_sell_value = equipment_base_sell_value(item.equipment_slot, item.rarity)
 
     new_missions = _insert_missing(db, MissionTemplate, _mission_rows() + _gathering_rows(), "slug")
     mission_map = {item.slug: item for item in db.scalars(select(MissionTemplate).where(MissionTemplate.content_pack == PACK_KEY))}

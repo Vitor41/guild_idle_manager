@@ -1,0 +1,45 @@
+{
+  "simulation": "ml013_early_rank_e_economy_v1",
+  "seed": 20261102,
+  "monte_carlo_runs": 20000,
+  "uses_campaign_save": false,
+  "uses_isolated_temporary_campaign": true,
+  "starting_gold_after_existing_baseline": 30,
+  "second_recruit_cost_gold": 53,
+  "housing_level_2_gold_cost": 200,
+  "housing_level_2_material_costs": {
+    "wood": 40,
+    "ore": 0,
+    "crystals": 0
+  },
+  "rank_e_board_snapshot": {
+    "gold": 30,
+    "home_region": "Picos do Norte",
+    "rank_e_offers_in_board": 3,
+    "eligible_rank_e_offers": 3,
+    "eligible_rank_e_gold_rewards": [
+      26,
+      35,
+      23
+    ],
+    "eligible_rank_e_chances": [
+      84,
+      68,
+      69
+    ],
+    "eligible_rank_e_durations_seconds": [
+      348,
+      470,
+      306
+    ]
+  },
+  "repeat_assumption": "Five successive Vigílias reuse the first real Rank E offer sample; each success pays only the frozen gold reward, failures pay zero, XP/material value excluded.",
+  "success_gold_median_actions_to_second_recruit": 1,
+  "success_gold_p90_actions_to_second_recruit": 2,
+  "success_gold_median_actions_to_housing_level_2": 9,
+  "success_gold_p90_actions_to_housing_level_2": 11,
+  "probability_second_recruit_gold_by_5_vigilias": 1.0,
+  "probability_housing_gold_by_5_vigilias": 0.9968,
+  "mean_gold_after_5_vigilias": 216.7,
+  "decision": "No Rank E reward change: this isolates gold only; housing also needs 40 wood, and contract office costs remain separate sinks."
+}

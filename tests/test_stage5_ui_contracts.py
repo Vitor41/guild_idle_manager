@@ -110,6 +110,13 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("{{ offline.regional_context.cycles_processed }} Vigília{% if offline.regional_context.cycles_processed != 1 %}s", template)
         self.assertIn('report["regional_context"]["cycles_processed"], 2', clock_guard_test)
 
+    def test_legacy_cpu_report_labels_unmeasured_activity_stages(self):
+        regional = self.read("app/templates/regional/index.html")
+        self.assertIn("report.has_unmeasured_cpu_activity", regional)
+        self.assertIn("Estágios de atividade deste ciclo antigo não foram registrados", regional)
+        self.assertIn("activity.planned if activity.planned is not none else 'não registrado'", regional)
+        self.assertIn("activity.resolved if activity.resolved is not none else 'não registrado'", regional)
+
     def test_group_supply_appears_in_contract_dungeon_and_portal_preparation_only(self):
         mission = self.read("app/templates/missions/index.html")
         dungeon = self.read("app/templates/dungeons/index.html")
@@ -121,6 +128,7 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('class="supply-preparation"', dungeon)
         self.assertIn('class="supply-preparation"', regional)
         self.assertIn("card.supply_quote.cost_gold", regional)
+        self.assertIn("custo em ouro confirmados ao enviar o portal", regional)
         self.assertIn('data-supply-quote-url="/dungeons/supply-quote"', dungeon)
         self.assertNotIn("dungeon.supply_quotes.items()", dungeon)
         self.assertIn('path=\'/js/regional-supply.js\'', base)
@@ -188,7 +196,7 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("controller.abort(), 750", main)
         submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
         self.assertNotIn('form.submit()', submit_catch)
-        self.assertIn("?v=20261101-1", base)
+        self.assertIn("?v=20261101-2", base)
 
     def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
         gathering = self.read("app/templates/gathering/index.html")

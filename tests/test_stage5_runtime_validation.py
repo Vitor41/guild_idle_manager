@@ -228,6 +228,7 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
         self.assertEqual(quote["base_final_chance"], no_supply_chance)
         self.assertEqual(quote["final_chance"], min(95, no_supply_chance + quote["chance_bonus_pp"]))
 
+        gold_before_supply = self.resources.gold
         run = start_dungeon(
             self.db, self.guild, str(template.id), member_ids,
             run_multiplier="2", supply_selected=True, commit=False,
@@ -237,6 +238,7 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
         self.assertEqual(snapshot["base_final_chance"], quote["base_final_chance"])
         self.assertEqual(snapshot["chance_bonus_pp"], quote["chance_bonus_pp"])
         self.assertEqual(snapshot["cost_gold"], quote["cost_gold"])
+        self.assertEqual(self.resources.gold, gold_before_supply - quote["cost_gold"])
 
         run.ends_at = self.now - timedelta(seconds=1)
         self.db.commit()

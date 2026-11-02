@@ -9,11 +9,39 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.guild import GuildResources
+from app.models.item import GuildInventoryItem, ItemTemplate
 from app.services.economy_pricing_service import market_sale_unit_value
 
 
 SUPPLY_CHANCE_BONUS_PP = 5
 SUPPLY_RANK_COST_CAP = {"E": 1, "D": 2, "C": 3, "B": 4, "A": 5, "S": 6}
+
+
+def regional_kit_quote(db: Session, guild_id: int, rank: str, base_final_chance: int) -> dict[str, object]:
+    """Quote the approved regional kit cost without consuming anything."""
+    rank = str(rank or "E").upper()
+    required = SUPPLY_RANK_COST_CAP.get(rank)
+    bonus = min(SUPPLY_CHANCE_BONUS_PP, max(0, 95 - int(base_final_chance)))
+    kit = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == "supply_kit"))
+    inventory = db.scalar(select(GuildInventoryItem).where(
+        GuildInventoryItem.guild_id == guild_id,
+        GuildInventoryItem.item_template_id == (kit.id if kit else -1),
+    ))
+    available = int(inventory.quantity) if inventory else 0
+    if required is None:
+        reason = "Rank de suprimento inválido."
+    elif bonus <= 0:
+        reason = "A chance já atingiu o teto de 95%; nenhum kit será consumido."
+    elif kit is None:
+        reason = "Oficina de Suprimentos indisponível."
+    elif available < required:
+        reason = f"Faltam kits: esta atividade exige {required}; disponíveis {available}."
+    else:
+        reason = ""
+    return {"available": not reason, "reason": reason, "rank": rank,
+            "cost_gold": 0, "cost_kits": required or 0, "available_kits": available,
+            "chance_bonus_pp": bonus, "base_final_chance": int(base_final_chance),
+            "final_chance": min(95, int(base_final_chance) + bonus)}
 
 
 def estimate_drop_sale_value(db: Session, guild_id: int, drops: list[object], multiplier: int) -> float:

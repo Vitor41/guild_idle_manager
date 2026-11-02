@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, select
 from app.database.connection import Base, SessionLocal, configure_database, get_engine
 from app.models import BuildingTemplate
 from app.seeds.massive_content import _ensure_docks_template
-from app.services.building_balance_service import BUILDING_MAX_LEVEL
+from app.services.building_balance_service import BUILDING_MAX_LEVEL, get_building_benefit, next_milestone
 from app.services.building_service import INITIAL_BUILDING_TEMPLATES, seed_initial_building_templates
 
 
@@ -20,6 +20,19 @@ class BuildingTemplateCapTests(unittest.TestCase):
 
     def tearDown(self):
         configure_database("sqlite:///:memory:")
+
+    def test_contract_office_and_scouts_show_the_next_effect_breakpoint(self):
+        office = get_building_benefit("contract_office", 0)
+        scouts = get_building_benefit("scouts", 0)
+        self.assertEqual(office["next_milestone_level"], 5)
+        self.assertTrue(any("+1%" in line for line in office["next"]))
+        self.assertEqual(scouts["next_milestone_level"], 5)
+        self.assertTrue(any("Loot de masmorra: +1 p.p." in line for line in scouts["next"]))
+        self.assertEqual(next_milestone("contract_office", 5), 10)
+        maximum = get_building_benefit("scouts", BUILDING_MAX_LEVEL)
+        self.assertTrue(maximum["is_max_level"])
+        self.assertIsNone(maximum["next_milestone_level"])
+        self.assertEqual(maximum["next"], [])
 
     def test_new_initial_templates_use_level_100(self):
         with SessionLocal() as db:

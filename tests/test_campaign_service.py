@@ -34,10 +34,12 @@ from app.models import (
     ProfessionTemplate,
     User,
 )
+from app.models.regional import RegionalCpuCyclePlan
 from app.repositories.item_repository import RESOURCE_MATERIAL_FAMILIES, add_inventory_quantity
 from app.repositories.building_repository import get_guild_building_by_effect
 from app.services.building_service import ensure_guild_buildings, upgrade_guild_building
 from app.services.campaign_service import CampaignService
+from app.services.regional_cycle_service import CYCLE_SECONDS, advance_regional_world
 from app.services.dungeon_service import claim_dungeon_loot, get_advanced_dungeon_chance, get_dungeons_page_context, start_dungeon
 from app.services.achievement_service import evaluate_achievements, get_codex_context, sync_codex
 from app.services.crafting_service import craft_recipe, get_blacksmith_context
@@ -112,6 +114,48 @@ asyncio.run(main())
                 configure_database("sqlite:///:memory:")
                 gc.collect()
 
+    def test_cpu_stage_counts_remain_unknown_when_upgrading_a_legacy_cycle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Save com plano CPU legado")
+            campaigns.activate_campaign(campaign.campaign_id)
+            active = True
+            try:
+                with SessionLocal() as db:
+                    metadata = db.get(CampaignMetadata, campaign.campaign_id)
+                    guild, _resources = get_current_guild_context(db, campaign.campaign_id)
+                    self.assertIsNotNone(metadata)
+                    self.assertIsNotNone(guild)
+                    advance_regional_world(db, metadata, guild, metadata.created_at_utc)
+                    advance_regional_world(
+                        db, metadata, guild, metadata.created_at_utc + timedelta(seconds=CYCLE_SECONDS),
+                    )
+                    plan = db.scalar(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.campaign_id == campaign.campaign_id,
+                    ).order_by(RegionalCpuCyclePlan.id))
+                    self.assertIsNotNone(plan)
+                    plan_id = plan.id
+                    legacy_actions = plan.actions
+
+                campaigns.close_active_campaign(campaign.campaign_id)
+                active = False
+                command.downgrade(campaigns._alembic_config(campaign.database_path), "c7d8e9f0a1b2")
+                campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
+
+                with closing(sqlite3.connect(campaign.database_path)) as connection:
+                    row = connection.execute(
+                        "SELECT actions, planned_actions, eligible_actions, started_actions, resolved_actions "
+                        "FROM regional_cpu_cycle_plans WHERE id = ?",
+                        (plan_id,),
+                    ).fetchone()
+                self.assertEqual(row[0], legacy_actions)
+                self.assertEqual(row[1:], (None, None, None, None))
+            finally:
+                if active:
+                    campaigns.close_active_campaign(campaign.campaign_id)
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
     def _assert_campaigns_are_isolated(self, temp_path: Path) -> None:
         campaigns = CampaignService(temp_path / "saves")
         first = campaigns.create_campaign("Campanha Norte", "Guilda Norte")
@@ -123,7 +167,7 @@ asyncio.run(main())
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
         with closing(sqlite3.connect(first.database_path)) as connection:
-            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "c7d8e9f0a1b2")
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "d9e0f1a2b3c4")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -404,7 +448,7 @@ asyncio.run(main())
                     "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
                 ).fetchone()
                 columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
-                self.assertEqual(revision, "c7d8e9f0a1b2")
+                self.assertEqual(revision, "d9e0f1a2b3c4")
                 self.assertEqual(guild, (7, "Guilda preservada", None))
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
@@ -446,7 +490,7 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(database_path, campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "b1c2d3e4f5a6")
-            self.assertEqual(migration.current_revision, "c7d8e9f0a1b2")
+            self.assertEqual(migration.current_revision, "d9e0f1a2b3c4")
             self.assertEqual((migration.previous_save_version, migration.current_save_version), (6, 7))
             with closing(sqlite3.connect(database_path)) as connection:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(guild_resources)")}
@@ -542,7 +586,7 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(database_path, campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "d7e8f9a0b1c2")
-            self.assertEqual(migration.current_revision, "c7d8e9f0a1b2")
+            self.assertEqual(migration.current_revision, "d9e0f1a2b3c4")
             backups = list((Path(temp_dir) / "backups" / campaign_id).glob(
                 "pre-migration-d7e8f9a0b1c2-*.db"
             ))
@@ -551,7 +595,7 @@ asyncio.run(main())
             expected_guild = ("Guilda preservada", 12, 345, 67)
             expected_regional_guild = ("Guilda preservada", 12, 345, 88, 67)
             expected_run = (campaign_id, "mission", 99, "C", 1, 2, 75, 120)
-            for path, expected_revision in ((database_path, "c7d8e9f0a1b2"), (backups[0], "d7e8f9a0b1c2")):
+            for path, expected_revision in ((database_path, "d9e0f1a2b3c4"), (backups[0], "d7e8f9a0b1c2")):
                 with closing(sqlite3.connect(path)) as connection:
                     self.assertEqual(
                         connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
@@ -608,13 +652,13 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "a6b7c8d9e0f1")
-            self.assertEqual(migration.current_revision, "c7d8e9f0a1b2")
+            self.assertEqual(migration.current_revision, "d9e0f1a2b3c4")
             self.assertEqual(migration.previous_save_version, 3)
             self.assertEqual(migration.current_save_version, 7)
             with closing(sqlite3.connect(campaign.database_path)) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "c7d8e9f0a1b2",
+                    "d9e0f1a2b3c4",
                 )
                 self.assertIn(
                     "capacity_paused",
@@ -625,7 +669,7 @@ asyncio.run(main())
                         "SELECT schema_version FROM campaign_metadata WHERE campaign_id = ?",
                         (campaign.campaign_id,),
                     ).fetchone()[0],
-                    6,
+                    7,
                 )
 
     def test_failed_migration_restores_original_schema_and_keeps_backup(self):

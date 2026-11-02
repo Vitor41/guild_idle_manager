@@ -10,7 +10,7 @@ class DesktopHttpSmokeTests(unittest.TestCase):
     def test_gameplay_pages_and_mutations_work_through_loopback_without_http_sessions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             script = r'''
-import gc, http.client, json, os, re, socket, sqlite3, tempfile, threading, time
+import gc, http.client, json, logging, os, re, socket, sqlite3, tempfile, threading, time
 from contextlib import closing
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -26,19 +26,27 @@ from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRun
     MissionRunMember, ProfessionTemplate, ProfessionTraining)
 from app.models.dungeon import DungeonTemplate
 from app.models.item import DungeonTemplateItemDrop
-from app.models.regional import RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState
+from app.models.regional import RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome
 from app.models.mercenary import Mercenary
 from app.models.achievement import AchievementTemplate, GuildAchievement
 from app.models.item import GuildItemInstance
 from app.models.mission import MissionTemplate
 from app.models.building import BuildingTemplate
 from app.repositories.mercenary_repository import create_mercenary
-from app.services.regional_cycle_service import REGIONS, ensure_campaign_world
+from app.services.regional_cycle_service import REGIONS, ensure_campaign_world, get_regional_board
 from app.services.regional_event_service import expire_due_events
 from sqlalchemy import select
 import uvicorn
 
 with tempfile.TemporaryDirectory() as data_dir:
+    desktop_log = Path(data_dir) / "logs" / "desktop.log"
+    desktop_log.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        handlers=[logging.FileHandler(desktop_log, encoding="utf-8")],
+        force=True,
+    )
     saves = CampaignService(Path(data_dir) / "saves")
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
@@ -198,23 +206,78 @@ with tempfile.TemporaryDirectory() as data_dir:
             to_class_id=target_class.id, gold_cost=1, started_at=now, ends_at=later))
         material = db.query(ItemTemplate).filter(ItemTemplate.item_type == "material").first()
         assert material
+        inventory_material = db.query(GuildInventoryItem).filter_by(
+            guild_id=guild.id, item_template_id=material.id,
+        ).one_or_none()
+        if inventory_material is None:
+            db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=material.id, quantity=2))
+        else:
+            inventory_material.quantity += 2
         db.add(GuildSalvageJob(guild_id=guild.id, slot_number=1, item_template_id=item_template.id,
             material_template_id=material.id, quantity=1, gold_cost=1, started_at=now, ends_at=later))
         db.commit()
+        ensure_campaign_world(db, db.get(CampaignMetadata, campaign.campaign_id), guild)
         eligible_region = db.query(RegionalRegionState).filter_by(campaign_id=campaign.campaign_id).order_by(RegionalRegionState.region_code).first()
-        if eligible_region is None:
-            ensure_campaign_world(db, db.get(CampaignMetadata, campaign.campaign_id), guild)
-            eligible_region = db.query(RegionalRegionState).filter_by(campaign_id=campaign.campaign_id).order_by(RegionalRegionState.region_code).first()
         assert eligible_region
         eligible_region.threat = 90
         eligible_region.security = 20
+        with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
+            get_regional_board(db, db.get(CampaignMetadata, campaign.campaign_id), guild)
+        outcome_state = db.query(RegionalGuildState).filter(
+            RegionalGuildState.campaign_id == campaign.campaign_id,
+            RegionalGuildState.guild_id.is_(None),
+            RegionalGuildState.active.is_(True),
+        ).order_by(RegionalGuildState.region_code, RegionalGuildState.slot).first()
+        assert outcome_state is not None, "campaign should seed an active CPU guild for regional detail"
+        outcome_offer = db.query(RegionalOffer).filter_by(
+            campaign_id=campaign.campaign_id,
+            region_code=outcome_state.region_code,
+            offer_type="contract",
+        ).order_by(RegionalOffer.cycle_number.desc(), RegionalOffer.slot).first()
+        assert outcome_offer is not None, "campaign should seed a regional contract offer for outcome detail"
+        db.add(RegionalRunOutcome(
+            campaign_id=campaign.campaign_id,
+            guild_state_id=outcome_state.id,
+            offer_id=outcome_offer.id,
+            source_type="mission",
+            source_run_id=987654321,
+            offer_cycle_number=outcome_offer.cycle_number,
+            applied_cycle_number=outcome_offer.cycle_number,
+            rank=outcome_offer.rank,
+            success=True,
+            contribution=1,
+        ))
+        regional_outcome_region_code = outcome_state.region_code
+        regional_outcome_guild_name = outcome_state.name
+        outcome_offer_type = outcome_offer.offer_type
         db.commit()
 
     try:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+            handlers=[logging.FileHandler(desktop_log, encoding="utf-8")],
+            force=True,
+        )
+        with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0), patch(
+            "app.routes.regional_routes.get_regional_board",
+            side_effect=RuntimeError("Falha de consulta da tela de atividades"),
+        ):
+            failed_status, _failed_location, failed_body = request("/regional")
+            assert failed_status == 500
+            assert "Não foi possível abrir esta tela".encode("utf-8") in failed_body
+            assert "Tentar novamente".encode("utf-8") in failed_body
+            diagnostic_match = re.search(rb"Refer\xc3\xaancia: <code>([a-f0-9]{32})</code>", failed_body)
+            assert diagnostic_match, failed_body
+            regional_diagnostic_id = diagnostic_match.group(1).decode("ascii")
+        desktop_trace = desktop_log.read_text(encoding="utf-8")
+        assert f"Unhandled desktop request method=GET route=/regional ref={regional_diagnostic_id}" in desktop_trace, desktop_trace
+        assert "RuntimeError: Falha de consulta da tela de atividades" in desktop_trace
         rendered_pages = {}
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/dungeons", "/regional", f"/regional/regions/{REGIONS[0][0]}", "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/tutorial")
+        regional_outcome_path = f"/regional/regions/{regional_outcome_region_code}"
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", regional_outcome_path, "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
         for path in page_paths:
-            if path == "/dashboard":
+            if path in {"/dashboard", "/regional"}:
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
                     status, _location, body = request(path)
             else:
@@ -222,7 +285,16 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
-        assert "Navegar entre regiões".encode("utf-8") in rendered_pages[f"/regional/regions/{REGIONS[0][0]}"]
+        assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
+        outcome_row = next((row for row in re.findall(rb"<tr[^>]*>.*?</tr>", rendered_pages[regional_outcome_path], re.S)
+                            if regional_outcome_guild_name.encode("utf-8") in row), None)
+        assert outcome_row, regional_outcome_guild_name
+        outcome_cells = re.findall(rb"<td[^>]*>(.*?)</td>", outcome_row, re.S)
+        result_column = {"contract": 3, "dungeon": 4, "boss": 5}[outcome_offer_type]
+        assert outcome_cells[result_column] == b"1", outcome_cells
+        assert outcome_cells[6] == b"1 " + bytes([194, 183]) + b" 0", outcome_cells
+        assert b"data-market-fill-max" in rendered_pages["/market"]
+        assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
 
         with SessionLocal() as db:
             db.query(GuildBuilding).filter_by(guild_id=guild_id).delete(synchronize_session=False)
@@ -232,6 +304,15 @@ with tempfile.TemporaryDirectory() as data_dir:
             resources = db.query(GuildResources).filter_by(guild_id=guild_id).one()
             assert active_cycle is not None
             resources.gold = 1000
+            supply_kit = db.query(ItemTemplate).filter_by(slug="supply_kit").one()
+            inventory_kit = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit.id,
+            ).one_or_none()
+            if inventory_kit is None:
+                db.add(GuildInventoryItem(guild_id=guild_id, item_template_id=supply_kit.id, quantity=1))
+            else:
+                inventory_kit.quantity = 1
+            supply_kit_id = supply_kit.id
             home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
             no_supply_offer = RegionalOffer(
                 campaign_id=campaign.campaign_id, cycle_id=active_cycle.id,
@@ -367,10 +448,10 @@ with tempfile.TemporaryDirectory() as data_dir:
         )
         supply_quote = json.loads(quote_body)
         assert quote_status == 200 and supply_quote["available"] is True, (quote_status, supply_quote)
-        assert supply_quote["chance_bonus_pp"] == 5 and supply_quote["cost_gold"] > 0, supply_quote
+        assert supply_quote["chance_bonus_pp"] == 5 and supply_quote["cost_kits"] == 1, supply_quote
         assert supply_quote["base_final_chance"] >= 86, supply_quote
         assert supply_quote["final_chance"] == min(95, supply_quote["base_final_chance"] + 5), supply_quote
-        assert supply_quote["cost_gold"] == 1, supply_quote
+        assert supply_quote["cost_gold"] == 0, supply_quote
         prepare_status, prepare_location, prepare_body = request(
             f"/regional/offers/{prepared_offer_id}/prepare", method="POST",
             body=f"mercenary_ids={regional_supply_worker_id}&supply=1",
@@ -382,13 +463,17 @@ with tempfile.TemporaryDirectory() as data_dir:
         with SessionLocal() as db:
             prepared_offer = db.get(RegionalOffer, prepared_offer_id)
             resources_after_prepare = db.query(GuildResources).filter_by(guild_id=guild_id).one().gold
+            kits_after_prepare = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one().quantity
             preparation = json.loads(prepared_offer.supply_preparation_snapshot_json)
             assert prepared_offer.status == "supply_preparing"
             assert preparation["prepared_for_offer_id"] == prepared_offer_id
             assert preparation["mercenary_ids"] == [str(regional_supply_worker_id)]
             assert preparation["chance_bonus_pp"] == 5
-            assert preparation["cost_gold"] == supply_quote["cost_gold"]
-            assert resources_after_prepare == 1000 - supply_quote["cost_gold"]
+            assert preparation["cost_kits"] == supply_quote["cost_kits"]
+            assert kits_after_prepare == 0
+            assert resources_after_prepare == 1000
 
         preparation_deadline = time.monotonic() + 4
         while time.monotonic() < preparation_deadline:
@@ -965,6 +1050,10 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert str(backup_files[0]).encode("utf-8") not in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in migration_body
         assert b"offline-dialog" not in dashboard_body
+        status, _location, migrated_regional_body = request("/regional")
+        assert status == 200, ("/regional after migration", status, migrated_regional_body[:400])
+        assert b"Internal Server Error" not in migrated_regional_body
+        assert b'id="evolution-title"' in migrated_regional_body
         status, _location, next_dashboard_body = request("/dashboard")
         assert status == 200
         assert b"save-migration-notice" not in next_dashboard_body
@@ -999,6 +1088,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         sock.close()
         configure_database("sqlite:///:memory:")
         gc.collect()
+        logging.shutdown()
 '''
             environment = os.environ.copy()
             environment["APP_MODE"] = "desktop"

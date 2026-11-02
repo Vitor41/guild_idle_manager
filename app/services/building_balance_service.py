@@ -116,7 +116,12 @@ def required_guild_level_for_upgrade(next_level: int, base_required_level: int =
 
 
 def next_milestone(effect_type: str, level: int) -> int | None:
-    milestones = HOUSING_MILESTONES if effect_type == "housing" else STANDARD_MILESTONES
+    # Contract Office and Scouts change effects at five-level breakpoints.
+    milestones = HOUSING_MILESTONES if effect_type == "housing" else (
+        tuple(range(5, BUILDING_MAX_LEVEL + 1, 5))
+        if effect_type in {"contract_office", "scouts"}
+        else STANDARD_MILESTONES
+    )
     return next((milestone for milestone in milestones if milestone > clamp_level(level)), None)
 
 

@@ -210,13 +210,18 @@ def _dungeon_balance(dungeon: DungeonTemplate, index: int) -> None:
 
 
 def _rebalance_items_and_drops(db: Session) -> dict[str, int]:
+    from app.services.economy_pricing_service import equipment_base_sell_value
     items = list(db.scalars(select(ItemTemplate).where(ItemTemplate.content_pack == PACK_KEY).order_by(ItemTemplate.id)))
     items_by_band_family: dict[tuple[str, str], list[ItemTemplate]] = {}
     equipment_by_band: dict[str, list[ItemTemplate]] = {}
     for index, item in enumerate(items):
         tier = max(1, item.tier)
         item.rarity = _rarity_for(tier, index)
-        item.base_sell_value = max(2, int((item.item_level + 4) * tier * (1.8 if item.item_type == "equipment" else 0.45)))
+        item.base_sell_value = (
+            equipment_base_sell_value(item.equipment_slot, item.rarity)
+            if item.item_type == "equipment"
+            else max(2, int((item.item_level + 4) * tier * 0.45))
+        )
         if item.item_type == "equipment":
             equipment_by_band.setdefault(item.level_band, []).append(item)
             item.rng_bonus_min = max(1, tier)
