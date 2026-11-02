@@ -10,6 +10,13 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - 12 correções implementadas no ramo `fix/ml-bugs-followup`; validação automatizada aprovada nos testes direcionados e simulação descritos abaixo.
 - Build, instalação e revisão visual do aplicativo instalado não foram realizados nesta rodada.
 
+## Incremento solicitado antes da publicação DEV 0.5.0
+
+- **Critérios:** toda oferta especial da Taverna gera mercenário no nível 1, preservando raridade, classe, atributos, nome, preço e janela existentes; o badge da oferta usa a classe/cor da raridade do mercenário (por exemplo, Raro azul também no tema desktop).
+- **Implementação/evidência:** `app/services/tavern_service.py` fixa o nível da oferta gerada em 1; `app/static/css/desktop-theme.css` mantém o fundo escuro sem substituir cor e borda definidas por tier em `main.css`. A tela da Taverna renderiza `rarity-badge rarity-rare` para uma oferta rara.
+- **Regressões:** `tests.test_tavern_special_offers` verifica geração nível 1 e preservação de raridade, classe, atributos, custo e prazo; `tests.test_desktop_art` protege a classe e a cor do badge; `tests.test_desktop_http_smoke` verifica o badge na página real.
+- **Status:** implementação e testes direcionados aprovados; aguardando revisão CR. É incremento da release DEV 0.5.0, sem alteração de versão/tag ou schema, sem migração.
+
 ## Melhorias
 
 ### ML-001 — Aumentar a atividade das guildas CPU

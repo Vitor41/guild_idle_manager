@@ -32,6 +32,7 @@ from app.models.achievement import AchievementTemplate, GuildAchievement
 from app.models.item import GuildItemInstance
 from app.models.mission import MissionTemplate
 from app.models.building import BuildingTemplate
+from app.models.tavern import TavernSpecialOffer
 from app.repositories.mercenary_repository import create_mercenary
 from app.services.regional_cycle_service import REGIONS, ensure_campaign_world, get_regional_board
 from app.services.regional_event_service import expire_due_events
@@ -192,6 +193,22 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="blacksmith").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="tavern").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="docks").one().id, level=1))
+        db.add(TavernSpecialOffer(
+            guild_id=guild.id,
+            name="Oferta Rara de teste",
+            class_id=mercenary_class.id,
+            rarity="rare",
+            level=1,
+            power=31,
+            vitality=19,
+            agility=17,
+            intelligence=13,
+            luck=11,
+            gold_cost=4321,
+            available_from=now,
+            available_until=later,
+            status="active",
+        ))
         mission_run = MissionRun(guild_id=guild.id, mission_template_id=mission_template.id, started_at=now, ends_at=later)
         dungeon_run = DungeonRun(guild_id=guild.id, dungeon_template_id=dungeon_template.id, started_at=now, ends_at=later)
         db.add_all([mission_run, dungeon_run])
@@ -286,6 +303,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
         assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
+        assert b'class="rarity-badge rarity-rare">Raro</span>' in rendered_pages["/tavern"]
         outcome_row = next((row for row in re.findall(rb"<tr[^>]*>.*?</tr>", rendered_pages[regional_outcome_path], re.S)
                             if regional_outcome_guild_name.encode("utf-8") in row), None)
         assert outcome_row, regional_outcome_guild_name

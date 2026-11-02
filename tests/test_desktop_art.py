@@ -62,6 +62,27 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn("desktop-operations-intro", missions)
         self.assertIn("desktop-operations-intro", dungeons)
 
+    def test_tavern_special_offer_badge_keeps_mercenary_rarity_color_in_desktop_theme(self):
+        template = (ROOT / "app" / "templates" / "tavern" / "index.html").read_text(encoding="utf-8")
+        main_css = (STATIC / "css" / "main.css").read_text(encoding="utf-8")
+        desktop_theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+
+        self.assertIn(
+            '<span class="rarity-badge rarity-{{ active_offer.rarity }}">{{ active_offer.rarity_label }}</span>',
+            template,
+        )
+        self.assertIn(
+            ".rarity-rare { --rarity-color: #5d9ed6; border-color: var(--rarity-color); color: #b9ddff; }",
+            main_css,
+        )
+        desktop_badge = re.search(
+            r'body\[data-app-mode="desktop"\]\s+\.rarity-badge\s*\{([^}]*)\}', desktop_theme,
+        )
+        self.assertIsNotNone(desktop_badge)
+        self.assertIn("background: #1d3034", desktop_badge.group(1))
+        self.assertNotIn("border-color:", desktop_badge.group(1))
+        self.assertNotIn("color:", desktop_badge.group(1))
+
     def test_gathering_screen_uses_local_evolution_art_and_navigation(self):
         script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
         template = (ROOT / "app" / "templates" / "gathering" / "index.html").read_text(encoding="utf-8")
