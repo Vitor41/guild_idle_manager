@@ -2,28 +2,6 @@
   const body = document.body;
   if (body.dataset.appMode !== "desktop") return;
 
-  const navigationArt = new Map([
-    ["/dashboard", "guild-sigil"],
-    ["/tavern", "building-tavern"],
-    ["/mercenaries", "class-warrior"],
-    ["/professions", "building-training_ground"],
-    ["/missions", "expedition-map"],
-    ["/gathering", "material-wood"],
-    ["/dungeons", "dungeon-gate"],
-    ["/inventory", "item-chest"],
-    ["/blacksmith", "building-blacksmith"],
-    ["/market", "building-market"],
-    ["/docks", "building-docks"],
-    ["/buildings", "building-warehouse"],
-    ["/class-change", "class-apprentice"],
-    ["/guild/progress", "resource-xp"],
-    ["/classes", "class-warrior"],
-    ["/tiers", "status-ready"],
-    ["/codex", "item-book"],
-    ["/guide", "item-quest-scroll"],
-    ["/admin", "status-warning"],
-  ]);
-
   const routeArt = [
     { path: "/desktop/campaigns", sprite: "guild-sigil", illustration: "guild_hall" },
     { path: "/dashboard", sprite: "guild-sigil", illustration: "guild_hall" },
@@ -91,9 +69,10 @@
   }
 
   async function applyDesktopArt() {
+    body.dataset.desktopArtStatus = "loading";
     try {
       const response = await fetch("/static/assets/desktop/manifest.json", { cache: "no-store" });
-      if (!response.ok) return;
+      if (!response.ok) throw new Error(`Desktop art manifest returned ${response.status}`);
       const manifest = await response.json();
       const base = new URL(manifest.base, window.location.origin);
       const spriteUrl = (key) => {
@@ -106,6 +85,8 @@
         return path ? new URL(path, base).href : null;
       };
       const iconMaps = manifest.icon_maps || {};
+      const navigationArt = manifest.navigation || {};
+      let navigationErrors = 0;
 
       for (const element of document.querySelectorAll("[data-desktop-class]")) {
         const code = normalizeKey(element.dataset.desktopClass);
@@ -154,14 +135,35 @@
       }
 
       const route = body.dataset.route || window.location.pathname;
-      for (const [href, key] of navigationArt) {
-        const link = [...document.querySelectorAll(".sidebar-nav a")].find((anchor) => anchor.getAttribute("href") === href);
-        if (!link) continue;
-        if (routeMatches(href, route)) link.setAttribute("aria-current", "page");
+      for (const link of document.querySelectorAll(".sidebar-nav a")) {
+        const href = link.getAttribute("href");
+        const key = navigationArt[href];
+        link.removeAttribute("aria-current");
+        if (href && routeMatches(href, route)) link.setAttribute("aria-current", "page");
         const icon = link.querySelector(".nav-icon");
-        const url = spriteUrl(key);
-        if (icon && url) icon.replaceChildren(makeImage(url, "desktop-nav-art"));
+        if (!icon) {
+          navigationErrors += 1;
+          continue;
+        }
+        icon.setAttribute("aria-hidden", "true");
+        icon.classList.add("desktop-nav-icon");
+        const url = key && manifest.sprites?.[key] && spriteUrl(key);
+        if (!url) {
+          icon.replaceChildren();
+          icon.classList.add("desktop-nav-icon--fallback");
+          navigationErrors += 1;
+          continue;
+        }
+        const image = makeImage(url, "desktop-nav-art");
+        image.addEventListener("error", () => {
+          icon.replaceChildren();
+          icon.classList.add("desktop-nav-icon--fallback");
+          body.dataset.desktopArtStatus = "error";
+        }, { once: true });
+        icon.classList.remove("desktop-nav-icon--fallback");
+        icon.replaceChildren(image);
       }
+      body.dataset.desktopArtStatus = navigationErrors === 0 ? "ready" : "error";
 
       const currentArt = routeArt.find((entry) => routeMatches(entry.path, route));
       if (!currentArt) return;
@@ -198,7 +200,12 @@
         header.append(makeImage(illustration, "desktop-page-illustration"));
       }
     } catch (_error) {
-      // Art is decorative; a missing manifest must leave all existing navigation usable.
+      body.dataset.desktopArtStatus = "error";
+      for (const icon of document.querySelectorAll(".sidebar-nav .nav-icon")) {
+        icon.replaceChildren();
+        icon.setAttribute("aria-hidden", "true");
+        icon.classList.add("desktop-nav-icon", "desktop-nav-icon--fallback");
+      }
     }
   }
 

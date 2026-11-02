@@ -16,11 +16,13 @@ ART_ROOT = STATIC / "assets" / "desktop"
 class DesktopArtIntegrationTests(unittest.TestCase):
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
-        script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
-        navigation_routes = re.findall(r'\["(/[^"\n]+)",\s*"([a-z0-9_-]+)"\]', script)
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        navigation_routes = re.findall(r'<a href="(/[^"#]+)"[^>]*>.*?<span class="nav-icon">', base)
 
-        self.assertGreaterEqual(len(navigation_routes), 15)
-        for route, sprite_key in navigation_routes:
+        self.assertEqual(len(navigation_routes), 22)
+        self.assertEqual(set(navigation_routes), set(manifest["navigation"]))
+        for route in navigation_routes:
+            sprite_key = manifest["navigation"][route]
             with self.subTest(route=route, sprite=sprite_key):
                 self.assertIn(sprite_key, manifest["sprites"])
                 paths = manifest["sprites"][sprite_key]["paths"]
@@ -85,8 +87,11 @@ class DesktopArtIntegrationTests(unittest.TestCase):
 
     def test_gathering_screen_uses_local_evolution_art_and_navigation(self):
         script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
+        manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         template = (ROOT / "app" / "templates" / "gathering" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('["/gathering", "material-wood"]', script)
+        self.assertIn('const navigationArt = manifest.navigation || {}', script)
+        self.assertEqual(manifest["navigation"]["/gathering"], "nav-gathering")
+        self.assertEqual(manifest["navigation"]["/regional"], "nav-regional")
         self.assertIn("evolution/illustrations/gathering-worksite.webp", template)
         self.assertIn("evolution/sprites/ui_64/gathering-kit.png", template)
         self.assertTrue((ART_ROOT / "evolution" / "illustrations" / "gathering-worksite.webp").is_file())
@@ -105,6 +110,66 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn('.compact-navigation .sidebar-nav {', theme)
         self.assertIn('.compact-navigation[open] .sidebar-nav { display: grid; }', theme)
         self.assertIn('body[data-app-mode="desktop"] :focus-visible', theme)
+
+    def test_desktop_sidebar_fills_available_height_and_keeps_long_navigation_scrollable(self):
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        layout = (STATIC / "css" / "desktop-sidebar-layout.css").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        art = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
+        art_css = (STATIC / "css" / "desktop-art.css").read_text(encoding="utf-8")
+
+        self.assertIn("/css/desktop-sidebar-layout.css", base)
+        self.assertIn("height: 100dvh", layout)
+        self.assertIn("min-height: 0", layout)
+        self.assertIn("overflow-y: auto", layout)
+        self.assertIn("overscroll-behavior: contain", layout)
+        self.assertIn("@media (max-width: 980px)", layout)
+        self.assertIn("max-height: min(68vh, 440px)", theme)
+        self.assertIn("overflow-y: auto", theme)
+        self.assertIn("flex: 0 0 28px", art_css)
+        self.assertIn("color: transparent", art_css)
+        self.assertIn("body[data-app-mode=\"desktop\"] :focus-visible", theme)
+        self.assertIn('body.dataset.desktopArtStatus = "error"', art)
+        self.assertIn("desktop-nav-icon--fallback", art_css)
+        self.assertNotIn("navigationArt = new Map", art)
+        self.assertIn("manifest.navigation", art)
+
+    def test_desktop_navigation_color_contrast_and_keyboard_focus(self):
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        self.assertIn("color: #c2cfcd", theme)
+        self.assertIn("background: #17272b", theme)
+        self.assertIn("outline: 3px solid var(--gold-2)", theme)
+        self.assertIn("<nav class=\"sidebar-nav\"", base)
+        self.assertIn('aria-label="Navegação principal"', base)
+
+        def luminance(color):
+            channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+            linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+                      for channel in channels]
+            return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear))
+
+        def contrast(foreground, background):
+            high, low = sorted((luminance(foreground), luminance(background)), reverse=True)
+            return (high + 0.05) / (low + 0.05)
+
+        self.assertGreaterEqual(contrast("#c2cfcd", "#17272b"), 4.5)
+        self.assertGreaterEqual(contrast("#f5d798", "#1d3538"), 4.5)
+        self.assertGreaterEqual(contrast("#f5d798", "#101a1d"), 4.5)
+
+    def test_short_height_and_200_percent_zoom_leave_a_scroll_window(self):
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        layout = (STATIC / "css" / "desktop-sidebar-layout.css").read_text(encoding="utf-8")
+        self.assertIn("height: 100dvh", layout)
+        self.assertIn("max-height: min(68vh, 440px)", theme)
+        self.assertIn("overflow-y: auto", theme)
+
+        # At 200% browser zoom, a 420 physical-pixel window has about 210 CSS px.
+        for css_viewport_height in (420, 210):
+            with self.subTest(css_viewport_height=css_viewport_height):
+                menu_height = min(css_viewport_height * 0.68, 440)
+                self.assertGreater(menu_height, 0)
+                self.assertLess(menu_height, css_viewport_height)
 
     def test_regional_menu_navigation_resets_scroll_after_swap_and_page_restore(self):
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")

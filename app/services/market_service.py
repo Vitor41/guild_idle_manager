@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.models.guild import Guild, GuildResources
 from app.models.market import MarketSale
-from app.models.item import ItemTemplate
 from app.repositories.item_repository import (
     delete_item_instance,
     get_inventory_item,
@@ -31,8 +30,6 @@ from app.services.achievement_service import record_guild_stat
 
 
 RARITY_SECONDS = MARKET_RARITY_SECONDS
-MATERIAL_BASE_UNITS_PER_24H: int | None = 25
-MATERIAL_SALE_WINDOW = timedelta(hours=24)
 _MATERIAL_SALE_LOCKS: dict[int, Lock] = {}
 _MATERIAL_SALE_LOCKS_GUARD = Lock()
 
@@ -55,55 +52,6 @@ def get_market_bonuses(db: Session, guild_id: int) -> dict[str, int]:
     return {"level": level, **market_values(level)}
 
 
-def get_material_sale_quota(
-    db: Session,
-    guild_id: int,
-    *,
-    now: datetime | None = None,
-) -> dict[str, int | None]:
-    """Return material throughput in the rolling 24h window, including active listings."""
-    timestamp = now or utc_now()
-    if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
-    cutoff = timestamp - MATERIAL_SALE_WINDOW
-    market = get_market_bonuses(db, guild_id)
-    market_level = int(market["level"])
-    limit = (
-        None if MATERIAL_BASE_UNITS_PER_24H is None else
-        0 if market_level < 1 else
-        MATERIAL_BASE_UNITS_PER_24H + 5 * (market_level // 5)
-    )
-    recent_sales = list(db.execute(
-        select(MarketSale.started_at, MarketSale.quantity)
-        .join(ItemTemplate, ItemTemplate.id == MarketSale.item_template_id)
-        .where(
-            MarketSale.guild_id == guild_id,
-            ItemTemplate.item_type == "material",
-            MarketSale.started_at > cutoff,
-            MarketSale.started_at <= timestamp,
-        )
-        .order_by(MarketSale.started_at, MarketSale.id)
-    ))
-    used = sum(int(row.quantity) for row in recent_sales)
-    # Report the first expiry that frees at least one unit of the active quota,
-    # rather than implying that the entire daily allowance returns at once.
-    next_release_at = None
-    if recent_sales and limit is not None and used > 0:
-        units_to_release = max(1, used - limit + 1)
-        released = 0
-        for row in recent_sales:
-            released += int(row.quantity)
-            if released >= units_to_release:
-                started_at = row.started_at
-                if started_at.tzinfo is None:
-                    started_at = started_at.replace(tzinfo=timezone.utc)
-                next_release_at = started_at + MATERIAL_SALE_WINDOW
-                break
-    remaining = 2_147_483_647 if limit is None else max(0, limit - used)
-    return {"limit": limit, "used": used, "remaining": remaining,
-            "next_release_at": next_release_at}
-
-
 def _sale_duration_seconds(rarity: str, tier: int, quantity: int, reduction: int) -> int:
     base = RARITY_SECONDS.get(rarity, 30) * max(1, tier) * max(1, quantity)
     return max(5, floor(base * (100 - reduction) / 100))
@@ -120,7 +68,6 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
     if market["level"] < 1:
         return {
             "market": market,
-            "material_sale_quota": get_material_sale_quota(db, guild.id),
             "inventory_items": [],
             "equipment_items": [],
             "active_sales": [],
@@ -132,15 +79,13 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
     active_sales = [sale for sale in sales if sale.status == "in_progress"]
     inventory_items = get_inventory_for_guild(db, guild.id)
     slots_available = len(active_sales) < int(market["slots"])
-    max_quantity_by_quota = int(get_material_sale_quota(db, guild.id, now=now)["remaining"])
     for item in inventory_items:
-        item.market_max_quantity = min(int(item.quantity), max_quantity_by_quota) if slots_available else 0
+        item.market_max_quantity = int(item.quantity) if slots_available else 0
     for sale in active_sales:
         prepare_timer_context(sale, now)
     completed_sales = [sale for sale in sales if sale.status == "completed"][:10]
     return {
         "market": market,
-        "material_sale_quota": get_material_sale_quota(db, guild.id, now=now),
         "inventory_items": inventory_items,
         "equipment_items": [
             item for item in get_equipment_for_guild(db, guild.id)
@@ -205,13 +150,6 @@ def _start_sale(db, guild, item_template, quantity, inventory_item=None, item_in
         raise MarketError("Todos os espacos de venda estao ocupados.")
 
     started_at = utc_now()
-    if inventory_item is not None and item_template.item_type == "material":
-        quota = get_material_sale_quota(db, guild.id, now=started_at)
-        if quota["limit"] is not None and int(quantity) > quota["remaining"]:
-            raise MarketError(
-                f"Limite de materiais nas últimas 24h: restam {quota['remaining']} de {quota['limit']} unidades."
-            )
-
     unit_value = _sale_unit_value(item_template.base_sell_value, bonuses["value_bonus_percent"])
     ends_at = started_at + timedelta(seconds=_sale_duration_seconds(
         item_template.rarity, item_template.tier, quantity, bonuses["time_reduction_percent"]

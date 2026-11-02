@@ -1935,8 +1935,6 @@ textarea {
 .market-item-row small { display: block; margin-top: 3px; color: var(--muted); }
 .market-item-row .inline-form { grid-template-columns: minmax(64px, 76px) 48px auto; }
 .market-max-button { min-width: 40px; min-height: 40px; padding: 6px; }
-.market-quota-primary { margin: 12px 0 3px; color: var(--parchment); }
-.market-quota-detail { margin-top: 0; overflow-wrap: anywhere; }
 .market-item-action { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .market-item-action .inline-form { max-width: 100%; }
 .market-item-action small { max-width: 32ch; }

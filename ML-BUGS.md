@@ -154,6 +154,23 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Pedido:** disponibilizar um botão `MAX` para preencher a maior quantidade que o jogador pode anunciar para venda.
 - **Critério para investigação:** calcular o máximo respeitando estoque próprio, limite de quantidade por anúncio e espaços disponíveis no Mercado; não oferecer quantidade acima do permitido. Equipamentos únicos devem continuar limitados à unidade disponível por instância.
 
+### ML-019 — Remover temporariamente a cota de venda de materiais
+
+- **Origem:** anotação do usuário após esclarecer o funcionamento do MAX no Mercado.
+- **Status:** Validada; a cota móvel foi removida da regra de venda, da tela do Mercado e do guia.
+- **Regra solicitada:** não limitar a quantidade de materiais vendida por janela móvel de 24 horas. A venda continua limitada pelo estoque disponível e pelas regras normais do Mercado, como espaços de anúncio; o botão MAX deve refletir esses limites, sem aplicar cota diária.
+- **Contexto:** a cota atual começa em 25 unidades por 24 horas no Mercado nível 1 e cresce com o nível da construção. Não foi identificada evidência de teste de exploit que justificasse essa restrição; não tratar o valor atual como balanceamento validado.
+- **Critério de conclusão:** remover a cota do cálculo de quantidade máxima e da validação do servidor, mantendo a validação de estoque, a remoção correta das unidades anunciadas e os limites de espaços do Mercado. Confirmar que materiais de tipos diferentes podem ser vendidos sem cota compartilhada e que o MAX seleciona todo o estoque vendável permitido.
+- **Implementação/evidência:** `app/services/market_service.py` calcula MAX pelo estoque e pelos espaços, e não valida cota; mantém checagem e débito de estoque sob lock. Testes separados em `tests.test_market_max_quantity` cobrem MAX 80, venda de 60, venda de 70 unidades em dois materiais, estoque insuficiente e equipamento único. `tests.test_stage5_runtime_validation` confirma que vendas concorrentes não podem exceder o estoque restante. Interface e guia cobertos por `tests.test_stage5_ui_contracts`.
+
+### ML-020 — Completar os ícones do menu e tornar a sidebar elástica
+
+- **Origem:** captura e solicitação do usuário em 2026-11-02.
+- **Status:** Implementada e validada estruturalmente; cobertura visual integrada para todos os 22 links via mapa canônico do manifesto.
+- **Pedido:** a DA deve criar/entregar sprites para todos os itens de navegação que ainda não possuem ícone, seguindo a identidade visual desktop já aprovada. Nenhum menu deve aparecer sem ícone. A sidebar deve preencher dinamicamente a altura disponível e manter o fundo contínuo até a base, independentemente da quantidade de menus ou seções adicionadas.
+- **Critérios de conclusão:** inventariar todos os links e cabeçalhos da navegação e comprovar cobertura por sprite; integrar os novos assets no manifesto/mapeamento existente sem fallback genérico para entradas sem arte; ajustar o layout para crescer com a altura da janela e com o conteúdo, sem área de fundo interrompida, sobreposição ou perda de rolagem; documentar caminhos dos assets e apresentar evidência de teste responsivo/estrutural. Sem mudança de regras de jogo ou banco de dados.
+- **Implementação/evidência:** a DA entregou `docs/art_direction/ML020_DESKTOP_NAV_SPRITES.md`, três famílias de sprites e as 22 entradas `manifest.navigation`; `app/static/js/desktop-art.js` consome esse mapa e marca falha com superfície neutra, sem glyph de fallback. `app/static/css/desktop-sidebar-layout.css` mantém a sidebar na altura da janela, rolagem do conteúdo, menus responsivos e ícones com largura fixa. `tests.test_desktop_art` compara as 22 rotas e sprites locais, verifica altura/rolagem para janela curta e zoom, foco de teclado, ausência de glyph e contraste WCAG AA dos estados de texto/foco. Os dois rótulos de seção são texto, não links, conforme o inventário da DA.
+
 ## Bugs / Inconsistências
 
 ### BUG-001 — Requisitos da oferta regional não são aplicados a partir do snapshot
