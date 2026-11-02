@@ -26,14 +26,14 @@ from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRun
     MissionRunMember, ProfessionTemplate, ProfessionTraining)
 from app.models.dungeon import DungeonTemplate
 from app.models.item import DungeonTemplateItemDrop
-from app.models.regional import RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState
+from app.models.regional import RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome
 from app.models.mercenary import Mercenary
 from app.models.achievement import AchievementTemplate, GuildAchievement
 from app.models.item import GuildItemInstance
 from app.models.mission import MissionTemplate
 from app.models.building import BuildingTemplate
 from app.repositories.mercenary_repository import create_mercenary
-from app.services.regional_cycle_service import REGIONS, ensure_campaign_world
+from app.services.regional_cycle_service import REGIONS, ensure_campaign_world, get_regional_board
 from app.services.regional_event_service import expire_due_events
 from sqlalchemy import select
 import uvicorn
@@ -216,13 +216,40 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.add(GuildSalvageJob(guild_id=guild.id, slot_number=1, item_template_id=item_template.id,
             material_template_id=material.id, quantity=1, gold_cost=1, started_at=now, ends_at=later))
         db.commit()
+        ensure_campaign_world(db, db.get(CampaignMetadata, campaign.campaign_id), guild)
         eligible_region = db.query(RegionalRegionState).filter_by(campaign_id=campaign.campaign_id).order_by(RegionalRegionState.region_code).first()
-        if eligible_region is None:
-            ensure_campaign_world(db, db.get(CampaignMetadata, campaign.campaign_id), guild)
-            eligible_region = db.query(RegionalRegionState).filter_by(campaign_id=campaign.campaign_id).order_by(RegionalRegionState.region_code).first()
         assert eligible_region
         eligible_region.threat = 90
         eligible_region.security = 20
+        with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
+            get_regional_board(db, db.get(CampaignMetadata, campaign.campaign_id), guild)
+        outcome_state = db.query(RegionalGuildState).filter(
+            RegionalGuildState.campaign_id == campaign.campaign_id,
+            RegionalGuildState.guild_id.is_(None),
+            RegionalGuildState.active.is_(True),
+        ).order_by(RegionalGuildState.region_code, RegionalGuildState.slot).first()
+        assert outcome_state is not None, "campaign should seed an active CPU guild for regional detail"
+        outcome_offer = db.query(RegionalOffer).filter_by(
+            campaign_id=campaign.campaign_id,
+            region_code=outcome_state.region_code,
+            offer_type="contract",
+        ).order_by(RegionalOffer.cycle_number.desc(), RegionalOffer.slot).first()
+        assert outcome_offer is not None, "campaign should seed a regional contract offer for outcome detail"
+        db.add(RegionalRunOutcome(
+            campaign_id=campaign.campaign_id,
+            guild_state_id=outcome_state.id,
+            offer_id=outcome_offer.id,
+            source_type="mission",
+            source_run_id=987654321,
+            offer_cycle_number=outcome_offer.cycle_number,
+            applied_cycle_number=outcome_offer.cycle_number,
+            rank=outcome_offer.rank,
+            success=True,
+            contribution=1,
+        ))
+        regional_outcome_region_code = outcome_state.region_code
+        regional_outcome_guild_name = outcome_state.name
+        outcome_offer_type = outcome_offer.offer_type
         db.commit()
 
     try:
@@ -247,7 +274,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert f"Unhandled desktop request method=GET route=/regional ref={regional_diagnostic_id}" in desktop_trace, desktop_trace
         assert "RuntimeError: Falha de consulta da tela de atividades" in desktop_trace
         rendered_pages = {}
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", f"/regional/regions/{REGIONS[0][0]}", "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
+        regional_outcome_path = f"/regional/regions/{regional_outcome_region_code}"
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", regional_outcome_path, "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
         for path in page_paths:
             if path in {"/dashboard", "/regional"}:
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
@@ -257,7 +285,14 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
-        assert "Navegar entre regiões".encode("utf-8") in rendered_pages[f"/regional/regions/{REGIONS[0][0]}"]
+        assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
+        outcome_row = next((row for row in re.findall(rb"<tr[^>]*>.*?</tr>", rendered_pages[regional_outcome_path], re.S)
+                            if regional_outcome_guild_name.encode("utf-8") in row), None)
+        assert outcome_row, regional_outcome_guild_name
+        outcome_cells = re.findall(rb"<td[^>]*>(.*?)</td>", outcome_row, re.S)
+        result_column = {"contract": 3, "dungeon": 4, "boss": 5}[outcome_offer_type]
+        assert outcome_cells[result_column] == b"1", outcome_cells
+        assert outcome_cells[6] == b"1 " + bytes([194, 183]) + b" 0", outcome_cells
         assert b"data-market-fill-max" in rendered_pages["/market"]
         assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
 

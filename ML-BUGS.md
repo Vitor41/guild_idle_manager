@@ -161,14 +161,15 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 ### BUG-002 — Atividades da guilda retornam erro interno sem registro útil no log
 
 - **Origem:** relato do usuário e captura de tela enviados em 2026-11-02.
-- **Status:** Parcialmente corrigida; causa original pendente. A instrumentação de GET desktop e o fallback recuperável estão verificados na rota real `/regional`, mas a exceção reportada pelo usuário ainda não foi reproduzida nem isolada.
+- **Status:** Corrigida e validada. A exceção reportada foi identificada nos logs e reproduzida com dados de resultado em campanha descartável; a rota renderiza os resultados após a correção.
 - **Problema observado:** ao abrir as atividades da guilda, a janela do jogo exibe apenas `Internal Server Error` em uma página em branco.
 - **Problema de diagnóstico:** o arquivo `%LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log` não registrava a falha correspondente, impedindo identificar a rota, ação e exceção que causaram o erro.
-- **Evidência original:** captura `codex-clipboard-fe81c85d-1fe1-4c69-a0d7-fe9acfd0411f.png`; rota e detalhes da exceção do perfil afetado ainda não foram coletados.
-- **Investigação desta rodada:** `/regional` retornou 200 em campanha descartável nova e após migrar uma campanha descartável de schema 1 para 7. Uma exceção controlada injetada na função de consulta da própria rota `/regional` confirmou o fallback 500 recuperável e registrou em `desktop.log` método GET, rota, referência de diagnóstico e stack trace correlacionados. Esta sonda verifica a instrumentação, não reproduz a causa observada na captura.
-- **Limitação:** sem o estado de campanha que originou a captura, não foi possível reproduzir a exceção original. Nenhuma causa foi atribuída e nenhum conserto da causa subjacente é alegado. A falha permanece pendente até obter uma reprodução ou os dados diagnósticos correlacionados do perfil afetado.
-- **Critério para fechamento:** reproduzir a falha original em estado de campanha representativo, identificar e corrigir sua causa e adicionar regressão da causa. Não registrar segredos nem dados sensíveis no log.
-- **Gate de integração/release:** a integração e o release v0.5.0 podem prosseguir somente como pacote com BUG-002 explicitamente parcial e pendente; em alternativa, podem aguardar dados diagnósticos do perfil afetado. Esta decisão não fecha BUG-002 nem declara a entrega v0.5.0 completa.
+- **Evidência original:** captura `codex-clipboard-fe81c85d-1fe1-4c69-a0d7-fe9acfd0411f.png` e logs desktop enviados pelo usuário em 2026-11-02; `GET /regional/regions/{region_code}` e a exceção `TypeError` foram identificados no stack trace.
+- **Causa raiz:** em `app/routes/regional_routes.py`, a consulta `db.scalars(select(RegionalRunOutcome, RegionalOffer))` retornava somente `RegionalRunOutcome`; o loop tentava desempacotar cada entidade como `(outcome, offer)`, causando `TypeError: cannot unpack non-iterable RegionalRunOutcome object` quando havia resultados registrados.
+- **Correção:** a consulta agora usa `db.execute(...).all()`, preservando ambas as entidades por linha.
+- **Regressão/evidência:** `tests.test_desktop_http_smoke` cria uma `RegionalRunOutcome` vinculada a uma `RegionalOffer`, abre a rota real `/regional/regions/{region_code}` e confere os contadores renderizados para a guilda. O smoke passou também para `/regional` em campanha nova e migrada; a sonda da falha GET confirma referência e stack trace correlacionados em `desktop.log`.
+- **Verificação de padrão semelhante:** busca em rotas/serviços regionais encontrou apenas essa consulta `scalars(select(A, B))`; as demais consultas `scalars()` selecionam entidade ou coluna única.
+- **Gate de integração/release:** nenhuma integração, publicação ou release foi realizada. Aguardam-se revisão CR e o gate humano de integração/release. Não declarar a entrega v0.5.0 completa nesta rodada.
 
 ## Validação desta rodada
 
@@ -176,8 +177,8 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - Testes direcionados de oficina, coleta/couro+carne, preços, suprimento, marcos de construção e MAX do Mercado: aprovados (27 testes antes da cobertura extra de equipamento único).
 - `tests.test_stage5_ui_contracts` + `tests.test_stage5_runtime_validation`: aprovados (33 testes no conjunto).
 - Retestes direcionados de `tests.test_regional_cycle_service`, `tests.test_campaign_service` e `tests.test_campaign_content_versioning`: simulação de 100 Vigílias e migração de saves cobertas; cinco testes de migração/campanha, quatro testes de descoberta/compatibilidade e dois casos regionais anteriormente divergentes aprovados após atualizar as expectativas do head e permitir que probabilidade zero desative ações CPU. `test_cpu_stage_counts_remain_unknown_when_upgrading_a_legacy_cycle` confirma estágios `NULL` após migração, e `test_legacy_cpu_report_labels_unmeasured_activity_stages` verifica a apresentação “não registrado”.
-- `tests.test_desktop_http_smoke`: página e mutações HTTP desktop aprovadas após ajustar fixtures de inventário sem duplicar linhas; inclui regressão de log/erro GET, oficinas, cotação e débito regional.
-- BUG-002: o smoke HTTP confirma apenas a instrumentação/fallback em `/regional`, com log correlacionado para uma falha controlada, e o carregamento em campanhas descartáveis nova e migrada. A causa do erro original continua sem reprodução e fora dos critérios plenamente validados.
+- `tests.test_desktop_http_smoke`: página e mutações HTTP desktop aprovadas após ajustar fixtures de inventário sem duplicar linhas; inclui regressão de log/erro GET, renderização de outcome na rota regional, oficinas, cotação e débito regional.
+- BUG-002: causa raiz identificada nos logs, corrigida e coberta por regressão da rota real com `RegionalRunOutcome` e `RegionalOffer`; smoke aprovado. A integração/release ainda aguarda revisão CR e gate humano.
 - Auditoria ML-013: 20.000 sequências reproduzíveis em campanha descartável; sem abrir saves do jogador.
 - Auditoria ML-017: 1.700 equipamentos, 20 comparações tipo/raridade/Mercado, monotonicidade estrita e faixa econômica documentadas.
 - `alembic heads`: uma única cabeça, `d9e0f1a2b3c4`.
@@ -205,7 +206,7 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 | ML-016 | Novas ações CPU têm estágios medidos; saves legados preservam desconhecido em vez de inventar contagens | `test_cpu_action_cadence_is_above_initial_baseline`; `test_seeded_cpu_simulation_100_cycles_and_campaign_isolation`; `test_cpu_stage_counts_remain_unknown_when_upgrading_a_legacy_cycle`; `test_legacy_cpu_report_labels_unmeasured_activity_stages` |
 | ML-017 | Preço por espaço e raridade, monotônico no Market 1/100 com tipo/nível/refino comparáveis | `reports/ml017_equipment_price_audit_v0.5.0.json` e `.md`; `tests.test_equipment_pricing` |
 | ML-018 | MAX por estoque/cota, bloqueio sem espaço e equipamento único por instância | `tests.test_market_max_quantity` |
-| BUG-002 — parcial | Instrumentação/fallback verificados em GET `/regional`; causa original do erro da captura pendente | `tests.test_desktop_http_smoke`: falha controlada na função real da rota, referência + stack trace correlacionados em `desktop.log`; `/regional` 200 em campanha nova e migrada. Não valida nem fecha a causa original. |
+| BUG-002 | Resultados regionais renderizam com outcome e oferta registrados; erro de desempacotamento corrigido | `tests.test_desktop_http_smoke`: cria `RegionalRunOutcome` + `RegionalOffer`, abre `/regional/regions/{region_code}` e valida contagens; consulta usa `db.execute(...).all()` |
 
 ### Reteste após revisão independente
 

@@ -83,9 +83,9 @@ def regional_region_detail(
         RegionalCpuMercenary.guild_state_id.in_(state_ids), RegionalCpuMercenary.active.is_(True),
     ))) if state_ids else []
     resources = list(db.scalars(select(RegionalCpuResource).where(RegionalCpuResource.guild_state_id.in_(state_ids)))) if state_ids else []
-    outcomes = list(db.scalars(select(RegionalRunOutcome, RegionalOffer).join(
+    outcomes = list(db.execute(select(RegionalRunOutcome, RegionalOffer).join(
         RegionalOffer, RegionalOffer.id == RegionalRunOutcome.offer_id,
-    ).where(RegionalRunOutcome.guild_state_id.in_(state_ids)))) if state_ids else []
+    ).where(RegionalRunOutcome.guild_state_id.in_(state_ids))).all()) if state_ids else []
     roster_by_state: dict[int, list[RegionalCpuMercenary]] = {}
     resources_by_state: dict[int, int] = {}
     results_by_state: dict[int, dict[str, int]] = {}
