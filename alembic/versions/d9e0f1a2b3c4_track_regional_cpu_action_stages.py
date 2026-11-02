@@ -18,18 +18,12 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     with op.batch_alter_table("regional_cpu_cycle_plans") as batch:
-        batch.add_column(sa.Column("planned_actions", sa.Integer(), nullable=False, server_default="0"))
-        batch.add_column(sa.Column("eligible_actions", sa.Integer(), nullable=False, server_default="0"))
-        batch.add_column(sa.Column("started_actions", sa.Integer(), nullable=False, server_default="0"))
-        batch.add_column(sa.Column("resolved_actions", sa.Integer(), nullable=False, server_default="0"))
-    bind = op.get_bind()
-    bind.execute(sa.text("""
-        UPDATE regional_cpu_cycle_plans
-        SET planned_actions = actions,
-            eligible_actions = actions,
-            started_actions = actions,
-            resolved_actions = actions
-    """))
+        # Old saves tracked only final actions. The stage counts were never
+        # measured, so leave them NULL instead of presenting estimates as facts.
+        batch.add_column(sa.Column("planned_actions", sa.Integer(), nullable=True))
+        batch.add_column(sa.Column("eligible_actions", sa.Integer(), nullable=True))
+        batch.add_column(sa.Column("started_actions", sa.Integer(), nullable=True))
+        batch.add_column(sa.Column("resolved_actions", sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:

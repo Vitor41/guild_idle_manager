@@ -75,7 +75,29 @@
   <section class="evolution-section" aria-labelledby="history-title">
     <div class="evolution-section__heading"><div><p class="evolution-eyebrow">ANTES · DEPOIS · CAUSAS</p><h2 id="history-title">Relatórios encerrados</h2></div><span class="evolution-muted">{{ reports|length }} registros recentes</span></div>
     {% if reports %}<div class="evolution-report-list">{% for report in reports %}<article class="evolution-report-row"><div><span class="evolution-status evolution-status--muted">Ciclo {{ report.cycle_number + 1 }} · encerrado</span><h3>{{ home_region.region_name }}</h3><p>{{ report.row.cpu_successes }} sucessos em {{ report.row.cpu_actions }} ações CPU · {{ report.row.cpu_failures }} falhas · {{ report.summary.get('player_actions', 0) }} ações da guilda</p></div><button type="button" class="evolution-button evolution-button--secondary" data-evolution-dialog="report-{{ report.row.id }}" aria-haspopup="dialog" aria-controls="report-{{ report.row.id }}">Ler relatório</button></article>
-      <dialog class="evolution-dialog" id="report-{{ report.row.id }}" aria-labelledby="report-{{ report.row.id }}-title"><form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar">×</button><p class="evolution-eyebrow">PRESTAÇÃO DE CONTAS · CICLO {{ report.cycle_number + 1 }}</p><h2 id="report-{{ report.row.id }}-title">{{ home_region.region_name }}</h2><dl><div><dt>Segurança</dt><dd>{{ '%.2f'|format(report.row.security_before) }} → {{ '%.2f'|format(report.row.security_after) }}</dd></div><div><dt>Ameaça</dt><dd>{{ '%.2f'|format(report.row.threat_before) }} → {{ '%.2f'|format(report.row.threat_after) }}</dd></div><div><dt>Influência regional</dt><dd>{{ report.row.influence_before }} → {{ report.row.influence_after }}</dd></div><div><dt>Ações CPU</dt><dd>{{ report.row.cpu_successes }} sucessos · {{ report.row.cpu_failures }} falhas</dd></div><div><dt>Ações da guilda</dt><dd>{{ report.summary.get('player_successes', 0) }} sucessos · {{ report.summary.get('player_failures', 0) }} falhas</dd></div></dl><h3>Atividade por guilda CPU</h3><ul>{% for activity in report.cpu_activity_rows %}<li>{{ activity.guild }} · {{ activity.planned }} planejadas · {{ activity.eligible }} elegíveis · {{ activity.started }} iniciadas · {{ activity.resolved }} resolvidas</li>{% else %}<li>Sem planos CPU registrados neste ciclo.</li>{% endfor %}</ul><h3>Decisões registradas</h3><ul>{% for archetype, count in report.summary.get('actions_by_archetype', {}).items() %}<li>{{ {'expansion': 'Expansão', 'security': 'Segurança', 'contracts': 'Contratos', 'exploration': 'Exploração'}.get(archetype, archetype) }}: {{ count }} ações</li>{% else %}<li>Sem ações CPU neste ciclo.</li>{% endfor %}</ul><p>{% if report.summary.get('baseline', {}).get('applied') %}Sem ações regionais: segurança −1 e ameaça +1 nesta Vigília.{% else %}O baseline sem ações não foi aplicado; os impactos das ações concluídas estão registrados acima.{% endif %}</p><button class="evolution-button evolution-button--secondary">Fechar relatório</button></form></dialog>
+      <dialog class="evolution-dialog" id="report-{{ report.row.id }}" aria-labelledby="report-{{ report.row.id }}-title">
+        <form method="dialog">
+          <button class="evolution-dialog__close" aria-label="Fechar">×</button>
+          <p class="evolution-eyebrow">PRESTAÇÃO DE CONTAS · CICLO {{ report.cycle_number + 1 }}</p>
+          <h2 id="report-{{ report.row.id }}-title">{{ home_region.region_name }}</h2>
+          <dl>
+            <div><dt>Segurança</dt><dd>{{ '%.2f'|format(report.row.security_before) }} → {{ '%.2f'|format(report.row.security_after) }}</dd></div>
+            <div><dt>Ameaça</dt><dd>{{ '%.2f'|format(report.row.threat_before) }} → {{ '%.2f'|format(report.row.threat_after) }}</dd></div>
+            <div><dt>Influência regional</dt><dd>{{ report.row.influence_before }} → {{ report.row.influence_after }}</dd></div>
+            <div><dt>Ações CPU</dt><dd>{{ report.row.cpu_successes }} sucessos · {{ report.row.cpu_failures }} falhas</dd></div>
+            <div><dt>Ações da guilda</dt><dd>{{ report.summary.get('player_successes', 0) }} sucessos · {{ report.summary.get('player_failures', 0) }} falhas</dd></div>
+          </dl>
+          <h3>Atividade por guilda CPU</h3>
+          {% if report.has_unmeasured_cpu_activity %}<p class="note">Estágios de atividade deste ciclo antigo não foram registrados; aparecem como “não registrado”.</p>{% endif %}
+          <ul>{% for activity in report.cpu_activity_rows %}
+            <li>{{ activity.guild }} · {{ activity.planned if activity.planned is not none else 'não registrado' }} planejadas · {{ activity.eligible if activity.eligible is not none else 'não registrado' }} elegíveis · {{ activity.started if activity.started is not none else 'não registrado' }} iniciadas · {{ activity.resolved if activity.resolved is not none else 'não registrado' }} resolvidas</li>
+          {% else %}<li>Sem planos CPU registrados neste ciclo.</li>{% endfor %}</ul>
+          <h3>Decisões registradas</h3>
+          <ul>{% for archetype, count in report.summary.get('actions_by_archetype', {}).items() %}<li>{{ {'expansion': 'Expansão', 'security': 'Segurança', 'contracts': 'Contratos', 'exploration': 'Exploração'}.get(archetype, archetype) }}: {{ count }} ações</li>{% else %}<li>Sem ações CPU neste ciclo.</li>{% endfor %}</ul>
+          <p>{% if report.summary.get('baseline', {}).get('applied') %}Sem ações regionais: segurança −1 e ameaça +1 nesta Vigília.{% else %}O baseline sem ações não foi aplicado; os impactos das ações concluídas estão registrados acima.{% endif %}</p>
+          <button class="evolution-button evolution-button--secondary">Fechar relatório</button>
+        </form>
+      </dialog>
     {% endfor %}</div>{% else %}<p class="evolution-empty">Ainda não há uma Vigília encerrada nesta campanha.</p>{% endif %}
   </section>
 

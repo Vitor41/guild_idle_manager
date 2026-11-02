@@ -302,6 +302,11 @@ def regional_index(
                                    "eligible": plan.eligible_actions, "started": plan.started_actions,
                                    "resolved": plan.resolved_actions}
                                   for plan, state in cpu_plans],
+            "has_unmeasured_cpu_activity": any(
+                plan.planned_actions is None or plan.eligible_actions is None
+                or plan.started_actions is None or plan.resolved_actions is None
+                for plan, _state in cpu_plans
+            ),
         })
     rebellion = board.get("rebellion_event")
     rebellion_participant = None

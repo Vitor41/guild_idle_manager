@@ -5,8 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import Base, create_database_engine
 from app.models import Guild, GuildInventoryItem, ItemTemplate
+from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 from app.services.supply_preparation_service import regional_kit_quote
-from app.services.workshop_service import craft_supply_kit, ensure_supply_kit, get_supply_workshop_context
+from app.services.workshop_service import (
+    HERBS_PER_KIT, MEAT_PER_KIT, craft_supply_kit, ensure_supply_kit, get_supply_workshop_context,
+)
 
 
 class WorkshopServiceTests(unittest.TestCase):
@@ -72,3 +75,76 @@ class WorkshopServiceTests(unittest.TestCase):
             GuildInventoryItem.guild_id == self.guild.id,
             GuildInventoryItem.item_template_id == self.meat.id,
         )), 3)
+
+    def test_recipe_sums_and_consumes_materials_across_tiers(self):
+        higher_tier_meat = ItemTemplate(
+            name="Carne de tier superior", description="", item_type="material", rarity="common",
+            material_family="meat", item_level=1, level_band="1-20", tier=2,
+        )
+        self.db.add(higher_tier_meat)
+        self.db.flush()
+        self._stock(self.meat, 2)
+        self._stock(higher_tier_meat, 1)
+        self._stock(self.herb, 2)
+        self.assertTrue(get_supply_workshop_context(self.db, self.guild)["can_craft"])
+
+        self.assertEqual(craft_supply_kit(self.db, self.guild), 1)
+
+        self.assertEqual(int(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == self.meat.id,
+        )) or 0), 0)
+        self.assertEqual(int(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == higher_tier_meat.id,
+        )) or 0), 0)
+        self.assertEqual(int(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == self.herb.id,
+        )) or 0), 0)
+
+    def test_insufficient_split_stack_recipe_consumes_nothing(self):
+        higher_tier_meat = ItemTemplate(
+            name="Carne de tier superior", description="", item_type="material", rarity="common",
+            material_family="meat", item_level=1, level_band="1-20", tier=2,
+        )
+        self.db.add(higher_tier_meat)
+        self.db.flush()
+        self._stock(self.meat, 2)
+        self._stock(higher_tier_meat, 1)
+        self._stock(self.herb, 1)
+
+        with self.assertRaisesRegex(ValueError, "Faltam Ervas"):
+            craft_supply_kit(self.db, self.guild)
+
+        self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == self.meat.id,
+        )), 2)
+        self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == higher_tier_meat.id,
+        )), 1)
+        self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == self.herb.id,
+        )), 1)
+
+    def test_full_warehouse_allows_recipe_that_reduces_usage_without_exceeding_capacity(self):
+        filler = ItemTemplate(
+            name="Material de preenchimento", description="", item_type="material", rarity="common",
+            material_family="wood", item_level=1, level_band="1-20", tier=1,
+        )
+        self.db.add(filler)
+        self.db.flush()
+        self._stock(self.meat, 3)
+        self._stock(self.herb, 2)
+        capacity = get_inventory_capacity(self.db, self.guild)
+        self._stock(filler, capacity - MEAT_PER_KIT - HERBS_PER_KIT)
+        self.assertEqual(get_inventory_usage(self.db, self.guild.id), capacity)
+        self.assertTrue(get_supply_workshop_context(self.db, self.guild)["can_craft"])
+
+        craft_supply_kit(self.db, self.guild)
+
+        self.assertEqual(get_inventory_usage(self.db, self.guild.id), capacity - 4)
+        self.assertLessEqual(get_inventory_usage(self.db, self.guild.id), capacity)

@@ -34,10 +34,12 @@ from app.models import (
     ProfessionTemplate,
     User,
 )
+from app.models.regional import RegionalCpuCyclePlan
 from app.repositories.item_repository import RESOURCE_MATERIAL_FAMILIES, add_inventory_quantity
 from app.repositories.building_repository import get_guild_building_by_effect
 from app.services.building_service import ensure_guild_buildings, upgrade_guild_building
 from app.services.campaign_service import CampaignService
+from app.services.regional_cycle_service import CYCLE_SECONDS, advance_regional_world
 from app.services.dungeon_service import claim_dungeon_loot, get_advanced_dungeon_chance, get_dungeons_page_context, start_dungeon
 from app.services.achievement_service import evaluate_achievements, get_codex_context, sync_codex
 from app.services.crafting_service import craft_recipe, get_blacksmith_context
@@ -109,6 +111,48 @@ asyncio.run(main())
             try:
                 self._assert_campaigns_are_isolated(Path(temp_dir))
             finally:
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
+    def test_cpu_stage_counts_remain_unknown_when_upgrading_a_legacy_cycle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Save com plano CPU legado")
+            campaigns.activate_campaign(campaign.campaign_id)
+            active = True
+            try:
+                with SessionLocal() as db:
+                    metadata = db.get(CampaignMetadata, campaign.campaign_id)
+                    guild, _resources = get_current_guild_context(db, campaign.campaign_id)
+                    self.assertIsNotNone(metadata)
+                    self.assertIsNotNone(guild)
+                    advance_regional_world(db, metadata, guild, metadata.created_at_utc)
+                    advance_regional_world(
+                        db, metadata, guild, metadata.created_at_utc + timedelta(seconds=CYCLE_SECONDS),
+                    )
+                    plan = db.scalar(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.campaign_id == campaign.campaign_id,
+                    ).order_by(RegionalCpuCyclePlan.id))
+                    self.assertIsNotNone(plan)
+                    plan_id = plan.id
+                    legacy_actions = plan.actions
+
+                campaigns.close_active_campaign(campaign.campaign_id)
+                active = False
+                command.downgrade(campaigns._alembic_config(campaign.database_path), "c7d8e9f0a1b2")
+                campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
+
+                with closing(sqlite3.connect(campaign.database_path)) as connection:
+                    row = connection.execute(
+                        "SELECT actions, planned_actions, eligible_actions, started_actions, resolved_actions "
+                        "FROM regional_cpu_cycle_plans WHERE id = ?",
+                        (plan_id,),
+                    ).fetchone()
+                self.assertEqual(row[0], legacy_actions)
+                self.assertEqual(row[1:], (None, None, None, None))
+            finally:
+                if active:
+                    campaigns.close_active_campaign(campaign.campaign_id)
                 configure_database("sqlite:///:memory:")
                 gc.collect()
 
