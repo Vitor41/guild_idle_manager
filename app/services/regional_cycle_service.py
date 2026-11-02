@@ -48,7 +48,7 @@ REGIONAL_IMPACT_BASE = 0.02
 REGIONAL_IMPACT_PER_RANK = 0.02
 # CPU rivals make a deterministic per-action decision each Vigília. Their
 # profile sets the cadence; archetype and campaign seed add small variation.
-CPU_ACTION_PROBABILITY_BY_PROFILE = {"strong": 0.28, "medium": 0.25, "new": 0.22}
+CPU_ACTION_PROBABILITY_BY_PROFILE = {"strong": 0.31, "medium": 0.29, "new": 0.26}
 CPU_ARCHETYPE_ACTION_ADJUSTMENT = {
     "expansion": 0.005,
     "security": -0.005,
@@ -191,7 +191,7 @@ def regional_cpu_action_probability(
         campaign_id, state.region_code, state.slot, state.archetype, rules_version, "activity-rate",
     )[:8], 16) / 0xFFFFFFFF
     seed_variation = (seed_fraction - 0.5) * 0.02
-    return round(max(0.05, min(0.35, base + archetype_adjustment + seed_variation)), 4)
+    return round(max(0.05, min(0.40, base + archetype_adjustment + seed_variation)), 4)
 
 
 def rank_progression_stage(guild_level: int, total_power: int) -> float:
@@ -652,6 +652,7 @@ def _add_offer(
         recommended_power_snapshot=recommended_power,
         min_party_size_snapshot=max(1, int(template.min_party_size or 1)),
         max_party_size_snapshot=max(1, int(template.max_party_size or 1)),
+        required_guild_level_snapshot=max(1, int(template.required_guild_level or 1)),
         duration_seconds_snapshot=max(1, int(template.duration_seconds)),
         gold_reward_snapshot=max(0, int(template.base_gold_reward)),
         xp_reward_snapshot=max(0, int(template.base_xp_reward)),
@@ -1225,18 +1226,27 @@ def get_regional_board(
             RegionalCycle.status == "completed",
         )
         .order_by(RegionalCycle.cycle_number.desc())
-        .limit(8)
+        .limit(5)
     ))
     portal_events = active_portals_for_region(db, campaign.campaign_id, home_code)
     rebellion_event = active_rebellion(db, campaign.campaign_id)
     event_history = event_history_for_campaign(db, campaign.campaign_id)
-    open_offers = [offer for offer in offers["contract"] + offers["dungeon"] + offers["boss"] if offer.status in {"available", "supply_preparing"}]
+    open_offers = [
+        offer for offer in offers["contract"] + offers["dungeon"] + offers["boss"]
+        if offer.status in {"available", "supply_preparing"}
+        and max(1, int(guild.level or 1)) >= offer.required_guild_level_snapshot
+    ]
     return {
         "world": db.get(RegionalWorldState, campaign.campaign_id),
         "cycle": active_cycle,
         "home_region": home_region,
         "regions": regions,
         "rankings": [{"score": score, "guild": state} for score, state in rankings],
+        "player_ranking": next((
+            {"rank": index + 1, "score": score, "guild": state}
+            for index, (score, state) in enumerate(rankings)
+            if state.guild_id == guild.id
+        ), None),
         "offers": offers,
         "latest_history": latest_history,
         "portal_events": portal_events,

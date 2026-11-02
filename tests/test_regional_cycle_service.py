@@ -48,6 +48,21 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
+    def test_cpu_action_cadence_is_above_initial_baseline(self):
+        states = [
+            RegionalGuildState(region_code="sample", slot=slot, name=f"Rival {slot}", profile=profile, archetype="balanced")
+            for slot, profile in enumerate(("strong", "medium", "new", "new"))
+        ]
+        expected_actions = sum(
+            regional_cycle_service.regional_cpu_action_probability("cadence-test", state)
+            * (2 if state.profile == "strong" else 1)
+            for state in states
+        )
+
+        self.assertGreater(expected_actions, 1.25)
+        self.assertGreaterEqual(expected_actions, 1.38)
+        self.assertLessEqual(expected_actions, 1.48)
+
     def test_seeded_cpu_simulation_100_cycles_and_campaign_isolation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
@@ -1021,6 +1036,9 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         level_band_snapshot="1-20",
                         recommended_level_snapshot=1,
                         recommended_power_snapshot=1,
+                        min_party_size_snapshot=1,
+                        max_party_size_snapshot=1,
+                        required_guild_level_snapshot=1,
                         duration_seconds_snapshot=5400,
                         gold_reward_snapshot=321,
                         xp_reward_snapshot=123,
@@ -1032,9 +1050,14 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     apprentice = db.scalar(select(MercenaryClass).where(MercenaryClass.code == "apprentice"))
                     mercenary = create_mercenary(db, guild.id, apprentice, "Snapshot Runner")
                     db.flush()
+                    template.min_party_size = 2
+                    template.max_party_size = 3
+                    template.required_guild_level = 99
                     run = start_mission(
                         db, guild, str(template.id), [str(mercenary.id)], commit=False,
                         regional_duration_seconds=offer.duration_seconds_snapshot,
+                        regional_party_bounds=(offer.min_party_size_snapshot, offer.max_party_size_snapshot),
+                        regional_required_guild_level=offer.required_guild_level_snapshot,
                     )
                     run.regional_offer_id = offer.id
                     run.rank_snapshot = offer.rank
@@ -1098,6 +1121,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     failed_run = start_mission(
                         db, guild, str(template.id), [str(mercenary.id)], commit=False,
                         regional_duration_seconds=failed_offer.duration_seconds_snapshot,
+                        regional_party_bounds=(failed_offer.min_party_size_snapshot, failed_offer.max_party_size_snapshot),
+                        regional_required_guild_level=failed_offer.required_guild_level_snapshot,
                     )
                     failed_run.regional_offer_id = failed_offer.id
                     failed_run.rank_snapshot = failed_offer.rank

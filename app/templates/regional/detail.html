@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ region_name }} · Vigília Regional{% endblock %}
+{% block content %}
+<main class="page-shell evolution-page">
+  <p><a href="/regional">← Voltar ao mapa regional</a></p>
+  <header class="page-heading"><p class="eyebrow">VIGÍLIA REGIONAL · {{ region_code }}</p><h1>{{ region_name }}</h1><p>Comparativo das guildas, patrimônio disponível, tiers do elenco e resultados registrados nesta campanha.</p></header>
+  <nav class="regional-region-nav" aria-label="Navegar entre regiões">
+    {% for region in regions %}<a href="/regional/regions/{{ region.region_code }}" {% if region.region_code == region_code %}aria-current="page"{% endif %}>{{ region.region_name }}{% if region.region_code == home_region_code %}<span>Região natal</span>{% endif %}</a>{% endfor %}
+  </nav>
+  {% if selected_region %}<section class="evolution-region-card regional-detail-summary" aria-label="Indicadores de {{ region_name }}"><div class="evolution-region-card__title"><h2>{{ selected_region.region_name }}</h2>{% if region_code == home_region_code %}<b>REGIÃO NATAL</b>{% endif %}</div><dl><div><dt>Segurança</dt><dd>{{ '%.2f'|format(selected_region.security) }}</dd></div><div><dt>Ameaça</dt><dd>{{ '%.2f'|format(selected_region.threat) }}</dd></div><div><dt>Influência</dt><dd>{{ selected_region.influence }}</dd></div></dl><p>Última Vigília atualizada: <time datetime="{{ utc_iso(selected_region.updated_at_utc) }}">{{ selected_region.updated_at_utc.strftime('%d/%m/%Y %H:%M') }} UTC</time></p></section>{% endif %}
+  {% if guild_rows %}
+  <div class="evolution-ranking-table-wrap" tabindex="0" aria-label="Resumo das guildas da região">
+    <table class="evolution-ranking-table"><thead><tr><th scope="col">Guilda</th><th scope="col">Patrimônio (ouro)</th><th scope="col">Elenco</th><th scope="col">Tiers do elenco</th><th scope="col">Contratos</th><th scope="col">Masmorras</th><th scope="col">Chefes</th><th scope="col">Sucessos · falhas</th><th scope="col">Eventos vencidos</th></tr></thead><tbody>
+      {% for row in guild_rows %}<tr {% if row.state.guild_id == guild.id %}class="is-player"{% endif %}><th>{{ row.state.name }}{% if row.state.guild_id == guild.id %}<strong class="evolution-ranking-player-label">Sua guilda</strong>{% endif %}</th><td class="numeric">{{ row.wealth }}</td><td class="numeric">{{ row.roster }}</td><td>{% for tier, amount in row.tier_counts|dictsort %}{{ tier }} {{ amount }}{% if not loop.last %} · {% endif %}{% else %}—{% endfor %}</td><td class="numeric">{{ row.results.contracts }}</td><td class="numeric">{{ row.results.dungeons }}</td><td class="numeric">{{ row.results.bosses }}</td><td class="numeric">{{ row.results.successes }} · {{ row.results.failures }}</td><td class="numeric">{{ row.state.event_wins }}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}<p class="evolution-empty">Ainda não há guildas ativas nesta região.</p>{% endif %}
+</main>
+{% endblock %}

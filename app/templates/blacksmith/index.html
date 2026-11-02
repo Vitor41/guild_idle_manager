@@ -15,8 +15,8 @@
         <div><dt>Receitas disponíveis</dt><dd>{{ recipes|length }}/{{ rotation.slots }}</dd></div>
         <div><dt>Raridade máxima</dt><dd>{{ rarity_label(rotation.max_rarity) }}</dd></div>
         <div><dt>Próxima rotação</dt><dd data-ends-at="{{ rotation.ends_at_iso }}">Calculando...</dd></div>
-        <div><dt>Ouro</dt><dd>{{ resources.gold }}</dd></div>
-        <div><dt>Minério</dt><dd>{{ resources.ore }}</dd></div>
+        <div><dt>Ouro</dt><dd data-resource-total="gold">{{ resources.gold }}</dd></div>
+        <div><dt>Minério</dt><dd data-resource-total="ore">{{ resources.ore }}</dd></div>
       </dl>
     </section>
     <section class="panel table-panel">

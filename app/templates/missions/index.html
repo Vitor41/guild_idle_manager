@@ -89,6 +89,7 @@
                   <span class="tag">{{ difficulty_labels.get(mission.difficulty, mission.difficulty) }}</span>
                   <span class="tag">Nível {{ mission.level_band }}</span>
                   <span class="tag">{{ mission.min_party_size }}-{{ mission.max_party_size }} membros</span>
+                  <span class="tag">Guilda nível {{ mission.required_guild_level }}+</span>
                   {% if mission.mission_type == 'gathering' %}<span class="tag">Coleta: {{ family_labels.get(mission.gathering_family, mission.gathering_family) }}</span><span class="tag profession-tag" style="--profession-color: {{ profession_colors.get(mission.profession_code, '#a98a52') }}">Profissão: {{ profession_labels.get(mission.profession_code, mission.profession_code) }}</span>{% endif %}
                 </div>
                 <p class="note">Recomendado: nível {{ mission.recommended_level }} · poder {{ mission.recommended_power }}</p>
@@ -182,6 +183,7 @@
 
     <section class="panel table-panel" aria-labelledby="history-title">
       <h2 id="history-title">Histórico recente</h2>
+      <dl class="mission-history-kpis" aria-label="Histórico completo de missões"><div><dt>Missões concluídas</dt><dd>{{ mission_history_total }}</dd></div><div><dt>Sucessos</dt><dd>{{ mission_history_successes }}</dd></div><div><dt>Falhas</dt><dd>{{ mission_history_failures }}</dd></div><div><dt>Taxa de sucesso</dt><dd>{{ mission_history_success_rate }}%</dd></div></dl>
       {% if finished_runs %}
         <div class="result-history-list">
           {% for run in finished_runs %}

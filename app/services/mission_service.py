@@ -361,7 +361,9 @@ def get_missions_page_context(
     in_progress_runs = [run for run in runs if run.status == "in_progress"]
     for run in in_progress_runs:
         prepare_timer_context(run, now)
-    finished_runs = [run for run in runs if run.status in {"completed", "failed"}][:10]
+    completed_runs = [run for run in runs if run.status in {"completed", "failed"}]
+    successful_runs = sum(1 for run in completed_runs if run.status == "completed")
+    finished_runs = completed_runs[:5]
     for run in finished_runs:
         run.result_view = parse_result_details(run.result_details)
     filter_values = {
@@ -377,6 +379,10 @@ def get_missions_page_context(
         "mission_chances": mission_chances,
         "in_progress_runs": in_progress_runs,
         "finished_runs": finished_runs,
+        "mission_history_total": len(completed_runs),
+        "mission_history_successes": successful_runs,
+        "mission_history_failures": len(completed_runs) - successful_runs,
+        "mission_history_success_rate": round(successful_runs * 100 / len(completed_runs)) if completed_runs else 0,
         "awaiting_loot_count": sum(
             1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
@@ -434,8 +440,15 @@ def parse_mercenary_ids(values: list[str]) -> list[int]:
     return parsed_ids
 
 
-def validate_mission_requirements(db: Session, guild: Guild, mission_template: MissionTemplate) -> None:
-    if guild.level < mission_template.required_guild_level:
+def validate_mission_requirements(
+    db: Session,
+    guild: Guild,
+    mission_template: MissionTemplate,
+    *,
+    required_guild_level: int | None = None,
+) -> None:
+    minimum_level = mission_template.required_guild_level if required_guild_level is None else required_guild_level
+    if guild.level < minimum_level:
         raise MissionError("Nível da guilda insuficiente para esta missão.")
 
 
@@ -461,6 +474,8 @@ def start_mission(
     regional_success_chance: int | None = None,
     regional_recommended_power: int | None = None,
     regional_recommended_level: int | None = None,
+    regional_party_bounds: tuple[int, int] | None = None,
+    regional_required_guild_level: int | None = None,
     allow_regional_supply: bool = False,
     supply_snapshot_override: dict[str, object] | None = None,
 ) -> MissionRun:
@@ -481,7 +496,9 @@ def start_mission(
     mission_template = get_active_mission_template(db, parsed_template_id)
     if mission_template is None:
         raise MissionError("Missao indisponivel.")
-    validate_mission_requirements(db, guild, mission_template)
+    validate_mission_requirements(
+        db, guild, mission_template, required_guild_level=regional_required_guild_level,
+    )
     if mission_template.mission_type == "long_idle":
         if parsed_multiplier != 1:
             raise MissionError("Missões longas não aceitam multiplicador.")
@@ -493,9 +510,12 @@ def start_mission(
         if not can_start_long_idle_mission(count_active_long_idle_runs(db, guild.id)):
             raise MissionError("O limite de 3 missões longas ativas foi atingido.")
 
-    if len(parsed_mercenary_ids) < mission_template.min_party_size:
+    minimum_party, maximum_party = regional_party_bounds or (
+        mission_template.min_party_size, mission_template.max_party_size,
+    )
+    if len(parsed_mercenary_ids) < minimum_party:
         raise MissionError("Grupo menor que o mínimo exigido para esta missão.")
-    if len(parsed_mercenary_ids) > mission_template.max_party_size:
+    if len(parsed_mercenary_ids) > maximum_party:
         raise MissionError("Grupo maior que o máximo permitido para esta missão.")
     mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_mercenary_ids)
     if len(mercenaries) != len(parsed_mercenary_ids):

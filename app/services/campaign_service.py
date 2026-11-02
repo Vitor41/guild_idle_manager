@@ -24,7 +24,7 @@ from app.models.content import ContentSeedRun
 from app.seeds.massive_content import PACK_KEY, PACK_VERSION, run_massive_content_seed
 
 
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 INITIAL_CONTENT_VERSION = PACK_VERSION
 _activation_lock = RLock()
 

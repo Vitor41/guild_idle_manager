@@ -363,10 +363,10 @@ class ClockGuardTests(unittest.TestCase):
             self.assertGreaterEqual(offline_start, base)
             guard.close_campaign(campaign.campaign_id, campaigns)
 
-    def test_special_crystal_is_granted_once_at_cap_and_survives_reopen(self):
+    def test_crystal_is_granted_once_at_cap_and_survives_reopen(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             campaigns = CampaignService(Path(temp_dir) / "saves")
-            campaign = campaigns.create_campaign("Cristal especial no cap")
+            campaign = campaigns.create_campaign("Cristal no cap")
             fake = FakeClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
             guard = ClockGuard(MemoryAnchorStore(), fake.wall, lambda: fake.monotonic)
 
@@ -380,18 +380,20 @@ class ClockGuardTests(unittest.TestCase):
             report = guard.activate_campaign(campaign.campaign_id)
             self.assertEqual(report["credited_seconds"], 8 * 60 * 60)
             self.assertEqual(sum(report["gold_sources"].values()), report["gold"])
-            self.assertEqual(report["special_crystals"], 1)
-            self.assertEqual(report["materials"]["crystals"], 0)
+            self.assertEqual(report["crystals"], 1)
+            self.assertEqual(report["materials"]["crystals"], 1)
             with SessionLocal() as db:
                 resources = db.scalar(select(GuildResources))
-                self.assertEqual(resources.special_crystals, 1)
-                self.assertEqual(resources.crystals, 0)
+                self.assertEqual(resources.crystals, 1)
+                self.assertEqual(resources.crystal_reserve, 1)
+                from app.repositories.item_repository import sync_inventory_resource_totals
+                sync_inventory_resource_totals(db, resources)
+                self.assertEqual(resources.crystals, 1)
             reopened = guard.activate_campaign(campaign.campaign_id)
             self.assertEqual(reopened["report_id"], report["report_id"])
             with SessionLocal() as db:
                 resources = db.scalar(select(GuildResources))
-                self.assertEqual(resources.special_crystals, 1)
-                self.assertEqual(resources.crystals, 0)
+                self.assertEqual(resources.crystals, 1)
             configure_database("sqlite:///:memory:")
             gc.collect()
 

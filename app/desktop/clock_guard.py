@@ -265,7 +265,8 @@ class ClockGuard:
                     OFFLINE_CAP_SECONDS,
                 )
                 resources.gold += gold
-                resources.special_crystals += materials["special_crystals"]
+                resources.crystal_reserve += materials["crystals"]
+                resources.crystals += materials["crystals"]
                 metadata.stamina_seconds = max(0, metadata.stamina_seconds - decision.stamina_seconds)
                 summary = {
                     "report_id": str(uuid4()),
@@ -276,7 +277,7 @@ class ClockGuard:
                     "gold": gold,
                     "gold_sources": gold_reward_sources(rate, decision.credited_seconds),
                     "materials": materials,
-                    "special_crystals": materials["special_crystals"],
+                    "crystals": materials["crystals"],
                     "gathering": gathering,
                     "stamina_spent_seconds": decision.stamina_seconds,
                     "stamina_remaining_seconds": metadata.stamina_seconds,
@@ -299,7 +300,7 @@ class ClockGuard:
                     "elapsed_label": _format_elapsed(decision.elapsed_seconds),
                     "credited_label": "0min",
                     "gold": 0,
-                    "special_crystals": 0,
+                    "crystals": 0,
                     "gathering": gathering,
                     "regional_context": regional_context,
                     "stamina_spent_seconds": 0,

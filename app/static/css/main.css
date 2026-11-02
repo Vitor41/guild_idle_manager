@@ -308,6 +308,7 @@
 }
 
 @media (max-width: 760px) {
+  .mission-history-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compact-form { grid-template-columns: 1fr; }
   .dock-summary, .tutorial-actions { align-items: stretch; flex-direction: column; }
   .dock-summary > div:not(:first-child) { text-align: left; }
@@ -558,11 +559,16 @@ a:hover {
 .treasury-menu summary::-webkit-details-marker { display: none; }
 .treasury-menu summary small { color: var(--muted); font-size: .68rem; text-transform: uppercase; }
 .treasury-menu summary strong { color: var(--gold-2); }
+.treasury-menu summary strong, [data-resource-total], .countdown { font-variant-numeric: tabular-nums; }
 .treasury-popover { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: 260px; padding: 16px; border: 1px solid var(--gold); border-radius: 8px; background: #18130f; box-shadow: var(--shadow); }
 .treasury-popover h3 { margin: 0 0 12px; color: var(--gold-2); }
 .treasury-popover dl { display: grid; gap: 8px; margin: 0; }
 .treasury-popover dl div { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 7px; border-bottom: 1px solid rgba(233,198,116,.12); }
 .treasury-popover dd { margin: 0; font-weight: 800; }
+.mission-history-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0 18px; }
+.mission-history-kpis > div { min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.mission-history-kpis dt { color: var(--muted); font-size: .78rem; }
+.mission-history-kpis dd { margin: 4px 0 0; font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 .page-shell {
   width: min(100% - 40px, 1480px);
@@ -2495,4 +2501,5 @@ html { scroll-behavior: smooth; }
   .mission-card-info-footer { grid-template-columns: 1fr; }
   .salvage-preview { grid-template-columns: 1fr; }
 }
+@media (max-width: 360px) { .mission-history-kpis { grid-template-columns: 1fr; } }
 .desktop-clock-warning { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #c6a25c; color: #f0d99f; background: #302719; }

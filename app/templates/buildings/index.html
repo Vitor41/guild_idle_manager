@@ -27,10 +27,10 @@
     <section class="panel">
       <h2>Recursos</h2>
       <dl class="inline-stats">
-        <div><dt data-desktop-resource="gold">Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
-        <div><dt data-desktop-resource="wood">Madeira</dt><dd>{{ resources.wood if resources else 0 }}</dd></div>
-        <div><dt data-desktop-resource="ore">Minério</dt><dd>{{ resources.ore if resources else 0 }}</dd></div>
-        <div><dt data-desktop-resource="crystal">Cristais</dt><dd>{{ resources.crystals if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="gold">Ouro</dt><dd data-resource-total="gold">{{ resources.gold if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="wood">Madeira</dt><dd data-resource-total="wood">{{ resources.wood if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="ore">Minério</dt><dd data-resource-total="ore">{{ resources.ore if resources else 0 }}</dd></div>
+        <div><dt data-desktop-resource="crystal">Cristais</dt><dd data-resource-total="crystal">{{ resources.crystals if resources else 0 }}</dd></div>
       </dl>
     </section>
 

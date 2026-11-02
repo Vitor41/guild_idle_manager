@@ -17,7 +17,11 @@ from app.models.campaign import CampaignMetadata
 from app.models.guild import GuildResources
 from app.models.dungeon import DungeonTemplate
 from app.models.mission import MissionTemplate
-from app.models.regional import RegionalEvent, RegionalEventParticipant, RegionalGuildState, RegionalOffer
+from app.models.mercenary import Mercenary
+from app.models.regional import (
+    RegionalCpuMercenary, RegionalCpuResource, RegionalEvent, RegionalEventParticipant,
+    RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome,
+)
 from app.models.regional import RegionalCycle
 from app.models.user import User
 from app.services.dungeon_service import DungeonError, start_dungeon
@@ -43,6 +47,89 @@ from app.repositories.dungeon_repository import list_active_drops_for_dungeon
 
 router = APIRouter(prefix="/regional")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+
+
+@router.get("/regions/{region_code}")
+def regional_region_detail(
+    region_code: str,
+    request: Request,
+    db: DbSession,
+    current_user: User | None = Depends(get_current_player),
+    campaign: CampaignMetadata | None = Depends(get_current_campaign),
+):
+    if current_user is None or campaign is None:
+        return RedirectResponse("/login", status_code=303)
+    guild, _resources = get_current_guild_context(db, current_user.id)
+    if guild is None:
+        return RedirectResponse("/guild/create", status_code=303)
+    from app.services.regional_cycle_service import REGIONS
+
+    get_regional_board(db, campaign, guild)
+
+    region_name = dict(REGIONS).get(region_code)
+    if region_name is None:
+        return RedirectResponse("/regional", status_code=303)
+    states = list(db.scalars(select(RegionalGuildState).where(
+        RegionalGuildState.campaign_id == campaign.campaign_id,
+        RegionalGuildState.region_code == region_code,
+        RegionalGuildState.active.is_(True),
+    ).order_by(RegionalGuildState.influence.desc(), RegionalGuildState.reputation.desc(), RegionalGuildState.name)))
+    region_snapshots = list(db.scalars(select(RegionalRegionState).where(
+        RegionalRegionState.campaign_id == campaign.campaign_id,
+    ).order_by(RegionalRegionState.region_name)))
+    selected_region = next((row for row in region_snapshots if row.region_code == region_code), None)
+    state_ids = [state.id for state in states]
+    mercenaries = list(db.scalars(select(RegionalCpuMercenary).where(
+        RegionalCpuMercenary.guild_state_id.in_(state_ids), RegionalCpuMercenary.active.is_(True),
+    ))) if state_ids else []
+    resources = list(db.scalars(select(RegionalCpuResource).where(RegionalCpuResource.guild_state_id.in_(state_ids)))) if state_ids else []
+    outcomes = list(db.scalars(select(RegionalRunOutcome, RegionalOffer).join(
+        RegionalOffer, RegionalOffer.id == RegionalRunOutcome.offer_id,
+    ).where(RegionalRunOutcome.guild_state_id.in_(state_ids)))) if state_ids else []
+    roster_by_state: dict[int, list[RegionalCpuMercenary]] = {}
+    resources_by_state: dict[int, int] = {}
+    results_by_state: dict[int, dict[str, int]] = {}
+    for member in mercenaries:
+        roster_by_state.setdefault(member.guild_state_id, []).append(member)
+    for resource in resources:
+        if resource.resource_code in {"gold", "gold_coins"}:
+            resources_by_state[resource.guild_state_id] = resource.amount
+    for outcome, offer in outcomes:
+        key = "contracts" if offer.offer_type == "contract" else "bosses" if offer.offer_type == "boss" else "dungeons"
+        counts = results_by_state.setdefault(outcome.guild_state_id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0})
+        counts[key] += 1
+        counts["successes" if outcome.success else "failures"] += 1
+    rows = []
+    for state in states:
+        roster = roster_by_state.get(state.id, [])
+        tier_counts: dict[str, int] = {}
+        for member in roster:
+            tier_counts[member.rarity] = tier_counts.get(member.rarity, 0) + 1
+        wealth = resources_by_state.get(state.id, 0)
+        if state.guild_id == guild.id:
+            real_roster = list(db.scalars(select(Mercenary).where(
+                Mercenary.guild_id == guild.id,
+                Mercenary.status != "dismissed",
+            )))
+            tier_counts = {}
+            for member in real_roster:
+                tier_counts[member.rarity] = tier_counts.get(member.rarity, 0) + 1
+            roster = real_roster
+            live_resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
+            wealth = live_resources.gold if live_resources else wealth
+        rows.append({
+            "state": state,
+            "wealth": wealth,
+            "roster": len(roster) or state.roster_size,
+            "tier_counts": tier_counts,
+            "results": results_by_state.get(state.id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0}),
+        })
+    return templates.TemplateResponse(request=request, name="regional/detail.html", context={
+        "current_user": current_user, "guild": guild, "resources": _resources, "region_name": region_name,
+        "region_code": region_code, "guild_rows": rows, "regions": region_snapshots,
+        "selected_region": selected_region,
+        "home_region_code": next((code for code, name in REGIONS if name == campaign.home_region), ""),
+    })
 
 
 def _datetime_iso(value: datetime | None) -> str | None:
@@ -101,10 +188,10 @@ def _quote_offer_supply(db, guild, offer: RegionalOffer, mercenary_ids: list[str
         if template.mission_type in {"gathering", "long_idle"}:
             return {"available": False, "reason": "Suprimento indisponível nesta atividade."}
         try:
-            validate_mission_requirements(db, guild, template)
+            validate_mission_requirements(db, guild, template, required_guild_level=offer.required_guild_level_snapshot)
         except ValueError as error:
             return {"available": False, "reason": str(error)}
-        if not template.min_party_size <= len(members) <= template.max_party_size:
+        if not offer.min_party_size_snapshot <= len(members) <= offer.max_party_size_snapshot:
             return {"available": False, "reason": "O grupo não atende ao tamanho exigido pelo contrato."}
         details = get_party_chance_details(db, guild.id, offer.success_chance_snapshot, members,
                                            offer.recommended_power_snapshot, offer.recommended_level_snapshot)
@@ -123,11 +210,11 @@ def _quote_offer_supply(db, guild, offer: RegionalOffer, mercenary_ids: list[str
         if template is None:
             return {"available": False, "reason": "Masmorra indisponível."}
         try:
-            validate_dungeon_requirements(db, guild, template)
+            validate_dungeon_requirements(db, guild, template, required_guild_level=offer.required_guild_level_snapshot)
             validate_advanced_party_requirements(db, guild, template, members)
         except ValueError as error:
             return {"available": False, "reason": str(error)}
-        if not template.min_party_size <= len(members) <= template.max_party_size:
+        if not offer.min_party_size_snapshot <= len(members) <= offer.max_party_size_snapshot:
             return {"available": False, "reason": "O grupo não atende ao tamanho exigido pela masmorra."}
         details = get_party_chance_details(db, guild.id, offer.success_chance_snapshot, members,
                                            offer.recommended_power_snapshot, offer.recommended_level_snapshot,
@@ -446,6 +533,8 @@ async def start_offer(
                 regional_success_chance=offer.success_chance_snapshot,
                 regional_recommended_power=offer.recommended_power_snapshot,
                 regional_recommended_level=offer.recommended_level_snapshot,
+                regional_party_bounds=(offer.min_party_size_snapshot, offer.max_party_size_snapshot),
+                regional_required_guild_level=offer.required_guild_level_snapshot,
                 allow_regional_supply=True,
                 supply_snapshot_override=supply_snapshot,
             )
@@ -461,6 +550,8 @@ async def start_offer(
                 regional_success_chance=offer.success_chance_snapshot,
                 regional_recommended_power=offer.recommended_power_snapshot,
                 regional_recommended_level=offer.recommended_level_snapshot,
+                regional_party_bounds=(offer.min_party_size_snapshot, offer.max_party_size_snapshot),
+                regional_required_guild_level=offer.required_guild_level_snapshot,
                 supply_snapshot_override=supply_snapshot,
             )
             run.regional_offer_id = offer.id

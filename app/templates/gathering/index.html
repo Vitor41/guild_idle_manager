@@ -42,6 +42,7 @@
               </div>
             {% endif %}
             <p>1 unidade por ciclo de 60 s{% if assignment.extra_chance %} · +{{ assignment.extra_chance }}% de chance para 1 extra{% endif %}</p>
+            {% if assignment.target_quantity %}<p>Meta: {{ assignment.quantity_collected }} / {{ assignment.target_quantity }} unidades</p>{% endif %}
             <form method="post" action="/gathering/release/{{ assignment.id }}">
               <button class="secondary-button" type="submit">Liberar trabalhador</button>
             </form>
@@ -54,6 +55,8 @@
                 <select id="worker-{{ family }}" name="mercenary_id" required>
                   {% for worker in workers %}<option value="{{ worker.id }}">{{ worker.name }} · nível {{ worker.level }}</option>{% endfor %}
                 </select>
+                <label for="target-{{ family }}">Meta de unidades (opcional; vazio = contínua)</label>
+                <input id="target-{{ family }}" name="target_quantity" type="number" min="1" max="100000" inputmode="numeric">
                 <button type="submit">Designar para coleta</button>
               </form>
             {% else %}

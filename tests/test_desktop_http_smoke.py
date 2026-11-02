@@ -206,7 +206,7 @@ with tempfile.TemporaryDirectory() as data_dir:
 
     try:
         rendered_pages = {}
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/dungeons", "/regional", "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/tutorial")
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/dungeons", "/regional", f"/regional/regions/{REGIONS[0][0]}", "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/tutorial")
         for path in page_paths:
             if path == "/dashboard":
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
@@ -216,6 +216,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
+        assert "Navegar entre regiões".encode("utf-8") in rendered_pages[f"/regional/regions/{REGIONS[0][0]}"]
 
         with SessionLocal() as db:
             db.query(GuildBuilding).filter_by(guild_id=guild_id).delete(synchronize_session=False)
@@ -861,7 +862,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             "previous_revision": notice["previous_revision"],
             "current_revision": notice["current_revision"],
             "previous_save_version": 1,
-            "current_save_version": 6,
+            "current_save_version": 7,
             "backup_created": True,
         }, notice
         backup_files = list(
@@ -883,7 +884,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert status == 200
         assert b'role="status" aria-live="polite"' in dashboard_body
         assert "Dados da campanha atualizados.".encode("utf-8") in dashboard_body
-        assert "Versão 1 → 6".encode("utf-8") in dashboard_body
+        assert "Versão 1 → 7".encode("utf-8") in dashboard_body
         assert "cópia de segurança foi criada antes da atualização".encode("utf-8") in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in dashboard_body
         assert str(backup_files[0]).encode("utf-8") not in migration_body

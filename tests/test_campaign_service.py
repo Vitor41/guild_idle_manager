@@ -123,7 +123,7 @@ asyncio.run(main())
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
         with closing(sqlite3.connect(first.database_path)) as connection:
-            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "b1c2d3e4f5a6")
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "c7d8e9f0a1b2")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -404,11 +404,58 @@ asyncio.run(main())
                     "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
                 ).fetchone()
                 columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
-                self.assertEqual(revision, "b1c2d3e4f5a6")
+                self.assertEqual(revision, "c7d8e9f0a1b2")
                 self.assertEqual(guild, (7, "Guilda preservada", None))
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
                 self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_upgrade_unifies_crystals_without_changing_total_save_balance(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saves = Path(temp_dir) / "saves"
+            saves.mkdir()
+            campaigns = CampaignService(saves)
+            campaign_id = str(uuid4())
+            database_path = saves / f"{campaign_id}.db"
+            command.upgrade(campaigns._alembic_config(database_path), "b1c2d3e4f5a6")
+            with closing(sqlite3.connect(database_path)) as connection:
+                self._insert_legacy_row(connection, "campaign_metadata", {
+                    "campaign_id": campaign_id, "campaign_name": "Cristais preservados", "schema_version": 6,
+                })
+                self._insert_legacy_row(connection, "guilds", {
+                    "id": 901, "campaign_id": campaign_id, "name": "Guilda de teste", "level": 8,
+                })
+                self._insert_legacy_row(connection, "item_templates", {
+                    "id": 903, "name": "Cristais de teste", "description": "", "item_type": "material",
+                    "rarity": "common", "material_family": "gem",
+                })
+                self._insert_legacy_row(connection, "guild_inventory_items", {
+                    "id": 904, "guild_id": 901, "item_template_id": 903, "quantity": 13,
+                })
+                self._insert_legacy_row(connection, "guild_resources", {
+                    "id": 902, "guild_id": 901, "gold": 420, "crystals": 13, "special_crystals": 7,
+                })
+                self._insert_legacy_row(connection, "tavern_config", {
+                    "id": 905, "special_spawn_cooldown_hours": 24, "special_offer_duration_hours": 24,
+                })
+                self._insert_legacy_row(connection, "guild_tavern_states", {
+                    "id": 906, "guild_id": 901, "next_special_check_at": "2026-11-02 12:00:00",
+                })
+                connection.commit()
+
+            migration = campaigns._ensure_schema(database_path, campaign_id)
+            self.assertIsNotNone(migration)
+            self.assertEqual(migration.previous_revision, "b1c2d3e4f5a6")
+            self.assertEqual(migration.current_revision, "c7d8e9f0a1b2")
+            self.assertEqual((migration.previous_save_version, migration.current_save_version), (6, 7))
+            with closing(sqlite3.connect(database_path)) as connection:
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(guild_resources)")}
+                self.assertNotIn("special_crystals", columns)
+                self.assertEqual(connection.execute("SELECT crystals FROM guild_resources WHERE id = 902").fetchone()[0], 20)
+                self.assertEqual(connection.execute("SELECT crystal_reserve FROM guild_resources WHERE id = 902").fetchone()[0], 7)
+                self.assertEqual(connection.execute("SELECT SUM(quantity) FROM guild_inventory_items WHERE guild_id = 901").fetchone()[0], 13)
+                self.assertEqual(connection.execute("SELECT special_spawn_cooldown_hours, special_offer_duration_hours FROM tavern_config WHERE id = 905").fetchone(), (12, 3))
+                self.assertEqual(connection.execute("SELECT next_special_check_at FROM guild_tavern_states WHERE id = 906").fetchone()[0], "2026-11-02 12:00:00")
 
     def test_upgrade_from_pre_event_revision_preserves_campaign_regional_run_and_backup(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -495,7 +542,7 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(database_path, campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "d7e8f9a0b1c2")
-            self.assertEqual(migration.current_revision, "b1c2d3e4f5a6")
+            self.assertEqual(migration.current_revision, "c7d8e9f0a1b2")
             backups = list((Path(temp_dir) / "backups" / campaign_id).glob(
                 "pre-migration-d7e8f9a0b1c2-*.db"
             ))
@@ -504,7 +551,7 @@ asyncio.run(main())
             expected_guild = ("Guilda preservada", 12, 345, 67)
             expected_regional_guild = ("Guilda preservada", 12, 345, 88, 67)
             expected_run = (campaign_id, "mission", 99, "C", 1, 2, 75, 120)
-            for path, expected_revision in ((database_path, "b1c2d3e4f5a6"), (backups[0], "d7e8f9a0b1c2")):
+            for path, expected_revision in ((database_path, "c7d8e9f0a1b2"), (backups[0], "d7e8f9a0b1c2")):
                 with closing(sqlite3.connect(path)) as connection:
                     self.assertEqual(
                         connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
@@ -561,13 +608,13 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "a6b7c8d9e0f1")
-            self.assertEqual(migration.current_revision, "b1c2d3e4f5a6")
+            self.assertEqual(migration.current_revision, "c7d8e9f0a1b2")
             self.assertEqual(migration.previous_save_version, 3)
-            self.assertEqual(migration.current_save_version, 6)
+            self.assertEqual(migration.current_save_version, 7)
             with closing(sqlite3.connect(campaign.database_path)) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "b1c2d3e4f5a6",
+                    "c7d8e9f0a1b2",
                 )
                 self.assertIn(
                     "capacity_paused",

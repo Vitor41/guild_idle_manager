@@ -153,7 +153,7 @@ class FundedProgressionSimulationTests(unittest.TestCase):
         for day in row["daily_ledger"]:
             self.assertLessEqual(day["inventory_used"], day["inventory_capacity"])
         self.assertEqual(sum(day["materials_spent"]["crystals"] for day in row["daily_ledger"]), 0)
-        self.assertTrue(all(day["special_crystals_earned"] in (0, 1) for day in row["daily_ledger"]))
+        self.assertTrue(all(day["offline_crystals_earned"] in (0, 1) for day in row["daily_ledger"]))
 
     def test_recovery_requires_same_blocked_purchase_to_be_later_bought(self):
         row = {

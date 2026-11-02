@@ -56,6 +56,26 @@ function updateGenericCountdowns() {
   });
 }
 
+async function refreshResourceTotals() {
+  if (!document.querySelector("[data-resource-total]")) return;
+  try {
+    const response = await fetch("/api/resources", { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) return;
+    const totals = await response.json();
+    document.querySelectorAll("[data-resource-total]").forEach((element) => {
+      const value = totals[element.dataset.resourceTotal];
+      if (Number.isFinite(value)) element.textContent = new Intl.NumberFormat("pt-BR").format(value);
+    });
+  } catch (_error) {
+    // Live totals are a convenience; the server-rendered balance remains visible.
+  }
+}
+
+refreshResourceTotals();
+window.setInterval(() => {
+  if (document.visibilityState === "visible") refreshResourceTotals();
+}, 15000);
+
 window.parseUtcTimestamp = (value) => {
   const raw = value || "";
   return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);

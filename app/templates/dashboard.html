@@ -37,10 +37,10 @@
   </header>
   {% if desktop_mode %}
     <section class="desktop-resource-row" aria-label="Recursos da guilda">
-      <div><span class="desktop-resource-row__icon" data-desktop-resource="gold" aria-hidden="true"></span><span><small>Tesouro</small><strong>{{ resources.gold if resources else 0 }}</strong></span></div>
-      <div><span class="desktop-resource-row__icon" data-desktop-resource="wood" aria-hidden="true"></span><span><small>Madeira</small><strong>{{ resources.wood if resources else 0 }}</strong></span></div>
-      <div><span class="desktop-resource-row__icon" data-desktop-resource="ore" aria-hidden="true"></span><span><small>Minério</small><strong>{{ resources.ore if resources else 0 }}</strong></span></div>
-      <div><span class="desktop-resource-row__icon" data-desktop-resource="crystals" aria-hidden="true"></span><span><small>Cristais</small><strong>{{ resources.crystals if resources else 0 }}</strong></span></div>
+      <div><span class="desktop-resource-row__icon" data-desktop-resource="gold" aria-hidden="true"></span><span><small>Tesouro</small><strong data-resource-total="gold">{{ resources.gold if resources else 0 }}</strong></span></div>
+      <div><span class="desktop-resource-row__icon" data-desktop-resource="wood" aria-hidden="true"></span><span><small>Madeira</small><strong data-resource-total="wood">{{ resources.wood if resources else 0 }}</strong></span></div>
+      <div><span class="desktop-resource-row__icon" data-desktop-resource="ore" aria-hidden="true"></span><span><small>Minério</small><strong data-resource-total="ore">{{ resources.ore if resources else 0 }}</strong></span></div>
+      <div><span class="desktop-resource-row__icon" data-desktop-resource="crystals" aria-hidden="true"></span><span><small>Cristais</small><strong data-resource-total="crystal">{{ resources.crystals if resources else 0 }}</strong></span></div>
     </section>
     {{ operation_band() }}
   {% endif %}

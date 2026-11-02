@@ -34,7 +34,7 @@
       <article class="panel tavern-hero">
         <h2>Contratação</h2>
         <dl class="stat-list">
-          <div><dt>Ouro</dt><dd>{{ resources.gold if resources else 0 }}</dd></div>
+          <div><dt>Ouro</dt><dd data-resource-total="gold">{{ resources.gold if resources else 0 }}</dd></div>
           <div><dt>Vagas</dt><dd>{{ mercenaries|length }}/{{ mercenary_limit }}</dd></div>
         </dl>
         <p class="note">Novos mercenários entram pela Taverna e nascem como Aprendiz.</p>

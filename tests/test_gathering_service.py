@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import Base, create_database_engine
 from app.models import BuildingTemplate, Guild, GuildBuilding, GuildInventoryItem, GuildResources, ItemTemplate, Mercenary, MercenaryClass
+from app.models.gathering import GatheringAssignment
 from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 
@@ -73,6 +74,24 @@ class GatheringServiceTests(unittest.TestCase):
             self.db, self.guild, assignment, now=endpoint, max_seconds=2 * 60 * 60,
         )
         self.assertEqual(repeated["cycles"], 0)
+
+    def test_finite_assignment_stops_at_target_and_releases_worker(self):
+        assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start, target_quantity=3)
+
+        result = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=10))
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["target_quantity"], 3)
+        self.assertEqual(result["quantity_collected"], 3)
+        self.assertEqual(result["cycles"], 3)
+        self.assertEqual(result["stored"], 3)
+        self.db.flush()
+        self.assertEqual(self.db.scalar(select(Mercenary).where(Mercenary.id == self.worker.id)).status, "available")
+        self.assertEqual(self.db.scalar(select(GatheringAssignment.id).where(GatheringAssignment.id == assignment.id)), None)
+
+    def test_finite_assignment_rejects_nonpositive_target(self):
+        with self.assertRaisesRegex(ValueError, "meta de coleta"):
+            assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start, target_quantity=0)
 
     def test_filling_cycle_loses_only_its_overflow_and_leaves_later_cycle_pending(self):
         self.assertEqual(get_inventory_capacity(self.db, self.guild), 1500)
