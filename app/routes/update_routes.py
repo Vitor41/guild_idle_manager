@@ -1,4 +1,5 @@
 import ast
+import logging
 from pathlib import Path
 import sys
 import threading
@@ -20,6 +21,7 @@ from app.services.github_releases import (
 
 
 router = APIRouter()
+logger = logging.getLogger("gim.update")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 _release_update_lock = threading.Lock()
@@ -124,6 +126,7 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
 
 
 def _schedule_verified_update_install(callback, installer_path: Path) -> None:
+    logger.info("Scheduling verified installer handoff: installer=%s", installer_path)
     timer = threading.Timer(0.75, callback, args=(installer_path,))
     timer.daemon = True
     timer.start()
@@ -138,19 +141,28 @@ def install_verified_release_update(
     if current_user is None:
         return JSONResponse({"reason": "Abra uma campanha para instalar a atualização."}, status_code=401)
     if request.app.state.app_mode != "desktop" or not getattr(sys, "frozen", False):
+        logger.warning("Rejected release installer request outside packaged desktop mode")
         return JSONResponse({"reason": "A instalação via GitHub Releases só está disponível no aplicativo instalado."}, status_code=404)
 
     with _release_update_lock:
         prepared: PreparedReleaseUpdate | None = getattr(request.app.state, "prepared_release_update", None)
         if prepared is None:
+            logger.warning("Rejected release installer request without a prepared update")
             return JSONResponse({"reason": "Verifique e valide uma atualização antes de solicitar a instalação."}, status_code=409)
         if not prepared_file_is_valid(prepared, read_installed_channel()):
+            logger.error("Prepared release installer failed its final channel/hash validation")
             cleanup_prepared_update(prepared)
             request.app.state.prepared_release_update = None
             return JSONResponse({"reason": "O Setup preparado não corresponde mais ao hash ou canal verificado. Verifique novamente."}, status_code=409)
         install_callback = getattr(request.app.state, "request_verified_update_install", None)
         if not callable(install_callback):
+            logger.error("Release installer callback is unavailable in the desktop launcher")
             return JSONResponse({"reason": "O launcher não disponibilizou a abertura segura do Setup."}, status_code=503)
+        logger.info(
+            "Accepted verified release install: version=%s installer=%s",
+            prepared.version,
+            prepared.installer_path,
+        )
         request.app.state.prepared_release_update = None
 
     background_tasks.add_task(
