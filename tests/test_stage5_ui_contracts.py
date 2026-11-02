@@ -262,11 +262,13 @@ class Stage5UiContractTests(unittest.TestCase):
     def test_market_max_explains_stock_and_slots_without_a_rolling_quota(self):
         template = self.read("app/templates/market/index.html")
         guide = self.read("app/templates/guide/index.html")
+        admin = self.read("app/templates/admin/index.html")
         css = self.read("app/static/css/main.css")
         service = self.read("app/services/market_service.py")
         self.assertIn("estoque disponível e os espaços livres do Mercado", template)
         self.assertIn("todos os espaços de venda estão ocupados", template)
         self.assertIn("considerando o estoque disponível", template)
+        self.assertIn("Sem cota por período", admin)
         self.assertNotIn("material_sale_quota", template + service)
         self.assertNotIn("24 horas", guide)
         self.assertIn("overflow-wrap: anywhere", css)
