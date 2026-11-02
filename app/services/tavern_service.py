@@ -274,7 +274,7 @@ def refresh_special_offer(db: Session, guild: Guild, state: GuildTavernState, co
                     )[0],
                     "class_id": mercenary_class.id,
                     "rarity": rarity,
-                    "level": 20,
+                    "level": 1,
                     **attributes,
                     "gold_cost": int(getattr(config, RARITY_COST_FIELDS[rarity])),
                     "available_from": now,

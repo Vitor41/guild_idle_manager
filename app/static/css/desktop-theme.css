@@ -282,10 +282,13 @@ body[data-app-mode="desktop"] input::placeholder,
 body[data-app-mode="desktop"] textarea::placeholder { color: #91a4a4; }
 body[data-app-mode="desktop"] label { color: #d8e2df; }
 body[data-app-mode="desktop"] .status-badge,
-body[data-app-mode="desktop"] .rarity-badge,
 body[data-app-mode="desktop"] .tag,
 body[data-app-mode="desktop"] .bonus-pill {
   border-color: #3a5559; border-radius: 999px; color: #d3e0dc; background: #1d3034;
+}
+body[data-app-mode="desktop"] .rarity-badge {
+  border-radius: 999px;
+  background: #1d3034;
 }
 body[data-app-mode="desktop"] .status-available,
 body[data-app-mode="desktop"] .status-ready { color: var(--green); border-color: #496d53; background: #20372c; }
