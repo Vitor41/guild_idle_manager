@@ -168,14 +168,14 @@ def _verified_update_handoff(installer_path: Path, parent_pid: int) -> None:
     helper = r"""
 $ErrorActionPreference = 'Stop'
 $setup = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__SETUP__'))
-$logPath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__LOG__'))
+$logFile = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__LOG__'))
 $staging = [IO.Path]::GetDirectoryName($setup)
 $parentPid = __PID__
 $setupStarted = $false
 $setupExitCode = $null
 function Write-HandoffLog([string]$level, [string]$message) {
     $line = "$(Get-Date -Format o) $level gim.update.handoff $message"
-    try { Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8 } catch { }
+    Write-Output $line
 }
 try {
     Write-HandoffLog 'INFO' "Helper started; waiting for application PID $parentPid; setup=$setup"
@@ -184,7 +184,7 @@ try {
         Write-HandoffLog 'ERROR' "Application PID $parentPid did not exit after 30 seconds; setup preserved"
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
-            "O Guild Idle Manager ainda não encerrou completamente. O Setup foi preservado em:`n$setup`n`nFeche o processo GuildIdleManager pelo Gerenciador de Tarefas e execute o Setup manualmente. Registro: $logPath",
+            "O Guild Idle Manager ainda não encerrou completamente. O Setup foi preservado em:`n$setup`n`nFeche o processo GuildIdleManager pelo Gerenciador de Tarefas e execute o Setup manualmente. Registro: $logFile",
             'Guild Idle Manager', 'OK', 'Warning'
         ) | Out-Null
         return
@@ -197,7 +197,7 @@ try {
     if ($setupExitCode -ne 0) {
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.MessageBox]::Show(
-            "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logPath",
+            "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logFile",
             'Guild Idle Manager', 'OK', 'Warning'
         ) | Out-Null
     }
@@ -205,7 +205,7 @@ try {
     Write-HandoffLog 'ERROR' "Handoff failed: $($_.Exception.ToString()); setup preserved at $setup"
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show(
-        "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logPath",
+        "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logFile",
         'Guild Idle Manager', 'OK', 'Error'
     ) | Out-Null
 } finally {
