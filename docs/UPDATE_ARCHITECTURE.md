@@ -1,6 +1,6 @@
 # Atualização do aplicativo
 
-Versão local atual: `0.4.0` (`app/core/version.py`, também publicada como `FastAPI.version`). O versionamento desta entrega segue a convenção `major.release.minor`; a tag correspondente planejada é `DEV-v0.4.0`.
+Versão local atual: `0.4.1` (`app/core/version.py`, também publicada como `FastAPI.version`). O versionamento segue a convenção `major.release.minor`; a tag deste hotfix é `DEV-v0.4.1`.
 
 ## DEV a partir do checkout
 
@@ -36,4 +36,4 @@ Antes de distribuição, confirmar acesso anônimo ao repositório, gerar e prot
 
 O checkout prepara o bootstrap 0.3.3. Instalações anteriores sem chave pública embutida não podem aceitar confiança retroativamente e precisam receber o novo Setup manualmente uma vez. A chave privada deve ficar fora do repositório e ser armazenada como segredo do ambiente Actions `release-signing` (`GIM_RELEASE_PRIVATE_KEY_B64`); nunca deve ser commitada. Cadastre a chave pública correspondente como variável do repositório (`GIM_RELEASE_PUBLIC_KEY_B64`).
 
-O workflow `.github/workflows/publish-dev-release.yml` só roda manualmente a partir do branch principal e valida que a tag `DEV-vX.Y.Z` aponta para um commit já integrado nele, além de exigir que `app/core/version.py` corresponda à tag. Antes de rodar, crie o ambiente Actions `release-signing`, configure o segredo privado e a variável pública. O build embute a chave pública; o signer confirma que a privada corresponde à pública antes de assinar; o workflow publica Setup, manifesto e assinatura como prerelease. Para esta entrega, a release 0.4.0 só poderá ser publicada depois que este commit estiver integrado ao branch padrão e o ambiente Actions estiver configurado. Use a tag `DEV-v0.4.0` para publicar esta versão.
+O workflow `.github/workflows/publish-dev-release.yml` só roda manualmente a partir do branch principal e valida que a tag `DEV-vX.Y.Z` aponta para um commit já integrado nele, além de exigir que `app/core/version.py` corresponda à tag. Antes de rodar, crie o ambiente Actions `release-signing`, configure o segredo privado e a variável pública. O build embute a chave pública; o signer confirma que a privada corresponde à pública; o workflow publica Setup, manifesto e assinatura como prerelease. A versão 0.4.1 corrige o encerramento automático durante a atualização, que antes podia abrir uma confirmação nativa extra e impedir a abertura do Setup. Após integrar este commit ao branch padrão, use a tag `DEV-v0.4.1` e execute manualmente o workflow para publicar a release assinada.
