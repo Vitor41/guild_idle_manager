@@ -130,13 +130,18 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
         }
     sales = list_market_sales_by_guild(db, guild.id)
     active_sales = [sale for sale in sales if sale.status == "in_progress"]
+    inventory_items = get_inventory_for_guild(db, guild.id)
+    slots_available = len(active_sales) < int(market["slots"])
+    max_quantity_by_quota = int(get_material_sale_quota(db, guild.id, now=now)["remaining"])
+    for item in inventory_items:
+        item.market_max_quantity = min(int(item.quantity), max_quantity_by_quota) if slots_available else 0
     for sale in active_sales:
         prepare_timer_context(sale, now)
     completed_sales = [sale for sale in sales if sale.status == "completed"][:10]
     return {
         "market": market,
         "material_sale_quota": get_material_sale_quota(db, guild.id, now=now),
-        "inventory_items": get_inventory_for_guild(db, guild.id),
+        "inventory_items": inventory_items,
         "equipment_items": [
             item for item in get_equipment_for_guild(db, guild.id)
             if item.equipped_to_mercenary_id is None and item.market_sale is None
@@ -184,7 +189,10 @@ def start_equipment_sale(db: Session, guild: Guild, item_instance_id: str) -> Ma
     except ValueError as exc:
         raise MarketError("Equipamento invalido.") from exc
     item = get_item_instance_by_guild(db, guild.id, parsed_item_id)
-    if item is None or item.equipped_to_mercenary_id is not None or item.market_sale is not None:
+    already_listed = item is not None and db.scalar(
+        select(MarketSale.id).where(MarketSale.item_instance_id == item.id).limit(1)
+    ) is not None
+    if item is None or item.equipped_to_mercenary_id is not None or item.market_sale is not None or already_listed:
         raise MarketError("Equipamento indisponivel para venda.")
     return _start_sale(db, guild, item.item_template, 1, item_instance=item)
 

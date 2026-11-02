@@ -19,7 +19,7 @@ from app.models.dungeon import DungeonTemplate
 from app.models.mission import MissionTemplate
 from app.models.mercenary import Mercenary
 from app.models.regional import (
-    RegionalCpuMercenary, RegionalCpuResource, RegionalEvent, RegionalEventParticipant,
+    RegionalCpuCyclePlan, RegionalCpuMercenary, RegionalCpuResource, RegionalEvent, RegionalEventParticipant,
     RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome,
 )
 from app.models.regional import RegionalCycle
@@ -40,7 +40,7 @@ from app.services.regional_event_service import (
     build_portal_boss_snapshot,
 )
 from app.services.evolution_art_service import get_evolution_art_context
-from app.services.supply_preparation_service import estimate_drop_sale_value, guild_gold, quote_supply
+from app.services.supply_preparation_service import estimate_drop_sale_value, guild_gold, quote_supply, regional_kit_quote
 from app.repositories.item_repository import list_active_drops_for_mission
 from app.repositories.dungeon_repository import list_active_drops_for_dungeon
 
@@ -224,12 +224,7 @@ def _quote_offer_supply(db, guild, offer: RegionalOffer, mercenary_ids: list[str
         base_final = min(95, base_final + scouts_values(get_building_level(db, guild.id, "scouts"))["success_bonus_percentage_points"])
         success_gold = floor(offer.gold_reward_snapshot * (100 + skills.get("gold_reward", 0)) / 100)
         drops = list_active_drops_for_dungeon(db, template.id)
-    quote = quote_supply(
-        rank=offer.rank, success_gold=success_gold,
-        expected_drop_sale=estimate_drop_sale_value(db, guild.id, drops, 1),
-        multiplier=1, available_gold=guild_gold(db, guild.id),
-        applied_bonus_pp=min(5, max(0, 95 - base_final)),
-    )
+    quote = regional_kit_quote(db, guild.id, offer.rank, base_final)
     return {**quote, "base_final_chance": base_final,
             "final_chance": min(95, base_final + int(quote.get("chance_bonus_pp", 0)))}
 
@@ -242,12 +237,7 @@ def _initial_offer_supply_quote(db, guild, offer: RegionalOffer, available_gold:
         drops = list_active_drops_for_mission(db, template.id)
     else:
         drops = list_active_drops_for_dungeon(db, offer.dungeon_template_id)
-    return quote_supply(
-        rank=offer.rank, success_gold=offer.gold_reward_snapshot,
-        expected_drop_sale=estimate_drop_sale_value(db, guild.id, drops, 1),
-        multiplier=1, available_gold=available_gold,
-        applied_bonus_pp=5,
-    )
+    return regional_kit_quote(db, guild.id, offer.rank, offer.success_chance_snapshot)
 
 
 @router.post("/offers/{offer_id}/supply-quote")
@@ -301,10 +291,17 @@ def regional_index(
     reports = []
     for history_row in board["latest_history"]:
         cycle = db.get(RegionalCycle, history_row.cycle_id)
+        cpu_plans = list(db.execute(select(RegionalCpuCyclePlan, RegionalGuildState).join(
+            RegionalGuildState, RegionalGuildState.id == RegionalCpuCyclePlan.guild_state_id,
+        ).where(RegionalCpuCyclePlan.cycle_id == history_row.cycle_id).order_by(RegionalGuildState.slot)))
         reports.append({
             "row": history_row,
             "cycle_number": cycle.cycle_number if cycle else history_row.cycle_id,
             "summary": json.loads(history_row.summary_json or "{}"),
+            "cpu_activity_rows": [{"guild": state.name, "planned": plan.planned_actions,
+                                   "eligible": plan.eligible_actions, "started": plan.started_actions,
+                                   "resolved": plan.resolved_actions}
+                                  for plan, state in cpu_plans],
         })
     rebellion = board.get("rebellion_event")
     rebellion_participant = None
@@ -617,7 +614,7 @@ async def prepare_regional_offer_supply(
     quote = _quote_offer_supply(db, guild, offer, form.get("mercenary_ids", []))
     if not quote.get("available"):
         return _start_error_redirect(quote.get("reason", "Suprimento indisponível."), form)
-    cost = int(quote["cost_gold"])
+    cost = int(quote["cost_kits"])
     cycle = db.get(RegionalCycle, offer.cycle_id)
     now = datetime.now(timezone.utc)
     prep_seconds = max(1, int(offer.duration_seconds_snapshot * 0.015))
@@ -645,13 +642,16 @@ async def prepare_regional_offer_supply(
     if reserved.rowcount != 1:
         db.rollback()
         return _start_error_redirect("Esta oferta já está sendo preparada.", form)
-    debit = db.execute(update(GuildResources).where(
-        GuildResources.guild_id == guild.id,
-        GuildResources.gold >= cost,
-    ).values(gold=GuildResources.gold - cost))
+    from app.models.item import GuildInventoryItem, ItemTemplate
+    kit_template = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == "supply_kit"))
+    debit = db.execute(update(GuildInventoryItem).where(
+        GuildInventoryItem.guild_id == guild.id,
+        GuildInventoryItem.item_template_id == (kit_template.id if kit_template else -1),
+        GuildInventoryItem.quantity >= cost,
+    ).values(quantity=GuildInventoryItem.quantity - cost))
     if debit.rowcount != 1:
         db.rollback()
-        return _start_error_redirect("Saldo insuficiente para preparar o suprimento.", form)
+        return _start_error_redirect("Os Kits de Suprimentos mudaram; confira o inventário e tente novamente.", form)
     offer.status = "supply_preparing"
     offer.reserved_by_guild_state_id = player_state.id
     offer.supply_preparation_started_at_utc = now

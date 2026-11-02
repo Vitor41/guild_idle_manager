@@ -817,9 +817,8 @@ def _cpu_plan_for_guild(
     threat_delta = security_delta = 0.0
     rank_sum = 0
     action_index = 0
-    for _ in range(actions_requested):
-        if activity_rng.random() >= action_probability:
-            continue
+    eligible_actions = 0
+    for request_index in range(actions_requested):
         use_exploration = state.archetype == "exploration" and dungeon_offers
         candidates = dungeon_offers if use_exploration else contract_offers
         if not candidates:
@@ -838,6 +837,13 @@ def _cpu_plan_for_guild(
             and offer.min_party_size_snapshot <= offer.max_party_size_snapshot
         ]
         if not candidates:
+            continue
+        eligible_actions += 1
+        if action_probability <= 0:
+            continue
+        # Every rival starts its first eligible action each Vigília. Profiles
+        # keep their stochastic extra action, without random zero-activity cycles.
+        if request_index > 0 and activity_rng.random() >= action_probability:
             continue
         action_index += 1
         if state.archetype == "exploration" and candidates:
@@ -934,6 +940,10 @@ def _cpu_plan_for_guild(
         decisions_json=json.dumps(decisions, ensure_ascii=False, sort_keys=True),
         outcomes_json=json.dumps(outcomes, ensure_ascii=False, sort_keys=True),
         actions=len(decisions),
+        planned_actions=actions_requested,
+        eligible_actions=eligible_actions,
+        started_actions=len(decisions),
+        resolved_actions=len(outcomes),
         successes=successes,
         failures=failures,
         gold_earned=gold_earned,
@@ -1012,6 +1022,7 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
         security = float(region.security)
         threat = float(region.threat)
         cpu_actions = successes = failures = gold_earned = xp_earned = 0
+        cpu_planned = cpu_eligible = cpu_started = cpu_resolved = 0
         cpu_guilds = list(db.scalars(select(RegionalGuildState).where(
             RegionalGuildState.campaign_id == campaign_id,
             RegionalGuildState.region_code == region.region_code,
@@ -1029,6 +1040,10 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
                 db, campaign_id, cycle, region.region_code, plan
             )
             cpu_actions += plan.actions
+            cpu_planned += plan.planned_actions
+            cpu_eligible += plan.eligible_actions
+            cpu_started += plan.started_actions
+            cpu_resolved += plan.resolved_actions
             successes += action_successes
             failures += action_failures
             gold_earned += plan.gold_earned
@@ -1109,6 +1124,10 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
                 "player_successes": player_successes,
                 "player_failures": player_failures,
                 "actions_by_archetype": archetype_totals,
+                "cpu_activity": {
+                    "planned": cpu_planned, "eligible": cpu_eligible,
+                    "started": cpu_started, "resolved": cpu_resolved,
+                },
                 "successes": successes,
                 "failures": failures,
             }, ensure_ascii=False, sort_keys=True),

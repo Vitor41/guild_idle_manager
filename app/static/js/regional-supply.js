@@ -100,7 +100,9 @@ window.initializeRegionalSupply = (root = document) => {
           return;
         }
         quoteState = "available";
-        summary.textContent = `Chance ${quote.base_final_chance}% → ${quote.final_chance}% (+${quote.chance_bonus_pp} p.p.) · ${quote.cost_gold} ouro · retorno incremental esperado ${quote.incremental_ev_gold} ouro.`;
+        summary.textContent = quote.cost_kits !== undefined
+          ? `Chance ${quote.base_final_chance}% → ${quote.final_chance}% (+${quote.chance_bonus_pp} p.p.) · ${quote.cost_kits} kit(s) · disponíveis ${quote.available_kits}.`
+          : `Chance ${quote.base_final_chance}% → ${quote.final_chance}% (+${quote.chance_bonus_pp} p.p.) · ${quote.cost_gold} ouro · retorno incremental esperado ${quote.incremental_ev_gold} ouro.`;
         syncPrepareButton();
       } catch (_error) {
         if (version !== requestVersion) return;

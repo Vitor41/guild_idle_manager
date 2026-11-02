@@ -58,6 +58,31 @@ class GatheringServiceTests(unittest.TestCase):
         self.assertEqual(second["cycles"], 0)
         self.assertEqual(inventory.quantity, 2)
 
+    def test_meat_and_leather_coexist_at_hunting_ground_with_shared_inventory_cap(self):
+        second_worker = Mercenary(
+            guild_id=self.guild.id, class_id=self.mercenary_class.id, name="Caçador",
+            level=1, power=5, vitality=5, agility=5, intelligence=5, luck=5,
+        )
+        meat = ItemTemplate(name="Carne de teste", description="", item_type="material", rarity="common",
+                            material_family="meat", item_level=1, level_band="1-20", tier=1)
+        leather = ItemTemplate(name="Couro de teste", description="", item_type="material", rarity="common",
+                               material_family="leather", item_level=1, level_band="1-20", tier=1)
+        self.db.add_all([second_worker, meat, leather])
+        self.db.flush()
+        meat_job = assign_worker(self.db, self.guild, self.worker.id, "meat", now=self.start)
+        leather_job = assign_worker(self.db, self.guild, second_worker.id, "leather", now=self.start)
+        self.assertEqual(meat_job.node_code, leather_job.node_code)
+        self.assertEqual(meat_job.node_code, "hunting_ground")
+
+        meat_result = advance_assignment(self.db, self.guild, meat_job, now=self.start + timedelta(seconds=60))
+        leather_result = advance_assignment(self.db, self.guild, leather_job, now=self.start + timedelta(seconds=60))
+        self.db.flush()
+        inventory = list(self.db.scalars(select(GuildInventoryItem).where(GuildInventoryItem.guild_id == self.guild.id)))
+        self.assertEqual(meat_result["stored"], 1)
+        self.assertEqual(leather_result["stored"], 1)
+        self.assertEqual(len(inventory), 2)
+        self.assertLessEqual(get_inventory_usage(self.db, self.guild.id), get_inventory_capacity(self.db, self.guild))
+
     def test_max_seconds_caps_24h_elapsed_and_advances_checkpoint(self):
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
         endpoint = self.start + timedelta(days=1)

@@ -76,7 +76,11 @@ with tempfile.TemporaryDirectory() as data_dir:
     async def fail_gameplay_action():
         raise RuntimeError("password=do-not-log Authorization=Bearer do-not-log-this")
 
+    async def fail_activity_page():
+        raise RuntimeError("Falha de consulta da tela de atividades")
+
     app.add_api_route("/regional/test-diagnostic", fail_gameplay_action, methods=["POST"])
+    app.add_api_route("/guild/test-activity-page", fail_activity_page, methods=["GET"])
 
     create_status, _create_location, create_body = request(
         "/desktop/api/campaigns", method="POST", body=json.dumps({"guild_name": "Smoke desktop"}),
@@ -198,6 +202,13 @@ with tempfile.TemporaryDirectory() as data_dir:
             to_class_id=target_class.id, gold_cost=1, started_at=now, ends_at=later))
         material = db.query(ItemTemplate).filter(ItemTemplate.item_type == "material").first()
         assert material
+        inventory_material = db.query(GuildInventoryItem).filter_by(
+            guild_id=guild.id, item_template_id=material.id,
+        ).one_or_none()
+        if inventory_material is None:
+            db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=material.id, quantity=2))
+        else:
+            inventory_material.quantity += 2
         db.add(GuildSalvageJob(guild_id=guild.id, slot_number=1, item_template_id=item_template.id,
             material_template_id=material.id, quantity=1, gold_cost=1, started_at=now, ends_at=later))
         db.commit()
@@ -211,8 +222,14 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.commit()
 
     try:
+        with patch("app.main.logging.getLogger") as technical_logger:
+            failed_status, _failed_location, failed_body = request("/guild/test-activity-page")
+            assert failed_status == 500
+            assert "Não foi possível abrir esta tela".encode("utf-8") in failed_body
+            assert "Tentar novamente".encode("utf-8") in failed_body
+            technical_logger.return_value.exception.assert_called_once()
         rendered_pages = {}
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/dungeons", "/regional", f"/regional/regions/{REGIONS[0][0]}", "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/tutorial")
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", f"/regional/regions/{REGIONS[0][0]}", "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
         for path in page_paths:
             if path == "/dashboard":
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
@@ -223,6 +240,8 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
         assert "Navegar entre regiões".encode("utf-8") in rendered_pages[f"/regional/regions/{REGIONS[0][0]}"]
+        assert b"data-market-fill-max" in rendered_pages["/market"]
+        assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
 
         with SessionLocal() as db:
             db.query(GuildBuilding).filter_by(guild_id=guild_id).delete(synchronize_session=False)
@@ -232,6 +251,15 @@ with tempfile.TemporaryDirectory() as data_dir:
             resources = db.query(GuildResources).filter_by(guild_id=guild_id).one()
             assert active_cycle is not None
             resources.gold = 1000
+            supply_kit = db.query(ItemTemplate).filter_by(slug="supply_kit").one()
+            inventory_kit = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit.id,
+            ).one_or_none()
+            if inventory_kit is None:
+                db.add(GuildInventoryItem(guild_id=guild_id, item_template_id=supply_kit.id, quantity=1))
+            else:
+                inventory_kit.quantity = 1
+            supply_kit_id = supply_kit.id
             home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
             no_supply_offer = RegionalOffer(
                 campaign_id=campaign.campaign_id, cycle_id=active_cycle.id,
@@ -367,10 +395,10 @@ with tempfile.TemporaryDirectory() as data_dir:
         )
         supply_quote = json.loads(quote_body)
         assert quote_status == 200 and supply_quote["available"] is True, (quote_status, supply_quote)
-        assert supply_quote["chance_bonus_pp"] == 5 and supply_quote["cost_gold"] > 0, supply_quote
+        assert supply_quote["chance_bonus_pp"] == 5 and supply_quote["cost_kits"] == 1, supply_quote
         assert supply_quote["base_final_chance"] >= 86, supply_quote
         assert supply_quote["final_chance"] == min(95, supply_quote["base_final_chance"] + 5), supply_quote
-        assert supply_quote["cost_gold"] == 1, supply_quote
+        assert supply_quote["cost_gold"] == 0, supply_quote
         prepare_status, prepare_location, prepare_body = request(
             f"/regional/offers/{prepared_offer_id}/prepare", method="POST",
             body=f"mercenary_ids={regional_supply_worker_id}&supply=1",
@@ -382,13 +410,17 @@ with tempfile.TemporaryDirectory() as data_dir:
         with SessionLocal() as db:
             prepared_offer = db.get(RegionalOffer, prepared_offer_id)
             resources_after_prepare = db.query(GuildResources).filter_by(guild_id=guild_id).one().gold
+            kits_after_prepare = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one().quantity
             preparation = json.loads(prepared_offer.supply_preparation_snapshot_json)
             assert prepared_offer.status == "supply_preparing"
             assert preparation["prepared_for_offer_id"] == prepared_offer_id
             assert preparation["mercenary_ids"] == [str(regional_supply_worker_id)]
             assert preparation["chance_bonus_pp"] == 5
-            assert preparation["cost_gold"] == supply_quote["cost_gold"]
-            assert resources_after_prepare == 1000 - supply_quote["cost_gold"]
+            assert preparation["cost_kits"] == supply_quote["cost_kits"]
+            assert kits_after_prepare == 0
+            assert resources_after_prepare == 1000
 
         preparation_deadline = time.monotonic() + 4
         while time.monotonic() < preparation_deadline:

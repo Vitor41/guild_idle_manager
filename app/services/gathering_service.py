@@ -17,20 +17,20 @@ CYCLE_SECONDS = 60
 OFFLINE_CAP_SECONDS = 8 * 60 * 60
 RESOURCE_FAMILIES = {
     "wood": "wood", "ore": "ore", "leather": "leather", "essence": "essence",
-    "gem": "gem", "herb": "herb", "relic": "relic", "cloth": "cloth",
+    "gem": "gem", "herb": "herb", "relic": "relic", "cloth": "cloth", "meat": "meat",
 }
 NODE_CODES = {
     "wood": "forest", "ore": "quarry", "leather": "hunting_ground",
     "essence": "leyline", "gem": "crystal_cavern", "herb": "herb_garden",
-    "relic": "ruins", "cloth": "loom_grove",
+    "relic": "ruins", "cloth": "loom_grove", "meat": "hunting_ground",
 }
 FAMILY_LABELS = {
     "wood": "Madeira", "ore": "Minério", "leather": "Couro", "essence": "Essências",
-    "gem": "Gemas", "herb": "Ervas", "relic": "Relíquias", "cloth": "Fibras",
+    "gem": "Gemas", "herb": "Ervas", "relic": "Relíquias", "cloth": "Fibras", "meat": "Carne",
 }
 NODE_LABELS = {
     "wood": "Bosque", "ore": "Pedreira", "leather": "Terras de caça", "essence": "Veios arcanos",
-    "gem": "Caverna de cristais", "herb": "Horta silvestre", "relic": "Ruínas antigas", "cloth": "Bosque de linho",
+    "gem": "Caverna de cristais", "herb": "Horta silvestre", "relic": "Ruínas antigas", "cloth": "Bosque de linho", "meat": "Terras de caça",
 }
 
 

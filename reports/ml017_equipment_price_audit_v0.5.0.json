@@ -1,0 +1,512 @@
+{
+  "audit": "ml017_equipment_base_and_market_price_v1",
+  "uses_campaign_save": false,
+  "seeded_equipment_rows_audited": 1700,
+  "equipment_rows_by_slot": {
+    "main_hand": 593,
+    "shield": 53,
+    "chest": 286,
+    "helmet": 72,
+    "gloves": 71,
+    "boots": 71,
+    "ring": 167,
+    "necklace": 167,
+    "earring": 83,
+    "belt": 83
+  },
+  "common_base_by_slot": {
+    "main_hand": 24,
+    "shield": 23,
+    "chest": 30,
+    "helmet": 22,
+    "gloves": 18,
+    "boots": 18,
+    "ring": 16,
+    "necklace": 17,
+    "earring": 15,
+    "belt": 16
+  },
+  "rarity_premium_percent": {
+    "common": 0,
+    "uncommon": 15,
+    "rare": 35,
+    "epic": 60,
+    "legendary": 90,
+    "mythic": 125
+  },
+  "market_levels_checked": {
+    "1": 0,
+    "100": 30
+  },
+  "economic_price_ranges": {
+    "1": {
+      "lowest_common_unit_price": 15,
+      "highest_mythic_unit_price": 68,
+      "maximum_common_to_mythic_delta_for_same_slot": 38
+    },
+    "100": {
+      "lowest_common_unit_price": 19,
+      "highest_mythic_unit_price": 88,
+      "maximum_common_to_mythic_delta_for_same_slot": 49
+    }
+  },
+  "comparability_dimensions": {
+    "fixed_when_comparing_rarity": [
+      "equipment_slot",
+      "item_level",
+      "instance_refinement_level"
+    ],
+    "pricing_inputs": [
+      "equipment_slot",
+      "rarity",
+      "market_value_bonus_percent"
+    ],
+    "item_level_or_refinement_changes_sale_price": false
+  },
+  "monotonic_comparison_count": 20,
+  "all_comparisons_strictly_monotonic": true,
+  "comparisons": [
+    {
+      "slot": "main_hand",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 24,
+        "uncommon": 28,
+        "rare": 33,
+        "epic": 39,
+        "legendary": 46,
+        "mythic": 54
+      },
+      "effective_prices_by_rarity": {
+        "common": 24,
+        "uncommon": 28,
+        "rare": 33,
+        "epic": 39,
+        "legendary": 46,
+        "mythic": 54
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "main_hand",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 24,
+        "uncommon": 28,
+        "rare": 33,
+        "epic": 39,
+        "legendary": 46,
+        "mythic": 54
+      },
+      "effective_prices_by_rarity": {
+        "common": 31,
+        "uncommon": 36,
+        "rare": 42,
+        "epic": 50,
+        "legendary": 59,
+        "mythic": 70
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "shield",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 23,
+        "uncommon": 27,
+        "rare": 32,
+        "epic": 37,
+        "legendary": 44,
+        "mythic": 52
+      },
+      "effective_prices_by_rarity": {
+        "common": 23,
+        "uncommon": 27,
+        "rare": 32,
+        "epic": 37,
+        "legendary": 44,
+        "mythic": 52
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "shield",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 23,
+        "uncommon": 27,
+        "rare": 32,
+        "epic": 37,
+        "legendary": 44,
+        "mythic": 52
+      },
+      "effective_prices_by_rarity": {
+        "common": 29,
+        "uncommon": 35,
+        "rare": 41,
+        "epic": 48,
+        "legendary": 57,
+        "mythic": 67
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "chest",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 30,
+        "uncommon": 35,
+        "rare": 41,
+        "epic": 48,
+        "legendary": 57,
+        "mythic": 68
+      },
+      "effective_prices_by_rarity": {
+        "common": 30,
+        "uncommon": 35,
+        "rare": 41,
+        "epic": 48,
+        "legendary": 57,
+        "mythic": 68
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "chest",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 30,
+        "uncommon": 35,
+        "rare": 41,
+        "epic": 48,
+        "legendary": 57,
+        "mythic": 68
+      },
+      "effective_prices_by_rarity": {
+        "common": 39,
+        "uncommon": 45,
+        "rare": 53,
+        "epic": 62,
+        "legendary": 74,
+        "mythic": 88
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "helmet",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 22,
+        "uncommon": 26,
+        "rare": 30,
+        "epic": 36,
+        "legendary": 42,
+        "mythic": 50
+      },
+      "effective_prices_by_rarity": {
+        "common": 22,
+        "uncommon": 26,
+        "rare": 30,
+        "epic": 36,
+        "legendary": 42,
+        "mythic": 50
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "helmet",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 22,
+        "uncommon": 26,
+        "rare": 30,
+        "epic": 36,
+        "legendary": 42,
+        "mythic": 50
+      },
+      "effective_prices_by_rarity": {
+        "common": 28,
+        "uncommon": 33,
+        "rare": 39,
+        "epic": 46,
+        "legendary": 54,
+        "mythic": 65
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "gloves",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 18,
+        "uncommon": 21,
+        "rare": 25,
+        "epic": 29,
+        "legendary": 35,
+        "mythic": 41
+      },
+      "effective_prices_by_rarity": {
+        "common": 18,
+        "uncommon": 21,
+        "rare": 25,
+        "epic": 29,
+        "legendary": 35,
+        "mythic": 41
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "gloves",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 18,
+        "uncommon": 21,
+        "rare": 25,
+        "epic": 29,
+        "legendary": 35,
+        "mythic": 41
+      },
+      "effective_prices_by_rarity": {
+        "common": 23,
+        "uncommon": 27,
+        "rare": 32,
+        "epic": 37,
+        "legendary": 45,
+        "mythic": 53
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "boots",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 18,
+        "uncommon": 21,
+        "rare": 25,
+        "epic": 29,
+        "legendary": 35,
+        "mythic": 41
+      },
+      "effective_prices_by_rarity": {
+        "common": 18,
+        "uncommon": 21,
+        "rare": 25,
+        "epic": 29,
+        "legendary": 35,
+        "mythic": 41
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "boots",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 18,
+        "uncommon": 21,
+        "rare": 25,
+        "epic": 29,
+        "legendary": 35,
+        "mythic": 41
+      },
+      "effective_prices_by_rarity": {
+        "common": 23,
+        "uncommon": 27,
+        "rare": 32,
+        "epic": 37,
+        "legendary": 45,
+        "mythic": 53
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "ring",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 16,
+        "uncommon": 19,
+        "rare": 22,
+        "epic": 26,
+        "legendary": 31,
+        "mythic": 36
+      },
+      "effective_prices_by_rarity": {
+        "common": 16,
+        "uncommon": 19,
+        "rare": 22,
+        "epic": 26,
+        "legendary": 31,
+        "mythic": 36
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "ring",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 16,
+        "uncommon": 19,
+        "rare": 22,
+        "epic": 26,
+        "legendary": 31,
+        "mythic": 36
+      },
+      "effective_prices_by_rarity": {
+        "common": 20,
+        "uncommon": 24,
+        "rare": 28,
+        "epic": 33,
+        "legendary": 40,
+        "mythic": 46
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "necklace",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 17,
+        "uncommon": 20,
+        "rare": 23,
+        "epic": 28,
+        "legendary": 33,
+        "mythic": 39
+      },
+      "effective_prices_by_rarity": {
+        "common": 17,
+        "uncommon": 20,
+        "rare": 23,
+        "epic": 28,
+        "legendary": 33,
+        "mythic": 39
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "necklace",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 17,
+        "uncommon": 20,
+        "rare": 23,
+        "epic": 28,
+        "legendary": 33,
+        "mythic": 39
+      },
+      "effective_prices_by_rarity": {
+        "common": 22,
+        "uncommon": 26,
+        "rare": 29,
+        "epic": 36,
+        "legendary": 42,
+        "mythic": 50
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "earring",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 15,
+        "uncommon": 18,
+        "rare": 21,
+        "epic": 24,
+        "legendary": 29,
+        "mythic": 34
+      },
+      "effective_prices_by_rarity": {
+        "common": 15,
+        "uncommon": 18,
+        "rare": 21,
+        "epic": 24,
+        "legendary": 29,
+        "mythic": 34
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "earring",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 15,
+        "uncommon": 18,
+        "rare": 21,
+        "epic": 24,
+        "legendary": 29,
+        "mythic": 34
+      },
+      "effective_prices_by_rarity": {
+        "common": 19,
+        "uncommon": 23,
+        "rare": 27,
+        "epic": 31,
+        "legendary": 37,
+        "mythic": 44
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "belt",
+      "market_level": 1,
+      "market_value_bonus_percent": 0,
+      "base_prices_by_rarity": {
+        "common": 16,
+        "uncommon": 19,
+        "rare": 22,
+        "epic": 26,
+        "legendary": 31,
+        "mythic": 36
+      },
+      "effective_prices_by_rarity": {
+        "common": 16,
+        "uncommon": 19,
+        "rare": 22,
+        "epic": 26,
+        "legendary": 31,
+        "mythic": 36
+      },
+      "strictly_monotonic": true
+    },
+    {
+      "slot": "belt",
+      "market_level": 100,
+      "market_value_bonus_percent": 30,
+      "base_prices_by_rarity": {
+        "common": 16,
+        "uncommon": 19,
+        "rare": 22,
+        "epic": 26,
+        "legendary": 31,
+        "mythic": 36
+      },
+      "effective_prices_by_rarity": {
+        "common": 20,
+        "uncommon": 24,
+        "rare": 28,
+        "epic": 33,
+        "legendary": 40,
+        "mythic": 46
+      },
+      "strictly_monotonic": true
+    }
+  ],
+  "manual_admin_price_preservation": "covered by tests.test_equipment_pricing.EquipmentPricingTests.test_catalog_upgrade_reprices_legacy_values_but_preserves_admin_price",
+  "method_limit": "The Common reference is intentionally slot-based. Item level and instance refinement are not price inputs, so comparisons hold those dimensions constant; tier does not shift the requested slot baseline."
+}

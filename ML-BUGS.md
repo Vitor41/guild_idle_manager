@@ -91,6 +91,62 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Pedido:** informar o nível mínimo exigido antes da tentativa de iniciar.
 - **Implementação/evidência:** `RegionalOffer.required_guild_level_snapshot` congela o requisito; ofertas inelegíveis permanecem visíveis com requisito e ação desabilitada. A criação de ofertas não descarta conteúdo apenas por nível, e a contagem de ofertas abertas considera a elegibilidade.
 
+### ML-012 — Explicar claramente quando a preparação de suprimento está indisponível
+
+- **Origem:** nova anotação 1 e captura enviada em 2026-11-02.
+- **Status:** Validada; a cotação mostra kits, bônus aplicável e motivo de indisponibilidade; preparações regionais debita kit atomicamente com a reserva. Portais iniciados imediatamente continuam usando ouro, e a tela informa isso antes do envio.
+- **Pedido:** deixar explícito no card/modal por que o preparo não pode ser iniciado e qual condição falta, em vez de uma mensagem econômica vaga.
+- **Evidência observada:** contrato Rank E “Vigiar Acampamento Inimigo em Estrada do Carvalho”; mercenário Vitão nível 3 selecionado; a preparação aparece marcada, mas o botão “Preparar para missão” fica desabilitado e a mensagem diz “O retorno esperado do bônus ainda não cobre 1 ouro.”
+- **Explicação técnica preliminar:** o custo mínimo é 1 ouro e a cotação usa apenas o valor esperado de ouro, arredondado para baixo; XP e drops não sustentam o custo. O bônus efetivo também pode ser menor que 5 pontos percentuais quando a chance final do grupo já está próxima do teto de 95%. Neste caso, a mensagem indica que o valor incremental calculado ficou abaixo de 1 ouro. O rótulo genérico “+5 pontos percentuais” não mostra essa redução, contribuindo para a confusão.
+- **Implementação/evidência:** `app/services/supply_preparation_service.py` (`quote_supply`) calcula `applied_bonus_pp` com o espaço restante até 95% e desabilita a cotação se o valor esperado em ouro não cobre 1 ouro. `app/routes/regional_routes.py` calcula a chance efetiva após selecionar o grupo.
+- **Critério para investigação:** expor o bônus realmente aplicável, explicar o motivo exato do bloqueio e indicar o que o jogador pode mudar; cobrir chance no teto, chance parcial, saldo insuficiente e cotação disponível em teste.
+
+### ML-013 — Revisar o ouro das missões Rank E no início da campanha
+
+- **Origem:** nova anotação 2.
+- **Status:** Validada sem buff. Auditoria isolada com 20.000 sequências, Taverna 1, Alojamento 1 e Aprendiz real: 30 ouro iniciais, custo do segundo recrutamento 53, custo do Alojamento nível 2 200; 100% alcançam o ouro do recrutamento e 99,68% o ouro do alojamento em até cinco Vigílias. Ver `reports/ml013_early_rank_e_economy_v0.5.0.md`; madeira continua requisito separado.
+- **Pedido:** avaliar se as recompensas de ouro Rank E são baixas no early game, considerando restrições de elenco/alojamento para executar atividades em paralelo e os vários custos que drenam ouro.
+- **Critério para investigação:** simular progressão inicial e fontes/drenos de ouro antes de propor buff, verificando que recrutamento, alojamento e demais custos essenciais continuam alcançáveis sem tornar a economia trivial.
+
+### ML-014 — Mostrar o nível do próximo marco nos Escritórios de Missões e Exploradores
+
+- **Origem:** nova anotação 3.
+- **Status:** Validada; Escritório de Contratos e Exploradores mostram o próximo marco em múltiplos de 5, sem mudar o efeito de gameplay. Coberto por `test_contract_office_and_scouts_show_the_next_effect_breakpoint`.
+- **Pedido:** os cards de Escritório de Missões e Exploradores devem informar o nível da construção em que ocorre o próximo marco e o benefício correspondente, seguindo o padrão já exibido pela Taverna.
+- **Critério para investigação:** conferir níveis atuais, marcos configurados e mensagem exibida para ambos os prédios; apresentar o próximo nível e o efeito correto sem alterar os marcos de gameplay.
+
+### ML-015 — Preparar o módulo expansível de Oficinas
+
+- **Origem:** proposta de evolução feita em 2026-11-02 durante o refinamento da preparação de contratos.
+- **Status:** Validada no escopo inicial aprovado: área expansível “Oficinas”, uma Oficina de Suprimentos funcional e receita de 3 Carnes + 2 Ervas = 1 Kit. Estoque, capacidade, ausência de consumo em falha e custo regional são testados; demais oficinas permanecem futuras.
+- **Proposta:** criar uma área/menu “Oficinas” que possa abrigar oficinas especializadas, começando pela Oficina de Suprimentos e permitindo futuras áreas como Serralheria e Joalheria. A primeira oficina poderá transformar materiais coletados em itens utilizáveis; exemplo inicial em discussão: 3 Carnes + 2 Ervas = 1 Kit de Suprimentos.
+- **Limite atual da decisão:** não implementar ainda todas as oficinas, receitas, profissionais ou desbloqueios. Preservar uma estrutura expansível sem construir conteúdo futuro sem necessidade.
+- **Critério para refinamento:** definir navegação, desbloqueio, profissionais, receitas e consumo do kit na preparação antes de iniciar implementação. A quantidade por Rank permanece proposta e sujeita a balanceamento.
+
+### ML-016 — Reavaliar a atividade das guildas CPU com evidência de campanha real
+
+- **Origem:** nova evidência de jogo, relacionada à ML-001.
+- **Status:** Validada por instrumentação da campanha. Cada guilda CPU registra ações planejadas, elegíveis, iniciadas e resolvidas por Vigília; o relatório regional apresenta esses estágios. A simulação de 100 ciclos mede cadência média inicial de pelo menos 0,70 ação iniciada por guilda elegível e confirma que as ações iniciadas foram resolvidas.
+- **Problema observado:** no relatório do ciclo 12 do Bosque de Âmbar, as ações CPU aparecem como `0 sucessos · 0 falhas`, com `Contratos: 0 ações`, `Exploração: 0 ações` e `Segurança: 0 ações`; ao mesmo tempo, a guilda do jogador registrou oito sucessos e uma falha. A guilda do jogador está em primeiro no ranking apesar de estar no início da campanha, com dois mercenários e nível 2.
+- **Evidência:** capturas `codex-clipboard-92e626bf-426e-4367-854c-cec300906e17.png` e `codex-clipboard-ecfb16b2-d1e7-417b-8b1c-33a8e2be8455.png`, enviadas em 2026-11-02.
+- **Pedido:** tornar as guildas CPU suficientemente ativas para criar competição e evolução regional, considerando que o jogador humano tende a realizar mais ações. A simulação anterior não deve ser tratada como prova suficiente de atividade perceptível na campanha.
+- **Critério para investigação:** rastrear quantas ações são planejadas, elegíveis, iniciadas e resolvidas por guilda CPU em cada Vigília; comparar resultados reais de vários ciclos e verificar se o planejamento se perde por indisponibilidade de mercenários, duração, limite, seleção de oferta ou falha de resolução. Propor ajuste com evidência e manter diversidade de perfis sem permitir que o jogador seja sistematicamente ultrapassado por simulação injusta.
+
+### ML-017 — Diferenciar o valor de venda de equipamentos por tipo e raridade
+
+- **Origem:** nova anotação e captura do Mercado enviadas em 2026-11-02.
+- **Status:** Validada. Tabela Comum por espaço e acréscimos Common→Mythic estritamente crescentes para mesmo tipo, nível e refino nos Mercados nível 1 e 100; 1.700 equipamentos e 20 comparações auditados. Diferença máxima Common→Mythic do mesmo tipo: 38 ouro no Mercado 1 e 49 no nível 100. Preços administrativos customizados permanecem preservados; ver `reports/ml017_equipment_price_audit_v0.5.0.md`.
+- **Problema observado:** equipamentos de raridades diferentes aparecem com o mesmo preço de venda. Na captura, um Brinco Incomum e itens Comuns semelhantes aparecem por 23 ouro.
+- **Direção solicitada:** definir valores-base para equipamentos Comuns, diferenciando-os pelo tipo do item; equipamentos semelhantes de raridade superior devem receber acréscimo progressivo de ouro.
+- **Critério para investigação:** auditar todos os equipamentos e o cálculo do preço efetivo (valor-base, raridade, nível do item, refino e bônus do Mercado); propor uma tabela explícita de base por tipo e incrementos por raridade, verificando que cada raridade superior tenha preço estritamente maior para itens comparáveis e que não quebre a economia.
+
+### ML-018 — Adicionar atalho MAX à seleção de quantidade no Mercado
+
+- **Origem:** nova anotação do Mercado enviada em 2026-11-02.
+- **Status:** Validada. MAX usa `min(estoque, cota restante)` para materiais e fica em zero sem espaço de venda; a cota continua sendo revalidada no servidor. Equipamentos seguem limitados a uma unidade por instância, e a rota agora rejeita uma segunda listagem da mesma instância. Coberto por `tests.test_market_max_quantity`.
+- **Pedido:** disponibilizar um botão `MAX` para preencher a maior quantidade que o jogador pode anunciar para venda.
+- **Critério para investigação:** calcular o máximo respeitando estoque próprio, limite de quantidade por anúncio e espaços disponíveis no Mercado; não oferecer quantidade acima do permitido. Equipamentos únicos devem continuar limitados à unidade disponível por instância.
+
 ## Bugs / Inconsistências
 
 ### BUG-001 — Requisitos da oferta regional não são aplicados a partir do snapshot
@@ -102,17 +158,26 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Evidência:** `app/models/regional.py` (`RegionalOffer.min_party_size_snapshot` e `max_party_size_snapshot`); `app/services/regional_cycle_service.py` (`_add_offer`); `app/routes/regional_routes.py` (`start_offer` chama `start_mission`); `app/services/mission_service.py` (`validate_mission_requirements` e validação de `min_party_size`/`max_party_size`).
 - **Validação:** testes de serviço/rota aprovados: alterar requisitos do template depois da oferta e iniciar usando os valores congelados.
 
+### BUG-002 — Atividades da guilda retornam erro interno sem registro útil no log
+
+- **Origem:** relato do usuário e captura de tela enviados em 2026-11-02.
+- **Status:** Validada. Requisições desktop GET inesperadamente falhas recebem página recuperável com referência de diagnóstico; rota, método e stack trace são registrados em `desktop.log`. `tests.test_desktop_http_smoke` simula a exceção e confirma resposta 500, botão de tentativa novamente e chamada do logger.
+- **Problema observado:** ao abrir as atividades da guilda, a janela do jogo exibe apenas `Internal Server Error` em uma página em branco.
+- **Problema de diagnóstico:** o arquivo `%LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log` não registra a falha correspondente, impedindo identificar a rota, ação e exceção que causaram o erro.
+- **Evidência:** captura `codex-clipboard-fe81c85d-1fe1-4c69-a0d7-fe9acfd0411f.png`; rota e detalhes da exceção ainda não foram coletados.
+- **Critério para investigação:** reproduzir na tela de atividades da guilda, registrar no log o contexto mínimo da requisição com stack trace no log técnico apropriado, corrigir a causa do erro 500 e adicionar teste de regressão. Não registrar segredos nem dados sensíveis no log.
+
 ## Validação desta rodada
 
-- `compileall` de `app`, `scripts` e `tests`: aprovado.
-- Parse dos templates Jinja: aprovado.
-- Testes direcionados de balanço PRD2, coleta, rotas de recursos e serviço regional: aprovados.
-- Simulação regional determinística de 100 Vigílias, incluindo economia e isolamento de campanhas: aprovada.
-- Testes de migração, timers da Taverna, persistência de Cristais no clock guard e versão de save: aprovados.
-- Teste HTTP desktop de páginas e mutações, incluindo detalhes regionais: aprovado (`tests.test_desktop_http_smoke`, 1 teste).
-- `alembic heads`: uma única cabeça, `c7d8e9f0a1b2`.
-- `git diff --check`: aprovado.
-- Build, instalação e revisão visual do aplicativo instalado: não realizados conforme a decisão do usuário.
+- Regras de design confirmadas: chance de rebelião de 2% por Vigília elegível; prazos de portal avançam durante catch-up offline.
+- Testes direcionados de oficina, coleta/couro+carne, preços, suprimento, marcos de construção e MAX do Mercado: aprovados (27 testes antes da cobertura extra de equipamento único).
+- `tests.test_stage5_ui_contracts` + `tests.test_stage5_runtime_validation`: aprovados (33 testes no conjunto).
+- Retestes direcionados de `tests.test_regional_cycle_service`, `tests.test_campaign_service` e `tests.test_campaign_content_versioning`: simulação de 100 Vigílias e migração de saves cobertas; cinco testes de migração/campanha, quatro testes de descoberta/compatibilidade e dois casos regionais anteriormente divergentes aprovados após atualizar as expectativas do head e permitir que probabilidade zero desative ações CPU.
+- `tests.test_desktop_http_smoke`: página e mutações HTTP desktop aprovadas após ajustar fixtures de inventário sem duplicar linhas; inclui regressão de log/erro GET, oficinas, cotação e débito regional.
+- Auditoria ML-013: 20.000 sequências reproduzíveis em campanha descartável; sem abrir saves do jogador.
+- Auditoria ML-017: 1.700 equipamentos, 20 comparações tipo/raridade/Mercado, monotonicidade estrita e faixa econômica documentadas.
+- `alembic heads`: uma única cabeça, `d9e0f1a2b3c4`.
+- Build e instalação não realizados conforme pedido explícito do usuário; não houve acesso ao perfil de saves instalado.
 
 ### Matriz de critérios e evidências
 
@@ -130,6 +195,13 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 | ML-010 | Intervalo de grupo visível e usado ao iniciar oferta | `test_regional_run_uses_frozen_duration_chance_and_rewards`; rota regional exercitada pelo teste HTTP desktop |
 | ML-011 | Nível mínimo visível e ação bloqueada sem elegibilidade | Snapshot persistido em `RegionalOffer`; início usa `regional_required_guild_level`; cobertura de fluxo regional pelo teste HTTP desktop |
 | BUG-001 | Alterações posteriores do template não mudam os requisitos congelados | `test_regional_run_uses_frozen_duration_chance_and_rewards` altera requisitos após a oferta e inicia pelo snapshot |
+| ML-012 / ML-015 | Cotação clara, custo por kit e consumo só na confirmação da preparação; oficina inicial produz kits | `test_workshop_service`; smoke HTTP regional compara cotação, ouro preservado e kit debitado; portal imediato informa custo em ouro |
+| ML-013 | Decisão de manter recompensas Rank E com fluxo inicial suficiente em ouro, sem ignorar custo de materiais | `reports/ml013_early_rank_e_economy_v0.5.0.json` e `.md` (20.000 sequências) |
+| ML-014 | Próximo marco apresentado no próximo nível configurado | `test_contract_office_and_scouts_show_the_next_effect_breakpoint` |
+| ML-016 | Planejado/elegível/iniciado/resolvido por guilda e cadência de 100 ciclos | `test_cpu_action_cadence_is_above_initial_baseline`; `test_seeded_cpu_simulation_100_cycles_and_campaign_isolation` |
+| ML-017 | Preço por espaço e raridade, monotônico no Market 1/100 com tipo/nível/refino comparáveis | `reports/ml017_equipment_price_audit_v0.5.0.json` e `.md`; `tests.test_equipment_pricing` |
+| ML-018 | MAX por estoque/cota, bloqueio sem espaço e equipamento único por instância | `tests.test_market_max_quantity` |
+| BUG-002 | Erro GET visível e recuperável, com referência e stack trace no log técnico | regressão simulada em `tests.test_desktop_http_smoke` |
 
 ### Reteste após revisão independente
 
