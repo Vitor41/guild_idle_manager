@@ -63,6 +63,29 @@ class _ClosedEvent:
 
 
 class DesktopLauncherUnitTests(unittest.TestCase):
+    def test_programmatic_shutdown_skips_pywebview_quit_prompt(self):
+        state = {"confirm_close": True, "destroyed": False}
+
+        class Window:
+            @property
+            def confirm_close(self):
+                return state["confirm_close"]
+
+            @confirm_close.setter
+            def confirm_close(self, value):
+                state["confirm_close"] = value
+
+            def destroy(self):
+                state["destroyed"] = True
+                self.close_prompt_would_show = self.confirm_close
+
+        window = Window()
+        launcher._destroy_window_for_shutdown(window)
+
+        self.assertFalse(state["confirm_close"])
+        self.assertTrue(state["destroyed"])
+        self.assertFalse(window.close_prompt_would_show)
+
     def _run_with_stubs(self, health_error=None):
         listener = _Listener()
         data_directory = tempfile.TemporaryDirectory(prefix="gim-launcher-test-data-")
