@@ -178,6 +178,15 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Verificação de padrão semelhante:** busca em rotas/serviços regionais encontrou apenas essa consulta `scalars(select(A, B))`; as demais consultas `scalars()` selecionam entidade ou coluna única.
 - **Gate de integração/release:** nenhuma integração, publicação ou release foi realizada. Aguardam-se revisão CR e o gate humano de integração/release. Não declarar a entrega v0.5.0 completa nesta rodada.
 
+### BUG-003 — O handoff de atualização fecha o jogo sem abrir o Setup nem registrar a causa
+
+- **Origem:** relato do usuário, captura do diálogo de confirmação e `desktop.log` enviados em 2026-11-02, durante a atualização de 0.4.1 para 0.5.0.
+- **Status:** Em andamento; a versão 0.4.1 fecha a janela, mas o Setup não aparece e o aplicativo continua em 0.4.1.
+- **Evidência:** `desktop.log` contém somente o encerramento do Uvicorn; nenhuma etapa do launcher ou do processo auxiliar é registrada. A captura confirma que a versão 0.5.0 foi validada e que a ação de instalação foi confirmada.
+- **Comportamento confirmado no código:** o launcher dispara um PowerShell oculto para aguardar o PID do jogo e executar o Setup. O PowerShell espera indefinidamente (`WaitForExit()` sem limite), não registra o progresso em arquivo e só apresenta erro quando captura uma exceção; a limpeza pode apagar o staging após um retorno não zero do instalador.
+- **Critérios para correção:** limitar a espera pelo processo do jogo e fornecer diagnóstico explícito caso não encerre; registrar a requisição/fechamento em `desktop.log` e o início do helper, PID, início/fim do Setup, código de saída e stdout/stderr em `%LOCALAPPDATA%\GuildIdleManager\logs\update-handoff.log`; preservar o Setup e staging em qualquer falha ou retorno não zero; cobrir os caminhos de sucesso, timeout e erro em testes.
+- **Nota de distribuição:** a instalação 0.4.1 não pode corrigir a si própria se o próprio handoff não inicia o Setup. Depois da correção, poderá ser necessário instalar manualmente uma primeira versão corrigida; isso deve ser explicado ao usuário se confirmado.
+
 ## Validação desta rodada
 
 - Regras de design confirmadas: chance de rebelião de 2% por Vigília elegível; prazos de portal avançam durante catch-up offline.
