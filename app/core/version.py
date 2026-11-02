@@ -1,3 +1,3 @@
 """Application version displayed by local builds."""
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.5.1"

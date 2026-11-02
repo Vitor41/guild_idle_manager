@@ -1,11 +1,13 @@
 from contextlib import ExitStack
 import os
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
+import base64
 
 from app.desktop import launcher
 
@@ -63,6 +65,59 @@ class _ClosedEvent:
 
 
 class DesktopLauncherUnitTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Verified release handoff uses Windows PowerShell.")
+    def test_verified_update_handoff_logs_helper_and_preserves_failed_setup(self):
+        with tempfile.TemporaryDirectory(prefix="gim-release-update-") as staging_dir, \
+             tempfile.TemporaryDirectory(prefix="gim-test-windows-") as windows_dir:
+            installer = Path(staging_dir) / "GuildIdleManager-DEV-Setup.exe"
+            installer.write_bytes(b"test setup placeholder")
+            powershell = Path(windows_dir) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+            powershell.parent.mkdir(parents=True)
+            powershell.touch()
+            test_logs = Path(windows_dir) / "logs"
+            test_logs.mkdir()
+
+            with patch.dict(os.environ, {"WINDIR": windows_dir}), \
+                 patch.object(launcher, "user_log_directory", return_value=test_logs), \
+                 patch.object(launcher.subprocess, "Popen", return_value=SimpleNamespace(pid=4321)) as popen:
+                launcher._verified_update_handoff(installer, 1234)
+
+            command = popen.call_args.args[0]
+            helper = base64.b64decode(command[-1]).decode("utf-16le")
+            self.assertIn("Write-HandoffLog", helper)
+            self.assertIn("FromBase64String", helper)
+            self.assertIn("$logFile =", helper)
+            self.assertIn("Write-Output $line", helper)
+            self.assertNotIn("Add-Content", helper)
+            self.assertIn("WaitForExit(30000)", helper)
+            self.assertIn("Setup finished with exit code", helper)
+            self.assertIn("$setupExitCode -eq 0", helper)
+            self.assertIn("setup preserved", helper)
+            self.assertEqual(command[0], str(powershell))
+            self.assertEqual(popen.call_args.kwargs["stderr"], subprocess.STDOUT)
+            self.assertEqual(Path(popen.call_args.kwargs["stdout"].name).name, "update-handoff.log")
+            popen.assert_called_once()
+
+            parser_script = Path(windows_dir) / "parse-powershell.ps1"
+            parser_script.write_text(
+                "param([string]$Path)\n"
+                "$tokens = $null; $errors = $null\n"
+                "[System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$tokens, [ref]$errors) | Out-Null\n"
+                "if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }\n",
+                encoding="utf-8",
+            )
+            helper_file = Path(windows_dir) / "verified-handoff.ps1"
+            helper_file.write_text(helper, encoding="utf-8")
+            real_windows = Path(os.environ.get("WINDIR", r"C:\Windows"))
+            real_powershell = real_windows / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+            parsed = subprocess.run(
+                [str(real_powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(parser_script), str(helper_file)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(parsed.returncode, 0, parsed.stderr)
+
     def test_programmatic_shutdown_skips_pywebview_quit_prompt(self):
         state = {"confirm_close": True, "destroyed": False}
 

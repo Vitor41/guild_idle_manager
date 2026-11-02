@@ -163,44 +163,82 @@ def _verified_update_handoff(installer_path: Path, parent_pid: int) -> None:
     staging = installer.parent
     if staging.parent != temp_root or not staging.name.startswith("gim-release-update-"):
         raise RuntimeError("O Setup não está na pasta temporária esperada.")
+    log_file = user_log_directory() / "update-handoff.log"
 
     helper = r"""
 $ErrorActionPreference = 'Stop'
 $setup = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__SETUP__'))
+$logFile = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__LOG__'))
 $staging = [IO.Path]::GetDirectoryName($setup)
 $parentPid = __PID__
 $setupStarted = $false
+$setupExitCode = $null
+function Write-HandoffLog([string]$level, [string]$message) {
+    $line = "$(Get-Date -Format o) $level gim.update.handoff $message"
+    Write-Output $line
+}
 try {
+    Write-HandoffLog 'INFO' "Helper started; waiting for application PID $parentPid; setup=$setup"
     $parent = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
-    if ($parent) { $parent.WaitForExit() }
+    if ($parent -and -not $parent.WaitForExit(30000)) {
+        Write-HandoffLog 'ERROR' "Application PID $parentPid did not exit after 30 seconds; setup preserved"
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.MessageBox]::Show(
+            "O Guild Idle Manager ainda não encerrou completamente. O Setup foi preservado em:`n$setup`n`nFeche o processo GuildIdleManager pelo Gerenciador de Tarefas e execute o Setup manualmente. Registro: $logFile",
+            'Guild Idle Manager', 'OK', 'Warning'
+        ) | Out-Null
+        return
+    }
+    Write-HandoffLog 'INFO' "Application PID $parentPid exited; starting verified Setup"
     $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait
     $setupStarted = $true
+    $setupExitCode = $process.ExitCode
+    Write-HandoffLog 'INFO' "Setup finished with exit code $setupExitCode"
+    if ($setupExitCode -ne 0) {
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.MessageBox]::Show(
+            "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logFile",
+            'Guild Idle Manager', 'OK', 'Warning'
+        ) | Out-Null
+    }
 } catch {
+    Write-HandoffLog 'ERROR' "Handoff failed: $($_.Exception.ToString()); setup preserved at $setup"
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show(
-        "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)",
+        "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logFile",
         'Guild Idle Manager', 'OK', 'Error'
     ) | Out-Null
 } finally {
     $temp = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
     $full = [IO.Path]::GetFullPath($staging)
-    if ($setupStarted -and $full.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -and
+    if ($setupStarted -and $setupExitCode -eq 0 -and $full.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -and
         (Split-Path -Leaf $full).StartsWith('gim-release-update-')) {
-        Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
+        try {
+            Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction Stop
+            Write-HandoffLog 'INFO' 'Successful Setup staging directory removed'
+        } catch {
+            Write-HandoffLog 'WARNING' "Could not remove successful Setup staging directory: $($_.Exception.Message)"
+        }
     }
 }
 """.replace("__SETUP__", base64.b64encode(str(installer).encode("utf-8")).decode("ascii"))
+    helper = helper.replace("__LOG__", base64.b64encode(str(log_file).encode("utf-8")).decode("ascii"))
     helper = helper.replace("__PID__", str(parent_pid))
     encoded = base64.b64encode(helper.encode("utf-16le")).decode("ascii")
     windows = Path(os.environ.get("WINDIR", r"C:\Windows"))
     powershell = windows / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     if not powershell.is_file():
         raise RuntimeError("Windows PowerShell não está disponível para abrir o Setup.")
-    subprocess.Popen(
-        [str(powershell), "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
-        close_fds=True,
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-    )
+    logging.info("Verified update handoff requested: pid=%s installer=%s", parent_pid, installer)
+    with log_file.open("a", encoding="utf-8") as helper_output:
+        process = subprocess.Popen(
+            [str(powershell), "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+            close_fds=True,
+            stdout=helper_output,
+            stderr=subprocess.STDOUT,
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+    logging.info("Verified update PowerShell helper started: pid=%s", process.pid)
 
 
 def run() -> None:
@@ -284,6 +322,7 @@ def run() -> None:
         app.state.request_local_checkout_restart = request_local_checkout_restart
 
         def request_verified_update_install(installer_path: Path) -> None:
+            logging.info("Verified update install callback received: installer=%s", installer_path)
             try:
                 _verified_update_handoff(installer_path, os.getpid())
             except Exception as exc:
@@ -297,6 +336,7 @@ def run() -> None:
                     0x10,
                 )
                 return
+            logging.info("Closing desktop window for verified update handoff")
             if server is not None:
                 server.should_exit = True
             try:
