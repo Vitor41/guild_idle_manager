@@ -3,12 +3,12 @@ from hashlib import sha256
 from math import floor
 import random
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.gathering import GatheringAssignment
 from app.models.guild import Guild
-from app.models.item import ItemTemplate
+from app.models.item import GuildInventoryItem, ItemTemplate
 from app.models.mercenary import Mercenary
 from app.services.inventory_capacity_service import add_inventory_quantity_capped, get_inventory_capacity, get_inventory_usage
 
@@ -62,6 +62,20 @@ def _material_template(db: Session, family: str, guild_level: int) -> ItemTempla
         .where(ItemTemplate.item_type == "material", ItemTemplate.material_family == family, ItemTemplate.is_active.is_(True))
         .order_by(ItemTemplate.item_level, ItemTemplate.tier, ItemTemplate.id)
     )
+
+
+def get_inventory_quantity_by_family(db: Session, guild_id: int) -> dict[str, int]:
+    rows = db.execute(
+        select(ItemTemplate.material_family, func.sum(GuildInventoryItem.quantity))
+        .join(GuildInventoryItem, GuildInventoryItem.item_template_id == ItemTemplate.id)
+        .where(
+            GuildInventoryItem.guild_id == guild_id,
+            ItemTemplate.item_type == "material",
+            ItemTemplate.material_family.is_not(None),
+        )
+        .group_by(ItemTemplate.material_family)
+    )
+    return {str(family): int(quantity or 0) for family, quantity in rows}
 
 
 def assign_worker(

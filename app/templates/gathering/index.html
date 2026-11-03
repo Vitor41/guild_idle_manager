@@ -3,7 +3,7 @@
 {% block title %}Coleta · Guild Idle Manager{% endblock %}
 
 {% block content %}
-  <section class="dashboard gathering-page" aria-labelledby="gathering-title">
+  <section class="dashboard gathering-page" aria-labelledby="gathering-title" data-gathering-status-url="/gathering/status">
     <header class="desktop-page-hero gathering-hero">
       <img src="/static/assets/desktop/evolution/illustrations/gathering-worksite.webp" width="1600" height="900" alt="" fetchpriority="high">
       <div>
@@ -19,8 +19,8 @@
     {% if catalog_errors %}<p class="form-error" role="alert">O catálogo está sem item para: {{ catalog_errors|join(", ") }}. Feche e reabra a campanha para aplicar a atualização de conteúdo.</p>{% endif %}
 
     <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">
-      <div><span>Armazém compartilhado</span><strong>{{ "{:,.0f}".format(used).replace(",", ".") }} / {{ "{:,.0f}".format(capacity).replace(",", ".") }}</strong></div>
-      <progress max="{{ capacity }}" value="{{ [used, capacity]|min }}">{{ used }} de {{ capacity }}</progress>
+      <div><span>Armazém compartilhado</span><strong data-gathering-warehouse-label>{{ "{:,.0f}".format(used).replace(",", ".") }} / {{ "{:,.0f}".format(capacity).replace(",", ".") }}</strong></div>
+      <progress max="{{ capacity }}" value="{{ [used, capacity]|min }}" data-gathering-warehouse-progress>{{ used }} de {{ capacity }}</progress>
       <p>Equipamentos únicos não ocupam espaço. A produção excedente é descartada quando cada ciclo termina.</p>
     </section>
 
@@ -28,20 +28,21 @@
       {% for family, label in family_labels.items() %}
         {% set node = node_labels[family] %}
         {% set assignment = assignments|selectattr('resource_family', 'equalto', family)|first %}
-        <article class="panel gathering-card">
+        <article class="panel gathering-card" data-gathering-card="{{ family }}">
           <div class="gathering-card__heading"><span class="eyebrow">{{ node }}</span><h2>{{ label }}</h2></div>
           {% if assignment %}
             {% if assignment.capacity_paused %}
-              <p class="gathering-status" role="status">Pausada · Armazém cheio · <strong>{{ assignment.mercenary.name }}</strong></p>
+              <p class="gathering-status" role="status" data-gathering-status>Pausada · Armazém cheio · <strong>{{ assignment.mercenary.name }}</strong></p>
               <p>Libere espaço no Armazém para retomar a produção. O tempo em pausa não acumula ciclos.</p>
               <a class="secondary-button" href="{{ inventory_url }}">Abrir inventário e liberar espaço</a>
             {% else %}
-              <p class="gathering-status">Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
-              <div class="gathering-cycle" data-gathering-cycle data-progress-seconds="{{ assignment.progress_seconds }}">
+              <p class="gathering-status" data-gathering-status>Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
+              <div class="gathering-cycle" data-gathering-cycle data-gathering-family="{{ family }}" data-progress-seconds="{{ assignment.progress_seconds }}">
                 <progress max="60" value="{{ assignment.progress_seconds }}" aria-label="Progresso do ciclo de {{ label }}">{{ assignment.progress_seconds }} de 60 segundos</progress>
                 <p class="gathering-progress" role="timer" aria-live="off">Próximo ciclo em <strong data-gathering-remaining>{{ 60 - assignment.progress_seconds }}</strong> s</p>
               </div>
             {% endif %}
+            <p class="gathering-inventory-count">Armazenado: <strong data-gathering-family-count="{{ family }}">{{ inventory_by_family.get(family, 0) }}</strong></p>
             <p>1 unidade por ciclo de 60 s{% if assignment.extra_chance %} · +{{ assignment.extra_chance }}% de chance para 1 extra{% endif %}</p>
             {% if assignment.target_quantity %}<p>Meta: {{ assignment.quantity_collected }} / {{ assignment.target_quantity }} unidades</p>{% endif %}
             <form method="post" action="/gathering/release/{{ assignment.id }}">
@@ -49,6 +50,7 @@
             </form>
           {% else %}
             <p class="gathering-status">Posto disponível</p>
+            <p class="gathering-inventory-count">Armazenado: <strong data-gathering-family-count="{{ family }}">{{ inventory_by_family.get(family, 0) }}</strong></p>
             {% if workers %}
               <form method="post" action="/gathering/assign" class="gathering-assignment-form">
                 <input type="hidden" name="resource_family" value="{{ family }}">

@@ -298,11 +298,12 @@ def _insert_missing(db: Session, model, rows: list[dict[str, object]], key: str)
 
 
 def _reactivate_required_meat_gathering_material(db: Session) -> None:
-    """Restore one canonical node only when a campaign has no active meat material."""
+    """Ensure guilds at level 1 can gather meat even if only high-level nodes remain active."""
     active_meat_id = db.scalar(select(ItemTemplate.id).where(
         ItemTemplate.item_type == "material",
         ItemTemplate.material_family == "meat",
         ItemTemplate.is_active.is_(True),
+        ItemTemplate.item_level <= 1,
     ).limit(1))
     if active_meat_id is not None:
         return
