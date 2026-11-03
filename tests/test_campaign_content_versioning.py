@@ -72,6 +72,11 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     self.assertIsNotNone(canonical)
                     self.assertIsNotNone(sibling)
                     sibling_slug = sibling.slug
+                    for material in db.scalars(select(ItemTemplate).where(
+                        ItemTemplate.item_type == "material",
+                        ItemTemplate.material_family == "meat",
+                    )):
+                        material.is_active = False
                     canonical.is_active = False
                     canonical.name = "Carne inicial personalizada"
                     canonical.description = "Descrição mantida durante a atualização."
@@ -96,6 +101,50 @@ class CampaignContentVersioningTests(unittest.TestCase):
             finally:
                 campaigns.close_active_campaign(created.campaign_id)
                 engine.dispose()
+
+    def test_current_version_activation_repairs_missing_or_inactive_meat_material(self):
+        for canonical_is_missing in (False, True):
+            with self.subTest(canonical_is_missing=canonical_is_missing), tempfile.TemporaryDirectory() as temp_dir:
+                campaigns = CampaignService(Path(temp_dir) / "saves")
+                created = campaigns.create_campaign("Carne v5", "Guilda Carne v5")
+                engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+                factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+                try:
+                    with factory() as db:
+                        metadata = db.get(CampaignMetadata, created.campaign_id)
+                        self.assertEqual(metadata.content_version, PACK_VERSION)
+                        canonical = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == "material_meat_1_001"))
+                        self.assertIsNotNone(canonical)
+                        canonical.name = "Carne inicial personalizada"
+                        canonical.description = "Descrição de administrador preservada."
+                        canonical.base_sell_value = 77
+                        for material in db.scalars(select(ItemTemplate).where(
+                            ItemTemplate.item_type == "material",
+                            ItemTemplate.material_family == "meat",
+                        )):
+                            material.is_active = False
+                        if canonical_is_missing:
+                            canonical.slug = "legacy_material_meat_1_001"
+                        db.commit()
+
+                    activated = campaigns.activate_campaign(created.campaign_id)
+                    self.assertEqual(activated.content_version, PACK_VERSION)
+                    with factory() as db:
+                        canonical_rows = list(db.scalars(select(ItemTemplate).where(
+                            ItemTemplate.slug == "material_meat_1_001",
+                        )))
+                        self.assertEqual(len(canonical_rows), 1)
+                        self.assertTrue(canonical_rows[0].is_active)
+                        self.assertEqual(canonical_rows[0].material_family, "meat")
+                        self.assertEqual(canonical_rows[0].item_type, "material")
+                        if not canonical_is_missing:
+                            self.assertEqual(canonical_rows[0].name, "Carne inicial personalizada")
+                            self.assertEqual(canonical_rows[0].description, "Descrição de administrador preservada.")
+                            self.assertEqual(canonical_rows[0].base_sell_value, 77)
+                        self.assertEqual(db.get(CampaignMetadata, created.campaign_id).content_version, PACK_VERSION)
+                finally:
+                    campaigns.close_active_campaign(created.campaign_id)
+                    engine.dispose()
 
     def test_legacy_campaign_upgrade_backs_up_and_preserves_materialized_offers(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -87,9 +87,13 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             self.assertIn("Write-HandoffLog", helper)
             self.assertIn("FromBase64String", helper)
             self.assertIn("$logFile =", helper)
-            self.assertIn("Write-Output $line", helper)
+            self.assertIn("AppendAllText", helper)
             self.assertNotIn("Add-Content", helper)
             self.assertIn("WaitForExit(30000)", helper)
+            self.assertIn("-WindowStyle Normal", helper)
+            self.assertIn("as the current user", helper)
+            self.assertIn("-RedirectStandardOutput $setupStdout", helper)
+            self.assertIn("-RedirectStandardError $setupStderr", helper)
             self.assertIn("Setup finished with exit code", helper)
             self.assertIn("$setupExitCode -eq 0", helper)
             self.assertIn("setup preserved", helper)
@@ -117,6 +121,101 @@ class DesktopLauncherUnitTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(parsed.returncode, 0, parsed.stderr)
+
+            simulated = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            simulated = simulated.replace(
+                "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
+                "    Add-Type -AssemblyName System.Windows.Forms\n"
+                "    [System.Windows.Forms.MessageBox]::Show(\n"
+                "        $message, 'Guild Idle Manager', 'OK', $icon\n"
+                "    ) | Out-Null\n"
+                "}",
+                "function Show-HandoffMessage([string]$message, [string]$icon) {}",
+            )
+            setup_start = (
+                "$process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `\n"
+                "        -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr"
+            )
+            self.assertIn(setup_start, simulated)
+            simulated = simulated.replace(
+                setup_start,
+                "throw [System.InvalidOperationException]::new('Simulated SmartScreen blocked Setup')",
+            )
+            simulated_file = Path(windows_dir) / "simulated-handoff.ps1"
+            simulated_file.write_text(simulated, encoding="utf-8")
+            exercised = subprocess.run(
+                [str(real_powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(simulated_file)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(exercised.returncode, 0, exercised.stderr)
+            handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
+            self.assertIn("Simulated SmartScreen blocked Setup", handoff_log)
+            self.assertIn(str(installer), handoff_log)
+            self.assertTrue(installer.is_file(), "Failed handoff must preserve the verified Setup")
+
+            fake_setup = Path(windows_dir) / "simulated-setup.ps1"
+            fake_setup.write_text(
+                "[Console]::Out.WriteLine('SIMULATED_SETUP_STDOUT')\n"
+                "[Console]::Error.WriteLine('SIMULATED_SETUP_STDERR')\n"
+                "exit 17\n",
+                encoding="utf-8",
+            )
+            stream_helper = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            stream_helper = stream_helper.replace(
+                "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
+                "    Add-Type -AssemblyName System.Windows.Forms\n"
+                "    [System.Windows.Forms.MessageBox]::Show(\n"
+                "        $message, 'Guild Idle Manager', 'OK', $icon\n"
+                "    ) | Out-Null\n"
+                "}",
+                "function Show-HandoffMessage([string]$message, [string]$icon) {}",
+            )
+            fake_setup_command = (
+                f"$process = Start-Process -FilePath '{real_powershell}' "
+                f"-ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{fake_setup}\"' "
+                "-WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `\n"
+                "    -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr"
+            )
+            stream_helper = stream_helper.replace(setup_start, fake_setup_command)
+            stream_helper_file = Path(windows_dir) / "simulated-stream-handoff.ps1"
+            stream_helper_file.write_text(stream_helper, encoding="utf-8")
+            streamed = subprocess.run(
+                [str(real_powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(stream_helper_file)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(streamed.returncode, 0, streamed.stderr)
+            handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
+            self.assertIn("SIMULATED_SETUP_STDOUT", handoff_log)
+            self.assertIn("SIMULATED_SETUP_STDERR", handoff_log)
+            self.assertIn("Setup finished with exit code 17", handoff_log)
+            self.assertTrue(installer.is_file(), "A failed Setup must leave the release staging files available")
+
+    @unittest.skipUnless(os.name == "nt", "Verified release handoff uses Windows PowerShell.")
+    def test_verified_update_handoff_logs_synchronous_helper_start_failure(self):
+        with tempfile.TemporaryDirectory(prefix="gim-release-update-") as staging_dir, \
+             tempfile.TemporaryDirectory(prefix="gim-test-windows-") as windows_dir:
+            installer = Path(staging_dir) / "GuildIdleManager-DEV-Setup.exe"
+            installer.write_bytes(b"test setup placeholder")
+            powershell = Path(windows_dir) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+            powershell.parent.mkdir(parents=True)
+            powershell.touch()
+            test_logs = Path(windows_dir) / "logs"
+            test_logs.mkdir()
+
+            with patch.dict(os.environ, {"WINDIR": windows_dir}), \
+                 patch.object(launcher, "user_log_directory", return_value=test_logs), \
+                 patch.object(launcher.subprocess, "Popen", side_effect=OSError("simulated helper failure")):
+                with self.assertRaisesRegex(OSError, "simulated helper failure"):
+                    launcher._verified_update_handoff(installer, 1234)
+
+            handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
+            self.assertIn("Launcher received verified Setup handoff", handoff_log)
+            self.assertIn("Could not start PowerShell helper", handoff_log)
+            self.assertTrue(installer.is_file(), "Failed helper startup must preserve the verified Setup")
 
     def test_programmatic_shutdown_skips_pywebview_quit_prompt(self):
         state = {"confirm_close": True, "destroyed": False}

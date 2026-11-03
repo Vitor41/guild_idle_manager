@@ -298,17 +298,27 @@ def _insert_missing(db: Session, model, rows: list[dict[str, object]], key: str)
 
 
 def _reactivate_required_meat_gathering_material(db: Session) -> None:
-    """Restore the canonical starter meat node during a legacy pack migration."""
-    item = db.scalar(select(ItemTemplate).where(
-        ItemTemplate.slug == REQUIRED_MEAT_GATHERING_SLUG,
-        ItemTemplate.content_pack == PACK_KEY,
+    """Restore one canonical node only when a campaign has no active meat material."""
+    active_meat_id = db.scalar(select(ItemTemplate.id).where(
         ItemTemplate.item_type == "material",
         ItemTemplate.material_family == "meat",
-    ))
-    if item is not None and not item.is_active:
-        item.is_active = True
-        db.add(item)
-        db.flush()
+        ItemTemplate.is_active.is_(True),
+    ).limit(1))
+    if active_meat_id is not None:
+        return
+
+    item = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == REQUIRED_MEAT_GATHERING_SLUG))
+    if item is not None:
+        if (item.content_pack == PACK_KEY and item.item_type == "material"
+                and item.material_family == "meat" and not item.is_active):
+            item.is_active = True
+            db.add(item)
+            db.flush()
+        return
+
+    canonical = next(row for row in _material_rows() if row["slug"] == REQUIRED_MEAT_GATHERING_SLUG)
+    db.add(ItemTemplate(**canonical))
+    db.flush()
 
 
 def run_massive_content_seed(

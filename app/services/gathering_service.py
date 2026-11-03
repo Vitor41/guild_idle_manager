@@ -76,7 +76,10 @@ def assign_worker(
     if resource_family not in RESOURCE_FAMILIES:
         raise ValueError("Escolha uma família de recurso disponível para coleta.")
     if _material_template(db, resource_family, guild.level) is None:
-        raise ValueError(f"O material de {FAMILY_LABELS[resource_family]} não está disponível no catálogo. Reabra a campanha para atualizar o conteúdo.")
+        raise ValueError(
+            f"O material de {FAMILY_LABELS[resource_family]} não está disponível no catálogo. "
+            "Nenhum trabalhador foi designado; verifique Atualizações ou contate o suporte."
+        )
     if target_quantity is not None and (int(target_quantity) < 1 or int(target_quantity) > 100_000):
         raise ValueError("A meta de coleta deve ficar entre 1 e 100.000 unidades.")
     mercenary = db.scalar(select(Mercenary).where(Mercenary.id == mercenary_id, Mercenary.guild_id == guild.id))
@@ -122,7 +125,10 @@ def release_worker(db: Session, guild: Guild, assignment_id: int, *, now: dateti
         raise ValueError("A designação não foi encontrada.")
     summary = advance_assignment(db, guild, assignment, now=now)
     if summary.get("catalog_missing"):
-        raise ValueError(f"O material de {FAMILY_LABELS[assignment.resource_family]} não está disponível no catálogo. Reabra a campanha para atualizar o conteúdo.")
+        raise ValueError(
+            f"O material de {FAMILY_LABELS[assignment.resource_family]} não está disponível no catálogo. "
+            "Nenhum ciclo foi consumido; verifique Atualizações ou contate o suporte."
+        )
     assignment.mercenary.status = "available"
     db.delete(assignment)
     return summary

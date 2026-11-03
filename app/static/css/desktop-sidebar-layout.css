@@ -9,16 +9,33 @@ body[data-app-mode="desktop"] .sidebar {
 
 body[data-app-mode="desktop"] .compact-navigation {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   flex-direction: column;
   min-height: 0;
 }
 
 body[data-app-mode="desktop"] .sidebar-nav {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #607f80 #101a1d;
+}
+
+body[data-app-mode="desktop"] .sidebar-nav::-webkit-scrollbar {
+  width: 10px;
+}
+
+body[data-app-mode="desktop"] .sidebar-nav::-webkit-scrollbar-track {
+  background: #101a1d;
+}
+
+body[data-app-mode="desktop"] .sidebar-nav::-webkit-scrollbar-thumb {
+  border: 2px solid #101a1d;
+  border-radius: 8px;
+  background: #607f80;
 }
 
 body[data-app-mode="desktop"] .desktop-save-state {
