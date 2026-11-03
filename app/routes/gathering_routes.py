@@ -2,7 +2,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
@@ -11,13 +11,54 @@ from app.core.forms import read_form_fields
 from app.desktop.gameplay_diagnostics import log_gameplay_action, log_gathering_advancement
 from app.models.mercenary import Mercenary
 from app.models.user import User
-from app.services.gathering_service import advance_all_assignments, assign_worker, list_assignments, release_worker, FAMILY_LABELS, NODE_LABELS
+from app.services.gathering_service import advance_all_assignments, assign_worker, get_inventory_quantity_by_family, list_assignments, release_worker, FAMILY_LABELS, NODE_LABELS
 from app.services.guild_service import get_current_guild_context
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 
 
 router = APIRouter(prefix="/gathering")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+
+
+@router.get("/status")
+def gathering_live_status(
+    request: Request,
+    db: DbSession,
+    current_user: User | None = Depends(get_current_player),
+):
+    if current_user is None:
+        return JSONResponse({"error": "session_expired"}, status_code=401)
+    guild, _resources = get_current_guild_context(db, current_user.id)
+    if guild is None:
+        return JSONResponse({"error": "guild_missing"}, status_code=409)
+
+    advancement = advance_all_assignments(db, guild)
+    log_gathering_advancement(
+        route=request.url.path,
+        diagnostic_id=getattr(request.state, "diagnostic_id", ""),
+        advancement=advancement,
+    )
+    db.commit()
+    assignments = list_assignments(db, guild.id)
+    return JSONResponse({
+        "warehouse": {
+            "used": get_inventory_usage(db, guild.id),
+            "capacity": get_inventory_capacity(db, guild),
+        },
+        "inventory_by_family": get_inventory_quantity_by_family(db, guild.id),
+        "assignments": {
+            assignment.resource_family: {
+                "progress_seconds": assignment.progress_seconds,
+                "capacity_paused": assignment.capacity_paused,
+                "worker": assignment.mercenary.name,
+            }
+            for assignment in assignments
+        },
+        "advanced": {
+            family: {"cycles": result.get("cycles", 0), "stored": result.get("stored", 0)}
+            for family, result in advancement.items()
+        },
+    })
 
 
 def _log_gathering(request: Request, event: str, outcome: str, status_code: int = 200) -> None:
@@ -67,6 +108,7 @@ def gathering_index(
             "node_labels": NODE_LABELS,
             "capacity": get_inventory_capacity(db, guild),
             "used": get_inventory_usage(db, guild.id),
+            "inventory_by_family": get_inventory_quantity_by_family(db, guild.id),
             "inventory_url": "/inventory",
             "error": request.query_params.get("error"),
             "diagnostic_id": request.query_params.get("diagnostic"),

@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.dependencies import DbSession, get_current_player
+from app.desktop.gameplay_diagnostics import log_gathering_advancement
 from app.models.user import User
 from app.services.guild_service import get_current_guild_context
 from app.services.equipment_service import get_equipment_slot_label
@@ -12,6 +13,7 @@ from app.services.icon_service import get_item_icon, get_item_icon_path
 from app.services.display_service import BONUS_ATTRIBUTE_LABELS, clean_generated_name, item_type_label, rarity_label
 from app.services.inventory_service import get_equipment_for_guild, get_inventory_for_guild
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
+from app.services.gathering_service import advance_all_assignments
 
 
 router = APIRouter(prefix="/inventory")
@@ -31,6 +33,13 @@ def inventory_index(
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
 
+    advancement = advance_all_assignments(db, guild)
+    log_gathering_advancement(
+        route=request.url.path,
+        diagnostic_id=getattr(request.state, "diagnostic_id", ""),
+        advancement=advancement,
+    )
+    db.commit()
     inventory_items = get_inventory_for_guild(db, guild.id)
     for inventory_item in inventory_items:
         inventory_item.display_name = clean_generated_name(inventory_item.item_template.name)

@@ -113,6 +113,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         mercenary_class_id = mercenary_class.id
         mercenary = create_mercenary(db, guild.id, mercenary_class, "Teste visual")
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
+        meat_gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador de Carne")
+        live_gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador ao vivo")
         regional_no_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato sem suprimento")
         regional_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato preparado")
         regional_snapshot_worker_a = create_mercenary(db, guild.id, mercenary_class, "Snapshot equipe A")
@@ -125,6 +127,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.flush()
         mercenary_id = mercenary.id
         gathering_worker_id = gathering_worker.id
+        meat_gathering_worker_id = meat_gathering_worker.id
+        live_gathering_worker_id = live_gathering_worker.id
         regional_no_supply_worker_id = regional_no_supply_worker.id
         regional_supply_worker_id = regional_supply_worker.id
         regional_snapshot_worker_a_id = regional_snapshot_worker_a.id
@@ -550,6 +554,56 @@ with tempfile.TemporaryDirectory() as data_dir:
             assignment.checkpoint_at_utc = datetime.now(timezone.utc) - timedelta(seconds=60)
             assignment.capacity_paused = False
             db.commit()
+
+        meat_status, meat_location, meat_body = request(
+            "/gathering/assign", method="POST",
+            body=f"mercenary_id={meat_gathering_worker_id}&resource_family=meat",
+        )
+        assert meat_status == 303 and meat_location.startswith("/gathering?message="), (meat_status, meat_location, meat_body[:300])
+        with SessionLocal() as db:
+            meat_assignment = db.query(GatheringAssignment).filter_by(
+                mercenary_id=meat_gathering_worker_id, resource_family="meat",
+            ).one()
+            meat_assignment.checkpoint_at_utc = datetime.now(timezone.utc) - timedelta(seconds=61)
+            meat_assignment.capacity_paused = False
+            db.commit()
+        inventory_status, _inventory_location, inventory_body = request("/inventory")
+        assert inventory_status == 200, inventory_body[:300]
+        assert b'data-desktop-item-family="meat"' in inventory_body, inventory_body[:1000]
+        assert b">x1</span>" in inventory_body, inventory_body[:1000]
+        with SessionLocal() as db:
+            meat_stack = db.query(GuildInventoryItem).join(ItemTemplate).filter(
+                GuildInventoryItem.guild_id == guild_id,
+                ItemTemplate.item_type == "material",
+                ItemTemplate.material_family == "meat",
+            ).one()
+            assert meat_stack.quantity == 1
+
+        live_status, live_location, live_body = request(
+            "/gathering/assign", method="POST",
+            body=f"mercenary_id={live_gathering_worker_id}&resource_family=leather",
+        )
+        assert live_status == 303 and live_location.startswith("/gathering?message="), (live_status, live_location, live_body[:300])
+        with SessionLocal() as db:
+            live_assignment = db.query(GatheringAssignment).filter_by(
+                mercenary_id=live_gathering_worker_id, resource_family="leather",
+            ).one()
+            live_assignment.checkpoint_at_utc = datetime.now(timezone.utc) - timedelta(seconds=61)
+            live_assignment.capacity_paused = False
+            db.commit()
+        live_status, _live_location, live_body = request("/gathering/status")
+        live_payload = json.loads(live_body)
+        assert live_status == 200, live_body[:300]
+        assert live_payload["advanced"]["leather"]["cycles"] == 1, live_payload
+        assert live_payload["inventory_by_family"]["leather"] == 1, live_payload
+        with SessionLocal() as db:
+            wood_assignment = db.query(GatheringAssignment).filter_by(
+                mercenary_id=gathering_worker_id, resource_family="wood",
+            ).one()
+            wood_assignment.checkpoint_at_utc = datetime.now(timezone.utc) - timedelta(seconds=61)
+            wood_assignment.capacity_paused = False
+            db.commit()
+
         regional_advance_status, _regional_advance_location, regional_advance_body = request(
             "/regional", extra_headers={"X-GIM-Diagnostic-ID": "9999999999999999"},
         )

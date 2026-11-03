@@ -2,7 +2,7 @@ from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,12 +15,14 @@ from app.models.content import ContentSeedRun
 from app.models.dock import MerchantTemplate
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild
-from app.models.item import DungeonTemplateItemDrop, ItemTemplate, MissionTemplateItemDrop
+from app.models.item import DungeonTemplateItemDrop, GuildInventoryItem, ItemTemplate, MissionTemplateItemDrop
 from app.models.content import ProfessionTemplate
 from app.models.mission import MissionRun, MissionTemplate
+from app.models.mercenary import Mercenary, MercenaryClass
 from app.models.regional import RegionalCycle, RegionalOffer
 from app.seeds.massive_content import PACK_KEY, PACK_VERSION
 from app.services.campaign_service import CampaignService
+from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.regional_cycle_service import CYCLE_SECONDS, get_regional_board
 
 
@@ -47,6 +49,33 @@ class CampaignContentVersioningTests(unittest.TestCase):
                         ItemTemplate.material_family == "meat",
                         ItemTemplate.is_active.is_(True),
                     )))
+                    worker_class = db.scalar(select(MercenaryClass).order_by(MercenaryClass.id))
+                    worker = Mercenary(
+                        guild_id=guild.id, class_id=worker_class.id, name="Coletora de Carne",
+                        level=1, power=5, vitality=5, agility=5, intelligence=5, luck=5,
+                    )
+                    db.add(worker)
+                    db.flush()
+                    started_at = datetime(2026, 11, 3, tzinfo=timezone.utc)
+                    assignment = assign_worker(db, guild, worker.id, "meat", now=started_at)
+                    db.flush()
+                    produced = advance_assignment(
+                        db, guild, assignment, now=started_at + timedelta(seconds=60),
+                    )
+                    self.assertEqual(produced["cycles"], 1)
+                    self.assertEqual(produced["stored"], 1)
+                    db.commit()
+                    meat_stack = db.scalar(
+                        select(GuildInventoryItem)
+                        .join(ItemTemplate, ItemTemplate.id == GuildInventoryItem.item_template_id)
+                        .where(
+                            GuildInventoryItem.guild_id == guild.id,
+                            ItemTemplate.item_type == "material",
+                            ItemTemplate.material_family == "meat",
+                        )
+                    )
+                    self.assertIsNotNone(meat_stack)
+                    self.assertEqual(meat_stack.quantity, 1)
                     board = get_regional_board(db, metadata, guild, metadata.created_at_utc + timedelta(minutes=1))
                     self.assertEqual(metadata.content_version, PACK_VERSION)
                     self.assertEqual(board["cycle"].content_version, PACK_VERSION)
@@ -61,6 +90,7 @@ class CampaignContentVersioningTests(unittest.TestCase):
             factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
             canonical_slug = "material_meat_1_001"
             sibling_slug = "material_meat_1_002"
+            high_level_slug = None
             try:
                 with factory() as db:
                     metadata = db.get(CampaignMetadata, created.campaign_id)
@@ -77,6 +107,15 @@ class CampaignContentVersioningTests(unittest.TestCase):
                         ItemTemplate.material_family == "meat",
                     )):
                         material.is_active = False
+                    high_level = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.item_type == "material",
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.item_level > 1,
+                        ItemTemplate.slug != sibling_slug,
+                    ).order_by(ItemTemplate.item_level).limit(1))
+                    self.assertIsNotNone(high_level)
+                    high_level.is_active = True
+                    high_level_slug = high_level.slug
                     canonical.is_active = False
                     canonical.name = "Carne inicial personalizada"
                     canonical.description = "Descrição mantida durante a atualização."
@@ -97,7 +136,38 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     self.assertEqual(canonical.description, "Descrição mantida durante a atualização.")
                     self.assertEqual(canonical.base_sell_value, 77)
                     self.assertFalse(sibling.is_active)
+                    high_level = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == high_level_slug))
+                    self.assertTrue(high_level.is_active)
+                    self.assertTrue(canonical.item_level <= 1)
                     self.assertEqual(db.get(CampaignMetadata, created.campaign_id).content_version, PACK_VERSION)
+                    guild = db.scalar(select(Guild).where(Guild.campaign_id == created.campaign_id))
+                    worker_class = db.scalar(select(MercenaryClass).order_by(MercenaryClass.id))
+                    worker = Mercenary(
+                        guild_id=guild.id, class_id=worker_class.id, name="Coletor legada",
+                        level=1, power=5, vitality=5, agility=5, intelligence=5, luck=5,
+                    )
+                    db.add(worker)
+                    db.flush()
+                    started_at = datetime(2026, 11, 3, tzinfo=timezone.utc)
+                    assignment = assign_worker(db, guild, worker.id, "meat", now=started_at)
+                    db.flush()
+                    produced = advance_assignment(
+                        db, guild, assignment, now=started_at + timedelta(seconds=60),
+                    )
+                    self.assertEqual(produced["cycles"], 1)
+                    self.assertEqual(produced["stored"], 1)
+                    db.commit()
+                    stack = db.scalar(
+                        select(GuildInventoryItem)
+                        .join(ItemTemplate, ItemTemplate.id == GuildInventoryItem.item_template_id)
+                        .where(
+                            GuildInventoryItem.guild_id == guild.id,
+                            ItemTemplate.material_family == "meat",
+                            ItemTemplate.item_level <= 1,
+                        )
+                    )
+                    self.assertIsNotNone(stack)
+                    self.assertEqual(stack.quantity, 1)
             finally:
                 campaigns.close_active_campaign(created.campaign_id)
                 engine.dispose()

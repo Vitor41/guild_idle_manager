@@ -1,0 +1,75 @@
+{
+  "baseline": {
+    "long": {
+      "viewport": "1920x1080",
+      "asideOverflowY": "hidden",
+      "asideClientHeight": 1080,
+      "asideScrollHeight": 1160,
+      "asideScrollTop": 0,
+      "navClientHeight": 1072,
+      "navScrollHeight": 1072,
+      "updateTop": 1116,
+      "updateBottom": 1160,
+      "asideTop": 0,
+      "asideBottom": 1080,
+      "updateFullyInsideAside": false,
+      "updateHitTarget": false,
+      "updateHref": "/updates"
+    },
+    "short": {
+      "viewport": "1920x620",
+      "asideOverflowY": "hidden",
+      "asideClientHeight": 620,
+      "asideScrollHeight": 1160,
+      "asideScrollTop": 0,
+      "navClientHeight": 1072,
+      "navScrollHeight": 1072,
+      "updateTop": 1116,
+      "updateBottom": 1160,
+      "asideTop": 0,
+      "asideBottom": 620,
+      "updateFullyInsideAside": false,
+      "updateHitTarget": false,
+      "updateHref": "/updates"
+    }
+  },
+  "fixed": {
+    "long": {
+      "viewport": "1920x1080",
+      "asideOverflowY": "auto",
+      "asideClientHeight": 1080,
+      "asideScrollHeight": 1241,
+      "asideScrollTop": 161,
+      "navClientHeight": 1072,
+      "navScrollHeight": 1072,
+      "updateTop": 955,
+      "updateBottom": 999,
+      "asideTop": 0,
+      "asideBottom": 1080,
+      "updateFullyInsideAside": true,
+      "updateHitTarget": true,
+      "updateHref": "/updates"
+    },
+    "short": {
+      "viewport": "1920x620",
+      "asideOverflowY": "auto",
+      "asideClientHeight": 620,
+      "asideScrollHeight": 1241,
+      "asideScrollTop": 621,
+      "navClientHeight": 1072,
+      "navScrollHeight": 1072,
+      "updateTop": 495,
+      "updateBottom": 539,
+      "asideTop": 0,
+      "asideBottom": 620,
+      "updateFullyInsideAside": true,
+      "updateHitTarget": true,
+      "updateHref": "/updates"
+    }
+  },
+  "clickedUpdate": {
+    "clicked": true,
+    "pathname": "/updates",
+    "title": "Atualizações · Guild Idle Manager"
+  }
+}

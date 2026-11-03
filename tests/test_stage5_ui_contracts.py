@@ -228,6 +228,17 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("escape-dismissed", self.read("app/static/js/main.js"))
         self.assertIn("prefers-reduced-motion: reduce", self.read("app/static/css/main.css"))
 
+    def test_gathering_live_status_polls_and_updates_counts_without_a_reload(self):
+        gathering = self.read("app/templates/gathering/index.html")
+        script = self.read("app/static/js/gathering-cycle.js")
+        self.assertIn('data-gathering-status-url="/gathering/status"', gathering)
+        self.assertIn('data-gathering-family-count="{{ family }}"', gathering)
+        self.assertIn('fetch(page.dataset.gatheringStatusUrl', script)
+        self.assertIn('window.setInterval(refreshGatheringStatus, 15000)', script)
+        self.assertIn('counter.textContent = String(state.inventory_by_family', script)
+        self.assertIn('warehouseProgress.value = Math.min(state.warehouse.used, state.warehouse.capacity)', script)
+        self.assertIn('cycleUpdaters.get(cycle)?.(assignment.progress_seconds)', script)
+
     def test_naive_sqlite_utc_timestamps_are_parsed_as_utc(self):
         main = self.read("app/static/js/main.js")
         regional = self.read("app/static/js/evolution-dialogs.js")
