@@ -221,7 +221,10 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('class="guide-index classes-guide-index"', classes)
         for anchor in ("classes", "habilidades", "atributos", "combinacoes", "coleta", "dungeons"):
             self.assertIn(f'id="guia-{anchor}"', classes)
-        self.assertIn("aria-current", self.read("app/static/js/main.js"))
+        class_guide_js = self.read("app/static/js/main.js")
+        self.assertIn("aria-current", class_guide_js)
+        self.assertIn("nav.scrollTo({ left: nav.scrollLeft", class_guide_js)
+        self.assertNotIn("link.scrollIntoView", class_guide_js)
         self.assertIn("escape-dismissed", self.read("app/static/js/main.js"))
         self.assertIn("prefers-reduced-motion: reduce", self.read("app/static/css/main.css"))
 

@@ -581,6 +581,8 @@ class CampaignService:
                     metadata = db.get(CampaignMetadata, info.campaign_id)
                     if metadata is None:
                         raise ValueError("O arquivo da campanha não foi encontrado durante a abertura.")
+                    from app.seeds.massive_content import _reactivate_required_meat_gathering_material
+                    _reactivate_required_meat_gathering_material(db)
                     metadata.last_session_state = "active"
                     metadata.updated_at_utc = datetime.now(timezone.utc)
                     db.commit()

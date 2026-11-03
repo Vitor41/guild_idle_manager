@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 import time
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import uvicorn
@@ -73,6 +74,14 @@ def _destroy_window_for_shutdown(window) -> None:
     """Skip pywebview's interactive quit prompt for an already-confirmed shutdown."""
     window.confirm_close = False
     window.destroy()
+
+
+def _append_update_handoff_log(log_file: Path, level: str, message: str) -> None:
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    with log_file.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(f"{timestamp} {level} gim.update.handoff {message}\n")
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def _configure_logging() -> None:
@@ -175,39 +184,37 @@ $setupStarted = $false
 $setupExitCode = $null
 function Write-HandoffLog([string]$level, [string]$message) {
     $line = "$(Get-Date -Format o) $level gim.update.handoff $message"
-    Write-Output $line
+    try {
+        [IO.File]::AppendAllText($logFile, $line + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    } catch {
+        Write-Output $line
+    }
+}
+function Show-HandoffMessage([string]$message, [string]$icon) {
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show(
+        $message, 'Guild Idle Manager', 'OK', $icon
+    ) | Out-Null
 }
 try {
     Write-HandoffLog 'INFO' "Helper started; waiting for application PID $parentPid; setup=$setup"
     $parent = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
     if ($parent -and -not $parent.WaitForExit(30000)) {
         Write-HandoffLog 'ERROR' "Application PID $parentPid did not exit after 30 seconds; setup preserved"
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show(
-            "O Guild Idle Manager ainda não encerrou completamente. O Setup foi preservado em:`n$setup`n`nFeche o processo GuildIdleManager pelo Gerenciador de Tarefas e execute o Setup manualmente. Registro: $logFile",
-            'Guild Idle Manager', 'OK', 'Warning'
-        ) | Out-Null
+        Show-HandoffMessage "O Guild Idle Manager ainda não encerrou completamente. O Setup foi preservado em:`n$setup`n`nFeche o processo GuildIdleManager pelo Gerenciador de Tarefas e execute o Setup manualmente. Registro: $logFile" 'Warning'
         return
     }
-    Write-HandoffLog 'INFO' "Application PID $parentPid exited; starting verified Setup"
-    $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait
+    Write-HandoffLog 'INFO' "Application PID $parentPid exited; starting verified Setup visibly with elevation"
+    $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal -Verb RunAs
     $setupStarted = $true
     $setupExitCode = $process.ExitCode
     Write-HandoffLog 'INFO' "Setup finished with exit code $setupExitCode"
     if ($setupExitCode -ne 0) {
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show(
-            "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logFile",
-            'Guild Idle Manager', 'OK', 'Warning'
-        ) | Out-Null
+        Show-HandoffMessage "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logFile" 'Warning'
     }
 } catch {
     Write-HandoffLog 'ERROR' "Handoff failed: $($_.Exception.ToString()); setup preserved at $setup"
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.MessageBox]::Show(
-        "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logFile",
-        'Guild Idle Manager', 'OK', 'Error'
-    ) | Out-Null
+    Show-HandoffMessage "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logFile" 'Error'
 } finally {
     $temp = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
     $full = [IO.Path]::GetFullPath($staging)
@@ -227,17 +234,24 @@ try {
     encoded = base64.b64encode(helper.encode("utf-16le")).decode("ascii")
     windows = Path(os.environ.get("WINDIR", r"C:\Windows"))
     powershell = windows / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    _append_update_handoff_log(log_file, "INFO", f"Launcher received verified Setup handoff; pid={parent_pid}; setup={installer}")
     if not powershell.is_file():
+        _append_update_handoff_log(log_file, "ERROR", f"Windows PowerShell not found at {powershell}; setup preserved at {installer}")
         raise RuntimeError("Windows PowerShell não está disponível para abrir o Setup.")
     logging.info("Verified update handoff requested: pid=%s installer=%s", parent_pid, installer)
-    with log_file.open("a", encoding="utf-8") as helper_output:
-        process = subprocess.Popen(
-            [str(powershell), "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
-            close_fds=True,
-            stdout=helper_output,
-            stderr=subprocess.STDOUT,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-        )
+    try:
+        with log_file.open("a", encoding="utf-8") as helper_output:
+            process = subprocess.Popen(
+                [str(powershell), "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+                close_fds=True,
+                stdout=helper_output,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+    except Exception as exc:
+        _append_update_handoff_log(log_file, "ERROR", f"Could not start PowerShell helper; setup preserved at {installer}; error={exc}")
+        raise
+    _append_update_handoff_log(log_file, "INFO", f"PowerShell helper process started; pid={process.pid}")
     logging.info("Verified update PowerShell helper started: pid=%s", process.pid)
 
 

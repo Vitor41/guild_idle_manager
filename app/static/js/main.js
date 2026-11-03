@@ -86,11 +86,21 @@ function initializeClassGuideIndex() {
   if (!nav) return;
   const links = [...nav.querySelectorAll('a[href^="#"]')];
   const sections = links.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1)))).filter(Boolean);
+  const revealLinkHorizontally = (link) => {
+    const linkBounds = link.getBoundingClientRect();
+    const navBounds = nav.getBoundingClientRect();
+    const padding = 8;
+    if (linkBounds.left < navBounds.left + padding) {
+      nav.scrollTo({ left: nav.scrollLeft + linkBounds.left - navBounds.left - padding, behavior: "smooth" });
+    } else if (linkBounds.right > navBounds.right - padding) {
+      nav.scrollTo({ left: nav.scrollLeft + linkBounds.right - navBounds.right + padding, behavior: "smooth" });
+    }
+  };
   const setActive = (target) => {
     links.forEach((link) => {
       if (link.hash === `#${target.id}`) {
         link.setAttribute("aria-current", "location");
-        link.scrollIntoView({ block: "nearest", inline: "nearest" });
+        revealLinkHorizontally(link);
       } else link.removeAttribute("aria-current");
     });
   };
