@@ -321,6 +321,56 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         group_only_candidates = [maps["item_icon_groups"].get("heavy_armor"), None, None]
         self.assertEqual(next((key for key in group_only_candidates if key), None), "item-chest")
 
+    def test_meat_and_supply_kit_icons_resolve_for_inventory_market_and_loot(self):
+        manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
+        maps = manifest["icon_maps"]
+        cases = (
+            ("material_meat_1_001", "meat", "meat", "material-meat"),
+            ("supply_kit", "resource-provisions", "supply_kit", "item-supply-kit"),
+        )
+        for slug, group, family, sprite_key in cases:
+            with self.subTest(slug=slug):
+                mapping = maps["item_icon_groups"] if slug == "supply_kit" else maps["material_families"]
+                map_key = group.replace("-", "_") if slug == "supply_kit" else family
+                self.assertEqual(mapping[map_key], sprite_key)
+                for size, relative_path in manifest["sprites"][sprite_key]["paths"].items():
+                    self.assertTrue((ART_ROOT / relative_path).is_file())
+                    self.assertEqual(Path(relative_path).name, f"{sprite_key}.png")
+                    self.assertIn(int(size), (64, 128, 512))
+        self.assertEqual(maps["item_icon_groups"]["meat"], "material-meat")
+
+        with patch.dict(os.environ, {"APP_MODE": "desktop", "DATABASE_URL": "sqlite:///:memory:"}):
+            from app.services import icon_service
+
+        for slug, group, family, sprite_key in cases:
+            item = SimpleNamespace(
+                slug=slug, name=slug, item_type="material", icon_group=group,
+                material_family=family, equipment_slot=None,
+            )
+            with self.subTest(resolver=slug), patch(
+                "app.services.icon_service.settings", SimpleNamespace(app_mode="desktop"),
+            ):
+                icon_path = icon_service.get_item_icon_path(item)
+                expected_path = manifest["sprites"][sprite_key]["paths"]["64"]
+                self.assertEqual(icon_path, f"/assets/desktop/{expected_path}")
+                self.assertTrue((ART_ROOT / expected_path).is_file())
+
+        context_sources = {
+            "inventory": ROOT / "app" / "routes" / "inventory_routes.py",
+            "market": ROOT / "app" / "routes" / "market_routes.py",
+            "mission_loot": ROOT / "app" / "services" / "mission_service.py",
+            "dungeon_loot": ROOT / "app" / "services" / "dungeon_service.py",
+        }
+        for context, path in context_sources.items():
+            with self.subTest(context=context):
+                self.assertIn("get_item_icon_path", path.read_text(encoding="utf-8"))
+        for template in (
+            "inventory/index.html", "market/index.html", "missions/index.html", "dungeons/index.html",
+        ):
+            source = (ROOT / "app" / "templates" / template).read_text(encoding="utf-8")
+            with self.subTest(template=template):
+                self.assertIn("icon_path", source)
+
     def test_server_side_desktop_icons_use_new_manifest_and_web_icons_remain_legacy(self):
         with patch.dict(os.environ, {"APP_MODE": "desktop", "DATABASE_URL": "sqlite:///:memory:"}):
             from app.services import icon_service

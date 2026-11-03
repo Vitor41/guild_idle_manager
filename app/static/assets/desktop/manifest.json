@@ -827,6 +827,22 @@
         "512": "sprites/master_512/nav-class-guide.png"
       },
       "master_project_path": "app/static/assets/desktop/sprites/master_512/nav-class-guide.png"
+    },
+    "material-meat": {
+      "paths": {
+        "64": "sprites/64/material-meat.png",
+        "128": "sprites/128/material-meat.png",
+        "512": "sprites/master_512/material-meat.png"
+      },
+      "master_project_path": "app/static/assets/desktop/sprites/master_512/material-meat.png"
+    },
+    "item-supply-kit": {
+      "paths": {
+        "64": "sprites/64/item-supply-kit.png",
+        "128": "sprites/128/item-supply-kit.png",
+        "512": "sprites/master_512/item-supply-kit.png"
+      },
+      "master_project_path": "app/static/assets/desktop/sprites/master_512/item-supply-kit.png"
     }
   },
   "navigation": {
@@ -901,6 +917,7 @@
       "leather": "material-leather",
       "cloth": "material-cloth",
       "herb": "material-herb",
+      "meat": "material-meat",
       "essence": "material-essence",
       "gem": "material-gem",
       "beast": "material-beast",
@@ -941,6 +958,7 @@
       "hide": "material-leather",
       "cloth": "material-cloth",
       "herb": "material-herb",
+      "meat": "material-meat",
       "essence": "material-essence",
       "gem": "material-gem",
       "crystal": "resource-crystal",
@@ -961,6 +979,7 @@
       "medal": "resource-honor-mark",
       "merchant_token": "resource-merchant-token",
       "provisions": "resource-provisions",
+      "resource_provisions": "item-supply-kit",
       "quest_scroll": "item-quest-scroll",
       "tavern_ticket": "resource-tavern-ticket",
       "training_token": "resource-training-token"
