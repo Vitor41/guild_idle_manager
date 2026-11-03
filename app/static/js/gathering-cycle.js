@@ -36,11 +36,11 @@
     });
   };
 
-  const page = document.querySelector("[data-gathering-status-url]");
-  if (!page) return;
   let requestInFlight = false;
   const refreshGatheringStatus = async () => {
     if (requestInFlight || document.visibilityState !== "visible") return;
+    const page = document.querySelector("[data-gathering-status-url]");
+    if (!page) return;
     requestInFlight = true;
     try {
       const response = await fetch(page.dataset.gatheringStatusUrl, {
@@ -50,6 +50,7 @@
       });
       if (!response.ok) return;
       const state = await response.json();
+      if (!page.isConnected || document.querySelector("[data-gathering-status-url]") !== page) return;
       const warehouseLabel = page.querySelector("[data-gathering-warehouse-label]");
       const warehouseProgress = page.querySelector("[data-gathering-warehouse-progress]");
       if (warehouseLabel) {

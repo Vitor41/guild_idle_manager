@@ -234,6 +234,8 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('data-gathering-status-url="/gathering/status"', gathering)
         self.assertIn('data-gathering-family-count="{{ family }}"', gathering)
         self.assertIn('fetch(page.dataset.gatheringStatusUrl', script)
+        self.assertIn('const page = document.querySelector("[data-gathering-status-url]");', script)
+        self.assertIn('if (!page.isConnected || document.querySelector("[data-gathering-status-url]") !== page) return;', script)
         self.assertIn('window.setInterval(refreshGatheringStatus, 15000)', script)
         self.assertIn('counter.textContent = String(state.inventory_by_family', script)
         self.assertIn('warehouseProgress.value = Math.min(state.warehouse.used, state.warehouse.capacity)', script)
