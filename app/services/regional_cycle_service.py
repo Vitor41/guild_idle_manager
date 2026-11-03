@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from itertools import combinations
 import json
 import random
+from types import SimpleNamespace
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.game_balance import GUILD_MAX_LEVEL, GUILD_XP_BASE, GUILD_XP_GROWTH
@@ -24,20 +26,29 @@ from app.models.regional import (
     RegionalCycleRegion,
     RegionalEvent,
     RegionalEventActivity,
+    RegionalEventParticipant,
     RegionalGuildState,
     RegionalOffer,
     RegionalRegionState,
     RegionalRunOutcome,
     RegionalWorldState,
 )
-from app.services.balance_service import CLASS_SUCCESS_BONUS, calculate_power_score, power_success_adjustment
+from app.models.tavern import TavernConfig
+from app.services.balance_service import (
+    APPRENTICE_RARITY_CAPS,
+    CLASS_SUCCESS_BONUS,
+    MERCENARY_POWER_RANGES,
+    calculate_power_score,
+    power_success_adjustment,
+)
 from app.services.equipment_service import get_mercenary_attribute_summary
 from app.models.content import ProfessionTemplate
+from app.services.tavern_service import get_discounted_hire_cost, get_tavern_apprentice_chances, next_apprentice_cost
 
 
 LEGACY_VIGILIA_RULES_VERSION = "vigilia-v2"
-VIGILIA_RULES_VERSION = "vigilia-v4"
-RIVAL_CALM_RULES_VERSIONS = frozenset({"vigilia-v3", "vigilia-v4"})
+VIGILIA_RULES_VERSION = "vigilia-v6"
+RIVAL_CALM_RULES_VERSIONS = frozenset({"vigilia-v3", "vigilia-v4", "vigilia-v5", "vigilia-v6"})
 CYCLE_SECONDS = 6 * 60 * 60
 RANKS = ("E", "D", "C", "B", "A", "S")
 # Confirmed GDD reference for a Vigília with no regional actions.
@@ -46,8 +57,8 @@ RIVAL_CALM_WINDOW_CYCLES = 4
 RIVAL_CALM_IMPACT_PER_CYCLE = 0.25
 REGIONAL_IMPACT_BASE = 0.02
 REGIONAL_IMPACT_PER_RANK = 0.02
-# CPU rivals make a deterministic per-action decision each Vigília. Their
-# profile sets the cadence; archetype and campaign seed add small variation.
+# CPU risk influences offer success; activity throughput comes from roster,
+# free teams, offer availability, and duration scheduling.
 CPU_ACTION_PROBABILITY_BY_PROFILE = {"strong": 0.31, "medium": 0.29, "new": 0.26}
 CPU_ARCHETYPE_ACTION_ADJUSTMENT = {
     "expansion": 0.005,
@@ -90,6 +101,22 @@ CPU_PROFILE_BASE = {
 }
 CPU_STAGE_RESOURCE_SCALARS = (1.00, 1.05, 1.10, 1.15, 1.20)
 CPU_STAGE_LEVEL_BONUSES = (0, 0, 1, 1, 2)
+CPU_INITIAL_ROSTER_SIZE = {"strong": 5, "medium": 3, "new": 1}
+REGIONAL_GRADUAL_PRESSURE_MIN = 9.5
+REGIONAL_GRADUAL_PRESSURE_MAX = 9.9
+REGIONAL_GRADUAL_MAINTENANCE_PRESSURE = 1.5
+REGIONAL_GRADUAL_MAINTENANCE_THRESHOLD = 85.0
+REGIONAL_GRADUAL_THREAT_SOFT_CAP = 95.0
+REGIONAL_PRESSURE_WINDOW_CYCLES = 19
+REGIONAL_GRADUAL_RECOVERY_THRESHOLD = 80.0
+REGIONAL_GRADUAL_RECOVERY_PRESSURE = 12.0
+REGIONAL_GRADUAL_SECURITY_RECOVERY = 5.0
+REGIONAL_GRADUAL_SECURITY_RECOVERY_CEILING = 75.0
+REGIONAL_GRADUAL_SECURITY_PRESSURE_MIN = 4.5
+REGIONAL_GRADUAL_SECURITY_PRESSURE_MAX = 4.9
+REGIONAL_ACTIVE_SECURITY_FLOOR = 20.0
+CPU_FAILURE_RISK_CAP_PP = 15
+CPU_TAVERN_BASE_COST = 50
 PROFESSION_RESOURCE_CODES = {
     "woodcutter": "wood", "miner": "ore", "leatherworker": "leather", "herbalist": "herb",
     "weaver": "cloth", "prospector": "gem", "reliquary": "relic", "alchemist": "essence",
@@ -192,6 +219,65 @@ def regional_cpu_action_probability(
     )[:8], 16) / 0xFFFFFFFF
     seed_variation = (seed_fraction - 0.5) * 0.02
     return round(max(0.05, min(0.40, base + archetype_adjustment + seed_variation)), 4)
+
+
+def cpu_roster_cap(state: RegionalGuildState, region_stage: int) -> int:
+    """Scale CPU lodging from its seeded roster to 20 slots by late progression."""
+    initial_size = CPU_INITIAL_ROSTER_SIZE.get(state.profile, CPU_INITIAL_ROSTER_SIZE["new"])
+    profile_level = int(cpu_initial_profile_values(state.profile, region_stage)["guild_level"])
+    # One paid vacancy is available at the seeded level, so the first hire can
+    # grow a strong roster by its second Vigília instead of waiting for XP levels.
+    earned_slots = max(0, int(state.level or 1) - profile_level + 1) // 3
+    return min(20, max(initial_size + 1, initial_size + 1 + earned_slots))
+
+
+def regional_risk_index(threat: float, security: float) -> float:
+    """Normalize hidden pressure from threat and lost security to [0, 1]."""
+    return round(max(0.0, min(1.0, (float(threat) + 100.0 - float(security)) / 200.0)), 4)
+
+
+def regional_pressure_target_code(
+    campaign_id: str,
+    cycle_number: int,
+    regions: list[RegionalRegionState],
+    recently_targeted_regions: set[str] | None = None,
+) -> str:
+    """Choose the riskiest eligible region; seeded RNG breaks exact-risk ties."""
+    if not regions:
+        return REGIONS[0][0]
+    recently_targeted = recently_targeted_regions or set()
+    candidates = [region for region in regions if region.region_code not in recently_targeted]
+    if not candidates:
+        candidates = list(regions)
+    highest_risk = max(float(region.threat) + 100.0 - float(region.security) for region in candidates)
+    tied = sorted(
+        (region for region in candidates
+         if float(region.threat) + 100.0 - float(region.security) == highest_risk),
+        key=lambda region: region.region_code,
+    )
+    chooser = _rng(campaign_id, int(cycle_number), "regional-pressure-target")
+    return tied[chooser.randrange(len(tied))].region_code
+
+
+def regional_gradual_pressure(threat: float, security: float) -> float:
+    """Add bounded background threat that rises with regional risk."""
+    risk = regional_risk_index(threat, security)
+    return round(REGIONAL_GRADUAL_PRESSURE_MIN
+                 + (REGIONAL_GRADUAL_PRESSURE_MAX - REGIONAL_GRADUAL_PRESSURE_MIN) * risk, 4)
+
+
+def regional_gradual_security_pressure(threat: float, security: float) -> float:
+    """Apply a gentler security loss so campaign pressure does not flatten every region."""
+    risk = regional_risk_index(threat, security)
+    return round(REGIONAL_GRADUAL_SECURITY_PRESSURE_MIN
+                 + (REGIONAL_GRADUAL_SECURITY_PRESSURE_MAX
+                    - REGIONAL_GRADUAL_SECURITY_PRESSURE_MIN) * risk, 4)
+
+
+def cpu_failure_risk_for_region(threat: float, security: float) -> int:
+    """Freeze a capped failure penalty on each offer from its regional risk."""
+    exposure = max(0.0, float(threat) - 50.0) + max(0.0, 50.0 - float(security))
+    return min(CPU_FAILURE_RISK_CAP_PP, max(0, round(exposure * 0.25)))
 
 
 def rank_progression_stage(guild_level: int, total_power: int) -> float:
@@ -373,6 +459,103 @@ def _ensure_cpu_roster(
     )))
     state.roster_size = len(roster)
     state.power = sum(_cpu_member_power(member) for member in roster)
+
+
+def _roll_cpu_apprentice_attributes(rng: random.Random, rarity: str) -> dict[str, int]:
+    cap = APPRENTICE_RARITY_CAPS[rarity]
+    power_range = MERCENARY_POWER_RANGES[rarity]
+    minimum_power = int(power_range["minimum"])
+    maximum_power = power_range["maximum"]
+    attributes: dict[str, int] = {}
+    for _ in range(200):
+        attributes = {
+            key: rng.randint(1, cap)
+            for key in ("power", "vitality", "agility", "intelligence", "luck")
+        }
+        score = calculate_power_score({**attributes, "armor": 0})
+        if score >= minimum_power and (maximum_power is None or score <= int(maximum_power)):
+            return attributes
+    score = calculate_power_score({**attributes, "armor": 0})
+    if score < minimum_power:
+        attributes["power"] += minimum_power - score
+    return attributes
+
+
+def _try_hire_cpu_mercenary(
+    db: Session,
+    campaign_id: str,
+    cycle: RegionalCycle,
+    state: RegionalGuildState,
+    roster: list[RegionalCpuMercenary],
+    resource_by_code: dict[str, RegionalCpuResource],
+) -> tuple[RegionalCpuMercenary | None, int]:
+    profile = state.profile if state.profile in CPU_INITIAL_ROSTER_SIZE else "new"
+    interval = {"strong": 2, "medium": 4, "new": 6}[profile]
+    if cycle.cycle_number < interval or cycle.cycle_number % interval != 0:
+        return None, 0
+    stage = regional_stage_for_region(state.region_code)
+    if len(roster) >= cpu_roster_cap(state, stage):
+        return None, 0
+    gold = resource_by_code.get("gold")
+    apprentice_class = db.scalar(select(MercenaryClass).where(
+        MercenaryClass.code == "apprentice",
+        MercenaryClass.is_active.is_(True),
+    ).order_by(MercenaryClass.id).limit(1))
+    if gold is None or apprentice_class is None:
+        return None, 0
+
+    configs = list(db.scalars(select(TavernConfig).where(TavernConfig.is_active.is_(True)).order_by(TavernConfig.id)))
+    config = configs[0] if configs else TavernConfig(
+        base_apprentice_cost=CPU_TAVERN_BASE_COST,
+        apprentice_cost_threshold=5000,
+        apprentice_growth_before_threshold_percent=5,
+        apprentice_growth_after_threshold_percent=3,
+        common_apprentice_chance=90,
+        uncommon_apprentice_chance=10,
+    )
+    hire_count = max(0, len(roster) - CPU_INITIAL_ROSTER_SIZE[profile])
+    base_cost = int(config.base_apprentice_cost)
+    for _ in range(hire_count):
+        base_cost = next_apprentice_cost(base_cost, config)
+    tavern_level = max(1, min(GUILD_MAX_LEVEL, int(state.level or 1)))
+    chances = get_tavern_apprentice_chances(tavern_level, config)
+    cost = get_discounted_hire_cost(base_cost, int(chances["hire_discount_percent"]))
+    if gold.amount < cost:
+        return None, 0
+
+    seed = _seed_text(campaign_id, cycle.cycle_number, state.id, len(roster), cycle.rules_version, "cpu-hire")
+    rng = _rng(seed)
+    uncommon_chance = int(chances["uncommon_final"])
+    rarity = "uncommon" if rng.randrange(100) < uncommon_chance else "common"
+    attributes = _roll_cpu_apprentice_attributes(rng, rarity)
+    slot = (db.scalar(select(func.max(RegionalCpuMercenary.slot)).where(
+        RegionalCpuMercenary.guild_state_id == state.id,
+    )) or 0) + 1
+    hired = RegionalCpuMercenary(
+        campaign_id=campaign_id,
+        guild_state_id=state.id,
+        slot=slot,
+        name=f"{state.name} · {slot}",
+        class_code="apprentice",
+        level=1,
+        rarity=rarity,
+        profession_code=None,
+        power=attributes["power"],
+        vitality=attributes["vitality"],
+        agility=attributes["agility"],
+        intelligence=attributes["intelligence"],
+        luck=attributes["luck"],
+        armor=0,
+        equipment_bonus_json="{}",
+        active=True,
+    )
+    gold.amount -= cost
+    db.add_all([gold, hired])
+    db.flush()
+    state.roster_size = len(roster) + 1
+    state.power = sum(_cpu_member_power(member) for member in roster) + _cpu_member_power(hired)
+    db.add(state)
+    return hired, cost
 
 
 def _cpu_member_power(member: RegionalCpuMercenary) -> int:
@@ -626,15 +809,34 @@ def _add_offer(
     slot: int,
     template: MissionTemplate | DungeonTemplate,
     rank: str,
+    cpu_failure_risk_snapshot: int = 0,
 ) -> RegionalOffer:
     if isinstance(template, MissionTemplate):
         mission_id, dungeon_id = template.id, None
         recommended_power = max(1, int(template.recommended_power or 0))
         level_band = template.level_band
+        requirements = {
+            "required_min_mercenary_level_snapshot": max(1, int(template.required_min_mercenary_level or 1)),
+            "required_total_power_snapshot": 0,
+            "required_class_code_snapshot": None,
+            "required_tank_count_snapshot": 0,
+            "required_support_count_snapshot": 0,
+            "required_damage_count_snapshot": 0,
+            "required_equipment_tier_snapshot": 0,
+        }
     else:
         mission_id, dungeon_id = None, template.id
         recommended_power = max(1, int(template.required_total_power or template.recommended_level * 10))
         level_band = template.level_band
+        requirements = {
+            "required_min_mercenary_level_snapshot": max(1, int(template.required_min_mercenary_level or 1)),
+            "required_total_power_snapshot": max(0, int(template.required_total_power or 0)),
+            "required_class_code_snapshot": template.required_class_code,
+            "required_tank_count_snapshot": max(0, int(template.required_tank_count or 0)),
+            "required_support_count_snapshot": max(0, int(template.required_support_count or 0)),
+            "required_damage_count_snapshot": max(0, int(template.required_damage_count or 0)),
+            "required_equipment_tier_snapshot": max(0, int(template.required_equipment_tier or 0)),
+        }
     offer = RegionalOffer(
         campaign_id=campaign_id,
         cycle_id=cycle.id,
@@ -654,6 +856,8 @@ def _add_offer(
         max_party_size_snapshot=max(1, int(template.max_party_size or 1)),
         required_guild_level_snapshot=max(1, int(template.required_guild_level or 1)),
         duration_seconds_snapshot=max(1, int(template.duration_seconds)),
+        cpu_failure_risk_snapshot=max(0, min(CPU_FAILURE_RISK_CAP_PP, int(cpu_failure_risk_snapshot))),
+        **requirements,
         gold_reward_snapshot=max(0, int(template.base_gold_reward)),
         xp_reward_snapshot=max(0, int(template.base_xp_reward)),
         success_chance_snapshot=max(5, min(95, int(template.base_success_chance))),
@@ -720,14 +924,26 @@ def _materialize_cycle(
         DungeonTemplate.content_type == "boss",
     ).order_by(DungeonTemplate.id)))
 
+    regional_states = {
+        row.region_code: row
+        for row in db.scalars(select(RegionalRegionState).where(
+            RegionalRegionState.campaign_id == campaign.campaign_id,
+        ))
+    }
     for region_code, _region_name in (region_scope or REGIONS):
+        regional_state = regional_states.get(region_code)
+        failure_risk = cpu_failure_risk_for_region(
+            float(regional_state.threat if regional_state else 25),
+            float(regional_state.security if regional_state else 50),
+        )
         region_rng = _rng(campaign.campaign_id, cycle_number, region_code, VIGILIA_RULES_VERSION, "offers")
         contracts = _select_contract_templates(mission_candidates, 10, region_rng, level, roster_level)
         contract_ranks = _roll_contract_rank_set(region_rng, weight_payload["contract"])
         for slot, (template, rank) in enumerate(
             _pair_contract_templates_with_ranks(contracts, contract_ranks), start=1,
         ):
-            _add_offer(db, campaign.campaign_id, cycle, region_code, "contract", slot, template, rank)
+            _add_offer(db, campaign.campaign_id, cycle, region_code, "contract", slot, template, rank,
+                       failure_risk)
         dungeons = _select_templates(dungeon_candidates, 3, region_rng)
         dungeon_ranks = sorted(
             (_roll_rank(region_rng, weight_payload["dungeon"]) for _ in dungeons),
@@ -737,7 +953,7 @@ def _materialize_cycle(
         for slot, (template, rank) in enumerate(zip(dungeons, dungeon_ranks), start=1):
             _add_offer(
                 db, campaign.campaign_id, cycle, region_code, "dungeon", slot, template,
-                rank,
+                rank, failure_risk,
             )
         boss_rank = _roll_rank(region_rng, weight_payload["boss"])
         ranked_bosses = sorted(boss_candidates, key=_template_rank_order)
@@ -745,7 +961,8 @@ def _materialize_cycle(
             raise RegionalCycleError("O catálogo local não tem chefes ativos para a Vigília regional.")
         boss_index = round(RANKS.index(boss_rank) * (len(ranked_bosses) - 1) / (len(RANKS) - 1))
         boss = ranked_bosses[boss_index]
-        _add_offer(db, campaign.campaign_id, cycle, region_code, "boss", 1, boss, boss_rank)
+        _add_offer(db, campaign.campaign_id, cycle, region_code, "boss", 1, boss, boss_rank,
+                   failure_risk)
     db.flush()
     return cycle
 
@@ -756,7 +973,7 @@ def _offer_sort_value(offer: RegionalOffer) -> tuple[int, int, int]:
     return (rank_value, expected_value, -offer.recommended_power_snapshot)
 
 
-def _cpu_plan_for_guild(
+def _cpu_plan_for_guild_legacy(
     db: Session,
     campaign_id: str,
     cycle: RegionalCycle,
@@ -956,6 +1173,358 @@ def _cpu_plan_for_guild(
     return plan, threat_delta, security_delta, successes, failures, rank_sum
 
 
+def _cpu_offer_party(
+    offer: RegionalOffer,
+    state: RegionalGuildState,
+    roster: list[RegionalCpuMercenary],
+    available_at: dict[int, datetime],
+    cycle_end: datetime,
+    class_roles: dict[str, str],
+) -> tuple[datetime, list[RegionalCpuMercenary]] | None:
+    if state.level < offer.required_guild_level_snapshot:
+        return None
+    party_size = max(1, int(offer.min_party_size_snapshot))
+    maximum_size = max(party_size, int(offer.max_party_size_snapshot))
+    minimum_level = max(1, int(offer.required_min_mercenary_level_snapshot or 1))
+    required_class = (offer.required_class_code_snapshot or "").casefold()
+    required_power = max(0, int(offer.required_total_power_snapshot or 0))
+    required_tank = max(0, int(offer.required_tank_count_snapshot or 0))
+    required_support = max(0, int(offer.required_support_count_snapshot or 0))
+    required_damage = max(0, int(offer.required_damage_count_snapshot or 0))
+    required_equipment = max(0, int(offer.required_equipment_tier_snapshot or 0))
+    earliest: tuple[datetime, int, list[RegionalCpuMercenary]] | None = None
+    for size in range(party_size, min(maximum_size, len(roster)) + 1):
+        for party in combinations(roster, size):
+            if any(member.level < minimum_level for member in party):
+                continue
+            if required_class and not any(member.class_code.casefold() == required_class for member in party):
+                continue
+            roles = {"tank": 0, "support": 0, "damage": 0}
+            equipment_tier = 0
+            power = 0
+            for member in party:
+                role = (class_roles.get(member.class_code, "damage") or "damage").casefold()
+                roles[role if role in roles else "damage"] += 1
+                bonuses = json.loads(member.equipment_bonus_json or "{}")
+                equipment_tier = max(equipment_tier, int(bonuses.get("equipment_tier", bonuses.get("tier", 0)) or 0))
+                power += _cpu_member_power(member)
+            if (power < required_power or roles["tank"] < required_tank
+                    or roles["support"] < required_support or roles["damage"] < required_damage
+                    or equipment_tier < required_equipment):
+                continue
+            start = max((available_at.get(member.id, cycle_end) for member in party))
+            if start >= cycle_end:
+                continue
+            key = (start, -power, list(party))
+            if earliest is None or key[:2] < earliest[:2]:
+                earliest = key
+    return (earliest[0], earliest[2]) if earliest is not None else None
+
+
+def _cpu_offer_preference(offer: RegionalOffer, archetype: str) -> tuple[int, ...]:
+    sort_value = _offer_sort_value(offer)
+    if offer.offer_type == "portal":
+        return (-1 if archetype == "exploration" else 1, *sort_value[:2])
+    if archetype == "security":
+        return (0 if offer.offer_type == "contract" else 1, -offer.recommended_power_snapshot,
+                -offer.success_chance_snapshot, -offer.id)
+    if archetype == "exploration":
+        return (0 if offer.offer_type in {"dungeon", "boss"} else 1, *sort_value[:2])
+    if archetype == "contracts":
+        return (0 if offer.offer_type == "contract" else 1, *sort_value[:2])
+    return (0, *sort_value[:2])
+
+
+def _cpu_plan_for_guild_v6(
+    db: Session,
+    campaign_id: str,
+    cycle: RegionalCycle,
+    region: RegionalRegionState,
+    state: RegionalGuildState,
+) -> tuple[RegionalCpuCyclePlan, float, float, int, int, int]:
+    existing = db.scalar(select(RegionalCpuCyclePlan).where(
+        RegionalCpuCyclePlan.cycle_id == cycle.id,
+        RegionalCpuCyclePlan.guild_state_id == state.id,
+    ))
+    if existing is not None:
+        raise RegionalCycleError("Foi encontrado um plano CPU parcialmente persistido; o ciclo não foi reaplicado.")
+
+    roster = list(db.scalars(select(RegionalCpuMercenary).where(
+        RegionalCpuMercenary.guild_state_id == state.id,
+        RegionalCpuMercenary.active.is_(True),
+    ).order_by(RegionalCpuMercenary.slot)))
+    resources = list(db.scalars(select(RegionalCpuResource).where(
+        RegionalCpuResource.guild_state_id == state.id,
+    ).order_by(RegionalCpuResource.resource_code)))
+    resource_by_code = {item.resource_code: item for item in resources}
+    before_resources = {item.resource_code: item.amount for item in resources}
+    hired, hire_cost = _try_hire_cpu_mercenary(
+        db, campaign_id, cycle, state, roster, resource_by_code,
+    )
+    if hired is not None:
+        roster.append(hired)
+        roster.sort(key=lambda member: member.slot)
+
+    roster_snapshot = [
+        {
+            "slot": member.slot,
+            "name": member.name,
+            "class": member.class_code,
+            "level": member.level,
+            "rarity": member.rarity,
+            "profession": member.profession_code,
+            "attributes": {
+                "power": member.power, "vitality": member.vitality, "agility": member.agility,
+                "intelligence": member.intelligence, "luck": member.luck, "armor": member.armor,
+            },
+            "equipment_bonus": json.loads(member.equipment_bonus_json or "{}"),
+            "total_power": _cpu_member_power(member),
+            "hired_this_cycle": hired is not None and member.id == hired.id,
+        }
+        for member in roster
+    ]
+    plan_seed = _seed_text(campaign_id, cycle.cycle_number, state.id, cycle.rules_version, "cpu-plan")
+    rng = _rng(plan_seed)
+    cycle_start, cycle_end = _utc(cycle.starts_at_utc), _utc(cycle.ends_at_utc)
+    player_priority_ends_at = cycle_start + timedelta(hours=1)
+    busy_until = {member.id: player_priority_ends_at for member in roster}
+    all_offers = list(db.scalars(select(RegionalOffer).where(
+        RegionalOffer.cycle_id == cycle.id,
+        RegionalOffer.region_code == region.region_code,
+    ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
+    portal = db.scalar(select(RegionalEvent).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEvent.event_type == "portal",
+        RegionalEvent.region_code == region.region_code,
+        RegionalEvent.status == "active",
+        RegionalEvent.created_at_utc <= cycle_start,
+        RegionalEvent.expires_at_utc > cycle_start,
+    ).order_by(RegionalEvent.id.desc()).limit(1))
+    portal_offer = None
+    if portal is not None and db.scalar(select(RegionalEventParticipant.id).where(
+        RegionalEventParticipant.event_id == portal.id,
+        RegionalEventParticipant.guild_state_id == state.id,
+    )) is None:
+        portal_summary = json.loads(portal.summary_json or "{}")
+        portal_boss = portal_summary.get("portal_boss", {}).get("template", {})
+        portal_rng = _rng(portal.seed, plan_seed, "cpu-portal-entry")
+        if (portal_rng.random() < 0.25 and not portal_boss.get("required_building_type")
+                and int(portal_boss.get("required_building_level") or 0) == 0):
+            portal_offer = SimpleNamespace(
+                id=-portal.id,
+                offer_type="portal",
+                rank="C",
+                status="available",
+                name_snapshot=str(portal_boss.get("name") or "Portal regional"),
+                description_snapshot=str(portal_boss.get("description") or ""),
+                recommended_power_snapshot=max(1, int(portal_boss.get("required_total_power") or 0)),
+                success_chance_snapshot=max(5, min(95, int(portal_boss.get("base_success_chance") or 50))),
+                gold_reward_snapshot=0,
+                xp_reward_snapshot=0,
+                recommended_level_snapshot=max(1, int(portal_boss.get("recommended_level") or 1)),
+                min_party_size_snapshot=max(1, int(portal_boss.get("min_party_size") or 1)),
+                max_party_size_snapshot=max(1, int(portal_boss.get("max_party_size") or 1)),
+                required_guild_level_snapshot=max(1, int(portal_boss.get("required_guild_level") or 1)),
+                required_min_mercenary_level_snapshot=max(1, int(portal_boss.get("required_min_mercenary_level") or 1)),
+                cpu_failure_risk_snapshot=cpu_failure_risk_for_region(region.threat, region.security),
+                required_total_power_snapshot=max(0, int(portal_boss.get("required_total_power") or 0)),
+                required_class_code_snapshot=portal_boss.get("required_class_code"),
+                required_tank_count_snapshot=max(0, int(portal_boss.get("required_tank_count") or 0)),
+                required_support_count_snapshot=max(0, int(portal_boss.get("required_support_count") or 0)),
+                required_damage_count_snapshot=max(0, int(portal_boss.get("required_damage_count") or 0)),
+                required_equipment_tier_snapshot=max(0, int(portal_boss.get("required_equipment_tier") or 0)),
+                duration_seconds_snapshot=max(1, int(portal_boss.get("duration_seconds") or 1)),
+                expires_at_utc=_utc(portal.expires_at_utc),
+                event_id=portal.id,
+            )
+    planned_actions = sum(offer.status == "available" for offer in all_offers)
+    planned_actions += int(portal_offer is not None and portal_offer.status == "available")
+    offers_by_type = {
+        offer_type: [offer for offer in all_offers if offer.offer_type == offer_type]
+        for offer_type in ("contract", "dungeon", "boss")
+    }
+    class_roles = {
+        code: role for code, role in db.execute(select(MercenaryClass.code, MercenaryClass.role_type).where(
+            MercenaryClass.code.is_not(None),
+        )) if code
+    }
+    profession_family = {
+        row.code: row.material_family
+        for row in db.scalars(select(ProfessionTemplate).where(ProfessionTemplate.is_active.is_(True)))
+    }
+    decisions: list[dict[str, object]] = []
+    outcomes: list[dict[str, object]] = []
+    successes = failures = gold_earned = xp_earned = 0
+    threat_delta = security_delta = 0.0
+    rank_sum = 0
+    eligible_actions = 0
+
+    while True:
+        if state.archetype == "exploration":
+            preferred_types = ("portal", "dungeon", "boss", "contract")
+        else:
+            preferred_types = ("contract", "dungeon", "boss", "portal")
+        candidates = [offer for offer in all_offers if offer.status == "available"]
+        if portal_offer is not None and portal_offer.status == "available":
+            candidates.append(portal_offer)
+        if state.archetype == "security":
+            defensive = [offer for offer in candidates if any(
+                token in (offer.name_snapshot + " " + offer.description_snapshot).casefold()
+                for token in ("patrulha", "vigia", "guarda", "defesa", "ameaça")
+            )]
+            if defensive:
+                candidates = defensive
+
+        feasible: list[tuple[tuple[datetime, tuple[int, int, int, int], int], RegionalOffer, list[RegionalCpuMercenary]]] = []
+        any_eligible = False
+        for offer in candidates:
+            offer_deadline = min(cycle_end, offer.expires_at_utc) if offer.offer_type == "portal" else cycle_end
+            party_choice = _cpu_offer_party(
+                offer, state, roster, busy_until, offer_deadline, class_roles,
+            )
+            if party_choice is None:
+                continue
+            any_eligible = True
+            start_at, party = party_choice
+            end_at = start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot))
+            if end_at > offer_deadline:
+                continue
+            preference = _cpu_offer_preference(offer, state.archetype)
+            type_preference = preferred_types.index(offer.offer_type) if offer.offer_type in preferred_types else len(preferred_types)
+            feasible.append(((start_at, preference, type_preference, offer.id), offer, party))
+        if any_eligible:
+            eligible_actions += 1
+        if not feasible:
+            break
+        feasible.sort(key=lambda entry: entry[0])
+        (_key, offer, party) = feasible[0]
+        start_at = max(busy_until[member.id] for member in party)
+        end_at = start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot))
+        for member in party:
+            busy_until[member.id] = end_at
+        if offer.offer_type == "portal":
+            offer.status = "cpu_completed"
+        else:
+            offer.status = "cpu_completed"
+            offer.reserved_by_guild_state_id = state.id
+            offer.claimed_at_utc = start_at
+            offer.resolved_at_utc = end_at
+        party_power = sum(_cpu_member_power(member) for member in party)
+        class_bonus = min(8, sum(CLASS_SUCCESS_BONUS.get(member.class_code, 0) for member in party))
+        chance = max(5, min(95, offer.success_chance_snapshot
+                           + power_success_adjustment(party_power, offer.recommended_power_snapshot)
+                           + class_bonus - int(getattr(offer, "cpu_failure_risk_snapshot", 0) or 0)))
+        success = rng.randint(1, 100) <= chance
+        rank_value = RANKS.index(offer.rank) + 1
+        rank_sum += rank_value
+        reward_gold = offer.gold_reward_snapshot if success else 0
+        reward_xp = offer.xp_reward_snapshot if success else max(0, offer.xp_reward_snapshot // 4)
+        decisions.append({
+            "action": len(decisions) + 1,
+            "type": "event" if offer.offer_type == "portal" else (
+                "exploration" if offer.offer_type in {"dungeon", "boss"} else state.archetype
+            ),
+            "offer_id": offer.id,
+            "offer_type": offer.offer_type,
+            "event_id": offer.event_id if offer.offer_type == "portal" else None,
+            "rank": offer.rank,
+            "mercenary_slots": [member.slot for member in party],
+            "duration_seconds": offer.duration_seconds_snapshot,
+            "player_priority_ends_at_utc": player_priority_ends_at.isoformat(),
+            "started_at_utc": start_at.isoformat(),
+            "resolved_at_utc": end_at.isoformat(),
+            "success_chance": chance,
+        })
+        outcomes.append({
+            "action": len(decisions),
+            "offer_id": offer.id,
+            "rank": offer.rank,
+            "success": success,
+            "gold": reward_gold,
+            "xp": reward_xp,
+            "contribution": rank_value,
+        })
+        if offer.offer_type == "portal":
+            if portal_offer is not None:
+                portal_offer.status = "cpu_completed"
+            successes += int(success)
+            failures += int(not success)
+        elif success:
+            successes += 1
+            gold_earned += reward_gold
+            xp_earned += reward_xp * len(party)
+            gold_resource = resource_by_code.get("gold")
+            if gold_resource is not None:
+                gold_resource.amount = min(gold_resource.capacity, gold_resource.amount + reward_gold)
+            xp_resource = resource_by_code.get("xp")
+            if xp_resource is not None:
+                xp_resource.amount = min(xp_resource.capacity, xp_resource.amount + reward_xp * len(party))
+            member = party[0]
+            family = profession_family.get(member.profession_code or "")
+            resource_code = PROFESSION_RESOURCE_CODES.get(member.profession_code or "", family or "")
+            material_resource = resource_by_code.get(resource_code)
+            if material_resource is not None:
+                material_resource.amount = min(material_resource.capacity, material_resource.amount + 1)
+            impact = regional_outcome_impact(offer.rank)
+            security_delta += impact
+            threat_delta -= impact
+            state.influence = min(100, state.influence + rank_value)
+            state.reputation = min(100, state.reputation + rank_value)
+        else:
+            failures += 1
+            xp_resource = resource_by_code.get("xp")
+            if xp_resource is not None:
+                xp_resource.amount = min(xp_resource.capacity, xp_resource.amount + reward_xp * len(party))
+            impact = regional_outcome_impact(offer.rank)
+            threat_delta += impact
+            security_delta -= impact
+            state.influence = min(100, state.influence + 1)
+            state.reputation = max(0, state.reputation - max(1, rank_value // 2))
+        if offer.offer_type != "portal" and reward_xp > 0:
+            _apply_cpu_xp(state, party, reward_xp * len(party))
+
+    state.power = sum(_cpu_member_power(member) for member in roster)
+    state.roster_size = len(roster)
+    after_resources = {item.resource_code: item.amount for item in resources}
+    plan = RegionalCpuCyclePlan(
+        campaign_id=campaign_id,
+        cycle_id=cycle.id,
+        guild_state_id=state.id,
+        seed=plan_seed,
+        roster_snapshot_json=json.dumps(roster_snapshot, ensure_ascii=False, sort_keys=True),
+        resources_before_json=json.dumps(before_resources, sort_keys=True),
+        resources_after_json=json.dumps(after_resources, sort_keys=True),
+        decisions_json=json.dumps(decisions, ensure_ascii=False, sort_keys=True),
+        outcomes_json=json.dumps(outcomes, ensure_ascii=False, sort_keys=True),
+        actions=len(decisions),
+        planned_actions=planned_actions,
+        eligible_actions=eligible_actions,
+        started_actions=len(decisions),
+        resolved_actions=len(outcomes),
+        hired_count=1 if hired is not None else 0,
+        hire_gold_spent=hire_cost,
+        successes=successes,
+        failures=failures,
+        gold_earned=gold_earned,
+        xp_earned=xp_earned,
+    )
+    db.add(plan)
+    db.flush()
+    return plan, threat_delta, security_delta, successes, failures, rank_sum
+
+
+def _cpu_plan_for_guild(
+    db: Session,
+    campaign_id: str,
+    cycle: RegionalCycle,
+    region: RegionalRegionState,
+    state: RegionalGuildState,
+) -> tuple[RegionalCpuCyclePlan, float, float, int, int, int]:
+    if cycle.rules_version != VIGILIA_RULES_VERSION:
+        return _cpu_plan_for_guild_legacy(db, campaign_id, cycle, region, state)
+    return _cpu_plan_for_guild_v6(db, campaign_id, cycle, region, state)
+
+
 def _apply_cpu_xp(state: RegionalGuildState, roster: list[RegionalCpuMercenary], xp_gain: int) -> None:
     if xp_gain <= 0 or state.level >= GUILD_MAX_LEVEL:
         return
@@ -994,6 +1563,53 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
     regions = list(db.scalars(select(RegionalRegionState).where(
         RegionalRegionState.campaign_id == campaign_id,
     ).order_by(RegionalRegionState.region_code)))
+    pressure_target = None
+    if cycle.rules_version == VIGILIA_RULES_VERSION and regions:
+        current_window_start = (
+            cycle.cycle_number // REGIONAL_PRESSURE_WINDOW_CYCLES
+        ) * REGIONAL_PRESSURE_WINDOW_CYCLES
+        if cycle.cycle_number > current_window_start:
+            previous_target_snapshot = db.scalar(
+                select(RegionalCycleRegion)
+                .join(RegionalCycle, RegionalCycle.id == RegionalCycleRegion.cycle_id)
+                .where(
+                    RegionalCycle.campaign_id == campaign_id,
+                    RegionalCycle.cycle_number == cycle.cycle_number - 1,
+                )
+                .order_by(RegionalCycleRegion.region_code)
+                .limit(1)
+            )
+            if previous_target_snapshot is not None:
+                pressure_target = json.loads(
+                    previous_target_snapshot.summary_json or "{}"
+                ).get("gradual_pressure", {}).get("target_region")
+        recently_targeted_regions: set[str] = set()
+        if pressure_target is None and current_window_start > 0:
+            previous_target_snapshot = db.scalar(
+                select(RegionalCycleRegion)
+                .join(RegionalCycle, RegionalCycle.id == RegionalCycleRegion.cycle_id)
+                .where(
+                    RegionalCycle.campaign_id == campaign_id,
+                    RegionalCycle.cycle_number == current_window_start - 1,
+                )
+                .order_by(RegionalCycleRegion.region_code)
+                .limit(1)
+            )
+            if previous_target_snapshot is not None:
+                previous_target = json.loads(
+                    previous_target_snapshot.summary_json or "{}"
+                ).get("gradual_pressure", {}).get("target_region")
+                if previous_target:
+                    recently_targeted_regions.add(previous_target)
+        if pressure_target not in {region.region_code for region in regions}:
+            pressure_target = regional_pressure_target_code(
+                campaign_id, cycle.cycle_number, regions, recently_targeted_regions,
+            )
+    if cycle.rules_version == VIGILIA_RULES_VERSION:
+        regions.sort(key=lambda region: (
+            -(float(region.threat) + 100.0 - float(region.security)),
+            region.region_code,
+        ))
     for region in regions:
         existing_snapshot = db.scalar(select(RegionalCycleRegion).where(
             RegionalCycleRegion.cycle_id == cycle.id,
@@ -1023,16 +1639,20 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
         threat = float(region.threat)
         cpu_actions = successes = failures = gold_earned = xp_earned = 0
         cpu_planned = cpu_eligible = cpu_started = cpu_resolved = 0
+        cpu_hires = cpu_hire_gold_spent = 0
         cpu_guilds = list(db.scalars(select(RegionalGuildState).where(
             RegionalGuildState.campaign_id == campaign_id,
             RegionalGuildState.region_code == region.region_code,
             RegionalGuildState.guild_id.is_(None),
             RegionalGuildState.active.is_(True),
         ).order_by(RegionalGuildState.slot)))
+        if cycle.rules_version == VIGILIA_RULES_VERSION and cpu_guilds:
+            rotation = cycle.cycle_number % len(cpu_guilds)
+            cpu_guilds = cpu_guilds[rotation:] + cpu_guilds[:rotation]
         archetype_totals: dict[str, int] = {}
         for cpu in cpu_guilds:
             plan, threat_delta, security_delta, action_successes, action_failures, _rank_sum = _cpu_plan_for_guild(
-                db, campaign_id, cycle, region, cpu
+                db, campaign_id, cycle, region, cpu,
             )
             from app.services.regional_event_service import record_cpu_event_activity
 
@@ -1044,6 +1664,8 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
             cpu_eligible += plan.eligible_actions
             cpu_started += plan.started_actions
             cpu_resolved += plan.resolved_actions
+            cpu_hires += plan.hired_count
+            cpu_hire_gold_spent += plan.hire_gold_spent
             successes += action_successes
             failures += action_failures
             gold_earned += plan.gold_earned
@@ -1081,6 +1703,33 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
         if baseline_applied:
             security = max(0.0, min(100.0, security - REGION_BASELINE_PRESSURE))
             threat = max(0.0, min(100.0, threat + REGION_BASELINE_PRESSURE))
+        cycle_pressure_target = pressure_target or region.region_code
+        is_pressure_target = region.region_code == cycle_pressure_target
+        pressure_targeted = is_pressure_target and not baseline_applied
+        pressure_stage = "inactive"
+        gradual_pressure = 0.0
+        gradual_security_pressure = 0.0
+        if pressure_targeted:
+            if float(region.threat) >= REGIONAL_GRADUAL_THREAT_SOFT_CAP:
+                pressure_stage = "threat_brake"
+            elif float(region.threat) >= REGIONAL_GRADUAL_MAINTENANCE_THRESHOLD:
+                pressure_stage = "threat_maintenance"
+                gradual_pressure = REGIONAL_GRADUAL_MAINTENANCE_PRESSURE
+            else:
+                pressure_stage = "build_up"
+                gradual_pressure = regional_gradual_pressure(region.threat, region.security)
+            gradual_security_pressure = regional_gradual_security_pressure(region.threat, region.security)
+        elif not is_pressure_target:
+            if float(region.threat) >= REGIONAL_GRADUAL_RECOVERY_THRESHOLD:
+                gradual_pressure = -REGIONAL_GRADUAL_RECOVERY_PRESSURE
+            if float(region.security) < REGIONAL_GRADUAL_SECURITY_RECOVERY_CEILING:
+                gradual_security_pressure = -REGIONAL_GRADUAL_SECURITY_RECOVERY
+            if gradual_pressure or gradual_security_pressure:
+                pressure_stage = "recovery"
+        risk_index = regional_risk_index(region.threat, region.security)
+        security_floor = REGIONAL_ACTIVE_SECURITY_FLOOR if pressure_targeted else 0.0
+        security = max(security_floor, min(100.0, security - gradual_security_pressure))
+        threat = max(0.0, min(100.0, threat + gradual_pressure))
         strong_rival = next((row for row in cpu_guilds if row.profile == "strong"), None)
         calm = rival_calm_for_cycle(
             cycle.cycle_number,
@@ -1119,6 +1768,19 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
                     "security": -REGION_BASELINE_PRESSURE if baseline_applied else 0,
                     "threat": REGION_BASELINE_PRESSURE if baseline_applied else 0,
                 },
+                "gradual_pressure": {
+                    "applied": gradual_pressure,
+                    "threat_applied": gradual_pressure,
+                    "security_applied": gradual_security_pressure,
+                    "security_floor": security_floor,
+                    "target_region": pressure_target,
+                    "targeted": pressure_targeted,
+                    "stage": pressure_stage,
+                    "risk_index": risk_index,
+                    "cpu_failure_risk_snapshot": cpu_failure_risk_for_region(
+                        float(before[1]), float(before[0]),
+                    ),
+                },
                 "rival_calm": calm,
                 "player_actions": len(player_action_ids),
                 "player_successes": player_successes,
@@ -1127,6 +1789,7 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
                 "cpu_activity": {
                     "planned": cpu_planned, "eligible": cpu_eligible,
                     "started": cpu_started, "resolved": cpu_resolved,
+                    "hires": cpu_hires, "hire_gold_spent": cpu_hire_gold_spent,
                 },
                 "successes": successes,
                 "failures": failures,

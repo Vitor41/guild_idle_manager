@@ -37,7 +37,9 @@ PORTAL_LOOT_VERSION = "portal-loot-v1"
 PORTAL_LOOT_CHANCE_BY_RARITY = {"rare": 20, "epic": 6, "legendary": 1}
 PORTAL_BOSS_SNAPSHOT_VERSION = "portal-boss-v1"
 REBELLION_CHANCE = 0.02
+REBELLION_REGION_ROLL_COOLDOWN_CYCLES = 5
 PORTAL_TTL = timedelta(hours=3)
+PORTAL_REGION_COOLDOWN_CYCLES = 24
 REBELLION_PRIORITY = timedelta(hours=1)
 REBELLION_TTL = timedelta(hours=12)
 PORTAL_BASE_CHANCE = 0.05
@@ -394,6 +396,15 @@ def _create_cycle_portals_locked(
         ).limit(1))
         if active_id is not None:
             continue
+        most_recent_portal = db.scalar(select(RegionalEvent).where(
+            RegionalEvent.campaign_id == campaign_id,
+            RegionalEvent.event_type == "portal",
+            RegionalEvent.region_code == region.region_code,
+        ).order_by(RegionalEvent.trigger_cycle_number.desc()).limit(1))
+        if (most_recent_portal is not None
+                and cycle.cycle_number - most_recent_portal.trigger_cycle_number
+                <= PORTAL_REGION_COOLDOWN_CYCLES):
+            continue
         player_state = db.scalar(select(RegionalGuildState).where(
             RegionalGuildState.campaign_id == campaign_id,
             RegionalGuildState.region_code == region.region_code,
@@ -439,6 +450,7 @@ def _create_cycle_portals_locked(
                 "scouts_detection_bonus_pp": detection_bonus_pp,
                 "threat_snapshot": round(region.threat, 4),
                 "deadline_policy": "continues_offline",
+                "region_cooldown_cycles": PORTAL_REGION_COOLDOWN_CYCLES,
                 "content_policy": "active_portal_biome_boss_template",
                 "portal_boss": {
                     "version": PORTAL_BOSS_SNAPSHOT_VERSION,
@@ -494,15 +506,44 @@ def _evaluate_open_rebellion_locked(
         for region in regions
         if region.threat >= REBELLION_MIN_THREAT and region.security <= REBELLION_MAX_SECURITY
     }
-    rolled: list[tuple[RegionalRegionState, str]] = []
     seeds: dict[str, str] = {}
     for region in regions:
         seed = _seed_text(
             campaign.campaign_id, cycle.cycle_number, region.region_code, EVENT_RULES_VERSION, "rebellion",
         )
         seeds[region.region_code] = seed
-        if region.region_code in eligible and _rng(seed).random() < REBELLION_CHANCE:
-            rolled.append((region, seed))
+    prior_rolls = list(db.scalars(select(RegionalEvent).where(
+        RegionalEvent.campaign_id == campaign.campaign_id,
+        RegionalEvent.event_type == "rebellion",
+        RegionalEvent.trigger_cycle_number < cycle.cycle_number,
+    )))
+    last_targeted: dict[str, int] = {}
+    for event in prior_rolls:
+        if (_summary(event).get("roll_selected")
+                or event.status not in {"not_triggered", "suppressed"}):
+            last_targeted[event.region_code] = max(
+                event.trigger_cycle_number, last_targeted.get(event.region_code, -1),
+            )
+    roll_target = None
+    available = [
+        region for region in eligible.values()
+        if region.region_code not in last_targeted
+        or cycle.cycle_number - last_targeted[region.region_code] > REBELLION_REGION_ROLL_COOLDOWN_CYCLES
+    ]
+    if available:
+        roll_target = min(
+            available,
+            key=lambda region: (
+                last_targeted.get(region.region_code, -1),
+                -float(region.threat + 100.0 - region.security),
+                region.region_code,
+            ),
+        )
+    rolled: list[tuple[RegionalRegionState, str]] = []
+    if roll_target is not None:
+        target_seed = seeds[roll_target.region_code]
+        if _rng(target_seed).random() < REBELLION_CHANCE:
+            rolled.append((roll_target, target_seed))
     winner = rolled[0] if rolled else None
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild_id)
     result: RegionalEvent | None = None
@@ -521,12 +562,19 @@ def _evaluate_open_rebellion_locked(
             priority_ends_at_utc=current + REBELLION_PRIORITY if chosen else None,
                 expires_at_utc=(current + REBELLION_PRIORITY + REBELLION_TTL) if chosen else current,
             summary_json=json.dumps({
-                "eligible": region.region_code in eligible,
-                "chance_per_eligible_region_cycle": REBELLION_CHANCE if region.region_code in eligible else 0,
+                "eligible": region.region_code == (roll_target.region_code if roll_target else None),
+                "threshold_eligible": region.region_code in eligible,
+                "roll_selected": region.region_code == (roll_target.region_code if roll_target else None),
+                "chance_per_eligible_region_cycle": (
+                    REBELLION_CHANCE
+                    if region.region_code == (roll_target.region_code if roll_target else None)
+                    else 0
+                ),
                 "threat_snapshot": round(region.threat, 4),
                 "security_snapshot": round(region.security, 4),
                 "generated_while_campaign_open": chosen,
-                "suppressed_by_global_limit": candidate and not chosen,
+                "suppressed_by_global_limit": False,
+                "region_roll_cooldown_cycles": REBELLION_REGION_ROLL_COOLDOWN_CYCLES,
                 "simultaneous_candidates": len(rolled),
             }, ensure_ascii=False, sort_keys=True),
         )
@@ -692,10 +740,32 @@ def record_cpu_event_activity(
         ))
         if participant_exists is None:
             rng = _rng(portal.seed, plan.seed, "cpu-portal-entry")
-            resolved_at = cycle_start + timedelta(hours=2)
-            if (rng.random() < PORTAL_CPU_PARTICIPATION_CHANCE
-                    and resolved_at <= _utc(portal.expires_at_utc)):
-                success = rng.random() < (plan.successes / max(1, plan.actions))
+            if cycle.rules_version in {"vigilia-v5", "vigilia-v6"}:
+                decisions = json.loads(plan.decisions_json or "[]")
+                outcomes = json.loads(plan.outcomes_json or "[]")
+                outcome_by_offer = {item.get("offer_id"): item for item in outcomes}
+                portal_runs = [decision for decision in decisions if (
+                    decision.get("offer_type") == "portal"
+                    and decision.get("event_id") == portal.id
+                    and decision.get("started_at_utc")
+                    and _utc(datetime.fromisoformat(decision["started_at_utc"])) < _utc(portal.expires_at_utc)
+                )]
+                portal_run = min(portal_runs, key=lambda item: (item["started_at_utc"], item["offer_id"])) if portal_runs else None
+                resolved_at = (
+                    _utc(datetime.fromisoformat(portal_run["resolved_at_utc"]))
+                    if portal_run and portal_run.get("resolved_at_utc") else None
+                )
+                eligible_portal_action = portal_run is not None and resolved_at is not None
+                success = bool(outcome_by_offer.get(portal_run["offer_id"], {}).get("success")) if eligible_portal_action else False
+                participate = eligible_portal_action and resolved_at <= _utc(portal.expires_at_utc)
+            else:
+                # Legacy CPU rules assigned a fixed two-hour, independent portal roll.
+                resolved_at = cycle_start + timedelta(hours=2)
+                participate = rng.random() < PORTAL_CPU_PARTICIPATION_CHANCE
+                if participate:
+                    success = rng.random() < (plan.successes / max(1, plan.actions))
+                participate = participate and resolved_at <= _utc(portal.expires_at_utc)
+            if participate:
                 db.add(RegionalEventParticipant(
                     event_id=portal.id,
                     guild_state_id=plan.guild_state_id,
