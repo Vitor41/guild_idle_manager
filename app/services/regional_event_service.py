@@ -740,7 +740,7 @@ def record_cpu_event_activity(
         ))
         if participant_exists is None:
             rng = _rng(portal.seed, plan.seed, "cpu-portal-entry")
-            if cycle.rules_version == "vigilia-v5":
+            if cycle.rules_version in {"vigilia-v5", "vigilia-v6"}:
                 decisions = json.loads(plan.decisions_json or "[]")
                 outcomes = json.loads(plan.outcomes_json or "[]")
                 outcome_by_offer = {item.get("offer_id"): item for item in outcomes}
