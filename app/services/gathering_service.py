@@ -75,6 +75,8 @@ def assign_worker(
 ) -> GatheringAssignment:
     if resource_family not in RESOURCE_FAMILIES:
         raise ValueError("Escolha uma família de recurso disponível para coleta.")
+    if _material_template(db, resource_family, guild.level) is None:
+        raise ValueError(f"O material de {FAMILY_LABELS[resource_family]} não está disponível no catálogo. Reabra a campanha para atualizar o conteúdo.")
     if target_quantity is not None and (int(target_quantity) < 1 or int(target_quantity) > 100_000):
         raise ValueError("A meta de coleta deve ficar entre 1 e 100.000 unidades.")
     mercenary = db.scalar(select(Mercenary).where(Mercenary.id == mercenary_id, Mercenary.guild_id == guild.id))
@@ -119,6 +121,8 @@ def release_worker(db: Session, guild: Guild, assignment_id: int, *, now: dateti
     if assignment is None:
         raise ValueError("A designação não foi encontrada.")
     summary = advance_assignment(db, guild, assignment, now=now)
+    if summary.get("catalog_missing"):
+        raise ValueError(f"O material de {FAMILY_LABELS[assignment.resource_family]} não está disponível no catálogo. Reabra a campanha para atualizar o conteúdo.")
     assignment.mercenary.status = "available"
     db.delete(assignment)
     return summary
@@ -144,6 +148,23 @@ def advance_assignment(
     db.flush()
     capacity = get_inventory_capacity(db, guild)
     used = get_inventory_usage(db, guild.id)
+
+    if template is None:
+        return {
+            "cycles": 0,
+            "produced": 0,
+            "stored": 0,
+            "discarded": 0,
+            "paused_seconds": 0,
+            "extra_chance": min(45, max(0, assignment.extra_chance)),
+            "capacity": capacity,
+            "used": used,
+            "paused": assignment.capacity_paused,
+            "completed": False,
+            "target_quantity": assignment.target_quantity or 0,
+            "quantity_collected": assignment.quantity_collected,
+            "catalog_missing": True,
+        }
 
     # Time spent while full is paused. On the first call after space is freed,
     # restart the clock there so that paused time cannot become backlog.

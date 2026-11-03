@@ -16,7 +16,7 @@ from app.models.regional import RegionalOffer
 
 
 PACK_KEY = "conteudo_massivo_pos_mvp026"
-PACK_VERSION = 4
+PACK_VERSION = 5
 BANDS = (
     ("1-20", 1, 20, 1, (10, 25, 45)),
     ("21-50", 21, 50, 2, (45, 90, 150)),
@@ -301,6 +301,8 @@ def run_massive_content_seed(
     *,
     deactivate_legacy_defaults: bool = False,
 ) -> dict[str, object]:
+    # Additively repair missing generated materials without overwriting edits.
+    _insert_missing(db, ItemTemplate, _material_rows(), "slug")
     marker = db.scalar(select(ContentSeedRun).where(ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION))
     if marker is not None:
         _ensure_docks_template(db)

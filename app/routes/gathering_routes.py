@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.core.dependencies import DbSession, get_current_player
 from app.core.forms import read_form_fields
+from app.desktop.gameplay_diagnostics import log_gameplay_action
 from app.models.mercenary import Mercenary
 from app.models.user import User
 from app.services.gathering_service import advance_all_assignments, assign_worker, list_assignments, release_worker, FAMILY_LABELS, NODE_LABELS
@@ -17,6 +18,17 @@ from app.services.inventory_capacity_service import get_inventory_capacity, get_
 
 router = APIRouter(prefix="/gathering")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+
+
+def _log_gathering(request: Request, event: str, outcome: str, status_code: int = 200) -> None:
+    log_gameplay_action(
+        action="gathering.production",
+        route=request.url.path,
+        diagnostic_id=getattr(request.state, "diagnostic_id", ""),
+        status_code=status_code,
+        outcome=outcome,
+        event=event,
+    )
 
 
 @router.get("")
@@ -30,7 +42,16 @@ def gathering_index(
     guild, resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
-    advance_all_assignments(db, guild)
+    advancement = advance_all_assignments(db, guild)
+    for family, result in advancement.items():
+        if result["cycles"] or result.get("catalog_missing"):
+            _log_gathering(
+                request, "production",
+                f"family={family} cycles={result['cycles']} produced={result['produced']} "
+                f"stored={result['stored']} discarded={result['discarded']} "
+                f"warehouse={result['used']}/{result['capacity']} paused={result['paused']} "
+                f"catalog_missing={result.get('catalog_missing', False)}",
+            )
     db.commit()
     assignments = list_assignments(db, guild.id)
     assigned_ids = {entry.mercenary_id for entry in assignments}
@@ -54,6 +75,7 @@ def gathering_index(
             "error": request.query_params.get("error"),
             "diagnostic_id": request.query_params.get("diagnostic"),
             "message": request.query_params.get("message"),
+            "catalog_errors": [FAMILY_LABELS[family] for family, result in advancement.items() if result.get("catalog_missing")],
         },
     )
 
@@ -72,10 +94,13 @@ async def gathering_assign(
     form = await read_form_fields(request)
     try:
         target_quantity = int(form["target_quantity"]) if form.get("target_quantity", "").strip() else None
-        assign_worker(db, guild, int(form.get("mercenary_id", "0")), form.get("resource_family", ""), target_quantity=target_quantity)
+        family = form.get("resource_family", "")
+        assignment = assign_worker(db, guild, int(form.get("mercenary_id", "0")), family, target_quantity=target_quantity)
         db.commit()
+        _log_gathering(request, "assignment", f"family={family} assignment_id={assignment.id} target={target_quantity or 'continuous'}")
     except (TypeError, ValueError) as exc:
         db.rollback()
+        _log_gathering(request, "assignment_rejected", f"reason={exc}", 400)
         return RedirectResponse(f"/gathering?error={quote(str(exc))}", status_code=303)
     return RedirectResponse("/gathering?message=Designa%C3%A7%C3%A3o+iniciada.", status_code=303)
 
@@ -93,9 +118,17 @@ def gathering_release(
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     try:
-        release_worker(db, guild, assignment_id)
+        summary = release_worker(db, guild, assignment_id)
         db.commit()
+        _log_gathering(
+            request, "release",
+            f"assignment_id={assignment_id} cycles={summary['cycles']} produced={summary['produced']} "
+            f"stored={summary['stored']} discarded={summary['discarded']} "
+            f"warehouse={summary['used']}/{summary['capacity']}",
+        )
     except ValueError as exc:
         db.rollback()
+        _log_gathering(request, "release_rejected", f"assignment_id={assignment_id} reason={exc}", 400)
         return RedirectResponse(f"/gathering?error={quote(str(exc))}", status_code=303)
-    return RedirectResponse("/gathering?message=Trabalhador+liberado.", status_code=303)
+    message = f"Trabalhador liberado. Coleta encerrada: {summary['stored']} unidade(s) armazenada(s)."
+    return RedirectResponse(f"/gathering?message={quote(message)}", status_code=303)

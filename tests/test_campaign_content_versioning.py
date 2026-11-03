@@ -42,6 +42,11 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     self.assertFalse(db.scalar(select(MissionTemplate.is_active).where(
                         MissionTemplate.name == "Cacar lobos",
                     )))
+                    self.assertIsNotNone(db.scalar(select(ItemTemplate.id).where(
+                        ItemTemplate.item_type == "material",
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.is_active.is_(True),
+                    )))
                     board = get_regional_board(db, metadata, guild, metadata.created_at_utc + timedelta(minutes=1))
                     self.assertEqual(metadata.content_version, PACK_VERSION)
                     self.assertEqual(board["cycle"].content_version, PACK_VERSION)
@@ -58,6 +63,7 @@ class CampaignContentVersioningTests(unittest.TestCase):
             missing_slug = None
             missing_required_min_level = None
             missing_dungeon_slug = None
+            missing_meat_slug = None
             old_offer_id = None
             old_offer_snapshot = None
             old_cycle_id = None
@@ -82,6 +88,16 @@ class CampaignContentVersioningTests(unittest.TestCase):
                         ContentSeedRun.pack_key == PACK_KEY,
                         ContentSeedRun.version == PACK_VERSION,
                     ))
+                    missing_meat = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.item_type == "material",
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.is_active.is_(True),
+                    ).order_by(ItemTemplate.item_level, ItemTemplate.id))
+                    self.assertIsNotNone(missing_meat)
+                    missing_meat_slug = missing_meat.slug
+                    missing_meat.slug = f"legacy_{missing_meat.slug}"
+                    missing_meat.name = "Carne Legada preservada"
+                    db.flush()
                     board = get_regional_board(
                         db, metadata, guild, metadata.created_at_utc + timedelta(minutes=1),
                     )
@@ -338,6 +354,15 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     ))
                     self.assertIsNotNone(restored_mission)
                     self.assertEqual(restored_mission.required_min_mercenary_level, missing_required_min_level)
+                    self.assertIsNotNone(db.scalar(select(ItemTemplate.id).where(
+                        ItemTemplate.slug == missing_meat_slug,
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.is_active.is_(True),
+                    )))
+                    self.assertIsNotNone(db.scalar(select(ItemTemplate.id).where(
+                        ItemTemplate.slug == f"legacy_{missing_meat_slug}",
+                        ItemTemplate.name == "Carne Legada preservada",
+                    )))
                     self.assertGreater(db.scalar(select(func.count(MissionTemplateItemDrop.id)).where(
                         MissionTemplateItemDrop.mission_template_id == restored_mission.id,
                     )) or 0, 0)

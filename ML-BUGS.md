@@ -204,7 +204,20 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Critérios para correção:** limitar a espera pelo processo do jogo e fornecer diagnóstico explícito caso não encerre; registrar a requisição/fechamento em `desktop.log` e o início do helper, PID, início/fim do Setup, código de saída e stdout/stderr em `%LOCALAPPDATA%\GuildIdleManager\logs\update-handoff.log`; preservar o Setup e staging em qualquer falha ou retorno não zero; cobrir os caminhos de sucesso, timeout e erro em testes.
 - **Nota de distribuição:** a instalação 0.4.1 não pode corrigir a si própria se o próprio handoff não inicia o Setup. Depois da correção, poderá ser necessário instalar manualmente uma primeira versão corrigida; isso deve ser explicado ao usuário se confirmado.
 
+### BUG-004 — Coleta de Carne pode consumir ciclos sem produzir item quando falta template ativo
+
+- **Origem:** relato do usuário de que a coleta de Carne não aparece no inventário; imagem de inventário enviada em 2026-11-02.
+- **Status:** Correção implementada e testes direcionados aprovados; causa exata no save do usuário permanece não confirmada, pois os logs enviados não registravam a família nem o resultado dos ciclos.
+- **Evidência:** inventário mostra Armazém em `435 / 1540`, portanto não estava cheio, e não lista Carne. O log anterior registra requisições/redirects, mas não a família coletada nem unidades produzidas/armazenadas.
+- **Falha confirmada no código:** `advance_assignment()` avançava o checkpoint mesmo quando `_material_template()` não encontrava item ativo daquela família, descartando o tempo acumulado sem erro ou aviso. Campanhas com marcador do catálogo já aplicado também não reparavam templates materiais ausentes.
+- **Correção:** catálogo elevado para versão 5 e materiais gerados são reconciliados aditivamente antes do retorno por marcador, sem sobrescrever templates existentes; coleta impede nova designação sem item ativo, preserva o checkpoint de designações antigas e mostra aviso se o catálogo estiver incompleto.
+- **Diagnóstico adicionado:** `gameplay-actions.log` registra família, ciclos, unidades produzidas/armazenadas/descartadas, ocupação do Armazém e rejeições/liberações de coleta.
+- **Regressões:** `tests.test_gathering_service` verifica coleta de Carne, rejeição sem template e preservação do ciclo; `tests.test_campaign_content_versioning` verifica Carne em campanha nova e reparo aditivo de campanha legada preservando o item customizado.
+- **Risco residual:** necessário confirmar em versão atualizada que a campanha afetada recebe Carne e que um ciclo aparece no inventário; nenhum save real foi aberto ou alterado durante a correção.
+
 ## Validação desta rodada
+
+- BUG-004: `tests.test_gathering_service` + `tests.test_campaign_content_versioning` passaram (14 testes); `compileall` e `git diff --check` passaram. A suíte completa não foi executada.
 
 - Regras de design confirmadas: chance de rebelião de 2% por Vigília elegível; prazos de portal avançam durante catch-up offline.
 - Testes direcionados de oficina, coleta/couro+carne, preços, suprimento, marcos de construção e MAX do Mercado: aprovados (27 testes antes da cobertura extra de equipamento único).
@@ -240,6 +253,7 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 | ML-017 | Preço por espaço e raridade, monotônico no Market 1/100 com tipo/nível/refino comparáveis | `reports/ml017_equipment_price_audit_v0.5.0.json` e `.md`; `tests.test_equipment_pricing` |
 | ML-018 | MAX por estoque/cota, bloqueio sem espaço e equipamento único por instância | `tests.test_market_max_quantity` |
 | BUG-002 | Resultados regionais renderizam com outcome e oferta registrados; erro de desempacotamento corrigido | `tests.test_desktop_http_smoke`: cria `RegionalRunOutcome` + `RegionalOffer`, abre `/regional/regions/{region_code}` e valida contagens; consulta usa `db.execute(...).all()` |
+| BUG-004 | Carne presente/recuperada em catálogo novo e legado; coleta não perde ciclos sem item; diagnóstico de produção registrado | `tests.test_gathering_service`; `tests.test_campaign_content_versioning`; `PACK_VERSION = 5` |
 
 ### Reteste após revisão independente
 
