@@ -42,11 +42,60 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     self.assertFalse(db.scalar(select(MissionTemplate.is_active).where(
                         MissionTemplate.name == "Cacar lobos",
                     )))
+                    self.assertIsNotNone(db.scalar(select(ItemTemplate.id).where(
+                        ItemTemplate.item_type == "material",
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.is_active.is_(True),
+                    )))
                     board = get_regional_board(db, metadata, guild, metadata.created_at_utc + timedelta(minutes=1))
                     self.assertEqual(metadata.content_version, PACK_VERSION)
                     self.assertEqual(board["cycle"].content_version, PACK_VERSION)
             finally:
                 campaigns.close_active_campaign(campaign.campaign_id)
+
+    def test_legacy_migration_reactivates_only_required_meat_gathering_material(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Carne legada", "Guilda Carne")
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            canonical_slug = "material_meat_1_001"
+            sibling_slug = "material_meat_1_002"
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    canonical = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == canonical_slug))
+                    sibling = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.slug != canonical_slug,
+                    ).order_by(ItemTemplate.slug).limit(1))
+                    self.assertIsNotNone(canonical)
+                    self.assertIsNotNone(sibling)
+                    sibling_slug = sibling.slug
+                    canonical.is_active = False
+                    canonical.name = "Carne inicial personalizada"
+                    canonical.description = "Descrição mantida durante a atualização."
+                    canonical.base_sell_value = 77
+                    sibling.is_active = False
+                    metadata.content_version = PACK_VERSION - 1
+                    db.commit()
+
+                activated = campaigns.activate_campaign(created.campaign_id)
+                self.assertEqual(activated.content_version, PACK_VERSION)
+                with factory() as db:
+                    canonical_rows = list(db.scalars(select(ItemTemplate).where(ItemTemplate.slug == canonical_slug)))
+                    canonical = canonical_rows[0]
+                    sibling = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == sibling_slug))
+                    self.assertEqual(len(canonical_rows), 1)
+                    self.assertTrue(canonical.is_active)
+                    self.assertEqual(canonical.name, "Carne inicial personalizada")
+                    self.assertEqual(canonical.description, "Descrição mantida durante a atualização.")
+                    self.assertEqual(canonical.base_sell_value, 77)
+                    self.assertFalse(sibling.is_active)
+                    self.assertEqual(db.get(CampaignMetadata, created.campaign_id).content_version, PACK_VERSION)
+            finally:
+                campaigns.close_active_campaign(created.campaign_id)
+                engine.dispose()
 
     def test_legacy_campaign_upgrade_backs_up_and_preserves_materialized_offers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -58,6 +107,7 @@ class CampaignContentVersioningTests(unittest.TestCase):
             missing_slug = None
             missing_required_min_level = None
             missing_dungeon_slug = None
+            missing_meat_slug = None
             old_offer_id = None
             old_offer_snapshot = None
             old_cycle_id = None
@@ -82,6 +132,16 @@ class CampaignContentVersioningTests(unittest.TestCase):
                         ContentSeedRun.pack_key == PACK_KEY,
                         ContentSeedRun.version == PACK_VERSION,
                     ))
+                    missing_meat = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.item_type == "material",
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.is_active.is_(True),
+                    ).order_by(ItemTemplate.item_level, ItemTemplate.id))
+                    self.assertIsNotNone(missing_meat)
+                    missing_meat_slug = missing_meat.slug
+                    missing_meat.slug = f"legacy_{missing_meat.slug}"
+                    missing_meat.name = "Carne Legada preservada"
+                    db.flush()
                     board = get_regional_board(
                         db, metadata, guild, metadata.created_at_utc + timedelta(minutes=1),
                     )
@@ -338,6 +398,15 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     ))
                     self.assertIsNotNone(restored_mission)
                     self.assertEqual(restored_mission.required_min_mercenary_level, missing_required_min_level)
+                    self.assertIsNotNone(db.scalar(select(ItemTemplate.id).where(
+                        ItemTemplate.slug == missing_meat_slug,
+                        ItemTemplate.material_family == "meat",
+                        ItemTemplate.is_active.is_(True),
+                    )))
+                    self.assertIsNotNone(db.scalar(select(ItemTemplate.id).where(
+                        ItemTemplate.slug == f"legacy_{missing_meat_slug}",
+                        ItemTemplate.name == "Carne Legada preservada",
+                    )))
                     self.assertGreater(db.scalar(select(func.count(MissionTemplateItemDrop.id)).where(
                         MissionTemplateItemDrop.mission_template_id == restored_mission.id,
                     )) or 0, 0)

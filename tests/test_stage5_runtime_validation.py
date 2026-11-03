@@ -37,7 +37,7 @@ from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 from app.services.inventory_capacity_service import add_inventory_quantity_capped
 from app.services.market_service import (
-    MarketError, collect_market_sale, get_material_sale_quota, start_material_sale,
+    MarketError, collect_market_sale, start_material_sale,
 )
 from app.services.mercenary_service import equip_mercenary_item
 from app.services.mission_service import claim_mission_loot, mission_is_unlocked, start_mission
@@ -379,72 +379,8 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
         self.assertLessEqual(usage_after_salvage - usage_before_salvage, job.result_quantity)
         self.assertTrue(any(discarded > 0 for _stored, discarded in salvage_overflow))
 
-    def test_material_market_quota_counts_active_sales_and_reopens_after_24h(self):
-        wood = self.db.scalar(select(ItemTemplate).where(
-            ItemTemplate.item_type == "material", ItemTemplate.material_family == "wood",
-            ItemTemplate.is_active.is_(True),
-        ).order_by(ItemTemplate.id))
-        self._set_inventory_usage(30, wood)
-        first_start = self.now
-        with patch.object(market_service, "MATERIAL_BASE_UNITS_PER_24H", 10), \
-                patch.object(market_service, "utc_now", return_value=first_start):
-            first = start_material_sale(self.db, self.guild, str(wood.id), "10")
-            quota = get_material_sale_quota(self.db, self.guild.id, now=first_start)
-        self.assertEqual({key: value for key, value in quota.items() if key != "next_release_at"},
-                         {"limit": 10, "used": 10, "remaining": 0})
-        self.assertIsNotNone(quota["next_release_at"])
-        first_end = first.ends_at.replace(tzinfo=timezone.utc) if first.ends_at.tzinfo is None else first.ends_at
-        with patch.object(market_service, "utc_now", return_value=first_end + timedelta(seconds=1)):
-            collect_market_sale(self.db, self.guild, self.resources, first.id)
-        # The completed sale still occupies rolling quota until its start time
-        # leaves the 24-hour window; collection frees the only sale slot.
-        with patch.object(market_service, "MATERIAL_BASE_UNITS_PER_24H", 10), \
-                patch.object(market_service, "utc_now", return_value=first_end + timedelta(seconds=2)):
-            with self.assertRaisesRegex(MarketError, "restam 0 de 10"):
-                start_material_sale(self.db, self.guild, str(wood.id), "1")
-        reopened_at = first_start + timedelta(hours=24)
-        with patch.object(market_service, "MATERIAL_BASE_UNITS_PER_24H", 10), \
-                patch.object(market_service, "utc_now", return_value=reopened_at):
-            quota = get_material_sale_quota(self.db, self.guild.id, now=reopened_at)
-            second = start_material_sale(self.db, self.guild, str(wood.id), "10")
-        self.assertEqual({key: value for key, value in quota.items() if key != "next_release_at"},
-                         {"limit": 10, "used": 0, "remaining": 10})
-        self.assertEqual(second.quantity, 10)
-
-    def test_material_market_quota_scales_with_slots(self):
-        wood = self.db.scalar(select(ItemTemplate).where(
-            ItemTemplate.item_type == "material", ItemTemplate.material_family == "wood",
-            ItemTemplate.is_active.is_(True),
-        ).order_by(ItemTemplate.id))
-        market = next(row for row in ensure_guild_buildings(self.db, self.guild.id)
-                      if row.building_template.effect_type == "market")
-        market.level = 6
-        self._set_inventory_usage(40, wood)
-        with patch.object(market_service, "MATERIAL_BASE_UNITS_PER_24H", 10), \
-                patch.object(market_service, "utc_now", return_value=self.now):
-            first = start_material_sale(self.db, self.guild, str(wood.id), "15")
-            quota = get_material_sale_quota(self.db, self.guild.id, now=self.now)
-        self.assertEqual({key: value for key, value in quota.items() if key != "next_release_at"},
-                         {"limit": 15, "used": 15, "remaining": 0})
-        self.assertEqual(first.quantity, 15)
-
-    def test_material_market_quota_starts_at_25_and_steps_at_five_level_milestones(self):
-        market = next(row for row in ensure_guild_buildings(self.db, self.guild.id)
-                      if row.building_template.effect_type == "market")
-        self.assertEqual(get_material_sale_quota(self.db, self.guild.id, now=self.now)["limit"], 25)
-        market.level = 4
-        self.assertEqual(get_material_sale_quota(self.db, self.guild.id, now=self.now)["limit"], 25)
-        market.level = 5
-        self.assertEqual(get_material_sale_quota(self.db, self.guild.id, now=self.now)["limit"], 30)
-        market.level = 9
-        self.assertEqual(get_material_sale_quota(self.db, self.guild.id, now=self.now)["limit"], 30)
-        market.level = 10
-        self.assertEqual(get_material_sale_quota(self.db, self.guild.id, now=self.now)["limit"], 35)
-        market.level = 100
-        self.assertEqual(get_material_sale_quota(self.db, self.guild.id, now=self.now)["limit"], 125)
-
-    def test_concurrent_material_sale_submissions_cannot_overbook_quota(self):
-        with TemporaryDirectory(prefix="gim-market-quota-race-") as temp_dir:
+    def test_concurrent_material_sale_submissions_cannot_overdraw_stock(self):
+        with TemporaryDirectory(prefix="gim-market-stock-race-") as temp_dir:
             engine = create_database_engine(f"sqlite:///{(Path(temp_dir) / 'race.sqlite3').as_posix()}")
             Base.metadata.create_all(engine)
             try:
@@ -452,17 +388,17 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
                     apply_initial_campaign_content(db)
                     campaign = CampaignMetadata(
                         campaign_id="00000000-0000-0000-0000-0000000000aa",
-                        campaign_name="Market quota race", created_at_utc=self.now,
+                        campaign_name="Market stock race", created_at_utc=self.now,
                         updated_at_utc=self.now, schema_version=5, content_version=PACK_VERSION,
                         home_region="Fronteira do Norte",
                     )
-                    guild = Guild(campaign_id=campaign.campaign_id, name="Quota race", level=1)
+                    guild = Guild(campaign_id=campaign.campaign_id, name="Stock race", level=1)
                     resources = GuildResources(guild=guild, gold=10_000)
                     db.add_all((campaign, guild, resources))
                     db.flush()
                     market = next(row for row in ensure_guild_buildings(db, guild.id)
                                   if row.building_template.effect_type == "market")
-                    market.level = 6  # two slots allow both submits to reach the quota check
+                    market.level = 6  # two slots allow both submits to reach the stock check
                     wood = db.scalar(select(ItemTemplate).where(
                         ItemTemplate.item_type == "material", ItemTemplate.material_family == "wood",
                         ItemTemplate.is_active.is_(True),
@@ -480,24 +416,20 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
                         guild = db.scalar(select(Guild).where(Guild.id == guild_id))
                         barrier.wait(timeout=10)
                         try:
-                            start_material_sale(db, guild, str(wood_id), "15")
+                            start_material_sale(db, guild, str(wood_id), "20")
                             return "accepted"
                         except MarketError:
                             db.rollback()
                             return "rejected"
 
-                with patch.object(market_service, "MATERIAL_BASE_UNITS_PER_24H", 10):
-                    with ThreadPoolExecutor(max_workers=2) as executor:
-                        outcomes = list(executor.map(lambda _index: submit_sale(), range(2)))
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    outcomes = list(executor.map(lambda _index: submit_sale(), range(2)))
                 self.assertCountEqual(outcomes, ["accepted", "rejected"])
                 with Session(engine) as db:
                     rows = list(db.scalars(select(MarketSale).where(MarketSale.guild_id == guild_id)))
                     stack = get_inventory_item(db, guild_id, wood_id)
-                    with patch.object(market_service, "MATERIAL_BASE_UNITS_PER_24H", 10):
-                        quota = get_material_sale_quota(db, guild_id)
-                self.assertEqual(sum(row.quantity for row in rows), 15)
-                self.assertEqual(stack.quantity, 15)
-                self.assertEqual(quota["used"], 15)
+                self.assertEqual(sum(row.quantity for row in rows), 20)
+                self.assertEqual(stack.quantity, 10)
             finally:
                 engine.dispose()
 

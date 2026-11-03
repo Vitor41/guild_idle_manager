@@ -87,3 +87,25 @@ def log_gameplay_action(
     except (OSError, RuntimeError):
         # Logging must not prevent the game action or hide its visible response.
         return
+
+
+def log_gathering_advancement(*, route: str, diagnostic_id: str, advancement: dict) -> None:
+    """Record gathering production once, regardless of which page advanced it."""
+    for family, result in advancement.items():
+        if not result.get("cycles") and not result.get("catalog_missing"):
+            continue
+        state = "catalog_missing" if result.get("catalog_missing") else (
+            "paused" if result.get("paused") else "active"
+        )
+        log_gameplay_action(
+            action="gathering.production",
+            route=route,
+            diagnostic_id=diagnostic_id,
+            status_code=200,
+            outcome=(
+                f"family={family} cycles={result['cycles']} produced={result['produced']} "
+                f"stored={result['stored']} discarded={result['discarded']} "
+                f"capacity={result['capacity']} used={result['used']} state={state}"
+            ),
+            event="production",
+        )

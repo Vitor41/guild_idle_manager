@@ -83,6 +83,28 @@ class GatheringServiceTests(unittest.TestCase):
         self.assertEqual(len(inventory), 2)
         self.assertLessEqual(get_inventory_usage(self.db, self.guild.id), get_inventory_capacity(self.db, self.guild))
 
+    def test_missing_material_template_blocks_assignment_without_consuming_worker(self):
+        with self.assertRaisesRegex(ValueError, "material de Carne não está disponível"):
+            assign_worker(self.db, self.guild, self.worker.id, "meat", now=self.start)
+        self.assertEqual(self.worker.status, "available")
+        self.assertEqual(self.db.query(GatheringAssignment).count(), 0)
+
+    def test_existing_assignment_does_not_consume_cycles_without_catalog_item(self):
+        assignment = GatheringAssignment(
+            guild_id=self.guild.id, mercenary_id=self.worker.id, resource_family="meat",
+            node_code="hunting_ground", progress_seconds=0, cycle_count=0,
+            rng_seed=123, started_at_utc=self.start, checkpoint_at_utc=self.start,
+        )
+        self.db.add(assignment)
+        self.db.flush()
+
+        result = advance_assignment(self.db, self.guild, assignment, now=self.start + timedelta(minutes=3))
+
+        self.assertTrue(result["catalog_missing"])
+        self.assertEqual(result["cycles"], 0)
+        self.assertEqual(assignment.cycle_count, 0)
+        self.assertEqual(assignment.checkpoint_at_utc, self.start)
+
     def test_max_seconds_caps_24h_elapsed_and_advances_checkpoint(self):
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)
         endpoint = self.start + timedelta(days=1)

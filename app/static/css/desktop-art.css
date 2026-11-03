@@ -6,6 +6,23 @@
   image-rendering: auto;
 }
 
+body[data-app-mode="desktop"] .sidebar-nav .nav-icon {
+  color: transparent;
+  font-size: 0;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #40545a;
+  border-radius: 5px;
+  background: #1a292d;
+}
+
+body[data-app-mode="desktop"] .sidebar-nav .nav-icon img { width: 24px; height: 24px; }
+body[data-app-mode="desktop"] .sidebar-nav .nav-icon.desktop-nav-icon--fallback {
+  border-color: #40545a;
+  background: #1a292d;
+}
+
 .sidebar-nav a[aria-current="page"] {
   border-color: rgba(240, 203, 114, 0.42);
   background: rgba(210, 168, 74, 0.14);

@@ -20,8 +20,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database.connection import SessionLocal, configure_database, create_database_engine, get_engine
 from app.models import CampaignMetadata, Guild, GuildResources
-from app.models.content import ContentSeedRun
-from app.seeds.massive_content import PACK_KEY, PACK_VERSION, run_massive_content_seed
+from app.seeds.massive_content import PACK_VERSION, run_massive_content_seed
 
 
 CURRENT_SCHEMA_VERSION = 7
@@ -564,12 +563,11 @@ class CampaignService:
                     metadata = db.get(CampaignMetadata, info.campaign_id)
                     if metadata is None:
                         raise ValueError("O save não contém os dados da campanha para atualizar o catálogo.")
-                    marker_exists = db.scalar(select(ContentSeedRun.id).where(
-                        ContentSeedRun.pack_key == PACK_KEY,
-                        ContentSeedRun.version == PACK_VERSION,
-                    )) is not None
-                    if not marker_exists:
-                        run_massive_content_seed(db, deactivate_legacy_defaults=False)
+                    run_massive_content_seed(
+                        db,
+                        deactivate_legacy_defaults=False,
+                        repair_required_gathering_materials=True,
+                    )
                     metadata.content_version = PACK_VERSION
                     metadata.updated_at_utc = datetime.now(timezone.utc)
                     db.commit()

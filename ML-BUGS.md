@@ -154,6 +154,23 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Pedido:** disponibilizar um botão `MAX` para preencher a maior quantidade que o jogador pode anunciar para venda.
 - **Critério para investigação:** calcular o máximo respeitando estoque próprio, limite de quantidade por anúncio e espaços disponíveis no Mercado; não oferecer quantidade acima do permitido. Equipamentos únicos devem continuar limitados à unidade disponível por instância.
 
+### ML-019 — Remover temporariamente a cota de venda de materiais
+
+- **Origem:** anotação do usuário após esclarecer o funcionamento do MAX no Mercado.
+- **Status:** Validada; a cota móvel foi removida da regra de venda, da tela do Mercado e do guia.
+- **Regra solicitada:** não limitar a quantidade de materiais vendida por janela móvel de 24 horas. A venda continua limitada pelo estoque disponível e pelas regras normais do Mercado, como espaços de anúncio; o botão MAX deve refletir esses limites, sem aplicar cota diária.
+- **Contexto:** a cota atual começa em 25 unidades por 24 horas no Mercado nível 1 e cresce com o nível da construção. Não foi identificada evidência de teste de exploit que justificasse essa restrição; não tratar o valor atual como balanceamento validado.
+- **Critério de conclusão:** remover a cota do cálculo de quantidade máxima e da validação do servidor, mantendo a validação de estoque, a remoção correta das unidades anunciadas e os limites de espaços do Mercado. Confirmar que materiais de tipos diferentes podem ser vendidos sem cota compartilhada e que o MAX seleciona todo o estoque vendável permitido.
+- **Implementação/evidência:** `app/services/market_service.py` calcula MAX pelo estoque e pelos espaços, e não valida cota; mantém checagem e débito de estoque sob lock. Testes separados em `tests.test_market_max_quantity` cobrem MAX 80, venda de 60, venda de 70 unidades em dois materiais, estoque insuficiente e equipamento único. `tests.test_stage5_runtime_validation` confirma que vendas concorrentes não podem exceder o estoque restante. `tests.test_stage5_service_journey_runner` cobre venda de 70 unidades pelo simulador, preserva reserva de 30 e confirma ausência de política/saída de cota. Interface, guia e texto administrativo cobertos em `tests.test_stage5_ui_contracts`.
+
+### ML-020 — Completar os ícones do menu e tornar a sidebar elástica
+
+- **Origem:** captura e solicitação do usuário em 2026-11-02.
+- **Status:** Implementada e validada estruturalmente; cobertura visual integrada para todos os 22 links via mapa canônico do manifesto.
+- **Pedido:** a DA deve criar/entregar sprites para todos os itens de navegação que ainda não possuem ícone, seguindo a identidade visual desktop já aprovada. Nenhum menu deve aparecer sem ícone. A sidebar deve preencher dinamicamente a altura disponível e manter o fundo contínuo até a base, independentemente da quantidade de menus ou seções adicionadas.
+- **Critérios de conclusão:** inventariar todos os links e cabeçalhos da navegação e comprovar cobertura por sprite; integrar os novos assets no manifesto/mapeamento existente sem fallback genérico para entradas sem arte; ajustar o layout para crescer com a altura da janela e com o conteúdo, sem área de fundo interrompida, sobreposição ou perda de rolagem; documentar caminhos dos assets e apresentar evidência de teste responsivo/estrutural. Sem mudança de regras de jogo ou banco de dados.
+- **Implementação/evidência:** a DA entregou `docs/art_direction/ML020_DESKTOP_NAV_SPRITES.md`, três famílias de sprites e as 22 entradas `manifest.navigation`; `app/static/js/desktop-art.js` consome esse mapa e marca falha com superfície neutra, sem glyph de fallback. `app/static/css/desktop-sidebar-layout.css` mantém a sidebar na altura da janela, rolagem do conteúdo, menus responsivos e ícones com largura fixa. `tests.test_desktop_art` compara as 22 rotas e sprites locais, verifica altura/rolagem para janela curta e zoom, foco de teclado, ausência de glyph e contraste WCAG AA dos estados de texto/foco. Os dois rótulos de seção são texto, não links, conforme o inventário da DA.
+
 ## Bugs / Inconsistências
 
 ### BUG-001 — Requisitos da oferta regional não são aplicados a partir do snapshot
@@ -187,13 +204,28 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Critérios para correção:** limitar a espera pelo processo do jogo e fornecer diagnóstico explícito caso não encerre; registrar a requisição/fechamento em `desktop.log` e o início do helper, PID, início/fim do Setup, código de saída e stdout/stderr em `%LOCALAPPDATA%\GuildIdleManager\logs\update-handoff.log`; preservar o Setup e staging em qualquer falha ou retorno não zero; cobrir os caminhos de sucesso, timeout e erro em testes.
 - **Nota de distribuição:** a instalação 0.4.1 não pode corrigir a si própria se o próprio handoff não inicia o Setup. Depois da correção, poderá ser necessário instalar manualmente uma primeira versão corrigida; isso deve ser explicado ao usuário se confirmado.
 
+### BUG-004 — Coleta de Carne pode consumir ciclos sem produzir item quando falta template ativo
+
+- **Origem:** relato do usuário de que a coleta de Carne não aparece no inventário; imagem de inventário enviada em 2026-11-02.
+- **Status:** Correção implementada e testes direcionados aprovados; causa exata no save do usuário permanece não confirmada, pois os logs enviados não registravam a família nem o resultado dos ciclos.
+- **Evidência:** inventário mostra Armazém em `435 / 1540`, portanto não estava cheio, e não lista Carne. O log anterior registra requisições/redirects, mas não a família coletada nem unidades produzidas/armazenadas.
+- **Falha confirmada no código:** `advance_assignment()` avançava o checkpoint mesmo quando `_material_template()` não encontrava item ativo daquela família, descartando o tempo acumulado sem erro ou aviso. Campanhas com marcador do catálogo já aplicado também não reparavam templates materiais ausentes.
+- **Correção:** catálogo elevado para versão 5 e materiais gerados são reconciliados aditivamente antes do retorno por marcador, sem sobrescrever templates existentes; coleta impede nova designação sem item ativo, preserva o checkpoint de designações antigas e mostra aviso se o catálogo estiver incompleto.
+- **Diagnóstico adicionado:** `gameplay-actions.log` registra família, ciclos, unidades produzidas/armazenadas/descartadas, ocupação do Armazém e rejeições/liberações de coleta.
+- **Regressões:** `tests.test_gathering_service` verifica coleta de Carne, rejeição sem template e preservação do ciclo; `tests.test_campaign_content_versioning` verifica Carne em campanha nova e reparo aditivo de campanha legada preservando o item customizado.
+- **Risco residual:** necessário confirmar em versão atualizada que a campanha afetada recebe Carne e que um ciclo aparece no inventário; nenhum save real foi aberto ou alterado durante a correção.
+- **Ajuste após revisão CR:** na migração de campanha antiga, reativar somente `material_meat_1_001` quando ele ainda for o material canônico do pacote; preservar campos customizados e os demais materiais desativados. A rota `/regional` agora usa o mesmo registrador de produção da rota `/gathering`, com família, ciclos, quantidades, capacidade e estado; o smoke verifica uma única linha para o avanço regional. O CR aprovou o commit `5ba0c438c785ad489a8e58c86105edd3b8072af4`, sem achados acionáveis.
+
 ## Validação desta rodada
+
+- BUG-004: `tests.test_gathering_service` + `tests.test_campaign_content_versioning` passaram (14 testes); `compileall` e `git diff --check` passaram. A suíte completa não foi executada.
 
 - Regras de design confirmadas: chance de rebelião de 2% por Vigília elegível; prazos de portal avançam durante catch-up offline.
 - Testes direcionados de oficina, coleta/couro+carne, preços, suprimento, marcos de construção e MAX do Mercado: aprovados (27 testes antes da cobertura extra de equipamento único).
 - `tests.test_stage5_ui_contracts` + `tests.test_stage5_runtime_validation`: aprovados (33 testes no conjunto).
 - Retestes direcionados de `tests.test_regional_cycle_service`, `tests.test_campaign_service` e `tests.test_campaign_content_versioning`: simulação de 100 Vigílias e migração de saves cobertas; cinco testes de migração/campanha, quatro testes de descoberta/compatibilidade e dois casos regionais anteriormente divergentes aprovados após atualizar as expectativas do head e permitir que probabilidade zero desative ações CPU. `test_cpu_stage_counts_remain_unknown_when_upgrading_a_legacy_cycle` confirma estágios `NULL` após migração, e `test_legacy_cpu_report_labels_unmeasured_activity_stages` verifica a apresentação “não registrado”.
 - `tests.test_desktop_http_smoke`: página e mutações HTTP desktop aprovadas após ajustar fixtures de inventário sem duplicar linhas; inclui regressão de log/erro GET, renderização de outcome na rota regional, oficinas, cotação e débito regional.
+- BUG-004/diagnóstico regional: `tests.test_campaign_content_versioning` (3 testes), `tests.test_gathering_service` (12 testes) e `tests.test_desktop_http_smoke` (1 teste) passaram em SQLite isolado; o smoke confirmou exatamente um registro de produção para o avanço via `/regional`. `compileall` e `git diff --check` passaram. Reteste independente CR aprovado no commit `5ba0c438c785ad489a8e58c86105edd3b8072af4`, sem achados acionáveis. Nenhuma build/instalação foi feita.
 - BUG-002: causa raiz identificada nos logs, corrigida e coberta por regressão da rota real com `RegionalRunOutcome` e `RegionalOffer`; smoke aprovado. A integração/release ainda aguarda revisão CR e gate humano.
 - Auditoria ML-013: 20.000 sequências reproduzíveis em campanha descartável; sem abrir saves do jogador.
 - Auditoria ML-017: 1.700 equipamentos, 20 comparações tipo/raridade/Mercado, monotonicidade estrita e faixa econômica documentadas.
@@ -223,6 +255,7 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 | ML-017 | Preço por espaço e raridade, monotônico no Market 1/100 com tipo/nível/refino comparáveis | `reports/ml017_equipment_price_audit_v0.5.0.json` e `.md`; `tests.test_equipment_pricing` |
 | ML-018 | MAX por estoque/cota, bloqueio sem espaço e equipamento único por instância | `tests.test_market_max_quantity` |
 | BUG-002 | Resultados regionais renderizam com outcome e oferta registrados; erro de desempacotamento corrigido | `tests.test_desktop_http_smoke`: cria `RegionalRunOutcome` + `RegionalOffer`, abre `/regional/regions/{region_code}` e valida contagens; consulta usa `db.execute(...).all()` |
+| BUG-004 | Carne presente/recuperada em catálogo novo e legado; coleta não perde ciclos sem item; diagnóstico de produção registrado | `tests.test_gathering_service`; `tests.test_campaign_content_versioning`; `PACK_VERSION = 5` |
 
 ### Reteste após revisão independente
 

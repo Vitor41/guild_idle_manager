@@ -16,6 +16,7 @@
 
     {% if error %}<p class="form-error" role="alert">{{ error }}{% if diagnostic_id %} Referência de diagnóstico: {{ diagnostic_id }}. Log: %LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log{% endif %}</p>{% endif %}
     {% if message %}<p class="form-success" role="status">{{ message }}</p>{% endif %}
+    {% if catalog_errors %}<p class="form-error" role="alert">O catálogo está sem item para: {{ catalog_errors|join(", ") }}. Feche e reabra a campanha para aplicar a atualização de conteúdo.</p>{% endif %}
 
     <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">
       <div><span>Armazém compartilhado</span><strong>{{ "{:,.0f}".format(used).replace(",", ".") }} / {{ "{:,.0f}".format(capacity).replace(",", ".") }}</strong></div>

@@ -259,17 +259,18 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("recipe.effective_gold_cost = _effective_recipe_gold_cost", service)
         self.assertIn("resources.gold -= gold_cost", service)
 
-    def test_market_quota_is_explained_and_disabled_material_sales_name_the_blocker(self):
+    def test_market_max_explains_stock_and_slots_without_a_rolling_quota(self):
         template = self.read("app/templates/market/index.html")
         guide = self.read("app/templates/guide/index.html")
+        admin = self.read("app/templates/admin/index.html")
         css = self.read("app/static/css/main.css")
-        self.assertIn("Materiais: {{ material_sale_quota.used }}/{{ material_sale_quota.limit }} unidades usadas", template)
-        self.assertIn("janela móvel", template)
-        self.assertIn("Próximas unidades liberadas a partir de", template)
+        service = self.read("app/services/market_service.py")
+        self.assertIn("estoque disponível e os espaços livres do Mercado", template)
         self.assertIn("todos os espaços de venda estão ocupados", template)
-        self.assertIn("cota de materiais esgotada", template)
-        self.assertIn("L5–9: 30; L10–14: 35; L100: 125", guide)
-        self.assertIn("completar 24 horas", guide)
+        self.assertIn("considerando o estoque disponível", template)
+        self.assertIn("Sem cota por período", admin)
+        self.assertNotIn("material_sale_quota", template + service)
+        self.assertNotIn("24 horas", guide)
         self.assertIn("overflow-wrap: anywhere", css)
 
 

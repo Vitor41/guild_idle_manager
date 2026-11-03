@@ -676,8 +676,7 @@ def _sell_surplus(db: Session, guild: Guild, resources: GuildResources, now: dat
     if not candidates:
         return
     excess, stack = max(candidates, key=lambda item: item[0])
-    quota = market_service.get_material_sale_quota(db, guild.id, now=now)
-    amount = min(int(stack.quantity), excess, int(quota["remaining"]))
+    amount = min(int(stack.quantity), excess)
     if amount < 1:
         return
     market_bonus = market_service.get_market_bonuses(db, guild.id)
@@ -692,7 +691,6 @@ def _sell_surplus(db: Session, guild: Guild, resources: GuildResources, now: dat
                    "units": amount, "base_unit_value": int(stack.item_template.base_sell_value),
                    "market_level": int(market_bonus["level"]),
                    "value_bonus_percent": int(market_bonus["value_bonus_percent"]),
-                   "material_quota_limit": quota["limit"], "material_quota_used_before": quota["used"],
                    "effective_unit_value": int(sale.unit_value), "gold": int(sale.total_value)})
 
 
@@ -1393,26 +1391,14 @@ def main() -> None:
                         help="Maximum wall-clock seconds per fresh journey; checkpointed daily.")
     parser.add_argument("--market-reserve-base", type=int, default=30,
                         help="Fixed material units reserved per family before sales; next-upgrade wood/ore costs are added.")
-    parser.add_argument("--market-base-units-per-24h", type=int,
-                        help="Override the rolling 24h material-sale allowance at Market 1 for sensitivity runs.")
-    parser.add_argument("--market-unlimited-materials", action="store_true",
-                        help="Disable the material-sale allowance for a paired sensitivity baseline only.")
     parser.add_argument("--craft-policy", choices=("none", "first_surplus_equipment_once"), default="none",
                         help="Optional one-time real craft from stock above the protected reserve; keeps the output gear.")
     parser.add_argument("--full-horizon", action="store_true",
                         help="Continue real-service activity to max-days after planned level-50 targets complete.")
     parser.add_argument("--profile", choices=[p["name"] for p in PROFILES], help="Optional single-cell pilot profile.")
     parser.add_argument("--path", choices=PATHS, help="Optional single-cell pilot policy.")
-    parser.add_argument("--output-stem", default="stage5_service_journeys_2026-10-29")
+    parser.add_argument("--output-stem", default="stage5_service_journeys_no_quota_2026-11-02")
     args = parser.parse_args()
-    if args.market_unlimited_materials and args.market_base_units_per_24h is not None:
-        parser.error("Use either --market-unlimited-materials or --market-base-units-per-24h, not both.")
-    if args.market_base_units_per_24h is not None and args.market_base_units_per_24h < 1:
-        parser.error("--market-base-units-per-24h must be positive.")
-    if args.market_unlimited_materials:
-        market_service.MATERIAL_BASE_UNITS_PER_24H = None
-    elif args.market_base_units_per_24h is not None:
-        market_service.MATERIAL_BASE_UNITS_PER_24H = args.market_base_units_per_24h
     start = time.perf_counter()
     report_dir = ROOT / "reports"
     report_dir.mkdir(exist_ok=True)
@@ -1451,7 +1437,6 @@ def main() -> None:
                                             "market_reserve_base": args.market_reserve_base,
                                             "craft_policy": args.craft_policy,
                                             "full_horizon": args.full_horizon,
-                                            "market_base_units_per_24h": market_service.MATERIAL_BASE_UNITS_PER_24H,
                                             "profiles": [dict(p) for _, p in chosen_profiles],
                                             "paths": [p for _, p in chosen_paths],
                                             "output_stem": args.output_stem,
@@ -1490,7 +1475,6 @@ def main() -> None:
                                     "max_days": args.max_days,
                                     "max_wall_seconds": args.max_wall_seconds,
                                     "market_reserve_base": args.market_reserve_base,
-                                    "market_base_units_per_24h": market_service.MATERIAL_BASE_UNITS_PER_24H,
                                     "profiles": [dict(p) for _, p in chosen_profiles],
                                     "paths": [p for _, p in chosen_paths],
                                     "output_stem": args.output_stem,
@@ -1506,7 +1490,7 @@ def main() -> None:
                             })
                         rows.extend(cell)
             report = {
-                "report_id": "gim-stage5-live-service-journeys-20261030-v6",
+                "report_id": "gim-stage5-live-service-journeys-20261102-v7",
                 "generated_at_utc": datetime.now(timezone.utc).isoformat(),
                 "pilot": args.runs_per_cell < 100,
                 "runs_per_cell": args.runs_per_cell,
@@ -1514,10 +1498,9 @@ def main() -> None:
                 "max_days": args.max_days,
                 "max_wall_seconds": args.max_wall_seconds,
                 "market_reserve_base": args.market_reserve_base,
+                "market_material_sales_rule": "no time quota; constrained by available stock, protected reserve and Market listing slots",
                 "craft_policy": args.craft_policy,
                 "full_horizon": args.full_horizon,
-                "market_base_units_per_24h": market_service.MATERIAL_BASE_UNITS_PER_24H,
-                "market_material_quota_disabled_for_sensitivity": market_service.MATERIAL_BASE_UNITS_PER_24H is None,
                 "elapsed_seconds": round(time.perf_counter() - start, 2),
                 "database_init_seconds": round(db_init_seconds, 3),
                 "content_seed_seconds": round(content_seed_seconds, 3),
@@ -1550,10 +1533,10 @@ def main() -> None:
                     "Each team has a separate per-window budget and uses a disjoint roster slice when enough mercenaries exist. Claims return mercenaries before their next assignment; no team shares a busy mercenary.",
                     "No new sink or price is added. Salvage is attempted only with spare gold above 75; the fixed material reserve and optional one-time crafting policy are explicit simulator choices, not game rules.",
                     f"Market sales reserve {max(0, args.market_reserve_base)} units per material family plus the full material cost of the current planned upgrade for wood/ore.",
+                    "Material sales have no per-period quota in the live service; this simulator's reserve is an explicit policy and sales also use the Market's normal listing slots.",
                     "Gathering uses the configured online windows and the persistent-stamina offline credit for each day, advancing real gathering_service checkpoints with max_seconds. It does not accrue 24 hours of gathering merely because the campaign clock advanced by one day.",
                     f"When a milestone changes the required material, the synthetic worker is released and reassigned via gathering_service.release_worker/assign_worker. Market sales protect {max(0, args.market_reserve_base)} units per material family plus the full material cost of the current planned upgrade for wood/ore. This is an explicit recovery policy, not a game rule.",
                     f"Crafting policy is {args.craft_policy}. When enabled, the runner selects at most one affordable rotating equipment recipe using only material stock above the protected reserve, keeps the crafted item out of automatic salvage, and records actual gold/material costs. This is an explicit journey choice, not a new game rule.",
-                    f"Material sales use the live service's rolling 24h throughput allowance: base={market_service.MATERIAL_BASE_UNITS_PER_24H!r} at Market 1, increasing by 5 units at each five-level milestone; it applies to all material sources and does not cap equipment sales.",
                     "Daily JSON checkpoints preserve ledger, milestone, roster-level and event/action counts during a run, but are evidence checkpoints rather than a resumable SQLite snapshot. Each journey has max_days and max_wall_seconds budgets. N=1 per profile/path cannot support rare-event or stable-rate claims.",
                     "A horizon blocker is the next planned target still pending at the end whose current gold, level, or material requirements are unmet. Historical blocked snapshots without a same-target retry are reported separately; neither metric proves a permanent softlock. Finite policy journeys do not establish whole-game hard-softlock absence or economic stability.",
                 ],
@@ -1604,7 +1587,7 @@ def main() -> None:
                         })
             ledger_temp.replace(ledger_path)
             lines = ["# Jornadas fresh-save com serviços reais — Stage 5", "",
-                     f"Pilot={report['pilot']} · N={args.runs_per_cell}/célula · {len(chosen_profiles)} perfis × {len(chosen_paths)} políticas · horizonte={args.max_days} dias · teto={args.max_wall_seconds}s/jornada · reserva fixa de material={max(0, args.market_reserve_base)} unidades/família · cota L1={market_service.MATERIAL_BASE_UNITS_PER_24H!r}, +5 nos níveis 5, 10, 15... · política de crafting={args.craft_policy} · tempo={report['elapsed_seconds']}s · setup SQLite={db_init_seconds:.2f}s · seed de conteúdo={content_seed_seconds:.2f}s.",
+                     f"Pilot={report['pilot']} · N={args.runs_per_cell}/célula · {len(chosen_profiles)} perfis × {len(chosen_paths)} políticas · horizonte={args.max_days} dias · teto={args.max_wall_seconds}s/jornada · reserva fixa de material={max(0, args.market_reserve_base)} unidades/família · sem cota de venda por período · política de crafting={args.craft_policy} · tempo={report['elapsed_seconds']}s · setup SQLite={db_init_seconds:.2f}s · seed de conteúdo={content_seed_seconds:.2f}s.",
                      "", "| Perfil/caminho | Nível 50 | Alvos planejados completos | Falhas de missão | Dungeon tentadas/vencidas | Ouro final p50 (IC95% bootstrap; não estimável em N<2) | Primeiro equipamento | Dungeon | Portal criado | Rebelião ativada | Upgrade-alvo ainda bloqueado no horizonte |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
             for key, s in report["cell_summaries"].items():
                 def rt(d): return f"{d['events']}/{d['n']} ({d['rate_percent']}%; {d['lower_percent']}–{d['upper_percent']}%)"
@@ -1640,10 +1623,10 @@ def main() -> None:
                     f"| D{journey['first_rebellion_day']}/{events_row['rebellion_activated']}/{events_row['rebellion_eligible_region_cycles']} "
                     f"| {journey['crafts_completed']}/{journey['craft_policy']} |"
                 )
-            lines.extend(["", f"*Portal encerrado inclui estados resolvidos ou expirados. Portais ativos da região natal são iniciados e resgatados pelo jogador via serviços reais se estiverem disponíveis durante uma janela online e a equipe cumprir o snapshot; portais não observados continuam ausentes. Rebeliões têm oportunidades naturais e resultados de CPU, mas esta política não aceita convites nem vincula atividade do jogador. A chance aprovada de rebelião é 2% por Vigília elegível e o prazo do portal avança durante catch-up offline. Venda de materiais segue cota L1={market_service.MATERIAL_BASE_UNITS_PER_24H!r}, +5 em cada marco de cinco níveis; sensibilidade está em relatório separado."])
+            lines.extend(["", "*Portal encerrado inclui estados resolvidos ou expirados. Portais ativos da região natal são iniciados e resgatados pelo jogador via serviços reais se estiverem disponíveis durante uma janela online e a equipe cumprir o snapshot; portais não observados continuam ausentes. Rebeliões têm oportunidades naturais e resultados de CPU, mas esta política não aceita convites nem vincula atividade do jogador. A chance aprovada de rebelião é 2% por Vigília elegível e o prazo do portal avança durante catch-up offline. A venda de materiais não tem cota por período; o simulador preserva a reserva explícita de materiais e usa os espaços normais do Mercado."])
             lines.extend(["", "## Limites e definições", ""] + [f"- {lim}" for lim in report["limits"]])
             lines.extend(["", "## Reprodução", "", "```powershell",
-                          f".venv-desktop\\Scripts\\python.exe scripts\\balance\\simulate_stage5_service_journeys.py --runs-per-cell {args.runs_per_cell} --seed-start {args.seed_start} --max-days {args.max_days} --max-wall-seconds {args.max_wall_seconds} --market-reserve-base {max(0, args.market_reserve_base)} --craft-policy {args.craft_policy}" + (" --market-unlimited-materials" if args.market_unlimited_materials else f" --market-base-units-per-24h {args.market_base_units_per_24h}" if args.market_base_units_per_24h is not None else "") + f" --output-stem {stem}" + (f" --profile {args.profile}" if args.profile else "") + (f" --path {args.path}" if args.path else ""), "```", ""])
+                          f".venv-desktop\\Scripts\\python.exe scripts\\balance\\simulate_stage5_service_journeys.py --runs-per-cell {args.runs_per_cell} --seed-start {args.seed_start} --max-days {args.max_days} --max-wall-seconds {args.max_wall_seconds} --market-reserve-base {max(0, args.market_reserve_base)} --craft-policy {args.craft_policy} --output-stem {stem}" + (f" --profile {args.profile}" if args.profile else "") + (f" --path {args.path}" if args.path else ""), "```", ""])
             (report_dir / f"{stem}.md").write_text("\n".join(lines), encoding="utf-8")
             print(f"report={stem}; ledger={ledger_path.name}; elapsed={report['elapsed_seconds']}s", flush=True)
         finally:

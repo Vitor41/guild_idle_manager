@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.connection import Base, create_database_engine
-from app.models import CampaignMetadata, Guild, GuildBuilding, GuildResources, ItemTemplate
+from app.models import CampaignMetadata, Guild, GuildBuilding, GuildInventoryItem, GuildResources, ItemTemplate
 from app.seeds.campaign_content import apply_initial_campaign_content
 from app.seeds.massive_content import PACK_VERSION
 from app.repositories.item_repository import add_inventory_quantity
@@ -154,6 +154,66 @@ class Stage5ServiceJourneyRunnerTests(unittest.TestCase):
         self.assertEqual(_marketable_surplus(160, 70), 90)
         self.assertEqual(_marketable_surplus(70, 70), 0)
         self.assertEqual(_marketable_surplus(50, 70), 0)
+
+    def test_market_surplus_sale_uses_stock_and_reserve_without_a_period_quota(self):
+        engine = create_database_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = Session(engine, autoflush=False, expire_on_commit=False)
+        try:
+            apply_initial_campaign_content(db)
+            now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            campaign = CampaignMetadata(
+                campaign_id="00000000-0000-0000-0000-000000000093",
+                campaign_name="Market no-quota simulation", created_at_utc=now,
+                updated_at_utc=now, schema_version=5, content_version=PACK_VERSION,
+                home_region="Vale da Fronteira",
+            )
+            guild = Guild(campaign_id=campaign.campaign_id, name="No quota fixture", level=1)
+            resources = GuildResources(guild=guild, gold=0)
+            db.add_all((campaign, guild, resources))
+            db.flush()
+            market = next(row for row in ensure_guild_buildings(db, guild.id)
+                          if row.building_template.effect_type == "market")
+            market.level = 1
+            wood = db.scalar(select(ItemTemplate).where(
+                ItemTemplate.item_type == "material", ItemTemplate.material_family == "wood",
+                ItemTemplate.is_active.is_(True),
+            ).order_by(ItemTemplate.id))
+            add_inventory_quantity(db, guild.id, wood.id, 100)
+            db.commit()
+
+            gold_before = int(resources.gold)
+            events = []
+            journey_runner._sell_surplus(
+                db, guild, resources, now, {"wood": 30}, events,
+            )
+
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["type"], "market_sale")
+            self.assertEqual(events[0]["units"], 70)
+            self.assertFalse(any("quota" in key for key in events[0]))
+            stack = db.scalar(select(GuildInventoryItem).where(
+                GuildInventoryItem.guild_id == guild.id,
+                GuildInventoryItem.item_template_id == wood.id,
+            ))
+            self.assertEqual(int(stack.quantity), 30)
+            self.assertGreater(int(resources.gold), gold_before)
+        finally:
+            db.close()
+            engine.dispose()
+
+    def test_stage5_market_runner_has_no_rolling_material_quota_policy_or_cli_flags(self):
+        runner = (Path(__file__).resolve().parents[1] / "scripts" / "balance"
+                  / "simulate_stage5_service_journeys.py").read_text(encoding="utf-8")
+        for obsolete in (
+            "get_material_sale_quota", "material_quota_limit", "material_quota_used_before",
+            "market_base_units_per_24h", "market_material_quota_disabled_for_sensitivity",
+            "--market-base-units-per-24h", "--market-unlimited-materials",
+            "rolling 24h throughput allowance", "cota L1=",
+        ):
+            with self.subTest(obsolete=obsolete):
+                self.assertNotIn(obsolete, runner)
+        self.assertIn("no time quota", runner)
 
     def test_gathering_schedule_uses_online_windows_and_offline_credit_not_24h(self):
         day_start = datetime(2026, 1, 1, tzinfo=timezone.utc)

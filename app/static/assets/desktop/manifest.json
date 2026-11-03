@@ -787,7 +787,87 @@
         "512": "sprites/master_512/status-warning.png"
       },
       "master_project_path": "design/masters/status-warning.webp"
+    },
+    "nav-gathering": {
+      "paths": {
+        "64": "evolution/sprites/ui_64/gathering-kit.png",
+        "128": "evolution/sprites/ui_128/gathering-kit.png",
+        "512": "evolution/sprites/master_512/gathering-kit.png"
+      },
+      "master_project_path": "design/preview/evolution_masters/gathering-kit.png"
+    },
+    "nav-regional": {
+      "paths": {
+        "64": "evolution/sprites/ui_64/vigil-tower.png",
+        "128": "evolution/sprites/ui_128/vigil-tower.png",
+        "512": "evolution/sprites/master_512/vigil-tower.png"
+      },
+      "master_project_path": "design/preview/evolution_masters/vigil-tower.png"
+    },
+    "nav-workshops": {
+      "paths": {
+        "64": "sprites/64/nav-workshops.png",
+        "128": "sprites/128/nav-workshops.png",
+        "512": "sprites/master_512/nav-workshops.png"
+      },
+      "master_project_path": "app/static/assets/desktop/sprites/master_512/nav-workshops.png"
+    },
+    "nav-updates": {
+      "paths": {
+        "64": "sprites/64/nav-updates.png",
+        "128": "sprites/128/nav-updates.png",
+        "512": "sprites/master_512/nav-updates.png"
+      },
+      "master_project_path": "app/static/assets/desktop/sprites/master_512/nav-updates.png"
+    },
+    "nav-class-guide": {
+      "paths": {
+        "64": "sprites/64/nav-class-guide.png",
+        "128": "sprites/128/nav-class-guide.png",
+        "512": "sprites/master_512/nav-class-guide.png"
+      },
+      "master_project_path": "app/static/assets/desktop/sprites/master_512/nav-class-guide.png"
+    },
+    "material-meat": {
+      "paths": {
+        "64": "sprites/64/material-meat.png",
+        "128": "sprites/128/material-meat.png",
+        "512": "sprites/master_512/material-meat.png"
+      },
+      "master_project_path": "app/static/assets/desktop/sprites/master_512/material-meat.png"
+    },
+    "item-supply-kit": {
+      "paths": {
+        "64": "sprites/64/item-supply-kit.png",
+        "128": "sprites/128/item-supply-kit.png",
+        "512": "sprites/master_512/item-supply-kit.png"
+      },
+      "master_project_path": "app/static/assets/desktop/sprites/master_512/item-supply-kit.png"
     }
+  },
+  "navigation": {
+    "/dashboard": "guild-sigil",
+    "/tavern": "building-tavern",
+    "/mercenaries": "class-warrior",
+    "/missions": "expedition-map",
+    "/gathering": "nav-gathering",
+    "/workshops": "nav-workshops",
+    "/dungeons": "dungeon-gate",
+    "/regional": "nav-regional",
+    "/inventory": "item-chest",
+    "/blacksmith": "building-blacksmith",
+    "/market": "building-market",
+    "/docks": "building-docks",
+    "/buildings": "building-warehouse",
+    "/class-change": "class-apprentice",
+    "/guild/progress": "resource-xp",
+    "/professions": "building-training_ground",
+    "/classes": "nav-class-guide",
+    "/tiers": "status-ready",
+    "/codex": "item-book",
+    "/guide": "item-quest-scroll",
+    "/updates": "nav-updates",
+    "/admin": "status-warning"
   },
   "accessibility": "Meaningful content and status must be live HTML text; background illustrations and repeated sprites are decorative and should be hidden from assistive technology.",
   "icon_maps": {
@@ -837,6 +917,7 @@
       "leather": "material-leather",
       "cloth": "material-cloth",
       "herb": "material-herb",
+      "meat": "material-meat",
       "essence": "material-essence",
       "gem": "material-gem",
       "beast": "material-beast",
@@ -877,6 +958,7 @@
       "hide": "material-leather",
       "cloth": "material-cloth",
       "herb": "material-herb",
+      "meat": "material-meat",
       "essence": "material-essence",
       "gem": "material-gem",
       "crystal": "resource-crystal",
@@ -897,6 +979,7 @@
       "medal": "resource-honor-mark",
       "merchant_token": "resource-merchant-token",
       "provisions": "resource-provisions",
+      "resource_provisions": "item-supply-kit",
       "quest_scroll": "item-quest-scroll",
       "tavern_ticket": "resource-tavern-ticket",
       "training_token": "resource-training-token"
