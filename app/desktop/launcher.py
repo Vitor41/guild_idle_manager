@@ -179,6 +179,8 @@ $ErrorActionPreference = 'Stop'
 $setup = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__SETUP__'))
 $logFile = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__LOG__'))
 $staging = [IO.Path]::GetDirectoryName($setup)
+$setupStdout = Join-Path $staging 'setup.stdout.log'
+$setupStderr = Join-Path $staging 'setup.stderr.log'
 $parentPid = __PID__
 $setupStarted = $false
 $setupExitCode = $null
@@ -196,6 +198,13 @@ function Show-HandoffMessage([string]$message, [string]$icon) {
         $message, 'Guild Idle Manager', 'OK', $icon
     ) | Out-Null
 }
+function Write-SetupOutputToHandoffLog([string]$path, [string]$streamName) {
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        Get-Content -LiteralPath $path | ForEach-Object {
+            Write-HandoffLog "SETUP-$streamName" ([string]$_)
+        }
+    }
+}
 try {
     Write-HandoffLog 'INFO' "Helper started; waiting for application PID $parentPid; setup=$setup"
     $parent = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
@@ -204,15 +213,20 @@ try {
         Show-HandoffMessage "O Guild Idle Manager ainda não encerrou completamente. O Setup foi preservado em:`n$setup`n`nFeche o processo GuildIdleManager pelo Gerenciador de Tarefas e execute o Setup manualmente. Registro: $logFile" 'Warning'
         return
     }
-    Write-HandoffLog 'INFO' "Application PID $parentPid exited; starting verified Setup visibly with elevation"
-    $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal -Verb RunAs
+    Write-HandoffLog 'INFO' "Application PID $parentPid exited; starting verified Setup visibly as the current user"
+    $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `
+        -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr
     $setupStarted = $true
     $setupExitCode = $process.ExitCode
+    Write-SetupOutputToHandoffLog $setupStdout 'STDOUT'
+    Write-SetupOutputToHandoffLog $setupStderr 'STDERR'
     Write-HandoffLog 'INFO' "Setup finished with exit code $setupExitCode"
     if ($setupExitCode -ne 0) {
         Show-HandoffMessage "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logFile" 'Warning'
     }
 } catch {
+    Write-SetupOutputToHandoffLog $setupStdout 'STDOUT'
+    Write-SetupOutputToHandoffLog $setupStderr 'STDERR'
     Write-HandoffLog 'ERROR' "Handoff failed: $($_.Exception.ToString()); setup preserved at $setup"
     Show-HandoffMessage "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logFile" 'Error'
 } finally {
