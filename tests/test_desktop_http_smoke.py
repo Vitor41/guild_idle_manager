@@ -544,6 +544,18 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert assignment.cycle_count == 1 and assignment.progress_seconds == 0
 
         with SessionLocal() as db:
+            assignment = db.query(GatheringAssignment).filter_by(
+                mercenary_id=gathering_worker_id, resource_family="wood",
+            ).one()
+            assignment.checkpoint_at_utc = datetime.now(timezone.utc) - timedelta(seconds=60)
+            assignment.capacity_paused = False
+            db.commit()
+        regional_advance_status, _regional_advance_location, regional_advance_body = request(
+            "/regional", extra_headers={"X-GIM-Diagnostic-ID": "9999999999999999"},
+        )
+        assert regional_advance_status == 200, regional_advance_body[:300]
+
+        with SessionLocal() as db:
             from app.services.dungeon_service import start_dungeon
             from app.services.mission_service import start_mission
             guild_row = db.get(Guild, guild_id)
@@ -643,6 +655,13 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert client_click_status == 200 and json.loads(client_click_body)["recorded"] is True
         gameplay_log = Path(os.environ["LOCALAPPDATA"]) / "GuildIdleManager" / "logs" / "gameplay-actions.log"
         gameplay_log_text = gameplay_log.read_text(encoding="utf-8")
+        regional_production_lines = [
+            line for line in gameplay_log_text.splitlines()
+            if "action=gathering.production" in line and "route=/regional" in line
+        ]
+        assert len(regional_production_lines) == 1, regional_production_lines
+        assert "family=wood cycles=1 produced=1 stored=1 discarded=0" in regional_production_lines[0]
+        assert "state=active" in regional_production_lines[0]
         for action_name in ("gathering.assign", "regional.offer.start", "regional.offer.prepare", f"buildings.{tavern_building_id}.upgrade"):
             assert f"action={action_name}" in gameplay_log_text
         assert f"event=start action=buildings.{tavern_building_id}.upgrade route=/buildings/{tavern_building_id}/upgrade ref=1111111111111111" in gameplay_log_text

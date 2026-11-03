@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.core.dependencies import DbSession, get_current_player
 from app.core.forms import read_form_fields
-from app.desktop.gameplay_diagnostics import log_gameplay_action
+from app.desktop.gameplay_diagnostics import log_gameplay_action, log_gathering_advancement
 from app.models.mercenary import Mercenary
 from app.models.user import User
 from app.services.gathering_service import advance_all_assignments, assign_worker, list_assignments, release_worker, FAMILY_LABELS, NODE_LABELS
@@ -43,15 +43,11 @@ def gathering_index(
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     advancement = advance_all_assignments(db, guild)
-    for family, result in advancement.items():
-        if result["cycles"] or result.get("catalog_missing"):
-            _log_gathering(
-                request, "production",
-                f"family={family} cycles={result['cycles']} produced={result['produced']} "
-                f"stored={result['stored']} discarded={result['discarded']} "
-                f"warehouse={result['used']}/{result['capacity']} paused={result['paused']} "
-                f"catalog_missing={result.get('catalog_missing', False)}",
-            )
+    log_gathering_advancement(
+        route=request.url.path,
+        diagnostic_id=getattr(request.state, "diagnostic_id", ""),
+        advancement=advancement,
+    )
     db.commit()
     assignments = list_assignments(db, guild.id)
     assigned_ids = {entry.mercenary_id for entry in assignments}

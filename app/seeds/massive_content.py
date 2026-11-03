@@ -17,6 +17,7 @@ from app.models.regional import RegionalOffer
 
 PACK_KEY = "conteudo_massivo_pos_mvp026"
 PACK_VERSION = 5
+REQUIRED_MEAT_GATHERING_SLUG = "material_meat_1_001"
 BANDS = (
     ("1-20", 1, 20, 1, (10, 25, 45)),
     ("21-50", 21, 50, 2, (45, 90, 150)),
@@ -296,20 +297,39 @@ def _insert_missing(db: Session, model, rows: list[dict[str, object]], key: str)
     return objects
 
 
+def _reactivate_required_meat_gathering_material(db: Session) -> None:
+    """Restore the canonical starter meat node during a legacy pack migration."""
+    item = db.scalar(select(ItemTemplate).where(
+        ItemTemplate.slug == REQUIRED_MEAT_GATHERING_SLUG,
+        ItemTemplate.content_pack == PACK_KEY,
+        ItemTemplate.item_type == "material",
+        ItemTemplate.material_family == "meat",
+    ))
+    if item is not None and not item.is_active:
+        item.is_active = True
+        db.add(item)
+        db.flush()
+
+
 def run_massive_content_seed(
     db: Session,
     *,
     deactivate_legacy_defaults: bool = False,
+    repair_required_gathering_materials: bool = False,
 ) -> dict[str, object]:
     # Additively repair missing generated materials without overwriting edits.
     _insert_missing(db, ItemTemplate, _material_rows(), "slug")
     marker = db.scalar(select(ContentSeedRun).where(ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION))
     if marker is not None:
         _ensure_docks_template(db)
+        if repair_required_gathering_materials:
+            _reactivate_required_meat_gathering_material(db)
         db.commit()
         return json.loads(marker.report_json)
 
     _ensure_docks_template(db)
+    if repair_required_gathering_materials:
+        _reactivate_required_meat_gathering_material(db)
 
     if deactivate_legacy_defaults:
         deactivate_obsolete_legacy_missions(db)

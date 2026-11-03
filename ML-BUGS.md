@@ -214,6 +214,7 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Diagnóstico adicionado:** `gameplay-actions.log` registra família, ciclos, unidades produzidas/armazenadas/descartadas, ocupação do Armazém e rejeições/liberações de coleta.
 - **Regressões:** `tests.test_gathering_service` verifica coleta de Carne, rejeição sem template e preservação do ciclo; `tests.test_campaign_content_versioning` verifica Carne em campanha nova e reparo aditivo de campanha legada preservando o item customizado.
 - **Risco residual:** necessário confirmar em versão atualizada que a campanha afetada recebe Carne e que um ciclo aparece no inventário; nenhum save real foi aberto ou alterado durante a correção.
+- **Ajuste após revisão CR:** na migração de campanha antiga, reativar somente `material_meat_1_001` quando ele ainda for o material canônico do pacote; preservar campos customizados e os demais materiais desativados. A rota `/regional` agora usa o mesmo registrador de produção da rota `/gathering`, com família, ciclos, quantidades, capacidade e estado; o smoke verifica uma única linha para o avanço regional. A confirmação independente deste commit ainda está pendente.
 
 ## Validação desta rodada
 
@@ -224,6 +225,7 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - `tests.test_stage5_ui_contracts` + `tests.test_stage5_runtime_validation`: aprovados (33 testes no conjunto).
 - Retestes direcionados de `tests.test_regional_cycle_service`, `tests.test_campaign_service` e `tests.test_campaign_content_versioning`: simulação de 100 Vigílias e migração de saves cobertas; cinco testes de migração/campanha, quatro testes de descoberta/compatibilidade e dois casos regionais anteriormente divergentes aprovados após atualizar as expectativas do head e permitir que probabilidade zero desative ações CPU. `test_cpu_stage_counts_remain_unknown_when_upgrading_a_legacy_cycle` confirma estágios `NULL` após migração, e `test_legacy_cpu_report_labels_unmeasured_activity_stages` verifica a apresentação “não registrado”.
 - `tests.test_desktop_http_smoke`: página e mutações HTTP desktop aprovadas após ajustar fixtures de inventário sem duplicar linhas; inclui regressão de log/erro GET, renderização de outcome na rota regional, oficinas, cotação e débito regional.
+- BUG-004/diagnóstico regional: `tests.test_campaign_content_versioning` (3 testes), `tests.test_gathering_service` (12 testes) e `tests.test_desktop_http_smoke` (1 teste) passaram em SQLite isolado; o smoke confirmou exatamente um registro de produção para o avanço via `/regional`. `compileall` e `git diff --check` passaram. Reteste independente CR pendente; nenhuma build/instalação será feita.
 - BUG-002: causa raiz identificada nos logs, corrigida e coberta por regressão da rota real com `RegionalRunOutcome` e `RegionalOffer`; smoke aprovado. A integração/release ainda aguarda revisão CR e gate humano.
 - Auditoria ML-013: 20.000 sequências reproduzíveis em campanha descartável; sem abrir saves do jogador.
 - Auditoria ML-017: 1.700 equipamentos, 20 comparações tipo/raridade/Mercado, monotonicidade estrita e faixa econômica documentadas.

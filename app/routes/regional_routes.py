@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.core.dependencies import DbSession, get_current_campaign, get_current_player
 from app.core.forms import read_form_multi_fields
+from app.desktop.gameplay_diagnostics import log_gathering_advancement
 from app.models.campaign import CampaignMetadata
 from app.models.guild import GuildResources
 from app.models.dungeon import DungeonTemplate
@@ -284,7 +285,12 @@ def regional_index(
             except (TypeError, json.JSONDecodeError):
                 saved_quote = {}
             offer.supply_quote = saved_quote or _initial_offer_supply_quote(db, guild, offer, resources.gold if resources else 0)
-    advance_all_assignments(db, guild)
+    advancement = advance_all_assignments(db, guild)
+    log_gathering_advancement(
+        route=request.url.path,
+        diagnostic_id=getattr(request.state, "diagnostic_id", ""),
+        advancement=advancement,
+    )
     db.commit()
     assignments = list_assignments(db, guild.id)
     achievement_context = get_codex_context(db, guild, True)
