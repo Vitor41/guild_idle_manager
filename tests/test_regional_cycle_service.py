@@ -2,8 +2,9 @@ import gc
 import json
 import tempfile
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import UUID
 
@@ -24,6 +25,7 @@ from app.models.regional import (
     RegionalCpuResource,
     RegionalCycle,
     RegionalCycleRegion,
+    RegionalEventActivity,
     RegionalGuildState,
     RegionalOffer,
     RegionalRunOutcome,
@@ -40,6 +42,7 @@ from app.services.regional_cycle_service import (
     RANKS,
     advance_regional_world,
     cpu_initial_profile_values,
+    cpu_roster_cap,
     regional_stage_for_region,
     rival_calm_for_cycle,
     simulate_rank_distribution,
@@ -49,6 +52,176 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
+    def test_cpu_throughput_scales_with_roster_and_pressure_selects_highest_risk(self):
+        strong = RegionalGuildState(
+            region_code="vale-fronteira", slot=1, name="Forte", profile="strong", archetype="balanced",
+            level=50,
+        )
+        self.assertEqual(cpu_roster_cap(strong, 1), 20)
+        strong.level = 100
+        self.assertEqual(cpu_roster_cap(strong, 1), 20)
+        new = RegionalGuildState(
+            region_code="vale-fronteira", slot=4, name="Nova", profile="new", archetype="balanced",
+            level=1,
+        )
+        self.assertEqual(cpu_roster_cap(new, 1), 2)
+        self.assertEqual(regional_cycle_service.cpu_failure_risk_for_region(25, 50), 0)
+        self.assertEqual(regional_cycle_service.cpu_failure_risk_for_region(85, 25), 15)
+        self.assertEqual(regional_cycle_service.cpu_failure_risk_for_region(100, 0), 15)
+        self.assertGreater(
+            regional_cycle_service.regional_gradual_pressure(85, 25),
+            regional_cycle_service.regional_gradual_pressure(25, 50),
+        )
+        self.assertLessEqual(
+            regional_cycle_service.regional_gradual_pressure(100, 0),
+            regional_cycle_service.REGIONAL_GRADUAL_PRESSURE_MAX,
+        )
+        self.assertGreater(
+            regional_cycle_service.regional_gradual_security_pressure(85, 25),
+            regional_cycle_service.regional_gradual_security_pressure(25, 50),
+        )
+        self.assertLessEqual(
+            regional_cycle_service.regional_gradual_security_pressure(100, 0),
+            regional_cycle_service.REGIONAL_GRADUAL_SECURITY_PRESSURE_MAX,
+        )
+        regions = [
+            SimpleNamespace(region_code=f"r{i}", threat=20 + i * 10, security=60 - i * 5)
+            for i in range(5)
+        ]
+        self.assertEqual(
+            regional_cycle_service.regional_pressure_target_code("pressure-risk-test", 0, regions),
+            "r4",
+        )
+        self.assertEqual(
+            regional_cycle_service.regional_pressure_target_code("pressure-risk-test", 19, regions, {"r4"}),
+            "r3",
+        )
+        ties = [SimpleNamespace(region_code="a", threat=90, security=20),
+                SimpleNamespace(region_code="b", threat=90, security=20)]
+        self.assertEqual(
+            regional_cycle_service.regional_pressure_target_code("pressure-tie-test", 0, ties),
+            regional_cycle_service.regional_pressure_target_code("pressure-tie-test", 0, ties),
+        )
+
+    def test_cpu_portal_uses_a_real_disjoint_action_and_resolves_before_offline_deadline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            with patch(
+                "app.services.campaign_service.uuid4",
+                return_value=UUID("00000000-0000-4000-8000-000000000091"),
+            ):
+                created = campaigns.create_campaign("Portal CPU", "Guilda Portal")
+            campaigns.activate_campaign(created.campaign_id)
+            with SessionLocal() as db:
+                from app.services.regional_event_service import build_portal_boss_snapshot
+
+                campaign = db.get(CampaignMetadata, created.campaign_id)
+                guild, _resources = get_current_guild_context(db, created.campaign_id)
+                start = campaign.created_at_utc
+                advance_regional_world(db, campaign, guild, start)
+                cycle = db.scalar(select(RegionalCycle).where(
+                    RegionalCycle.campaign_id == created.campaign_id,
+                    RegionalCycle.cycle_number == 0,
+                ))
+                region_code = next(code for code, name in regional_cycle_service.REGIONS
+                                   if name == campaign.home_region)
+                cpu = db.scalar(select(RegionalGuildState).where(
+                    RegionalGuildState.campaign_id == created.campaign_id,
+                    RegionalGuildState.region_code == region_code,
+                    RegionalGuildState.profile == "strong",
+                ))
+                cpu.archetype = "exploration"
+                template = DungeonTemplate(
+                    name="Chefe de teste do portal", description="Encontro regional", content_type="boss",
+                    level_band="1-20", recommended_level=1, biome="portal", difficulty="normal",
+                    duration_seconds=1800, base_gold_reward=500, base_xp_reward=500,
+                    base_success_chance=65, min_party_size=1, max_party_size=5,
+                    required_guild_level=1, required_min_mercenary_level=1,
+                    required_total_power=0, required_tank_count=0, required_support_count=0,
+                    required_damage_count=0, required_equipment_tier=0, is_active=True,
+                )
+                db.add(template)
+                db.flush()
+                plan_seed = regional_cycle_service._seed_text(
+                    created.campaign_id, 0, cpu.id, cycle.rules_version, "cpu-plan",
+                )
+                portal_seed = next(
+                    f"portal-test-{seed_index}"
+                    for seed_index in range(10_000)
+                    if regional_cycle_service._rng(
+                        f"portal-test-{seed_index}", plan_seed, "cpu-portal-entry",
+                    ).random() < 0.25
+                )
+                portal = regional_cycle_service.RegionalEvent(
+                    campaign_id=created.campaign_id,
+                    event_type="portal",
+                    region_code=region_code,
+                    trigger_cycle_number=0,
+                    rules_version="regional-events-v3",
+                    seed=portal_seed,
+                    status="active",
+                    dungeon_template_id=template.id,
+                    created_at_utc=start,
+                    expires_at_utc=start + timedelta(hours=3),
+                    summary_json=json.dumps({
+                        "portal_boss": {
+                            "template": build_portal_boss_snapshot(template),
+                        },
+                    }, sort_keys=True),
+                )
+                db.add(portal)
+                db.commit()
+
+                advance_regional_world(db, campaign, guild, start + timedelta(seconds=CYCLE_SECONDS))
+
+                plan = db.scalar(select(RegionalCpuCyclePlan).where(
+                    RegionalCpuCyclePlan.cycle_id == cycle.id,
+                    RegionalCpuCyclePlan.guild_state_id == cpu.id,
+                ))
+                decisions = json.loads(plan.decisions_json)
+                portal_decisions = [item for item in decisions if item["offer_type"] == "portal"]
+                self.assertEqual(len(portal_decisions), 1)
+                decision = portal_decisions[0]
+                self.assertEqual(decision["event_id"], portal.id)
+                self.assertEqual(decision["duration_seconds"], template.duration_seconds)
+                self.assertEqual(plan.actions, len(decisions))
+                start_at = regional_cycle_service._utc(datetime.fromisoformat(decision["started_at_utc"]))
+                end_at = regional_cycle_service._utc(datetime.fromisoformat(decision["resolved_at_utc"]))
+                self.assertEqual((end_at - start_at).total_seconds(), template.duration_seconds)
+                self.assertGreaterEqual(
+                    start_at,
+                    regional_cycle_service._utc(datetime.fromisoformat(
+                        decision["player_priority_ends_at_utc"],
+                    )),
+                )
+                self.assertLessEqual(end_at, regional_cycle_service._utc(portal.expires_at_utc))
+                occupied: dict[int, datetime] = {}
+                for item in sorted(decisions, key=lambda row: row["started_at_utc"]):
+                    item_start = regional_cycle_service._utc(datetime.fromisoformat(item["started_at_utc"]))
+                    item_end = regional_cycle_service._utc(datetime.fromisoformat(item["resolved_at_utc"]))
+                    for slot in item["mercenary_slots"]:
+                        self.assertLessEqual(occupied.get(slot, item_start), item_start)
+                        occupied[slot] = item_end
+                portal_outcome = next(row for row in json.loads(plan.outcomes_json)
+                                      if row["offer_id"] == decision["offer_id"])
+                self.assertEqual((portal_outcome["gold"], portal_outcome["xp"]), (0, 0))
+                participant = db.scalar(select(regional_cycle_service.RegionalEventParticipant).where(
+                    regional_cycle_service.RegionalEventParticipant.event_id == portal.id,
+                    regional_cycle_service.RegionalEventParticipant.guild_state_id == cpu.id,
+                ))
+                self.assertIsNotNone(participant)
+                self.assertEqual(participant.status, "resolved")
+                self.assertEqual(regional_cycle_service._utc(participant.resolved_at_utc), end_at)
+                offline_return = start + timedelta(seconds=2 * CYCLE_SECONDS)
+                advance_regional_world(db, campaign, guild, offline_return)
+                self.assertEqual(portal.status, "resolved")
+                advance_regional_world(db, campaign, guild, offline_return)
+                self.assertEqual(db.scalar(select(func.count(RegionalEventActivity.id)).where(
+                    RegionalEventActivity.event_id == portal.id,
+                    RegionalEventActivity.source_type == "cpu_portal",
+                )), 1)
+            configure_database("sqlite:///:memory:")
+
     def test_requirement_overrides_remain_defensive_in_services(self):
         class Stub:
             level = 1
@@ -91,7 +264,12 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertIsNotNone(campaign)
                     self.assertIsNotNone(guild)
                     now = campaign.created_at_utc + timedelta(seconds=100 * CYCLE_SECONDS)
-                    advance_regional_world(db, campaign, guild, now)
+                    advance_regional_world(db, campaign, guild, campaign.created_at_utc)
+                    regional_cycle_service.get_regional_board(db, campaign, guild, campaign.created_at_utc)
+                    for cycle_index in range(1, 101):
+                        current_time = campaign.created_at_utc + timedelta(seconds=cycle_index * CYCLE_SECONDS)
+                        advance_regional_world(db, campaign, guild, current_time)
+                        regional_cycle_service.get_regional_board(db, campaign, guild, current_time)
 
                     region_count = db.scalar(select(func.count(RegionalCycle.id)).where(
                         RegionalCycle.campaign_id == first.campaign_id,
@@ -124,21 +302,53 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         self.assertGreaterEqual(eligible, started)
                         self.assertEqual(started, actions)
                         self.assertEqual(resolved, actions)
-                        self.assertGreaterEqual(started / max(1, planned), 0.70)
+                        self.assertGreaterEqual(started / max(1, eligible), 0.70)
                         by_profile = {}
+                        by_region = {}
+                        by_guild = {}
                         for plan in plans:
                             state = db.get(RegionalGuildState, plan.guild_state_id)
                             bucket = by_profile.setdefault(state.profile, {
-                                "actions": 0, "successes": 0, "gold": 0, "xp": 0,
+                                "actions": 0, "successes": 0, "failures": 0, "gold": 0, "xp": 0,
+                                "hires": 0, "hire_gold_spent": 0,
                                 "guild_ids": set(), "roster_slots": 0, "roster_observations": 0,
                             })
                             bucket["actions"] += plan.actions
                             bucket["successes"] += plan.successes
+                            bucket["failures"] += plan.failures
                             bucket["gold"] += plan.gold_earned
                             bucket["xp"] += plan.xp_earned
+                            bucket["hires"] += plan.hired_count
+                            bucket["hire_gold_spent"] += plan.hire_gold_spent
                             bucket["guild_ids"].add(state.id)
                             bucket["roster_slots"] += len(json.loads(plan.roster_snapshot_json))
                             bucket["roster_observations"] += 1
+                            regional = by_region.setdefault(state.region_code, {
+                                "planned": 0, "eligible": 0, "started": 0, "resolved": 0,
+                                "successes": 0, "failures": 0, "hires": 0,
+                                "hire_gold_spent": 0,
+                            })
+                            for metric, value in (
+                                ("planned", plan.planned_actions), ("eligible", plan.eligible_actions),
+                                ("started", plan.started_actions), ("resolved", plan.resolved_actions),
+                                ("successes", plan.successes), ("failures", plan.failures),
+                                ("hires", plan.hired_count), ("hire_gold_spent", plan.hire_gold_spent),
+                            ):
+                                regional[metric] += value or 0
+                            guild_metrics = by_guild.setdefault(f"{state.region_code}:{state.slot}", {
+                                "name": state.name, "profile": state.profile, "archetype": state.archetype,
+                                "planned": 0, "eligible": 0, "started": 0, "resolved": 0,
+                                "successes": 0, "failures": 0, "hires": 0,
+                                "hire_gold_spent": 0, "gold_earned": 0, "xp_earned": 0,
+                            })
+                            for metric, value in (
+                                ("planned", plan.planned_actions), ("eligible", plan.eligible_actions),
+                                ("started", plan.started_actions), ("resolved", plan.resolved_actions),
+                                ("successes", plan.successes), ("failures", plan.failures),
+                                ("hires", plan.hired_count), ("hire_gold_spent", plan.hire_gold_spent),
+                                ("gold_earned", plan.gold_earned), ("xp_earned", plan.xp_earned),
+                            ):
+                                guild_metrics[metric] += value or 0
                         for bucket in by_profile.values():
                             bucket["guild_count"] = len(bucket["guild_ids"])
                             del bucket["guild_ids"]
@@ -158,6 +368,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                             "gold_earned": sum(plan.gold_earned for plan in plans),
                             "xp_earned": sum(plan.xp_earned for plan in plans),
                             "profiles": by_profile,
+                            "regions": by_region,
+                            "guilds": by_guild,
                         }
                         self.assertGreater(actions, 0)
                         self.assertGreaterEqual(successes, 0)
@@ -184,6 +396,10 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         RegionalOffer.campaign_id == first.campaign_id,
                         RegionalOffer.cycle_number < 100,
                     )))
+                    self.assertTrue(all(
+                        0 <= offer.cpu_failure_risk_snapshot <= regional_cycle_service.CPU_FAILURE_RISK_CAP_PP
+                        for offer in all_regional_offers
+                    ))
                     offer_by_id = {offer.id: offer for offer in all_regional_offers}
                     by_rank = {rank: {
                         "offers": 0, "level": 0, "power": 0, "chance": 0,
@@ -207,11 +423,15 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         outcomes = json.loads(plan.outcomes_json)
                         outcome_by_offer = {outcome["offer_id"]: outcome for outcome in outcomes}
                         for decision in decisions:
+                            if decision.get("offer_type") == "portal":
+                                continue
                             bucket = by_rank[decision["rank"]]
                             result = outcome_by_offer[decision["offer_id"]]
                             bucket["cpu_actions"] += 1
                             bucket["cpu_successes"] += int(result["success"])
-                            bucket["expected_chance_points"] += decision["chance"]
+                            bucket["expected_chance_points"] += decision.get(
+                                "chance", decision.get("success_chance", 0),
+                            )
                             bucket["cpu_gold"] += result["gold"]
                             bucket["cpu_xp"] += result["xp"]
                     for bucket in by_rank.values():
@@ -337,7 +557,11 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                                 if cycle_actions == 0:
                                     threat = max(0, min(100, threat + 1))
                                     security = max(0, min(100, security - 1))
-                                for group in sorted(groups, key=lambda row: row["slot"]):
+                                ordered_groups = sorted(groups, key=lambda row: row["slot"])
+                                if ordered_groups:
+                                    rotation = cycle_number % len(ordered_groups)
+                                    ordered_groups = ordered_groups[rotation:] + ordered_groups[:rotation]
+                                for group in ordered_groups:
                                     success_impact = impact(group["successes_by_rank"])
                                     failure_impact = impact(group["failures_by_rank"])
                                     threat = round(max(0, min(100, threat - success_impact + failure_impact)), 4)
@@ -664,16 +888,154 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         len({regional_cycle_service.regional_outcome_impact(rank) for rank in RANKS}), 6,
                     )
                     for row in region_states:
-                        candidate = candidate_cpu_pressure[row.region_code]
-                        self.assertEqual(row.security, candidate["final_security"])
-                        self.assertEqual(row.threat, candidate["final_threat"])
+                        self.assertGreaterEqual(row.security, 0)
+                        self.assertLessEqual(row.security, 100)
+                        self.assertGreaterEqual(row.threat, 0)
+                        self.assertLessEqual(row.threat, 100)
+                        final_snapshot = db.scalar(select(RegionalCycleRegion).join(
+                            RegionalCycle, RegionalCycle.id == RegionalCycleRegion.cycle_id,
+                        ).where(
+                            RegionalCycleRegion.campaign_id == first.campaign_id,
+                            RegionalCycleRegion.region_code == row.region_code,
+                            RegionalCycle.cycle_number == 99,
+                        ))
+                        self.assertAlmostEqual(row.security, final_snapshot.security_after)
+                        self.assertAlmostEqual(row.threat, final_snapshot.threat_after)
                     rebellion_candidates = [
                         row["first_rebellion_eligible_cycle"]
                         for row in candidate_cpu_pressure.values()
                         if row["first_rebellion_eligible_cycle"] is not None
                     ]
+                    event_history = list(db.scalars(select(regional_cycle_service.RegionalEvent).where(
+                        regional_cycle_service.RegionalEvent.campaign_id == first.campaign_id,
+                        regional_cycle_service.RegionalEvent.trigger_cycle_number < 100,
+                    )))
+                    active_rebellions = [event for event in event_history
+                                         if event.event_type == "rebellion"
+                                         and event.status in {"active", "in_progress"}]
+                    self.assertLessEqual(len(active_rebellions), 1)
+                    events_by_horizon = {}
+                    for horizon in (10, 50, 100):
+                        counts = {}
+                        for event in event_history:
+                            if event.trigger_cycle_number >= horizon:
+                                continue
+                            key = f"{event.event_type}:{event.status}"
+                            counts[key] = counts.get(key, 0) + 1
+                        events_by_horizon[horizon] = counts
+                    ranking = []
+                    for position, state in enumerate(sorted(
+                        guild_states,
+                        key=lambda row: (
+                            -(row.influence * 0.50 + row.reputation * 0.25
+                              + min(100, row.event_wins * 10) * 0.25),
+                            row.name.casefold(),
+                        ),
+                    ), start=1):
+                        ranking.append({
+                            "position": position, "region": state.region_code, "slot": state.slot,
+                            "name": state.name, "profile": state.profile,
+                            "score": round(state.influence * 0.50 + state.reputation * 0.25
+                                           + min(100, state.event_wins * 10) * 0.25, 2),
+                        })
+                    home_code = next(code for code, name in regional_cycle_service.REGIONS
+                                     if name == campaign.home_region)
+                    all_cpu_plans = list(db.scalars(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.campaign_id == first.campaign_id,
+                    )))
+                    plan_cycle = {plan.id: db.get(RegionalCycle, plan.cycle_id).cycle_number
+                                  for plan in all_cpu_plans}
+                    phase_progression = {}
+                    for phase, first_cycle, after_cycle in (
+                        ("vigílias_1_3", 0, 3), ("vigílias_4_20", 3, 20),
+                        ("vigílias_21_50", 20, 50), ("vigílias_51_100", 50, 100),
+                    ):
+                        phase_plans = [plan for plan in all_cpu_plans
+                                       if first_cycle <= plan_cycle[plan.id] < after_cycle]
+                        phases = {}
+                        for plan in phase_plans:
+                            state = db.get(RegionalGuildState, plan.guild_state_id)
+                            bucket = phases.setdefault(state.profile, {
+                                "actions": 0, "successes": 0, "failures": 0,
+                                "hires": 0, "roster_size_sum": 0, "roster_observations": 0,
+                            })
+                            bucket["actions"] += plan.resolved_actions or 0
+                            bucket["successes"] += plan.successes
+                            bucket["failures"] += plan.failures
+                            bucket["hires"] += plan.hired_count
+                            bucket["roster_size_sum"] += len(json.loads(plan.roster_snapshot_json))
+                            bucket["roster_observations"] += 1
+                        for bucket in phases.values():
+                            bucket["avg_roster_size"] = round(
+                                bucket.pop("roster_size_sum") / max(1, bucket.pop("roster_observations")), 2,
+                            )
+                        home_actions = sum(
+                            plan.resolved_actions or 0
+                            for plan in phase_plans
+                            if db.get(RegionalGuildState, plan.guild_state_id).region_code == home_code
+                        )
+                        opened_crises = sum(
+                            1 for event in event_history
+                            if first_cycle <= event.trigger_cycle_number < after_cycle
+                            and event.status not in {"not_triggered", "suppressed"}
+                        )
+                        phase_progression[phase] = {
+                            "cycles": after_cycle - first_cycle,
+                            "cpu_actions_per_cycle_global": round(
+                                sum(plan.resolved_actions or 0 for plan in phase_plans)
+                                / max(1, after_cycle - first_cycle), 2,
+                            ),
+                            "cpu_actions_per_cycle_home_region": round(
+                                home_actions / max(1, after_cycle - first_cycle), 2,
+                            ),
+                            "profiles": phases,
+                            "opened_crises": opened_crises,
+                        }
+                    legacy_baseline_by_region = {}
+                    for state in guild_states:
+                        if state.guild_id is not None or state.profile == "player" or not state.active:
+                            continue
+                        probability = regional_cycle_service.regional_cpu_action_probability(
+                            first.campaign_id, state, "vigilia-v4",
+                        )
+                        expected_actions = 1.0 + (probability if state.profile == "strong" else 0.0)
+                        legacy_baseline_by_region[state.region_code] = (
+                            legacy_baseline_by_region.get(state.region_code, 0.0) + expected_actions
+                        )
+                    first_strong_hire_cycle = min(
+                        (plan_cycle[plan.id] for plan in all_cpu_plans
+                         if db.get(RegionalGuildState, plan.guild_state_id).profile == "strong"
+                         and plan.hired_count > 0),
+                        default=None,
+                    )
                     print("REGIONAL_SIMULATION_METRICS=" + json.dumps({
                         "cycles": summaries,
+                        "phase_progression_1_100": phase_progression,
+                        "legacy_vigilias_v4_baseline": {
+                            "global_expected_actions_per_cycle": round(sum(legacy_baseline_by_region.values()), 2),
+                            "home_region_expected_actions_per_cycle": round(
+                                legacy_baseline_by_region.get(home_code, 0.0), 2,
+                            ),
+                            "region_actions_per_cycle": legacy_baseline_by_region,
+                        },
+                        "first_strong_hire_cycle_zero_based": first_strong_hire_cycle,
+                        "events_by_horizon": events_by_horizon,
+                        "ranking_after_100_cycles": ranking,
+                        "cpu_roster_cap_projection": {
+                            profile: {
+                                f"level_{level}": regional_cycle_service.cpu_roster_cap(
+                                    RegionalGuildState(
+                                        profile=profile, region_code=regional_cycle_service.REGIONS[0][0],
+                                        level=level,
+                                    ),
+                                    1,
+                                )
+                                for level in (
+                                    int(cpu_initial_profile_values(profile, 1)["guild_level"]), 50, 100,
+                                )
+                            }
+                            for profile in ("strong", "medium", "new")
+                        },
                         "rank_curves_10000_each": rank_curves,
                         "boss_ranks_500": boss_counts,
                         "boss_percentages": {
@@ -730,6 +1092,117 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         offer_ids = [decision["offer_id"] for decision in decisions]
                         self.assertEqual(len(offer_ids), len(set(offer_ids)))
 
+                    for plan in db.scalars(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.campaign_id == first.campaign_id,
+                    )):
+                        busy_until = {}
+                        for decision in sorted(
+                            json.loads(plan.decisions_json),
+                            key=lambda item: item["started_at_utc"],
+                        ):
+                            start_at = regional_cycle_service._utc(
+                                regional_cycle_service.datetime.fromisoformat(decision["started_at_utc"]),
+                            )
+                            player_priority_ends_at = regional_cycle_service._utc(
+                                regional_cycle_service.datetime.fromisoformat(
+                                    decision["player_priority_ends_at_utc"],
+                                ),
+                            )
+                            end_at = regional_cycle_service._utc(
+                                regional_cycle_service.datetime.fromisoformat(decision["resolved_at_utc"]),
+                            )
+                            self.assertGreaterEqual(start_at, player_priority_ends_at)
+                            self.assertEqual(
+                                (end_at - start_at).total_seconds(), decision["duration_seconds"],
+                            )
+                            for slot in decision["mercenary_slots"]:
+                                self.assertLessEqual(busy_until.get(slot, start_at), start_at)
+                                busy_until[slot] = end_at
+                            if decision["offer_type"] == "portal":
+                                event = db.get(regional_cycle_service.RegionalEvent, decision["event_id"])
+                                self.assertIsNotNone(event)
+                                self.assertLessEqual(end_at, event.expires_at_utc)
+                                self.assertLessEqual(len(decision["mercenary_slots"]), 5)
+                            else:
+                                offer = offer_by_id[decision["offer_id"]]
+                                self.assertEqual(offer.status, "cpu_completed")
+
+                    for region_cycle in db.scalars(select(RegionalCycleRegion).where(
+                        RegionalCycleRegion.campaign_id == first.campaign_id,
+                    )):
+                        activity = json.loads(region_cycle.summary_json)["cpu_activity"]
+                        pressure = json.loads(region_cycle.summary_json)["gradual_pressure"]
+                        self.assertEqual(activity["started"], activity["resolved"])
+                        self.assertLessEqual(activity["started"], activity["eligible"])
+                        self.assertLessEqual(activity["eligible"], activity["planned"])
+                        self.assertGreater(activity["started"], 0)
+                        if pressure["targeted"]:
+                            self.assertGreaterEqual(
+                                region_cycle.security_after,
+                                regional_cycle_service.REGIONAL_ACTIVE_SECURITY_FLOOR,
+                            )
+                    previous_pressure_target = None
+                    pressure_window = regional_cycle_service.REGIONAL_PRESSURE_WINDOW_CYCLES
+                    for cycle_number in range(100):
+                        pressure_cycle = db.scalar(select(RegionalCycle).where(
+                            RegionalCycle.campaign_id == first.campaign_id,
+                            RegionalCycle.cycle_number == cycle_number,
+                        ))
+                        pressure_rows = list(db.scalars(select(RegionalCycleRegion).where(
+                            RegionalCycleRegion.cycle_id == pressure_cycle.id,
+                        )))
+                        target_regions = {
+                            json.loads(row.summary_json)["gradual_pressure"]["target_region"]
+                            for row in pressure_rows
+                        }
+                        self.assertEqual(len(target_regions), 1)
+                        pressure_target = next(iter(target_regions))
+                        if cycle_number % pressure_window:
+                            self.assertEqual(pressure_target, previous_pressure_target)
+                        elif previous_pressure_target is not None:
+                            self.assertNotEqual(pressure_target, previous_pressure_target)
+                        previous_pressure_target = pressure_target
+                        targets = [
+                            row.region_code for row in pressure_rows
+                            if json.loads(row.summary_json)["gradual_pressure"]["targeted"]
+                        ]
+                        self.assertLessEqual(len(targets), 1)
+                        simultaneously_vulnerable = sum(
+                            row.threat_after >= 85 and row.security_after <= 25
+                            for row in pressure_rows
+                        )
+                        self.assertLessEqual(simultaneously_vulnerable, 1)
+                    strong_ids = set(db.scalars(select(RegionalGuildState.id).where(
+                        RegionalGuildState.campaign_id == first.campaign_id,
+                        RegionalGuildState.profile == "strong",
+                    )))
+                    first_strong_hire = db.scalar(
+                        select(func.min(RegionalCycle.cycle_number))
+                        .join(RegionalCpuCyclePlan, RegionalCpuCyclePlan.cycle_id == RegionalCycle.id)
+                        .where(
+                            RegionalCpuCyclePlan.campaign_id == first.campaign_id,
+                            RegionalCpuCyclePlan.guild_state_id.in_(strong_ids),
+                            RegionalCpuCyclePlan.hired_count > 0,
+                        )
+                    )
+                    self.assertIn(first_strong_hire, {2, 3})
+
+                    home_code = next(
+                        code for code, name in regional_cycle_service.REGIONS
+                        if name == campaign.home_region
+                    )
+                    max_cpu_completed_in_home_cycle = 0
+                    for cycle_number in range(100):
+                        home_board = [offer for offer in all_regional_offers
+                                      if offer.region_code == home_code
+                                      and offer.cycle_number == cycle_number]
+                        self.assertEqual(len(home_board), 14)
+                        max_cpu_completed_in_home_cycle = max(
+                            max_cpu_completed_in_home_cycle,
+                            sum(offer.status == "cpu_completed" for offer in home_board),
+                        )
+                    self.assertGreater(max_cpu_completed_in_home_cycle, 8)
+
                     self.assertEqual(db.scalar(select(func.count(RegionalOffer.id)).where(
                         RegionalOffer.campaign_id == first.campaign_id,
                         RegionalOffer.status == "cpu_completed",
@@ -759,13 +1232,25 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     per_region = {}
                     for row in no_action_rows:
                         per_region.setdefault(row.region_code, []).append(row)
-                    for snapshots in per_region.values():
-                        rebellion_cycles = [
-                            row.cycle_id for row in snapshots
-                            if row.threat_after >= 85 and row.security_after <= 25
+                    self.assertTrue(all(len(snapshots) == 61 for snapshots in per_region.values()))
+                    for cycle_number in range(61):
+                        cycle_snapshots = [
+                            row for snapshots in per_region.values() for row in snapshots
+                            if row.cycle_id == db.scalar(select(RegionalCycle.id).where(
+                                RegionalCycle.campaign_id == second.campaign_id,
+                                RegionalCycle.cycle_number == cycle_number,
+                            ))
                         ]
-                        self.assertEqual(len(snapshots), 61)
-                        self.assertEqual(rebellion_cycles[0], snapshots[59].cycle_id)
+                        target_regions = {
+                            json.loads(row.summary_json)["gradual_pressure"]["target_region"]
+                            for row in cycle_snapshots
+                        }
+                        self.assertEqual(len(target_regions), 1)
+                        self.assertLessEqual(
+                            sum(row.threat_after >= 85 and row.security_after <= 25
+                                for row in cycle_snapshots),
+                            1,
+                        )
                     snapshot_count = len(no_action_rows)
                     advance_regional_world(db, second_campaign, second_guild, no_action_now)
                     self.assertEqual(db.scalar(select(func.count(RegionalCycleRegion.id)).where(
@@ -861,7 +1346,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     )
 
                     advance_regional_world(db, campaign, guild, start)
-                    with patch.object(regional_cycle_service, "regional_cpu_action_probability", return_value=0.0):
+                    with patch.object(regional_cycle_service, "_cpu_offer_party", return_value=None):
                         advance_regional_world(db, campaign, guild, start + timedelta(seconds=CYCLE_SECONDS))
                         cycle_zero = db.scalar(select(RegionalCycle).where(
                             RegionalCycle.campaign_id == info.campaign_id,
@@ -878,9 +1363,16 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         self.assertTrue(first_summary["rival_calm"]["applied"])
                         self.assertEqual(first_summary["rival_calm"]["source_guild_state_id"],
                                          by_region_profile[(home_code, "strong")][0].id)
-                        # One baseline delta (-1/+1) plus one independent calm offset (+0.25/-0.25).
-                        self.assertAlmostEqual(first_snapshot.security_after, first_snapshot.security_before - 0.75)
-                        self.assertAlmostEqual(first_snapshot.threat_after, first_snapshot.threat_before + 0.75)
+                        # Baseline, gradual pressure and calm remain separate ledger entries.
+                        first_security_pressure = first_summary["gradual_pressure"]["security_applied"]
+                        self.assertAlmostEqual(
+                            first_snapshot.security_after,
+                            first_snapshot.security_before - 1 - first_security_pressure + 0.25,
+                        )
+                        self.assertAlmostEqual(
+                            first_snapshot.threat_after,
+                            first_snapshot.threat_before + 1 + first_summary["gradual_pressure"]["threat_applied"] - 0.25,
+                        )
 
                         advance_regional_world(db, campaign, guild, start + timedelta(seconds=5 * CYCLE_SECONDS))
                         cycle_four = db.scalar(select(RegionalCycle).where(
@@ -896,8 +1388,15 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         self.assertFalse(expired_summary["rival_calm"]["active"])
                         self.assertFalse(expired_summary["rival_calm"]["applied"])
                         self.assertTrue(expired_summary["rival_calm"]["expired_before_this_cycle"])
-                        self.assertAlmostEqual(expired_snapshot.security_after, expired_snapshot.security_before - 1)
-                        self.assertAlmostEqual(expired_snapshot.threat_after, expired_snapshot.threat_before + 1)
+                        expired_security_pressure = expired_summary["gradual_pressure"]["security_applied"]
+                        self.assertAlmostEqual(
+                            expired_snapshot.security_after,
+                            expired_snapshot.security_before - 1 - expired_security_pressure,
+                        )
+                        self.assertAlmostEqual(
+                            expired_snapshot.threat_after,
+                            expired_snapshot.threat_before + 1 + expired_summary["gradual_pressure"]["threat_applied"],
+                        )
                         before_repeat = expired_snapshot.summary_json
                         advance_regional_world(db, campaign, guild, start + timedelta(seconds=5 * CYCLE_SECONDS))
                         self.assertEqual(expired_snapshot.summary_json, before_repeat)
@@ -1203,7 +1702,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertAlmostEqual(region.security, 50.08)
                     self.assertAlmostEqual(region.threat, 24.92)
                     self.assertEqual(regional_cycle_service.REGION_BASELINE_PRESSURE, 1)
-                    with patch.object(regional_cycle_service, "regional_cpu_action_probability", return_value=0.0):
+                    with patch.object(regional_cycle_service, "_cpu_offer_party", return_value=None):
                         advance_regional_world(
                             db, campaign, guild, campaign.created_at_utc + timedelta(seconds=CYCLE_SECONDS),
                         )
@@ -1220,9 +1719,11 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     self.assertTrue(summary["rival_calm"]["active"])
                     self.assertTrue(summary["rival_calm"]["applied"])
                     self.assertAlmostEqual(summary["rival_calm"]["security"], 0.25)
-                    self.assertAlmostEqual(cycle_summary.security_after, 50.33)
+                    gradual_threat_pressure = summary["gradual_pressure"]["threat_applied"]
+                    gradual_security_pressure = summary["gradual_pressure"]["security_applied"]
+                    self.assertAlmostEqual(cycle_summary.security_after, 50.33 - gradual_security_pressure)
                     self.assertAlmostEqual(cycle_summary.threat_before, 25)
-                    self.assertAlmostEqual(cycle_summary.threat_after, 24.67)
+                    self.assertAlmostEqual(cycle_summary.threat_after, 24.67 + gradual_threat_pressure)
             finally:
                 configure_database("sqlite:///:memory:")
                 gc.collect()

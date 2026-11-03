@@ -184,6 +184,42 @@ class RegionalEventServiceTests(unittest.TestCase):
                     RegionalEvent.event_type == "portal",
                 )), 2)
 
+                cooldown_cycle = RegionalCycle(
+                    campaign_id=self.campaign_id, cycle_number=28,
+                    starts_at_utc=self.now + timedelta(hours=144),
+                    ends_at_utc=self.now + timedelta(hours=150),
+                    seed="portal-cooldown-boundary", rules_version="vigilia-v2",
+                )
+                db.add(cooldown_cycle)
+                db.flush()
+                with patch("app.services.regional_event_service._rng") as rng_factory:
+                    rng_factory.return_value.random.return_value = 0.0
+                    rng_factory.return_value.randrange.return_value = 0
+                    create_cycle_portals(db, self.campaign_id, cooldown_cycle, [threshold, capped])
+                self.assertEqual(db.scalar(select(func.count()).select_from(RegionalEvent).where(
+                    RegionalEvent.campaign_id == self.campaign_id,
+                    RegionalEvent.event_type == "portal",
+                )), 2)
+
+                cooldown_complete_cycle = RegionalCycle(
+                    campaign_id=self.campaign_id, cycle_number=29,
+                    starts_at_utc=self.now + timedelta(hours=150),
+                    ends_at_utc=self.now + timedelta(hours=156),
+                    seed="portal-cooldown-complete", rules_version="vigilia-v2",
+                )
+                db.add(cooldown_complete_cycle)
+                db.flush()
+                with patch("app.services.regional_event_service._rng") as rng_factory:
+                    rng_factory.return_value.random.return_value = 0.0
+                    rng_factory.return_value.randrange.return_value = 0
+                    create_cycle_portals(
+                        db, self.campaign_id, cooldown_complete_cycle, [threshold, capped],
+                    )
+                self.assertEqual(db.scalar(select(func.count()).select_from(RegionalEvent).where(
+                    RegionalEvent.campaign_id == self.campaign_id,
+                    RegionalEvent.event_type == "portal",
+                )), 4)
+
     def test_incidence_audit_portal_roll_matches_production_seeded_service(self):
         from app.services.regional_cycle_service import REGIONS
 
@@ -289,9 +325,9 @@ class RegionalEventServiceTests(unittest.TestCase):
                 RegionalEvent.campaign_id == self.campaign_id,
                 RegionalEvent.event_type == "rebellion",
             ).order_by(RegionalEvent.region_code)))
-            self.assertEqual([row.status for row in first_rows], ["active", "suppressed", "not_triggered"])
+            self.assertEqual([row.status for row in first_rows], ["active", "not_triggered", "not_triggered"])
             self.assertTrue(all(
-                json.loads(row.summary_json)["simultaneous_candidates"] == 2
+                json.loads(row.summary_json)["simultaneous_candidates"] == 1
                 for row in first_rows
             ))
             active_now = list(db.scalars(select(RegionalEvent).where(
@@ -366,12 +402,9 @@ class RegionalEventServiceTests(unittest.TestCase):
                 (row.region_code, row.status, row.seed, row.summary_json) for row in first_rows
             ]
             expected_candidates = [
-                f"replay-{index}" for index in range(5)
-                if rebellion_roll(self.campaign_id, cycle.cycle_number, f"replay-{index}", 85, 25)
-            ]
-            actual_candidates = [
-                row.region_code for row in first_rows if row.status in {"active", "suppressed"}
-            ]
+                "replay-0"
+            ] if rebellion_roll(self.campaign_id, cycle.cycle_number, "replay-0", 85, 25) else []
+            actual_candidates = [row.region_code for row in first_rows if row.status == "active"]
             self.assertEqual(actual_candidates, expected_candidates)
             db.execute(delete(RegionalEvent).where(
                 RegionalEvent.campaign_id == self.campaign_id,
@@ -392,6 +425,44 @@ class RegionalEventServiceTests(unittest.TestCase):
                 replay_event.region_code if replay_event is not None else None,
                 first_event.region_code if first_event is not None else None,
             )
+
+    def test_rebellion_roll_rotates_vulnerable_regions_and_observes_cooldown(self):
+        with SessionLocal() as db:
+            campaign = db.get(CampaignMetadata, self.campaign_id)
+            regions = [RegionalRegionState(
+                campaign_id=self.campaign_id,
+                region_code=f"rotate-{index}", region_name=f"Rotação {index}",
+                security=25, threat=85,
+            ) for index in range(5)]
+            cycles = [RegionalCycle(
+                campaign_id=self.campaign_id, cycle_number=index,
+                starts_at_utc=self.now + timedelta(hours=6 * index),
+                ends_at_utc=self.now + timedelta(hours=6 * (index + 1)),
+                seed=f"rotation-{index}", rules_version="vigilia-v2",
+            ) for index in range(7)]
+            db.add_all([*regions, *cycles])
+            db.flush()
+            with patch("app.services.regional_event_service._rng") as rng_factory:
+                rng_factory.return_value.random.return_value = 0.99
+                for cycle in cycles:
+                    evaluate_open_rebellion(
+                        db, campaign, cycle, guild_id=999, now=cycle.starts_at_utc,
+                    )
+            selected = []
+            for cycle in cycles:
+                cycle_events = list(db.scalars(select(RegionalEvent).where(
+                    RegionalEvent.campaign_id == self.campaign_id,
+                    RegionalEvent.event_type == "rebellion",
+                    RegionalEvent.trigger_cycle_number == cycle.cycle_number,
+                )))
+                selected_event = next(
+                    (row for row in cycle_events if json.loads(row.summary_json).get("roll_selected")),
+                    None,
+                )
+                selected.append(selected_event.region_code if selected_event is not None else None)
+            self.assertEqual(len(set(selected[:5])), 5)
+            self.assertIsNone(selected[5])
+            self.assertEqual(selected[6], selected[0])
 
     def test_concurrent_portal_and_rebellion_triggers_are_campaign_idempotent(self):
         class FixedRng:
@@ -509,7 +580,7 @@ class RegionalEventServiceTests(unittest.TestCase):
                 self.assertEqual(len({row.region_code for row in portal_rows}), 5)
                 self.assertEqual(len(rebellion_rows), 5)
                 self.assertEqual(sum(row.status == "active" for row in rebellion_rows), 1)
-                self.assertEqual(sum(row.status == "suppressed" for row in rebellion_rows), 4)
+                self.assertEqual(sum(row.status == "not_triggered" for row in rebellion_rows), 4)
                 self.assertEqual(db.scalar(select(func.count(RegionalEvent.id)).where(
                     RegionalEvent.campaign_id == campaign_id,
                     RegionalEvent.event_type == "rebellion",

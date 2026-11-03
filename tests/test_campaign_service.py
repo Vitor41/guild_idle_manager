@@ -167,7 +167,7 @@ asyncio.run(main())
         self.assertNotEqual(first.database_path, second.database_path)
         self.assertEqual(len(campaigns.list_campaigns()), 2)
         with closing(sqlite3.connect(first.database_path)) as connection:
-            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "d9e0f1a2b3c4")
+            self.assertEqual(connection.execute("SELECT version_num FROM alembic_version").fetchone()[0], "f1a2b3c4d5e6")
 
         campaigns.activate_campaign(first.campaign_id)
         with SessionLocal() as db:
@@ -448,7 +448,7 @@ asyncio.run(main())
                     "SELECT user_id, name, campaign_id FROM guilds WHERE id = 11"
                 ).fetchone()
                 columns = {row[1]: row for row in connection.execute("PRAGMA table_info(guilds)")}
-                self.assertEqual(revision, "d9e0f1a2b3c4")
+                self.assertEqual(revision, "f1a2b3c4d5e6")
                 self.assertEqual(guild, (7, "Guilda preservada", None))
                 self.assertEqual(columns["user_id"][3], 0)
                 self.assertTrue(list((Path(temp_dir) / "backups" / campaign_id).glob("pre-migration-c9d0e1f2a3b4-*.db")))
@@ -490,7 +490,7 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(database_path, campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "b1c2d3e4f5a6")
-            self.assertEqual(migration.current_revision, "d9e0f1a2b3c4")
+            self.assertEqual(migration.current_revision, "f1a2b3c4d5e6")
             self.assertEqual((migration.previous_save_version, migration.current_save_version), (6, 7))
             with closing(sqlite3.connect(database_path)) as connection:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(guild_resources)")}
@@ -586,7 +586,7 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(database_path, campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "d7e8f9a0b1c2")
-            self.assertEqual(migration.current_revision, "d9e0f1a2b3c4")
+            self.assertEqual(migration.current_revision, "f1a2b3c4d5e6")
             backups = list((Path(temp_dir) / "backups" / campaign_id).glob(
                 "pre-migration-d7e8f9a0b1c2-*.db"
             ))
@@ -595,7 +595,7 @@ asyncio.run(main())
             expected_guild = ("Guilda preservada", 12, 345, 67)
             expected_regional_guild = ("Guilda preservada", 12, 345, 88, 67)
             expected_run = (campaign_id, "mission", 99, "C", 1, 2, 75, 120)
-            for path, expected_revision in ((database_path, "d9e0f1a2b3c4"), (backups[0], "d7e8f9a0b1c2")):
+            for path, expected_revision in ((database_path, "f1a2b3c4d5e6"), (backups[0], "d7e8f9a0b1c2")):
                 with closing(sqlite3.connect(path)) as connection:
                     self.assertEqual(
                         connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
@@ -629,6 +629,14 @@ asyncio.run(main())
                     )
                     self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
 
+            with closing(sqlite3.connect(database_path)) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT cpu_failure_risk_snapshot FROM regional_offers WHERE id = 61"
+                    ).fetchone(),
+                    (0,),
+                )
+
     def test_upgrade_from_work_one_head_adds_pause_state_and_updates_schema_version(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             saves = Path(temp_dir) / "saves"
@@ -652,13 +660,13 @@ asyncio.run(main())
             migration = campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "a6b7c8d9e0f1")
-            self.assertEqual(migration.current_revision, "d9e0f1a2b3c4")
+            self.assertEqual(migration.current_revision, "f1a2b3c4d5e6")
             self.assertEqual(migration.previous_save_version, 3)
             self.assertEqual(migration.current_save_version, 7)
             with closing(sqlite3.connect(campaign.database_path)) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "d9e0f1a2b3c4",
+                    "f1a2b3c4d5e6",
                 )
                 self.assertIn(
                     "capacity_paused",
