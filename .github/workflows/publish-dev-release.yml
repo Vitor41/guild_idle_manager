@@ -81,7 +81,7 @@ jobs:
         run: |
           $version = $env:RELEASE_TAG.Substring(5)
           $output = "dist/staging/release-$env:RELEASE_TAG"
-          $packageRoot = Join-Path $output 'GuildIdleManager'
+          $packageRoot = Join-Path $output 'GuildIdleManager-DEV'
           $appVersionFile = Join-Path $packageRoot 'gim-app-version.txt'
           if (-not (Test-Path -LiteralPath $appVersionFile -PathType Leaf)) {
             throw "Arquivo de versão do pacote não encontrado: $appVersionFile"
