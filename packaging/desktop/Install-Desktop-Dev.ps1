@@ -86,6 +86,7 @@ $staging = Join-Path $programs "GuildIdleManager.stage-$token"
 $backup = Join-Path $programs "GuildIdleManager.backup-$token"
 $result = Join-Path $env:TEMP "GuildIdleManager-smoke-$token.txt"
 $backupCreated = $false
+$installCommitted = $false
 function Copy-DirectoryContents([string]$SourceDirectory, [string]$DestinationDirectory) {
     Get-ChildItem -LiteralPath $SourceDirectory -Force | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination $DestinationDirectory -Recurse -Force
@@ -140,15 +141,6 @@ try {
     } else {
         Move-Item -LiteralPath $staging -Destination $target
     }
-    if (Test-Path -LiteralPath $backup) {
-        Assert-ManagedInstall $backup
-        $resolvedBackup = [System.IO.Path]::GetFullPath($backup)
-        if (-not $resolvedBackup.StartsWith(($programs.TrimEnd('\') + '\'), [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw 'Instalacao recusada: o backup temporario saiu da pasta Programs.'
-        }
-        Remove-Item -LiteralPath $resolvedBackup -Recurse -Force
-    }
-
     if (-not $NoShortcut -and $env:GIM_SETUP_NO_SHORTCUT -ne '1') {
         $shortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "Guild Idle Manager $Channel.lnk"
         $shell = New-Object -ComObject WScript.Shell
@@ -165,10 +157,24 @@ try {
         $setupResult = "SUCCESS|$appVersion|$target|$actualLocalAppData"
         [System.IO.File]::WriteAllText($setupResultFile, $setupResult, [System.Text.UTF8Encoding]::new($false))
     }
+    $installCommitted = $true
+
+    if (Test-Path -LiteralPath $backup) {
+        try {
+            Assert-ManagedInstall $backup
+            $resolvedBackup = [System.IO.Path]::GetFullPath($backup)
+            if (-not $resolvedBackup.StartsWith(($programs.TrimEnd('\') + '\'), [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw 'Instalacao recusada: o backup temporario saiu da pasta Programs.'
+            }
+            Remove-Item -LiteralPath $resolvedBackup -Recurse -Force
+        } catch {
+            Write-Warning "Instalacao concluida; a copia de seguranca permaneceu em $backup porque nao foi possivel remove-la: $($_.Exception.Message)"
+        }
+    }
 
     Write-Output "Instalacao concluida em $target"
 } catch {
-    if ($backupCreated -and (Test-Path -LiteralPath $backup)) {
+    if (-not $installCommitted -and $backupCreated -and (Test-Path -LiteralPath $backup)) {
         try {
             if (Test-Path -LiteralPath $target) { Clear-DirectoryContents $target }
             else { New-Item -ItemType Directory -Path $target | Out-Null }
