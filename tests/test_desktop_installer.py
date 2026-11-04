@@ -46,6 +46,7 @@ class DesktopInstallerSafetyTests(unittest.TestCase):
         app = package / "GuildIdleManager"
         app.mkdir(parents=True)
         (app / "GuildIdleManager.exe").write_bytes(b"Installer safety test placeholder")
+        (package / "gim-app-version.txt").write_text("0.6.1", encoding="utf-8")
         shutil.copy2(INSTALLER, package / INSTALLER.name)
         return package
 
@@ -114,7 +115,7 @@ class DesktopInstallerSafetyTests(unittest.TestCase):
             installed_app = local_app_data / "Programs" / "GuildIdleManager"
             self.assertEqual(
                 (installed_app / ".gim-desktop-install.json").read_text(encoding="utf-8").strip(),
-                '{"product":"org.guildidlemanager.desktop","channel":"DEV"}',
+                '{"product":"org.guildidlemanager.desktop","channel":"DEV","version":"0.6.1"}',
             )
             self.assertTrue((installed_app / "GuildIdleManager.exe").is_file())
             self.assertEqual(save_marker.read_text(encoding="utf-8"), "save-preserved")

@@ -123,6 +123,28 @@ class ReleaseSigningToolTests(unittest.TestCase):
                 self.assertTrue(github_releases.prepared_file_is_valid(prepared, "DEV"))
                 github_releases.cleanup_prepared_update(prepared)
 
+    def test_signer_rejects_manifest_version_that_differs_from_packaged_app_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            setup = root / "GuildIdleManager-DEV-Setup.exe"
+            setup.write_bytes(b"disposable signed setup bytes")
+            key = Ed25519PrivateKey.generate()
+            raw_private_key = key.private_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PrivateFormat.Raw,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+            private_key_file = root / "release-private-key.base64"
+            private_key_file.write_text(base64.b64encode(raw_private_key).decode("ascii"), encoding="ascii")
+            app_version_file = root / "gim-app-version.txt"
+            app_version_file.write_text("0.6.1", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "diverge da versão empacotada"):
+                create_signed_manifest(
+                    setup, private_key_file, "0.6.0", "DEV", "0.5.9",
+                    app_version_file=app_version_file,
+                )
+
     def test_signer_refuses_private_keys_inside_repository(self):
         with tempfile.TemporaryDirectory() as directory:
             setup = Path(directory) / "setup.exe"

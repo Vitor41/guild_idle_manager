@@ -133,9 +133,9 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
     return JSONResponse(_local_checkout_update_status(request))
 
 
-def _schedule_verified_update_install(callback, installer_path: Path) -> None:
+def _schedule_verified_update_install(callback, installer_path: Path, expected_version: str) -> None:
     logger.info("Scheduling verified installer handoff: installer=%s", installer_path)
-    timer = threading.Timer(0.75, callback, args=(installer_path,))
+    timer = threading.Timer(0.75, callback, args=(installer_path, expected_version))
     timer.daemon = True
     timer.start()
 
@@ -177,6 +177,7 @@ def install_verified_release_update(
         _schedule_verified_update_install,
         install_callback,
         prepared.installer_path,
+        prepared.version,
     )
     return JSONResponse({
         "channel": "github-releases",

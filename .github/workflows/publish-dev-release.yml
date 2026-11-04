@@ -81,6 +81,10 @@ jobs:
         run: |
           $version = $env:RELEASE_TAG.Substring(5)
           $output = "dist/staging/release-$env:RELEASE_TAG"
+          $appVersionFile = Join-Path $output 'gim-app-version.txt'
+          if (-not (Test-Path -LiteralPath $appVersionFile -PathType Leaf)) {
+            throw "Arquivo de versão do pacote não encontrado: $appVersionFile"
+          }
           $keyFile = Join-Path $env:RUNNER_TEMP 'gim-ed25519-private-key.b64'
           try {
             [System.IO.File]::WriteAllText($keyFile, $env:RELEASE_PRIVATE_KEY_B64, [System.Text.Encoding]::ASCII)
@@ -91,6 +95,7 @@ jobs:
               --channel DEV `
               --minimum-supported-version 0.3.1 `
               --expected-public-key-base64 $env:RELEASE_PUBLIC_KEY_B64 `
+              --app-version-file $appVersionFile `
               --output-directory $output
             if ($LASTEXITCODE -ne 0) { throw 'Falha ao assinar o manifesto.' }
           }
