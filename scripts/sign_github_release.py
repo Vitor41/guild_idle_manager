@@ -25,6 +25,7 @@ def create_signed_manifest(
     channel: str,
     minimum_supported_version: str,
     expected_public_key_b64: str | None = None,
+    app_version_file: Path | None = None,
 ) -> tuple[bytes, bytes, str]:
     setup_path = setup_path.resolve()
     private_key_path = private_key_path.resolve()
@@ -35,6 +36,15 @@ def create_signed_manifest(
         raise ValueError("O Setup indicado não existe.")
     if channel not in _CHANNELS or not _SEMVER.fullmatch(version) or not _SEMVER.fullmatch(minimum_supported_version):
         raise ValueError("Canal ou versão SemVer inválida.")
+    if app_version_file is not None:
+        try:
+            embedded_version = app_version_file.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError("O arquivo de versão embutida não pôde ser lido.") from exc
+        if embedded_version != version:
+            raise ValueError(
+                f"A versão do manifesto ({version}) diverge da versão empacotada ({embedded_version})."
+            )
 
     encoded_key = private_key_path.read_text(encoding="ascii").strip()
     raw_key = base64.b64decode(encoded_key, validate=True)
@@ -76,13 +86,14 @@ def main() -> None:
     parser.add_argument("--channel", required=True, choices=sorted(_CHANNELS))
     parser.add_argument("--minimum-supported-version", required=True)
     parser.add_argument("--expected-public-key-base64")
+    parser.add_argument("--app-version-file", required=True, type=Path)
     parser.add_argument("--output-directory", type=Path)
     arguments = parser.parse_args()
 
     manifest, signature, public_key = create_signed_manifest(
         arguments.setup, arguments.private_key_file, arguments.version,
         arguments.channel, arguments.minimum_supported_version,
-        arguments.expected_public_key_base64,
+        arguments.expected_public_key_base64, arguments.app_version_file,
     )
     output = (arguments.output_directory or arguments.setup.resolve().parent).resolve()
     output.mkdir(parents=True, exist_ok=True)

@@ -5,6 +5,7 @@ import base64
 import binascii
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -21,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from app.core.config import settings
 
 
+logger = logging.getLogger("gim.update")
 _GITHUB_OWNER = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 _GITHUB_REPO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$")
 _CHANNELS = {"stable", "beta", "DEV"}
@@ -397,6 +399,7 @@ def _stream_download(url: str, destination: Path, expected_sha256: str) -> int:
         "Accept": "application/octet-stream",
     }, method="GET")
     opener = build_opener(_GitHubHttpsRedirects())
+    logger.info("Updater download started: destination=%s expected_sha256=%s", destination, expected_sha256)
     digest = hashlib.sha256()
     total = 0
     try:
@@ -420,12 +423,14 @@ def _stream_download(url: str, destination: Path, expected_sha256: str) -> int:
                     digest.update(chunk)
                     output.write(chunk)
                 output.flush()
+        logger.info("Updater download response complete: destination=%s bytes=%s", destination, total)
     except (HTTPError, URLError, TimeoutError, OSError) as error:
         destination.unlink(missing_ok=True)
         raise GitHubReleasesError("Não foi possível baixar o Setup assinado.") from error
     if total == 0 or digest.hexdigest() != expected_sha256:
         destination.unlink(missing_ok=True)
         raise GitHubReleasesError("O SHA-256 do Setup não corresponde ao manifesto assinado.")
+    logger.info("Updater download hash verified: destination=%s bytes=%s", destination, total)
     return total
 
 
@@ -455,7 +460,13 @@ def check_for_update(
     api_url = releases_api_url(config)
     if api_url is None:
         return provider_status(installed_channel, config), None
+    phase = "release-list"
+    staging: Path | None = None
     try:
+        logger.info(
+            "Updater check started: current_version=%s channel=%s installed_channel=%s temp_root=%s",
+            current_version, config.channel, installed_channel, tempfile.gettempdir(),
+        )
         releases = json.loads(_request_bytes(api_url, _MAX_API_BYTES, api_json=True).decode("utf-8"))
         release = _select_release(releases, config)
         if release is None:
@@ -464,7 +475,10 @@ def check_for_update(
                 "available": False, "reason": f"Nenhuma release válida do canal {config.channel} foi publicada.",
             }, None
         version = str(release["_version"])
+        phase = "signed-manifest"
+        logger.info("Updater release selected: channel=%s version=%s", config.channel, version)
         manifest = _load_and_verify_manifest(release, config, version)
+        logger.info("Updater manifest signature and metadata verified: version=%s", version)
         version_key = _semver_key(version)
         if version_key <= current_key:
             return {
@@ -477,8 +491,11 @@ def check_for_update(
         asset_url = _validate_asset_url(
             asset, _release_asset_url(config, str(release["tag_name"]), asset_name)
         )
+        phase = "create-staging"
         staging = Path(tempfile.mkdtemp(prefix="gim-release-update-"))
         installer_path = staging / asset_name
+        logger.info("Updater staging created: directory=%s exists=%s", staging, staging.is_dir())
+        phase = "download-and-hash"
         try:
             size = _stream_download(asset_url, installer_path, str(manifest["asset_sha256"]))
         except Exception:
@@ -487,6 +504,9 @@ def check_for_update(
                 asset_name, str(manifest["asset_sha256"]), installer_path, staging,
             ))
             raise
+        phase = "prepare-handoff"
+        if not installer_path.is_file():
+            raise FileNotFoundError(f"Setup verificado desapareceu do staging: {installer_path}")
         minimum_key = _semver_key(manifest["minimum_supported_version"])
         prepared = PreparedReleaseUpdate(
             channel=str(config.channel),
@@ -498,6 +518,10 @@ def check_for_update(
             staging_directory=staging,
         )
         required = current_key < minimum_key
+        logger.info(
+            "Updater check prepared: version=%s installer=%s size=%s sha256=%s required=%s",
+            version, installer_path, size, prepared.asset_sha256, required,
+        )
         return {
             **provider_status(installed_channel, config),
             "query_enabled": True,
@@ -515,11 +539,17 @@ def check_for_update(
             ),
         }, prepared
     except (GitHubReleasesError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OSError) as error:
+        logger.exception(
+            "Updater check failed: phase=%s current_version=%s channel=%s staging=%s",
+            phase, current_version, config.channel, staging,
+        )
         return {
             **provider_status(installed_channel, config),
             "query_enabled": True,
             "available": None,
             "install_enabled": False,
+            "failed": True,
+            "failure_phase": phase,
             "reason": str(error),
         }, None
 

@@ -45,6 +45,14 @@ class PublishDevReleaseWorkflowTests(unittest.TestCase):
         ambiguous = re.findall(r"\$env:[A-Za-z_][A-Za-z0-9_]*:", self.workflow_text)
         self.assertEqual(ambiguous, [])
 
+    def test_signer_receives_version_sidecar_from_the_same_release_package(self):
+        self.assertIn("$appVersionFile = Join-Path $output 'gim-app-version.txt'", self.workflow_text)
+        self.assertIn("Test-Path -LiteralPath $appVersionFile -PathType Leaf", self.workflow_text)
+        signer_step = self.workflow_text.split("- name: Assinar manifesto do Setup", 1)[1]
+        signer_step = signer_step.split("- name: Publicar release", 1)[0]
+        self.assertIn("--setup \"$output/GuildIdleManager-DEV-Setup.exe\"", signer_step)
+        self.assertIn("--app-version-file $appVersionFile", signer_step)
+
 
 if __name__ == "__main__":
     unittest.main()

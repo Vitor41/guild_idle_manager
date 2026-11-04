@@ -99,15 +99,23 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
     if current_user is None:
         return JSONResponse({"channel": "unavailable", "available": False, "reason": "Abra uma campanha para consultar atualizações."}, status_code=401)
     if request.app.state.app_mode == "desktop" and getattr(sys, "frozen", False):
+        logger.info("Updater check route requested: version=%s", request.app.version)
         with _release_update_lock:
             previous = getattr(request.app.state, "prepared_release_update", None)
             cleanup_prepared_update(previous)
             request.app.state.prepared_release_update = None
+            installed_channel = read_installed_channel()
+            logger.info("Updater check reading installation marker: channel=%s", installed_channel)
             release_status, prepared = check_for_update(
                 request.app.version,
-                read_installed_channel(),
+                installed_channel,
             )
             request.app.state.prepared_release_update = prepared
+            logger.info(
+                "Updater check route completed: available=%s install_enabled=%s version=%s failed=%s",
+                release_status.get("available"), release_status.get("install_enabled"),
+                release_status.get("available_version"), release_status.get("failed", False),
+            )
         return JSONResponse({**release_status, "current_version": request.app.version})
     if settings.app_env != "local" or getattr(sys, "frozen", False):
         release_status = provider_status()
@@ -125,9 +133,9 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
     return JSONResponse(_local_checkout_update_status(request))
 
 
-def _schedule_verified_update_install(callback, installer_path: Path) -> None:
+def _schedule_verified_update_install(callback, installer_path: Path, expected_version: str) -> None:
     logger.info("Scheduling verified installer handoff: installer=%s", installer_path)
-    timer = threading.Timer(0.75, callback, args=(installer_path,))
+    timer = threading.Timer(0.75, callback, args=(installer_path, expected_version))
     timer.daemon = True
     timer.start()
 
@@ -169,6 +177,7 @@ def install_verified_release_update(
         _schedule_verified_update_install,
         install_callback,
         prepared.installer_path,
+        prepared.version,
     )
     return JSONResponse({
         "channel": "github-releases",

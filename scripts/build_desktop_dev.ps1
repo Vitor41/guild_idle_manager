@@ -4,7 +4,8 @@ param(
     [string]$Channel = 'DEV',
     [string]$GitHubOwner = 'Vitor41',
     [string]$GitHubRepo = 'guild_idle_manager',
-    [string]$GitHubPublicKeyBase64
+    [string]$GitHubPublicKeyBase64,
+    [string]$PythonPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,9 +63,15 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 $buildRoot = Assert-ContainedNoReparsePoint $stagingRoot $OutputRoot
 New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
 
-$python = Join-Path $repo '.venv-desktop\Scripts\python.exe'
+$python = if ([string]::IsNullOrWhiteSpace($PythonPath)) {
+    Join-Path $repo '.venv-desktop\Scripts\python.exe'
+} elseif ([System.IO.Path]::IsPathRooted($PythonPath)) {
+    [System.IO.Path]::GetFullPath($PythonPath)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $repo $PythonPath))
+}
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-    throw 'Crie .venv-desktop e instale requirements-desktop-dev.txt antes do build.'
+    throw "Python de build nao encontrado: $python. Crie .venv-desktop ou informe -PythonPath."
 }
 $publicKeyBytes = $null
 if (-not [string]::IsNullOrWhiteSpace($GitHubPublicKeyBase64)) {
@@ -88,6 +95,8 @@ $distributionConfigJson = ConvertTo-Json -InputObject $distributionConfig -Compr
 $previousDistributionConfigFile = $env:GIM_BUILD_RELEASE_CONFIG_FILE
 $env:GIM_BUILD_RELEASE_CONFIG_FILE = $distributionConfigFile
 try {
+    & $python (Join-Path $repo 'scripts\verify_build_python_ssl.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Use uma distribuicao oficial do CPython sem patch externo em ssl.py.' }
     & $python -m PyInstaller --noconfirm --clean --distpath $buildRoot --workpath (Join-Path $buildRoot 'pyinstaller-work') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminou com codigo $LASTEXITCODE" }
 }
@@ -101,6 +110,17 @@ $packageRoot = Join-Path $buildRoot "GuildIdleManager-$Channel"
 $packageRoot = Assert-ContainedNoReparsePoint $stagingRoot $packageRoot
 if (Test-Path -LiteralPath $packageRoot) { Remove-Item -LiteralPath $packageRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $packageRoot | Out-Null
+$versionSource = Get-Content -LiteralPath (Join-Path $repo 'app\core\version.py') -Raw
+$versionMatch = [regex]::Match($versionSource, 'APP_VERSION\s*=\s*["'']([^"'']+)["'']')
+if (-not $versionMatch.Success -or $versionMatch.Groups[1].Value -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
+    throw 'APP_VERSION precisa conter uma versao SemVer valida antes de empacotar.'
+}
+$appVersion = $versionMatch.Groups[1].Value
+[System.IO.File]::WriteAllText(
+    (Join-Path $packageRoot 'gim-app-version.txt'),
+    $appVersion,
+    [System.Text.UTF8Encoding]::new($false)
+)
 Copy-Item -LiteralPath (Join-Path $buildRoot 'GuildIdleManager') -Destination $packageRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $repo 'packaging\desktop\Install-Desktop-Dev.ps1') -Destination $packageRoot
 Copy-Item -LiteralPath (Join-Path $repo 'docs\DEV_DESKTOP.md') -Destination $packageRoot
@@ -120,6 +140,7 @@ $iexpressSource = Assert-ContainedNoReparsePoint $tempRoot $iexpressSource
 New-Item -ItemType Directory -Path $iexpressSource | Out-Null
 Copy-Item -LiteralPath $zip -Destination (Join-Path $iexpressSource $zipName)
 Copy-Item -LiteralPath (Join-Path $repo 'packaging\desktop\Install-Desktop-Dev.ps1') -Destination $iexpressSource
+Copy-Item -LiteralPath (Join-Path $packageRoot 'gim-app-version.txt') -Destination $iexpressSource
 $sedPath = Join-Path $iexpressSource "GuildIdleManager-$Channel.sed"
 $installerTemp = Join-Path $iexpressSource $installerName
 $sed = @"
@@ -157,11 +178,13 @@ AdminQuietInstCmd=
 UserQuietInstCmd=
 FILE0="$zipName"
 FILE1="Install-Desktop-Dev.ps1"
+FILE2="gim-app-version.txt"
 [SourceFiles]
 SourceFiles0=$iexpressSource
 [SourceFiles0]
 %FILE0%=
 %FILE1%=
+%FILE2%=
 "@
 Set-Content -LiteralPath $sedPath -Value $sed -Encoding ASCII
 $iexpress = Join-Path $env:WINDIR 'System32\iexpress.exe'

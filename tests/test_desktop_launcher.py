@@ -65,6 +65,32 @@ class _ClosedEvent:
 
 
 class DesktopLauncherUnitTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "The update helper uses Windows process creation flags.")
+    def test_hidden_powershell_helper_executes_with_create_no_window(self):
+        with tempfile.TemporaryDirectory(prefix="gim-hidden-helper-") as temp_dir:
+            marker = Path(temp_dir) / "helper-ran.txt"
+            powershell = (
+                Path(os.environ.get("WINDIR", r"C:\Windows"))
+                / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+            )
+            script = f"[IO.File]::WriteAllText('{marker}', 'executed')"
+            encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+            output_path = Path(temp_dir) / "helper-output.log"
+            with output_path.open("ab") as output:
+                helper = subprocess.Popen(
+                    [
+                        str(powershell), "-NoProfile", "-WindowStyle", "Hidden",
+                        "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded,
+                    ],
+                    close_fds=True,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+                self.assertEqual(helper.wait(timeout=15), 0)
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "executed")
+
     @unittest.skipUnless(os.name == "nt", "Verified release handoff uses Windows PowerShell.")
     def test_verified_update_handoff_logs_helper_and_preserves_failed_setup(self):
         with tempfile.TemporaryDirectory(prefix="gim-release-update-") as staging_dir, \
@@ -80,7 +106,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             with patch.dict(os.environ, {"WINDIR": windows_dir}), \
                  patch.object(launcher, "user_log_directory", return_value=test_logs), \
                  patch.object(launcher.subprocess, "Popen", return_value=SimpleNamespace(pid=4321)) as popen:
-                launcher._verified_update_handoff(installer, 1234)
+                launcher._verified_update_handoff(installer, 1234, "0.6.2")
 
             command = popen.call_args.args[0]
             helper = base64.b64decode(command[-1]).decode("utf-16le")
@@ -95,11 +121,25 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             self.assertIn("-RedirectStandardOutput $setupStdout", helper)
             self.assertIn("-RedirectStandardError $setupStderr", helper)
             self.assertIn("Setup finished with exit code", helper)
+            self.assertIn("Installed version verified", helper)
+            self.assertIn(base64.b64encode(b"0.6.2").decode("ascii"), helper)
+            self.assertIn("$installDirectory = Join-Path $expectedLocalAppData 'Programs\\GuildIdleManager'", helper)
+            self.assertRegex(helper, r"\$setupResult = Join-Path \$staging \('\.setup-result-' \+ \[Guid\]::NewGuid\(\)")
+            self.assertIn("Remove-Item -LiteralPath $setupResult -Force", helper)
+            self.assertLess(helper.index("Remove-Item -LiteralPath $setupResult -Force"), helper.index("$process = Start-Process -FilePath $setup"))
+            self.assertRegex(helper, r"\$versionProbe = Join-Path \$staging \('\.installed-version-' \+ \[Guid\]::NewGuid\(\)")
+            self.assertIn("Remove-Item -LiteralPath $versionProbe -Force", helper)
+            self.assertLess(helper.index("Remove-Item -LiteralPath $versionProbe -Force"), helper.index("$versionProcess = Start-Process"))
             self.assertIn("$setupExitCode -eq 0", helper)
             self.assertIn("setup preserved", helper)
             self.assertEqual(command[0], str(powershell))
             self.assertEqual(popen.call_args.kwargs["stderr"], subprocess.STDOUT)
+            self.assertEqual(popen.call_args.kwargs["cwd"], str(installer.parent))
             self.assertEqual(Path(popen.call_args.kwargs["stdout"].name).name, "update-handoff.log")
+            creationflags = popen.call_args.kwargs["creationflags"]
+            self.assertTrue(creationflags & subprocess.CREATE_NO_WINDOW)
+            self.assertTrue(creationflags & subprocess.CREATE_NEW_PROCESS_GROUP)
+            self.assertFalse(creationflags & subprocess.DETACHED_PROCESS)
             popen.assert_called_once()
 
             parser_script = Path(windows_dir) / "parse-powershell.ps1"
@@ -134,7 +174,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             )
             setup_start = (
                 "$process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `\n"
-                "        -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr"
+                "            -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr"
             )
             self.assertIn(setup_start, simulated)
             simulated = simulated.replace(
@@ -193,6 +233,48 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             self.assertIn("SIMULATED_SETUP_STDERR", handoff_log)
             self.assertIn("Setup finished with exit code 17", handoff_log)
             self.assertTrue(installer.is_file(), "A failed Setup must leave the release staging files available")
+
+            # A stale fixed-name result from an earlier attempt must never satisfy this helper run.
+            (Path(staging_dir) / "setup-result.txt").write_text(
+                "SUCCESS|0.6.2|old-target|old-profile", encoding="utf-8"
+            )
+            stale_setup = Path(windows_dir) / "stale-success-setup.ps1"
+            stale_setup.write_text("exit 0\n", encoding="utf-8")
+            stale_helper = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            stale_helper = stale_helper.replace(
+                "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
+                "    Add-Type -AssemblyName System.Windows.Forms\n"
+                "    [System.Windows.Forms.MessageBox]::Show(\n"
+                "        $message, 'Guild Idle Manager', 'OK', $icon\n"
+                "    ) | Out-Null\n"
+                "}",
+                "function Show-HandoffMessage([string]$message, [string]$icon) {}",
+            )
+            stale_helper = stale_helper.replace(
+                "$deadline = [DateTime]::UtcNow.AddSeconds(180)",
+                "$deadline = [DateTime]::UtcNow.AddMilliseconds(500)",
+            )
+            stale_command = (
+                f"$process = Start-Process -FilePath '{real_powershell}' "
+                f"-ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{stale_setup}\"' "
+                "-WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `\n"
+                "    -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr"
+            )
+            stale_helper = stale_helper.replace(setup_start, stale_command)
+            stale_helper_file = Path(windows_dir) / "stale-result-handoff.ps1"
+            stale_helper_file.write_text(stale_helper, encoding="utf-8")
+            stale_run = subprocess.run(
+                [str(real_powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(stale_helper_file)],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            self.assertEqual(stale_run.returncode, 0, stale_run.stderr)
+            handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
+            self.assertNotIn("Installer confirmed target profile and version", handoff_log)
+            self.assertIn("Setup terminou sem confirmar a instalacao do pacote", handoff_log)
+            self.assertTrue(installer.is_file(), "A stale result must not make the helper delete its staging files")
 
     @unittest.skipUnless(os.name == "nt", "Verified release handoff uses Windows PowerShell.")
     def test_verified_update_handoff_logs_synchronous_helper_start_failure(self):

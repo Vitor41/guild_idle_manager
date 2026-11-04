@@ -163,7 +163,11 @@ def _skip_pywebview_early_webview_focus(webview_module=None) -> None:
     logging.info("Applied WinForms WebView2 early-focus compatibility for pywebview")
 
 
-def _verified_update_handoff(installer_path: Path, parent_pid: int) -> None:
+def _verified_update_handoff(
+    installer_path: Path,
+    parent_pid: int,
+    expected_version: str | None = None,
+) -> None:
     """Wait for this app to exit, then open only the already verified Setup."""
     if os.name != "nt":
         raise RuntimeError("A instalação de releases só está disponível no Windows.")
@@ -178,9 +182,13 @@ def _verified_update_handoff(installer_path: Path, parent_pid: int) -> None:
 $ErrorActionPreference = 'Stop'
 $setup = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__SETUP__'))
 $logFile = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__LOG__'))
+$expectedVersion = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__VERSION__'))
 $staging = [IO.Path]::GetDirectoryName($setup)
 $setupStdout = Join-Path $staging 'setup.stdout.log'
 $setupStderr = Join-Path $staging 'setup.stderr.log'
+$expectedLocalAppData = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
+$installDirectory = Join-Path $expectedLocalAppData 'Programs\GuildIdleManager'
+$setupResult = Join-Path $staging ('.setup-result-' + [Guid]::NewGuid().ToString('N') + '.txt')
 $parentPid = __PID__
 $setupStarted = $false
 $setupExitCode = $null
@@ -214,17 +222,73 @@ try {
         return
     }
     Write-HandoffLog 'INFO' "Application PID $parentPid exited; starting verified Setup visibly as the current user"
-    $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `
-        -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr
+    if (Test-Path -LiteralPath $setupResult) {
+        Remove-Item -LiteralPath $setupResult -Force
+    }
+    $env:GIM_SETUP_RESULT = $setupResult
+    $env:GIM_SETUP_EXPECTED_LOCALAPPDATA = $expectedLocalAppData
+    try {
+        $process = Start-Process -FilePath $setup -WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `
+            -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr
+    } finally {
+        Remove-Item Env:GIM_SETUP_RESULT -ErrorAction SilentlyContinue
+        Remove-Item Env:GIM_SETUP_EXPECTED_LOCALAPPDATA -ErrorAction SilentlyContinue
+    }
     $setupStarted = $true
     $setupExitCode = $process.ExitCode
     Write-SetupOutputToHandoffLog $setupStdout 'STDOUT'
     Write-SetupOutputToHandoffLog $setupStderr 'STDERR'
     Write-HandoffLog 'INFO' "Setup finished with exit code $setupExitCode"
+    if ($setupExitCode -eq 0) {
+        $deadline = [DateTime]::UtcNow.AddSeconds(180)
+        while (-not (Test-Path -LiteralPath $setupResult -PathType Leaf) -and [DateTime]::UtcNow -lt $deadline) {
+            Start-Sleep -Milliseconds 250
+        }
+        if (-not (Test-Path -LiteralPath $setupResult -PathType Leaf)) {
+            throw 'O Setup terminou sem confirmar a instalacao do pacote.'
+        }
+        $setupResultText = Get-Content -LiteralPath $setupResult -Raw
+        $expectedResultPrefix = "SUCCESS|$expectedVersion|$installDirectory|$expectedLocalAppData"
+        if (-not $setupResultText.StartsWith($expectedResultPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "O Setup nao confirmou a versao e o perfil temporario esperados: $($setupResultText.Trim())"
+        }
+        Write-HandoffLog 'INFO' "Installer confirmed target profile and version: $setupResultText"
+    }
+    if ($setupExitCode -eq 0 -and $expectedVersion) {
+        $installMarker = Join-Path $installDirectory '.gim-desktop-install.json'
+        if (-not (Test-Path -LiteralPath $installMarker -PathType Leaf)) {
+            throw "Setup terminou sem o marcador de instalacao esperado em $installMarker"
+        }
+        $installedIdentity = Get-Content -LiteralPath $installMarker -Raw | ConvertFrom-Json
+        if ($installedIdentity.version -ne $expectedVersion) {
+            throw "Setup terminou com a versao instalada '$($installedIdentity.version)', esperada '$expectedVersion'."
+        }
+        $installedExe = Join-Path $installDirectory 'GuildIdleManager.exe'
+        $versionProbe = Join-Path $staging ('.installed-version-' + [Guid]::NewGuid().ToString('N') + '.txt')
+        if (Test-Path -LiteralPath $versionProbe) {
+            Remove-Item -LiteralPath $versionProbe -Force
+        }
+        $env:GIM_VERSION_RESULT = $versionProbe
+        try {
+            $versionProcess = Start-Process -FilePath $installedExe -ArgumentList '--version' -PassThru -Wait -WindowStyle Hidden
+        } finally {
+            Remove-Item Env:GIM_VERSION_RESULT -ErrorAction SilentlyContinue
+        }
+        if ($versionProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $versionProbe -PathType Leaf)) {
+            throw 'O aplicativo instalado nao respondeu a verificacao de versao apos o Setup.'
+        }
+        $installedVersion = (Get-Content -LiteralPath $versionProbe -Raw).Trim()
+        if ($installedVersion -ne $expectedVersion) {
+            throw "O executavel instalado reporta '$installedVersion', esperada '$expectedVersion'."
+        }
+        Remove-Item -LiteralPath $versionProbe -Force
+        Write-HandoffLog 'INFO' "Installed version verified: $installedVersion"
+    }
     if ($setupExitCode -ne 0) {
         Show-HandoffMessage "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logFile" 'Warning'
     }
 } catch {
+    if ($setupStarted) { $setupExitCode = 1 }
     Write-SetupOutputToHandoffLog $setupStdout 'STDOUT'
     Write-SetupOutputToHandoffLog $setupStderr 'STDERR'
     Write-HandoffLog 'ERROR' "Handoff failed: $($_.Exception.ToString()); setup preserved at $setup"
@@ -244,6 +308,10 @@ try {
 }
 """.replace("__SETUP__", base64.b64encode(str(installer).encode("utf-8")).decode("ascii"))
     helper = helper.replace("__LOG__", base64.b64encode(str(log_file).encode("utf-8")).decode("ascii"))
+    helper = helper.replace(
+        "__VERSION__",
+        base64.b64encode((expected_version or "").encode("utf-8")).decode("ascii"),
+    )
     helper = helper.replace("__PID__", str(parent_pid))
     encoded = base64.b64encode(helper.encode("utf-16le")).decode("ascii")
     windows = Path(os.environ.get("WINDIR", r"C:\Windows"))
@@ -257,10 +325,11 @@ try {
         with log_file.open("a", encoding="utf-8") as helper_output:
             process = subprocess.Popen(
                 [str(powershell), "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+                cwd=str(staging),
                 close_fds=True,
                 stdout=helper_output,
                 stderr=subprocess.STDOUT,
-                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
             )
     except Exception as exc:
         _append_update_handoff_log(log_file, "ERROR", f"Could not start PowerShell helper; setup preserved at {installer}; error={exc}")
@@ -349,10 +418,10 @@ def run() -> None:
 
         app.state.request_local_checkout_restart = request_local_checkout_restart
 
-        def request_verified_update_install(installer_path: Path) -> None:
+        def request_verified_update_install(installer_path: Path, expected_version: str) -> None:
             logging.info("Verified update install callback received: installer=%s", installer_path)
             try:
-                _verified_update_handoff(installer_path, os.getpid())
+                _verified_update_handoff(installer_path, os.getpid(), expected_version)
             except Exception as exc:
                 logging.exception("Could not start the verified Setup handoff")
                 ctypes.windll.user32.MessageBoxW(
@@ -409,7 +478,7 @@ def run() -> None:
                 cwd=repository_root,
                 env=environment,
                 close_fds=True,
-                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
             )
             logging.info("Restarted the desktop app from the current local checkout")
         except Exception as exc:
