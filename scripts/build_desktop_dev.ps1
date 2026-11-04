@@ -4,7 +4,8 @@ param(
     [string]$Channel = 'DEV',
     [string]$GitHubOwner = 'Vitor41',
     [string]$GitHubRepo = 'guild_idle_manager',
-    [string]$GitHubPublicKeyBase64
+    [string]$GitHubPublicKeyBase64,
+    [string]$PythonPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,9 +63,15 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 $buildRoot = Assert-ContainedNoReparsePoint $stagingRoot $OutputRoot
 New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
 
-$python = Join-Path $repo '.venv-desktop\Scripts\python.exe'
+$python = if ([string]::IsNullOrWhiteSpace($PythonPath)) {
+    Join-Path $repo '.venv-desktop\Scripts\python.exe'
+} elseif ([System.IO.Path]::IsPathRooted($PythonPath)) {
+    [System.IO.Path]::GetFullPath($PythonPath)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $repo $PythonPath))
+}
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-    throw 'Crie .venv-desktop e instale requirements-desktop-dev.txt antes do build.'
+    throw "Python de build nao encontrado: $python. Crie .venv-desktop ou informe -PythonPath."
 }
 $publicKeyBytes = $null
 if (-not [string]::IsNullOrWhiteSpace($GitHubPublicKeyBase64)) {
@@ -88,6 +95,8 @@ $distributionConfigJson = ConvertTo-Json -InputObject $distributionConfig -Compr
 $previousDistributionConfigFile = $env:GIM_BUILD_RELEASE_CONFIG_FILE
 $env:GIM_BUILD_RELEASE_CONFIG_FILE = $distributionConfigFile
 try {
+    & $python (Join-Path $repo 'scripts\verify_build_python_ssl.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Use uma distribuicao oficial do CPython sem patch externo em ssl.py.' }
     & $python -m PyInstaller --noconfirm --clean --distpath $buildRoot --workpath (Join-Path $buildRoot 'pyinstaller-work') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminou com codigo $LASTEXITCODE" }
 }

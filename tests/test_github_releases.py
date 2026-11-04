@@ -164,6 +164,7 @@ def test_release_install_confirmation_uses_the_shared_accessible_dialog():
 
     assert "window.confirm" not in template
     assert "data-confirm-always" in template
+    assert 'action="/updates/install-release" method="post" data-native-submit="true"' in template
     assert 'aria-haspopup="dialog" aria-controls="confirmation-dialog"' in template
     assert "`Instalar versão ${preparedReleaseVersion}?`" in template
     assert "!form.dataset.confirmAlways" in main_js

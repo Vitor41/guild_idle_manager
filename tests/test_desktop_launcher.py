@@ -65,6 +65,32 @@ class _ClosedEvent:
 
 
 class DesktopLauncherUnitTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "The update helper uses Windows process creation flags.")
+    def test_hidden_powershell_helper_executes_with_create_no_window(self):
+        with tempfile.TemporaryDirectory(prefix="gim-hidden-helper-") as temp_dir:
+            marker = Path(temp_dir) / "helper-ran.txt"
+            powershell = (
+                Path(os.environ.get("WINDIR", r"C:\Windows"))
+                / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+            )
+            script = f"[IO.File]::WriteAllText('{marker}', 'executed')"
+            encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+            output_path = Path(temp_dir) / "helper-output.log"
+            with output_path.open("ab") as output:
+                helper = subprocess.Popen(
+                    [
+                        str(powershell), "-NoProfile", "-WindowStyle", "Hidden",
+                        "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded,
+                    ],
+                    close_fds=True,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+                self.assertEqual(helper.wait(timeout=15), 0)
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "executed")
+
     @unittest.skipUnless(os.name == "nt", "Verified release handoff uses Windows PowerShell.")
     def test_verified_update_handoff_logs_helper_and_preserves_failed_setup(self):
         with tempfile.TemporaryDirectory(prefix="gim-release-update-") as staging_dir, \
@@ -100,6 +126,10 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             self.assertEqual(command[0], str(powershell))
             self.assertEqual(popen.call_args.kwargs["stderr"], subprocess.STDOUT)
             self.assertEqual(Path(popen.call_args.kwargs["stdout"].name).name, "update-handoff.log")
+            creationflags = popen.call_args.kwargs["creationflags"]
+            self.assertTrue(creationflags & subprocess.CREATE_NO_WINDOW)
+            self.assertTrue(creationflags & subprocess.CREATE_NEW_PROCESS_GROUP)
+            self.assertFalse(creationflags & subprocess.DETACHED_PROCESS)
             popen.assert_called_once()
 
             parser_script = Path(windows_dir) / "parse-powershell.ps1"

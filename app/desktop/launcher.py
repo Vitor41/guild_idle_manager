@@ -260,7 +260,7 @@ try {
                 close_fds=True,
                 stdout=helper_output,
                 stderr=subprocess.STDOUT,
-                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
             )
     except Exception as exc:
         _append_update_handoff_log(log_file, "ERROR", f"Could not start PowerShell helper; setup preserved at {installer}; error={exc}")
@@ -409,7 +409,7 @@ def run() -> None:
                 cwd=repository_root,
                 env=environment,
                 close_fds=True,
-                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
             )
             logging.info("Restarted the desktop app from the current local checkout")
         except Exception as exc:

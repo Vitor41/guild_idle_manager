@@ -10,7 +10,7 @@
   <p>O atualizador consulta releases do canal desta instalação, valida o manifesto assinado e o hash do Setup e só o abre após sua confirmação.</p>
   <p role="status" aria-live="polite" data-release-update-status>{{ github_releases_status.reason }}</p>
   <button type="button" data-check-release-update {% if not github_releases_status.query_enabled %}disabled{% endif %}>Verificar GitHub Releases</button>
-  <form data-release-install-confirm data-confirm-always="true" data-confirm-title="Confirmar atualização" data-confirm-action="Fechar e abrir Setup" hidden>
+  <form action="/updates/install-release" method="post" data-native-submit="true" data-release-install-confirm data-confirm-always="true" data-confirm-title="Confirmar atualização" data-confirm-action="Fechar e abrir Setup" hidden>
     <button type="submit" data-install-release-update aria-haspopup="dialog" aria-controls="confirmation-dialog">Fechar e abrir Setup verificado</button>
   </form>
   <p class="note">A consulta só acontece quando você solicita e quando a origem, chave e canal desta instalação estão configurados. O Setup atualiza os arquivos do aplicativo com staging e rollback; os saves ficam em <code>%LOCALAPPDATA%\GuildIdleManager\saves</code>.</p>
@@ -30,7 +30,9 @@
         const response = await fetch('/updates/check', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
         const result = await response.json();
         if (!response.ok) throw new Error(result.reason || 'Consulta indisponível.');
-        releaseStatus.textContent = result.reason || 'Consulta concluída.';
+        releaseStatus.textContent = result.failed
+          ? `Não foi possível preparar a atualização (${result.failure_phase || 'verificação'}): ${result.reason}. Nenhuma instalação foi iniciada; tente verificar novamente.`
+          : (result.reason || 'Consulta concluída.');
         if (result.install_enabled && result.available) {
           preparedReleaseVersion = result.available_version;
           releaseInstallForm.dataset.confirmTitle = `Instalar versão ${preparedReleaseVersion}?`;
