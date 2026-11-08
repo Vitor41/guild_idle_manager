@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.guild import Guild
 from app.models.item import GuildInventoryItem
+from app.models.workshop import SupplyWorkshopJob
 from app.services.building_service import get_building_level
 from app.repositories.item_repository import add_inventory_quantity
 
@@ -22,11 +23,18 @@ def get_inventory_capacity(db: Session, guild: Guild) -> int:
 
 
 def get_inventory_usage(db: Session, guild_id: int) -> int:
-    return int(db.scalar(
+    stored = int(db.scalar(
         select(func.coalesce(func.sum(GuildInventoryItem.quantity), 0)).where(
             GuildInventoryItem.guild_id == guild_id,
         )
     ) or 0)
+    reserved = int(db.scalar(
+        select(func.coalesce(func.sum(SupplyWorkshopJob.kit_quantity), 0)).where(
+            SupplyWorkshopJob.guild_id == guild_id,
+            SupplyWorkshopJob.status == "in_progress",
+        )
+    ) or 0)
+    return stored + reserved
 
 
 def add_inventory_quantity_capped(
