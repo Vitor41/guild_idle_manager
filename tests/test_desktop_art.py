@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +16,28 @@ ART_ROOT = STATIC / "assets" / "desktop"
 
 
 class DesktopArtIntegrationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the JavaScript identity regression.")
+    def test_regional_notice_replaces_a_different_event_of_the_same_type(self):
+        script = r"""
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const match = source.match(/function regionalNoticeMatches\(current, replacement\) \{[\s\S]*?\n\}/);
+if (!match) throw new Error('regionalNoticeMatches helper is missing');
+const matches = new Function(`${match[0]}; return regionalNoticeMatches;`)();
+const first = {dataset: {eventId: 'event-a', eventDeadline: '2030-01-01T01:00:00Z'}};
+const sameEvent = {dataset: {eventId: 'event-a', eventDeadline: '2030-01-01T01:00:00Z'}};
+const nextEvent = {dataset: {eventId: 'event-b', eventDeadline: '2030-01-01T02:00:00Z'}};
+const changedDeadline = {dataset: {eventId: 'event-a', eventDeadline: '2030-01-01T03:00:00Z'}};
+if (!matches(first, sameEvent) || matches(first, nextEvent) || matches(first, changedDeadline)) process.exit(1);
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(STATIC / "js" / "main.js")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_desktop_art_reapplies_to_replaced_game_content_without_duplicate_decorations(self):
         script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
         main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
@@ -41,6 +65,8 @@ class DesktopArtIntegrationTests(unittest.TestCase):
         self.assertIn("uma entrada", portal_dialog)
         self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument)", main)
         self.assertIn("window.GIMEnqueueRegionalNotice?.(dialog)", main)
+        self.assertIn("regionalNoticeMatches(current, replacement)", main)
+        self.assertIn("GIMStartupModalQueue?.remove(current)", main)
         self.assertIn("deadline - right.deadline", main)
         self.assertIn('setInterval(() => {\n    if (!tableBody.isConnected) return;', main)
         self.assertIn('document.visibilityState === "hidden"', main)

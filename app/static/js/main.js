@@ -24,6 +24,11 @@ const startupModalQueue = (() => {
       pending.sort((left, right) => left.priority - right.priority || left.deadline - right.deadline || left.sequence - right.sequence);
       advance();
     },
+    remove(dialog) {
+      const index = pending.findIndex((row) => row.dialog === dialog);
+      if (index >= 0) pending.splice(index, 1);
+      if (active === dialog && dialog.open) dialog.close();
+    },
   };
 })();
 window.GIMStartupModalQueue = startupModalQueue;
@@ -521,11 +526,19 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   });
 }
 
+function regionalNoticeMatches(current, replacement) {
+  return current.dataset.eventId === replacement.dataset.eventId
+    && current.dataset.eventDeadline === replacement.dataset.eventDeadline;
+}
+window.GIMRegionalNoticeMatches = regionalNoticeMatches;
+
 function syncRegionalEventNoticeDialogs(parsedDocument) {
   const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
-  const incomingIds = new Set(incoming.map((dialog) => dialog.id));
+  const incomingById = new Map(incoming.filter((dialog) => dialog.id).map((dialog) => [dialog.id, dialog]));
   for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
-    if (incomingIds.has(current.id)) continue;
+    const replacement = incomingById.get(current.id);
+    if (replacement && regionalNoticeMatches(current, replacement)) continue;
+    window.GIMStartupModalQueue?.remove(current);
     if (current.open) current.close();
     current.remove();
   }

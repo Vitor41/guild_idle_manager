@@ -142,7 +142,7 @@
       </dialog>
     {% endif %}
     {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path == '/regional' and pending_rebellion_invite %}
-      <dialog class="evolution-dialog regional-rebellion-dialog regional-event-notice" id="regional-rebellion-notice" data-regional-event-notice data-event-deadline="{{ pending_rebellion_invite.priority_ends_at_iso }}" aria-labelledby="regional-rebellion-title" aria-describedby="regional-rebellion-description">
+      <dialog class="evolution-dialog regional-rebellion-dialog regional-event-notice" id="regional-rebellion-notice" data-regional-event-notice data-event-id="{{ pending_rebellion_invite.event_id }}" data-event-deadline="{{ pending_rebellion_invite.priority_ends_at_iso }}" aria-labelledby="regional-rebellion-title" aria-describedby="regional-rebellion-description">
         <form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar convite">×</button></form>
         <div class="regional-rebellion-dialog__content">
           <div class="regional-event-notice__art"><img src="/static/assets/desktop/evolution/illustrations/regional-rebellion.webp" alt=""><img src="/static/assets/desktop/evolution/sprites/ui_64/rebellion-shield.png" width="64" height="64" alt=""></div>
@@ -158,7 +158,7 @@
       </dialog>
     {% endif %}
     {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path == '/regional' and pending_portal_notice %}
-      <dialog class="evolution-dialog regional-portal-dialog regional-event-notice" id="regional-portal-notice" data-regional-event-notice data-event-deadline="{{ pending_portal_notice.expires_at_iso }}" aria-labelledby="regional-portal-title" aria-describedby="regional-portal-description">
+      <dialog class="evolution-dialog regional-portal-dialog regional-event-notice" id="regional-portal-notice" data-regional-event-notice data-event-id="{{ pending_portal_notice.event_id }}" data-event-deadline="{{ pending_portal_notice.expires_at_iso }}" aria-labelledby="regional-portal-title" aria-describedby="regional-portal-description">
         <form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar aviso do portal">×</button></form>
         <div class="regional-portal-dialog__content">
           <div class="regional-event-notice__art"><img src="/static/assets/desktop/evolution/illustrations/dimensional-portal.webp" alt=""><img src="/static/assets/desktop/evolution/sprites/ui_64/portal-gate.png" width="64" height="64" alt=""></div>
