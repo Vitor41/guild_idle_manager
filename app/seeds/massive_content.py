@@ -16,7 +16,7 @@ from app.models.regional import RegionalOffer
 
 
 PACK_KEY = "conteudo_massivo_pos_mvp026"
-PACK_VERSION = 5
+PACK_VERSION = 6
 REQUIRED_MEAT_GATHERING_SLUG = "material_meat_1_001"
 BANDS = (
     ("1-20", 1, 20, 1, (10, 25, 45)),
@@ -66,7 +66,7 @@ def _ensure_docks_template(db: Session) -> BuildingTemplate:
     return docks
 
 
-def _material_rows() -> list[dict[str, object]]:
+def _material_families() -> dict[str, tuple[str, int, list[str]]]:
     families = {
         "wood": ("Madeira", 40, ["Bruta", "de Carvalho", "Sombria", "Arcana", "Ancestral"]),
         "ore": ("Minério", 50, ["de Cobre", "de Ferro", "de Prata", "de Mithril", "Estelar"]),
@@ -82,16 +82,30 @@ def _material_rows() -> list[dict[str, object]]:
         "catalyst": ("Catalisador", 30, ["Simples", "Alquímico", "Arcano", "Abissal", "Eterno"]),
         "insignia": ("Insígnia", 20, ["de Bronze", "de Prata", "Dourada", "Heroica", "Lendária"]),
     }
+    return families
+
+
+MATERIAL_PROGRESS_STAGES = (
+    (1, 20, "common"),
+    (21, 50, "uncommon"),
+    (51, 100, "rare"),
+    (101, 200, "epic"),
+    (201, 300, "legendary"),
+    (301, 350, "mythic"),
+)
+
+
+def _legacy_material_rows() -> list[dict[str, object]]:
+    """Return v5 canonical rows for safe, field-by-field content migration."""
     rows: list[dict[str, object]] = []
     global_index = 0
-    for family, (base, count, variants) in families.items():
+    for family, (base, count, variants) in _material_families().items():
         for local_index in range(count):
             band, low, high, tier, _ = _band_for_index(local_index)
             variant = variants[(local_index // len(BANDS)) % len(variants)]
-            name = f"{base} {variant} {tier}-{local_index + 1:02d}"
             rows.append({
                 "slug": f"material_{family}_{tier}_{local_index + 1:03d}",
-                "name": name,
+                "name": f"{base} {variant} {tier}-{local_index + 1:02d}",
                 "description": f"Recurso de {base.lower()} obtido em regiões de nível {low} a {high}.",
                 "item_type": "material",
                 "rarity": _rarity(global_index),
@@ -107,6 +121,105 @@ def _material_rows() -> list[dict[str, object]]:
             })
             global_index += 1
     return rows
+
+
+def _material_rows() -> list[dict[str, object]]:
+    families = _material_families()
+    rows: list[dict[str, object]] = []
+    for family, (base, count, variants) in families.items():
+        for local_index in range(count):
+            stage_index = min(len(MATERIAL_PROGRESS_STAGES) - 1, local_index * len(MATERIAL_PROGRESS_STAGES) // count)
+            start_index = (count * stage_index + len(MATERIAL_PROGRESS_STAGES) - 1) // len(MATERIAL_PROGRESS_STAGES)
+            end_index = (count * (stage_index + 1) + len(MATERIAL_PROGRESS_STAGES) - 1) // len(MATERIAL_PROGRESS_STAGES)
+            position = local_index - start_index
+            stage_count = max(1, end_index - start_index)
+            stage_min, stage_max, rarity = MATERIAL_PROGRESS_STAGES[stage_index]
+            item_level = stage_min + (position * (stage_max - stage_min) // max(1, stage_count - 1))
+            band, _, _, tier, _ = next(
+                band_data for band_data in BANDS if band_data[1] <= item_level <= band_data[2]
+            )
+            # Keep v5 slugs and base values stable; both are identity/economy,
+            # while the exposed tier/name now follows the actual unlock band.
+            legacy_tier = _band_for_index(local_index)[3]
+            variant = variants[min(stage_index, len(variants) - 1)]
+            name = f"{base} {variant} {tier}-{local_index + 1:02d}"
+            rows.append({
+                "slug": f"material_{family}_{legacy_tier}_{local_index + 1:03d}",
+                "name": name,
+                "description": f"Recurso de {base.lower()} desbloqueado para guildas de nível {stage_min} a {stage_max}.",
+                "item_type": "material",
+                "rarity": rarity,
+                "item_level": item_level,
+                "level_band": band,
+                "tier": tier,
+                "content_pack": PACK_KEY,
+                "material_family": family,
+                "icon_group": family,
+                "required_level": stage_min,
+                "base_sell_value": max(2, legacy_tier * legacy_tier * 3),
+                "is_active": True,
+            })
+    return rows
+
+
+def _reconcile_material_progression(db: Session) -> int:
+    """Migrate canonical v5 metadata while retaining per-field admin edits."""
+    legacy_by_slug = {row["slug"]: row for row in _legacy_material_rows()}
+    current_by_slug = {row["slug"]: row for row in _material_rows()}
+    items = list(db.scalars(select(ItemTemplate).where(
+        ItemTemplate.content_pack == PACK_KEY, ItemTemplate.item_type == "material",
+    )))
+    by_id = {item.id: item for item in items}
+    canonical_pairs = {
+        item.id: (legacy_by_slug.get(item.slug), current_by_slug.get(item.slug))
+        for item in items
+    }
+    name_updates = {
+        item_id: new["name"]
+        for item_id, (old, new) in canonical_pairs.items()
+        if old is not None and new is not None
+        and by_id[item_id].name == old["name"]
+        and by_id[item_id].name != new["name"]
+    }
+    owners = {name: item_id for name, item_id in db.execute(select(ItemTemplate.name, ItemTemplate.id))}
+    eligible_name_ids = set(name_updates)
+    while True:
+        safe_ids = {
+            item_id for item_id in eligible_name_ids
+            if owners.get(str(name_updates[item_id])) is None
+            or owners.get(str(name_updates[item_id])) in eligible_name_ids
+        }
+        if safe_ids == eligible_name_ids:
+            break
+        eligible_name_ids = safe_ids
+    for item_id in eligible_name_ids:
+        by_id[item_id].name = f"__gim_lot_b_material_{item_id}__"
+        db.add(by_id[item_id])
+    if eligible_name_ids:
+        db.flush()
+
+    updated = 0
+    fields = ("description", "rarity", "item_level", "level_band", "tier", "required_level")
+    for item in items:
+        old, new = canonical_pairs[item.id]
+        if old is None or new is None:
+            continue
+        changed = False
+        if item.id in eligible_name_ids:
+            item.name = str(name_updates[item.id])
+            changed = True
+        for field in fields:
+            if getattr(item, field) == old[field]:
+                value = new[field]
+                if getattr(item, field) != value:
+                    setattr(item, field, value)
+                    changed = True
+        if changed:
+            db.add(item)
+            updated += 1
+    if updated:
+        db.flush()
+    return updated
 
 
 def _equipment_rows() -> list[dict[str, object]]:
@@ -344,6 +457,8 @@ def run_massive_content_seed(
 
     if deactivate_legacy_defaults:
         deactivate_obsolete_legacy_missions(db)
+
+    _reconcile_material_progression(db)
 
     family_labels = {"wood": "madeiras", "ore": "minérios", "herb": "ervas", "meat": "carnes", "leather": "couros", "cloth": "fibras", "gem": "gemas", "relic": "relíquias", "essence": "essências"}
 

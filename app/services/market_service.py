@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from math import floor
 from threading import Lock
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.guild import Guild, GuildResources
@@ -11,6 +11,7 @@ from app.repositories.item_repository import (
     delete_item_instance,
     get_inventory_item,
     get_item_instance_by_guild,
+    add_inventory_quantity,
     remove_inventory_quantity,
 )
 from app.repositories.market_repository import (
@@ -25,6 +26,7 @@ from app.services.inventory_service import get_equipment_for_guild, get_inventor
 from app.core.game_balance import MARKET_RARITY_SECONDS
 from app.core.time import prepare_timer_context
 from app.services.building_balance_service import market_values
+from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 from app.services.economy_pricing_service import market_sale_unit_value
 from app.services.achievement_service import record_guild_stat
 
@@ -52,8 +54,8 @@ def get_market_bonuses(db: Session, guild_id: int) -> dict[str, int]:
     return {"level": level, **market_values(level)}
 
 
-def _sale_duration_seconds(rarity: str, tier: int, quantity: int, reduction: int) -> int:
-    base = RARITY_SECONDS.get(rarity, 30) * max(1, tier) * max(1, quantity)
+def _sale_duration_seconds(rarity: str, quantity: int, reduction: int) -> int:
+    base = RARITY_SECONDS.get(rarity, 30) * max(1, quantity)
     return max(5, floor(base * (100 - reduction) / 100))
 
 
@@ -83,7 +85,8 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
         item.market_max_quantity = int(item.quantity) if slots_available else 0
     for sale in active_sales:
         prepare_timer_context(sale, now)
-    completed_sales = [sale for sale in sales if sale.status == "completed"][:10]
+        sale.cancelable = not sale.ready_for_loot
+    completed_sales = [sale for sale in sales if sale.status in {"completed", "cancelled"}][:10]
     return {
         "market": market,
         "inventory_items": inventory_items,
@@ -94,6 +97,7 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
         "active_sales": active_sales,
         "ready_sales_count": sum(1 for sale in active_sales if sale.ready_for_loot),
         "completed_sales": completed_sales,
+        "rarity_seconds": RARITY_SECONDS,
         "now": now,
     }
 
@@ -152,7 +156,7 @@ def _start_sale(db, guild, item_template, quantity, inventory_item=None, item_in
     started_at = utc_now()
     unit_value = _sale_unit_value(item_template.base_sell_value, bonuses["value_bonus_percent"])
     ends_at = started_at + timedelta(seconds=_sale_duration_seconds(
-        item_template.rarity, item_template.tier, quantity, bonuses["time_reduction_percent"]
+        item_template.rarity, quantity, bonuses["time_reduction_percent"]
     ))
     sale = create_market_sale(db, {
         "guild_id": guild.id,
@@ -182,16 +186,32 @@ def collect_market_sale(
     sale_id: int,
     *,
     commit: bool = True,
+    now: datetime | None = None,
 ) -> MarketSale:
     if resources is None:
         raise MarketError("Recursos da guilda indisponiveis.")
     sale = get_market_sale_by_guild(db, guild.id, sale_id)
     if sale is None or sale.status != "in_progress":
         raise MarketError("Venda nao encontrada ou ja coletada.")
-    now = utc_now()
+    now = now or utc_now()
+    now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
     ends_at = sale.ends_at if sale.ends_at.tzinfo else sale.ends_at.replace(tzinfo=timezone.utc)
     if now < ends_at:
         raise MarketError("A venda ainda nao foi concluida.")
+
+    claimed = db.execute(
+        update(MarketSale)
+        .where(
+            MarketSale.id == sale_id,
+            MarketSale.guild_id == guild.id,
+            MarketSale.status == "in_progress",
+            MarketSale.ends_at <= now,
+        )
+        .values(status="completed", collected_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        raise MarketError("Venda nao encontrada, cancelada ou ja coletada.")
 
     resources.gold += sale.total_value
     add_guild_xp(guild, 2 if sale.total_value >= 100 else 1)
@@ -206,6 +226,77 @@ def collect_market_sale(
     db.add(resources)
     db.add(guild)
     record_guild_stat(db, guild.id, "market_sales", 1)
+    if commit:
+        db.commit()
+        db.refresh(sale)
+    else:
+        db.flush()
+    return sale
+
+
+def cancel_market_sale(
+    db: Session,
+    guild: Guild,
+    sale_id: int,
+    *,
+    commit: bool = True,
+    now: datetime | None = None,
+) -> MarketSale:
+    sale = get_market_sale_by_guild(db, guild.id, sale_id)
+    if sale is None or sale.status != "in_progress":
+        raise MarketError("Venda nao encontrada ou ja finalizada.")
+    explicit_now = now is not None
+    now = now or utc_now()
+    now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    ends_at = sale.ends_at if sale.ends_at.tzinfo else sale.ends_at.replace(tzinfo=timezone.utc)
+    if now >= ends_at:
+        raise MarketError("O prazo terminou; esta venda esta pronta para coleta e nao pode ser cancelada.")
+
+    item_instance = sale.item_instance
+    if sale.item_template.item_type == "equipment" and item_instance is None:
+        raise MarketError("A instancia do equipamento nao esta mais reservada; a venda nao foi alterada.")
+    if sale.item_template.item_type == "material" and item_instance is not None:
+        raise MarketError("A reserva do item esta inconsistente; a venda nao foi alterada.")
+    if sale.item_template.item_type not in {"equipment", "material"}:
+        raise MarketError("Este tipo de item nao pode ser cancelado pelo Mercado.")
+    if item_instance is not None and item_instance.guild_id != guild.id:
+        raise MarketError("Equipamento reservado invalido para esta guilda.")
+    if item_instance is None:
+        capacity = get_inventory_capacity(db, guild)
+        used = get_inventory_usage(db, guild.id)
+        if used + sale.quantity > capacity:
+            raise MarketError(
+                "Nao ha espaco suficiente no Armazem para devolver todos os itens; "
+                "libere espaco e tente novamente."
+            )
+
+    transition_at = now if explicit_now else utc_now()
+    if transition_at >= ends_at:
+        raise MarketError("O prazo terminou; esta venda esta pronta para coleta e nao pode ser cancelada.")
+
+    claimed = db.execute(
+        update(MarketSale)
+        .where(
+            MarketSale.id == sale_id,
+            MarketSale.guild_id == guild.id,
+            MarketSale.status == "in_progress",
+            MarketSale.ends_at > transition_at,
+        )
+        .values(status="cancelled", cancelled_at=transition_at)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        raise MarketError("A venda mudou de estado; confira o Mercado antes de tentar novamente.")
+
+    if item_instance is None:
+        add_inventory_quantity(db, guild.id, sale.item_template_id, sale.quantity)
+    else:
+        # Releasing the unique sale FK makes this exact instance available again.
+        sale.item_instance_id = None
+        db.flush()
+    sale.status = "cancelled"
+    sale.cancelled_at = transition_at
+    db.add(sale)
     if commit:
         db.commit()
         db.refresh(sale)

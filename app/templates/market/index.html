@@ -17,16 +17,27 @@
       <div><dt>Redução de tempo</dt><dd>{{ market.time_reduction_percent }}%</dd></div>
       <div><dt>Bônus de valor</dt><dd>{{ market.value_bonus_percent }}%</dd></div>
     </dl>
+    <div class="market-duration-reference" aria-labelledby="market-duration-title">
+      <h2 id="market-duration-title">Tempo base por raridade</h2>
+      <table><thead><tr><th>Raridade</th><th>Tempo</th></tr></thead><tbody>
+        {% for rarity, seconds in rarity_seconds.items() %}<tr><td><span class="rarity-badge rarity-{{ rarity }}">{{ {'common':'Comum','uncommon':'Incomum','rare':'Raro','epic':'Épico','legendary':'Lendário','mythic':'Mítico'}[rarity] }}</span></td><td>{{ seconds }} s por unidade</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
     <p class="note">A quantidade anunciável considera o estoque disponível e os espaços livres do Mercado.</p>
   </section>
 
   <section class="panel" aria-labelledby="active-sales-title">
     <div class="section-heading"><div><h2 id="active-sales-title">Vendas em andamento</h2><p class="note">O relógio do servidor define quando a coleta é liberada.</p></div><form method="post" action="/market/collect-all"><button {% if ready_sales_count == 0 %}disabled{% endif %}>Coletar tudo{% if ready_sales_count > 0 %} ({{ ready_sales_count }}){% endif %}</button></form></div>
     {% if active_sales %}<div class="market-grid">
-      {% for sale in active_sales %}<article class="market-sale-card rarity-{{ sale.item_template.rarity }}">
-        <div><h3>{{ sale.item_template.name }}</h3><p class="note">{{ sale.quantity }} unidade(s) por {{ sale.unit_value }} ouro</p></div>
-        <dl class="inline-stats"><div><dt>Valor total</dt><dd>{{ sale.total_value }}</dd></div><div><dt>Tempo</dt><dd class="mission-timer" data-ends-at="{{ sale.ends_at_iso }}">Calculando...</dd></div></dl>
-        <form method="post" action="/market/{{ sale.id }}/collect"><button class="claim-button" data-ends-at="{{ sale.ends_at_iso }}" {% if not sale.ready_for_loot %}disabled{% endif %}>Coletar venda</button></form>
+      {% for sale in active_sales %}<article class="market-sale-card rarity-{{ sale.item_template.rarity }}" data-market-sale="{{ sale.id }}">
+        <div><h3>{{ sale.item_template.name }}</h3><p><span class="rarity-badge rarity-{{ sale.item_template.rarity }}">{{ {'common':'Comum','uncommon':'Incomum','rare':'Raro','epic':'Épico','legendary':'Lendário','mythic':'Mítico'}.get(sale.item_template.rarity, sale.item_template.rarity) }}</span></p><p class="note">À venda · {{ sale.quantity }} unidade(s) por {{ sale.unit_value }} ouro</p></div>
+        <dl class="inline-stats"><div><dt>Valor total</dt><dd>{{ sale.total_value }} ouro</dd></div><div><dt>Prazo absoluto</dt><dd>{{ sale.ends_at.strftime('%d/%m/%Y %H:%M') }} UTC</dd></div><div><dt>Tempo restante</dt><dd class="mission-timer" data-ends-at="{{ sale.ends_at_iso }}">Calculando...</dd></div></dl>
+        {% if attention_sale_id|string == sale.id|string and error %}<p class="error-message" role="alert">{{ error }} Estado atual carregado do servidor.</p>{% endif %}
+        {% if sale.ready_for_loot %}<p class="market-sale-state" role="status">Venda concluída · ouro pronto</p>{% else %}<p class="market-sale-state">À venda · cancelamento disponível até o prazo acima.</p>{% endif %}
+        <div class="market-sale-actions">
+          <form method="post" action="/market/{{ sale.id }}/collect"><button class="claim-button" data-ends-at="{{ sale.ends_at_iso }}" {% if not sale.ready_for_loot %}disabled{% endif %}>Coletar venda</button></form>
+          {% if sale.cancelable %}<form method="post" action="/market/{{ sale.id }}/cancel" data-confirm-title="Cancelar venda?" data-confirm-message="{{ sale.item_template.name }}{% if sale.item_instance_id %} (1 equipamento){% else %} ({{ sale.quantity }} unidade(s)){% endif %} voltará ao inventário e liberará um espaço do Mercado. Você receberá 0 ouro." data-confirm-action="Confirmar cancelamento" data-confirm-variant="danger" data-confirm-always="true"><button class="secondary-button" type="submit">Cancelar venda</button></form>{% else %}<p class="note">Prazo encerrado. A venda está pronta para coleta e não pode ser cancelada.</p>{% endif %}
+        </div>
       </article>{% endfor %}
     </div>{% else %}<p class="note">Nenhum item anunciado.</p>{% endif %}
   </section>
@@ -37,7 +48,7 @@
         <article class="market-item-row rarity-{{ item.item_template.rarity }}">
           <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ item.item_template.icon_group or '' }}" data-desktop-item-slot="{{ item.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ item.item_template.material_family or '' }}">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
           <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | Disponível: {{ item.quantity }} | {{ item.item_template.base_sell_value }} ouro/un.</small></div>
-          <div class="market-item-action"><form class="inline-form" method="post" action="/market/sell/material"><input type="hidden" name="item_template_id" value="{{ item.item_template_id }}"><input type="number" name="quantity" min="1" max="{{ item.market_max_quantity }}" value="{{ 1 if item.market_max_quantity else 0 }}" aria-label="Quantidade para anunciar" data-market-quantity><button class="market-max-button" type="button" data-market-fill-max data-max="{{ item.market_max_quantity }}" title="Preencher maior quantidade anunciável" aria-label="Preencher maior quantidade anunciável" {% if item.market_max_quantity < 1 %}disabled{% endif %}>MAX</button><button {% if item.market_max_quantity < 1 %}disabled{% endif %}>Vender</button></form>{% if active_sales|length >= market.slots %}<small>Indisponível: todos os espaços de venda estão ocupados.</small>{% elif item.market_max_quantity < item.quantity %}<small>Máximo neste anúncio: {{ item.market_max_quantity }} unidade(s), considerando o estoque disponível.</small>{% endif %}</div>
+          <div class="market-item-action"><form class="inline-form" method="post" action="/market/sell/material" data-market-estimator data-duration-base="{{ rarity_seconds.get(item.item_template.rarity, 30) }}" data-time-reduction="{{ market.time_reduction_percent }}"><input type="hidden" name="item_template_id" value="{{ item.item_template_id }}"><input type="number" name="quantity" min="1" max="{{ item.market_max_quantity }}" value="{{ 1 if item.market_max_quantity else 0 }}" aria-label="Quantidade para anunciar" data-market-quantity><button class="market-max-button" type="button" data-market-fill-max data-max="{{ item.market_max_quantity }}" title="Preencher maior quantidade anunciável" aria-label="Preencher maior quantidade anunciável" {% if item.market_max_quantity < 1 %}disabled{% endif %}>MAX</button><button {% if item.market_max_quantity < 1 %}disabled{% endif %}>Vender</button><p class="market-sale-estimate" data-market-estimate role="status" aria-live="polite"></p></form>{% if active_sales|length >= market.slots %}<small>Indisponível: todos os espaços de venda estão ocupados.</small>{% elif item.market_max_quantity < item.quantity %}<small>Máximo neste anúncio: {{ item.market_max_quantity }} unidade(s), considerando o estoque disponível.</small>{% endif %}</div>
         </article>
       {% endfor %}</div>{% else %}<p class="note">Nenhum item acumulavel disponivel.</p>{% endif %}
     </section>
@@ -46,14 +57,14 @@
         <article class="market-item-row rarity-{{ item.item_template.rarity }}">
           <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ item.item_template.icon_group or '' }}" data-desktop-item-slot="{{ item.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ item.item_template.material_family or '' }}">{% if item.icon_path %}<img class="asset-icon item-icon-img" src="{{ url_for('static', path=item.icon_path) }}" alt="">{% else %}<span>◇</span>{% endif %}</div>
           <div><strong>{{ item.item_template.name }}</strong><small>{{ item.rarity_label }} | {{ item.item_template.base_sell_value }} ouro</small></div>
-          <form method="post" action="/market/sell/equipment" data-confirm-title="Anunciar equipamento?" data-confirm-message="O equipamento ficara reservado ate a conclusao da venda." data-confirm-action="Anunciar"><input type="hidden" name="item_instance_id" value="{{ item.id }}"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button></form>
+          <form method="post" action="/market/sell/equipment" data-confirm-title="Anunciar equipamento?" data-confirm-message="O equipamento ficará reservado até o prazo da venda. Seu prazo estimado aparece abaixo." data-confirm-action="Anunciar"><input type="hidden" name="item_instance_id" value="{{ item.id }}"><button {% if market.level == 0 or active_sales|length >= market.slots %}disabled{% endif %}>Vender</button><p class="market-sale-estimate" data-market-estimator data-duration-base="{{ rarity_seconds.get(item.item_template.rarity, 30) }}" data-time-reduction="{{ market.time_reduction_percent }}" data-market-estimate role="status" aria-live="polite"></p></form>
         </article>
       {% endfor %}</div>{% else %}<p class="note">Nenhum equipamento livre para venda.</p>{% endif %}
     </section>
   </div>
 
   <section class="panel table-panel"><h2>Histórico recente</h2>
-    {% if completed_sales %}<div class="table-wrap"><table><thead><tr><th>Item</th><th>Quantidade</th><th>Ouro</th><th>Coletado em</th></tr></thead><tbody>{% for sale in completed_sales %}<tr><td>{{ sale.item_template.name }}</td><td>{{ sale.quantity }}</td><td>{{ sale.total_value }}</td><td>{{ sale.collected_at.strftime('%d/%m/%Y %H:%M') if sale.collected_at else '-' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="note">Nenhuma venda coletada ainda.</p>{% endif %}
+    {% if completed_sales %}<div class="table-wrap"><table><thead><tr><th>Estado</th><th>Item</th><th>Quantidade</th><th>Ouro recebido</th><th>Data</th></tr></thead><tbody>{% for sale in completed_sales %}<tr data-market-history="{{ sale.id }}"><td>{% if sale.status == 'cancelled' %}Cancelada · itens devolvidos{% else %}Coletada{% endif %}</td><td>{{ sale.item_template.name }}</td><td>{{ sale.quantity }}</td><td>{{ 0 if sale.status == 'cancelled' else sale.total_value }}</td><td>{{ (sale.cancelled_at or sale.collected_at).strftime('%d/%m/%Y %H:%M') if (sale.cancelled_at or sale.collected_at) else '-' }} UTC</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="note">Nenhuma venda concluída ainda.</p>{% endif %}
   </section>
   {% endif %}
 </section>

@@ -8,6 +8,7 @@ from app.database.connection import Base
 
 if TYPE_CHECKING:
     from app.models.guild import Guild
+    from app.models.item import ItemTemplate
     from app.models.mercenary import Mercenary
 
 
@@ -25,6 +26,9 @@ class GatheringAssignment(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     guild_id: Mapped[int] = mapped_column(ForeignKey("guilds.id"), nullable=False, index=True)
     mercenary_id: Mapped[int] = mapped_column(ForeignKey("mercenaries.id"), nullable=False, index=True)
+    target_item_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("item_templates.id"), nullable=True, index=True,
+    )
     resource_family: Mapped[str] = mapped_column(String(30), nullable=False)
     node_code: Mapped[str] = mapped_column(String(80), nullable=False)
     progress_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -39,3 +43,4 @@ class GatheringAssignment(Base):
 
     guild: Mapped["Guild"] = relationship()
     mercenary: Mapped["Mercenary"] = relationship()
+    target_item_template: Mapped["ItemTemplate | None"] = relationship()

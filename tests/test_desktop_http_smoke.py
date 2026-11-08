@@ -107,9 +107,12 @@ with tempfile.TemporaryDirectory() as data_dir:
     with SessionLocal() as db:
         guild = db.query(Guild).first()
         mercenary_class = db.query(MercenaryClass).order_by(MercenaryClass.id).first()
-        item_template = db.query(ItemTemplate).filter(ItemTemplate.icon_group.is_not(None)).order_by(ItemTemplate.id).first()
+        item_template = db.query(ItemTemplate).filter(
+            ItemTemplate.icon_group.is_not(None), ItemTemplate.item_type == "material",
+        ).order_by(ItemTemplate.id).first()
         assert guild and mercenary_class and item_template, "campaign must seed display entities for the desktop art smoke"
         guild_id = guild.id
+        smoke_market_item_template_id = item_template.id
         mercenary_class_id = mercenary_class.id
         mercenary = create_mercenary(db, guild.id, mercenary_class, "Teste visual")
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
@@ -219,8 +222,12 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.flush()
         db.add_all([MissionRunMember(mission_run_id=mission_run.id, mercenary_id=mercenary.id),
             DungeonRunMember(dungeon_run_id=dungeon_run.id, mercenary_id=mercenary.id)])
-        db.add(MarketSale(guild_id=guild.id, item_template_id=item_template.id, quantity=1, unit_value=1,
-            total_value=1, started_at=now, ends_at=later))
+        smoke_market_sale = MarketSale(guild_id=guild.id, item_template_id=item_template.id, quantity=1, unit_value=1,
+            total_value=1, started_at=now, ends_at=later)
+        db.add(smoke_market_sale)
+        db.flush()
+        smoke_market_sale_id = smoke_market_sale.id
+        initial_market_gold = db.query(GuildResources).filter_by(guild_id=guild.id).one().gold
         db.add(ProfessionTraining(guild_id=guild.id, mercenary_id=mercenary.id, profession_id=profession.id,
             started_at=now, ends_at=later))
         db.add(ClassChangeRun(guild_id=guild.id, mercenary_id=mercenary.id, from_class_id=mercenary.class_id,
@@ -340,7 +347,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert "RuntimeError: Falha de consulta da tela de atividades" in desktop_trace
         rendered_pages = {}
         regional_outcome_path = f"/regional/regions/{regional_outcome_region_code}"
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", regional_outcome_path, "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", regional_outcome_path, "/codex", "/guide", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
         for path in page_paths:
             if path in {"/dashboard", "/regional"}:
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
@@ -389,7 +396,31 @@ with tempfile.TemporaryDirectory() as data_dir:
         close_campaign(app, saves, guard)
         open_campaign(app, saves, guard, campaign.campaign_id)
         assert b"data-market-fill-max" in rendered_pages["/market"]
+        assert b"alvo fica fixo at\xc3\xa9 liberar o trabalhador" in rendered_pages["/guide"]
+        assert b"cancelar antes do prazo" in rendered_pages["/guide"]
         assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
+        assert b">Tempo base por raridade<" in rendered_pages["/market"]
+        assert b"data-market-estimate" in rendered_pages["/market"]
+        assert b"/market/" + str(smoke_market_sale_id).encode("ascii") + b"/cancel" in rendered_pages["/market"]
+        assert b"T1\xe2\x80\x93T8" not in rendered_pages["/market"] and b"T1-T8" not in rendered_pages["/market"]
+        for duration in (b"10 s por unidade", b"25 s por unidade", b"60 s por unidade", b"180 s por unidade", b"600 s por unidade", b"1200 s por unidade"):
+            assert duration in rendered_pages["/market"], duration
+        assert b"Pr\xc3\xb3ximo alvo dispon\xc3\xadvel" in rendered_pages["/gathering"]
+
+        cancel_status, cancel_location, cancel_body = request(
+            f"/market/{smoke_market_sale_id}/cancel", method="POST",
+        )
+        assert cancel_status == 303 and "Venda%20cancelada" in cancel_location, (cancel_status, cancel_location, cancel_body[:400])
+        with SessionLocal() as db:
+            cancelled_sale = db.get(MarketSale, smoke_market_sale_id)
+            assert cancelled_sale.status == "cancelled" and cancelled_sale.cancelled_at is not None
+            assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == initial_market_gold
+            assert db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=smoke_market_item_template_id,
+            ).one().quantity >= 2
+            assert db.query(MarketSale).filter_by(guild_id=guild_id, status="in_progress").count() == 0
+        cancelled_market_status, _cancelled_market_location, cancelled_market_body = request("/market")
+        assert cancelled_market_status == 200 and b"Cancelada \xc2\xb7 itens devolvidos" in cancelled_market_body
 
         with SessionLocal() as db:
             db.query(GuildBuilding).filter_by(guild_id=guild_id).delete(synchronize_session=False)
@@ -608,6 +639,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         with SessionLocal() as db:
             assignment = db.query(GatheringAssignment).filter_by(mercenary_id=gathering_worker_id, resource_family="wood").one_or_none()
             assert assignment is not None, "gathering form POST must persist its worker assignment"
+            assert assignment.target_item_template_id is not None, "new assignment must persist its exact material target"
+            wood_target_id = assignment.target_item_template_id
             gathering_worker = db.get(Mercenary, gathering_worker_id)
             assert gathering_worker.status == "gathering"
             from app.services.gathering_service import advance_all_assignments
@@ -619,6 +652,18 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.commit()
             db.refresh(assignment)
             assert assignment.cycle_count == 1 and assignment.progress_seconds == 0
+            assert assignment.target_item_template_id == wood_target_id
+
+        with SessionLocal() as db:
+            db.get(Guild, guild_id).level = 7
+            db.commit()
+        stable_gathering_status, _stable_gathering_location, stable_gathering_body = request("/gathering")
+        assert stable_gathering_status == 200 and b"Alvo desta designa\xc3\xa7\xc3\xa3o" in stable_gathering_body
+        with SessionLocal() as db:
+            assignment = db.query(GatheringAssignment).filter_by(mercenary_id=gathering_worker_id).one()
+            assert assignment.target_item_template_id == wood_target_id
+            db.get(Guild, guild_id).level = 1
+            db.commit()
 
         with SessionLocal() as db:
             assignment = db.query(GatheringAssignment).filter_by(
@@ -669,6 +714,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert live_status == 200, live_body[:300]
         assert live_payload["advanced"]["leather"]["cycles"] == 1, live_payload
         assert live_payload["inventory_by_family"]["leather"] == 1, live_payload
+        assert live_payload["assignments"]["leather"]["target_item_template_id"] is not None
+        assert live_payload["assignments"]["leather"]["target_item_name"]
         with SessionLocal() as db:
             wood_assignment = db.query(GatheringAssignment).filter_by(
                 mercenary_id=gathering_worker_id, resource_family="wood",

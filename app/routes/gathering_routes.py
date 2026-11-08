@@ -11,7 +11,7 @@ from app.core.forms import read_form_fields
 from app.desktop.gameplay_diagnostics import log_gameplay_action, log_gathering_advancement
 from app.models.mercenary import Mercenary
 from app.models.user import User
-from app.services.gathering_service import advance_all_assignments, assign_worker, get_inventory_quantity_by_family, list_assignments, release_worker, FAMILY_LABELS, NODE_LABELS
+from app.services.gathering_service import advance_all_assignments, assign_worker, get_inventory_quantity_by_family, list_assignments, preview_material_for_family, release_worker, FAMILY_LABELS, NODE_LABELS
 from app.services.guild_service import get_current_guild_context
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 
@@ -51,6 +51,9 @@ def gathering_live_status(
                 "progress_seconds": assignment.progress_seconds,
                 "capacity_paused": assignment.capacity_paused,
                 "worker": assignment.mercenary.name,
+                "target_item_template_id": assignment.target_item_template_id,
+                "target_item_name": assignment.target_item_template.name if assignment.target_item_template else None,
+                "target_item_rarity": assignment.target_item_template.rarity if assignment.target_item_template else None,
             }
             for assignment in assignments
         },
@@ -91,6 +94,16 @@ def gathering_index(
     )
     db.commit()
     assignments = list_assignments(db, guild.id)
+    material_previews = {
+        family: preview_material_for_family(db, family, guild.level)
+        for family in FAMILY_LABELS
+    }
+    for material in material_previews.values():
+        if material is not None:
+            material.rarity_label = {
+                "common": "Comum", "uncommon": "Incomum", "rare": "Raro",
+                "epic": "Épico", "legendary": "Lendário", "mythic": "Mítico",
+            }.get(material.rarity, material.rarity)
     assigned_ids = {entry.mercenary_id for entry in assignments}
     workers = list(db.scalars(
         select(Mercenary).where(Mercenary.guild_id == guild.id).order_by(Mercenary.name)
@@ -103,6 +116,7 @@ def gathering_index(
             "guild": guild,
             "resources": resources,
             "assignments": assignments,
+            "material_previews": material_previews,
             "workers": [worker for worker in workers if worker.id not in assigned_ids and worker.status == "available"],
             "family_labels": FAMILY_LABELS,
             "node_labels": NODE_LABELS,

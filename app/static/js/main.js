@@ -184,6 +184,38 @@ document.addEventListener("click", (event) => {
     if (!dropdown.contains(event.target)) dropdown.open = false;
   });
 });
+
+const formatMarketEstimate = (seconds) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  if (safeSeconds < 60) return `${safeSeconds} s`;
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  if (minutes < 60) return remainder ? `${minutes} min ${remainder} s` : `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
+};
+
+function updateMarketEstimate(node) {
+  const form = node.closest("form");
+  const quantityInput = form?.querySelector("[data-market-quantity]");
+  const quantity = quantityInput ? Number.parseInt(quantityInput.value, 10) : 1;
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    node.textContent = "Informe a quantidade para estimar o prazo.";
+    return;
+  }
+  const baseSeconds = Number.parseInt(node.dataset.durationBase || form?.dataset.durationBase || "30", 10);
+  const reduction = Number.parseInt(node.dataset.timeReduction || form?.dataset.timeReduction || "0", 10);
+  const baseTotal = Math.max(1, baseSeconds) * quantity;
+  const finalSeconds = Math.max(5, Math.floor(baseTotal * (100 - Math.min(100, Math.max(0, reduction))) / 100));
+  node.textContent = `Base antes da redução: ${formatMarketEstimate(baseTotal)} · redução do Mercado: ${reduction}% · prazo estimado: ${formatMarketEstimate(finalSeconds)}.`;
+}
+
+document.querySelectorAll("[data-market-estimate]").forEach((node) => updateMarketEstimate(node));
+document.addEventListener("input", (event) => {
+  if (!event.target.matches("[data-market-quantity]")) return;
+  event.target.closest("form")?.querySelectorAll("[data-market-estimate]").forEach(updateMarketEstimate);
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     document.querySelectorAll(".multi-select-filter[open]").forEach((dropdown) => { dropdown.open = false; });
