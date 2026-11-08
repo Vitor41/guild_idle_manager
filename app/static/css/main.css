@@ -2521,3 +2521,45 @@ html { scroll-behavior: smooth; }
 }
 @media (max-width: 360px) { .mission-history-kpis { grid-template-columns: 1fr; } }
 .desktop-clock-warning { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #c6a25c; color: #f0d99f; background: #302719; }
+
+.guide-search { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 10px 18px; align-items: end; margin: 20px 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.guide-search__form { display: grid; gap: 8px; }
+.guide-search__form label, .guide-catalog-controls label { display: grid; gap: 6px; color: var(--parchment-soft); font-weight: 700; }
+.guide-search__form > div { display: flex; gap: 8px; }
+.guide-search__form input { flex: 1 1 auto; min-width: 0; }
+.guide-search__actions { display: grid; justify-items: start; gap: 6px; }
+.guide-search [data-guide-search-status], .guide-search [data-guide-export-status] { margin: 0; min-height: 1.2em; color: var(--muted); }
+.guide-search-result { background: #f2d273; color: #1c160a; border-radius: 3px; box-shadow: 0 0 0 2px rgba(242,210,115,.4); }
+.guide-search-result:focus { outline: 3px solid var(--gold-2); outline-offset: 3px; }
+.guide-source-index { position: relative; top: auto; z-index: 1; display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; margin: 14px 0; padding: 4px 1px 10px; border: 0; background: transparent; }
+.guide-source-index a { display: inline-flex; flex: 0 0 auto; min-height: 40px; align-items: center; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--parchment-soft); }
+.guide-source-index a:focus-visible, .guide-catalog-controls :focus-visible, .guide-search :focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
+.guide-catalog-controls { display: grid; grid-template-columns: repeat(3, minmax(145px, 1fr)) auto; align-items: end; gap: 12px; margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.guide-catalog-controls input, .guide-catalog-controls select { width: 100%; min-width: 0; }
+.guide-catalog-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.guide-catalog-table { width: 100%; border-collapse: collapse; color: var(--parchment-soft); font-variant-numeric: tabular-nums; }
+.guide-catalog-table th, .guide-catalog-table td { padding: 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.guide-catalog-table th { color: var(--gold-2); background: var(--surface-3); }
+.guide-catalog-table .guide-catalog-group th { padding: 10px 12px; border-top: 2px solid var(--gold); color: var(--parchment); text-transform: none; letter-spacing: .01em; }
+.guide-catalog-table td:nth-child(1) { min-width: 150px; }
+.guide-catalog-table td:nth-child(2) { min-width: 190px; }
+.guide-catalog-table td:nth-child(2) img { width: 48px; height: 48px; margin: 0 8px 0 0; object-fit: contain; vertical-align: middle; }
+.guide-catalog-table td:nth-child(n+3) { min-width: 155px; }
+.guide-catalog-table tr:last-child td { border-bottom: 0; }
+.guide-catalog-table tr[id] { scroll-margin-top: 128px; }
+.guide-catalog-table [data-label]::before { display: none; }
+@media (max-width: 760px) {
+  .guide-search { grid-template-columns: 1fr; }
+  .guide-search__actions { grid-template-columns: 1fr; }
+  .guide-catalog-controls { grid-template-columns: 1fr; }
+  .guide-catalog-controls > button { width: 100%; }
+  .guide-catalog-table-wrap { overflow: visible; border: 0; }
+  .guide-catalog-table, .guide-catalog-table tbody { display: grid; gap: 12px; }
+  .guide-catalog-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .guide-catalog-table tr { display: grid; gap: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+  .guide-catalog-table td { display: grid; grid-template-columns: minmax(112px, 32%) 1fr; gap: 10px; min-width: 0 !important; padding: 9px 2px; border-bottom: 1px solid rgba(233,198,116,.14); overflow-wrap: anywhere; }
+  .guide-catalog-table td::before { display: block; content: attr(data-label); color: var(--gold-2); font-weight: 800; }
+  .guide-catalog-table td:nth-child(2) img { grid-column: 1; grid-row: 1; }
+  .guide-catalog-table td:nth-child(2) strong { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .guide-search-result { scroll-behavior: auto; } }

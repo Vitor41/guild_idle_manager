@@ -14,7 +14,7 @@ Consumidor: Lote D, Wiki/Guia. O serviço `app.services.material_source_manifest
 - `mission` e `dungeon_or_boss`: chance base e faixa de quantidade da tabela de drop ativa; só após sucesso, sujeita aos modificadores do gameplay. Os templates registram nível mínimo, requisito de edifício e nível mínimo do mercenário para contextualizar disponibilidade. A chance configurada não é chance total incondicional.
 - `docks_possible_offer`: oferta-template ativa, preço-base, faixa de estoque, nível mínimo e peso de seleção. Peso não é convertido em probabilidade.
 - `docks_current_snapshot`: só aparece quando um `guild_id` foi pedido; representa estoque restante, preço e término da rotação atual daquela guilda. É estado de campanha, não configuração global.
-- `gathering`: material realmente selecionado pelo algoritmo por família e nível da guilda. É determinístico, sem chance.
+- `gathering`: material realmente selecionado pelo algoritmo por família e faixa de nível da guilda (`guild_level_range`). É determinístico, sem chance; a varredura cobre 1–350.
 - `salvage`: saída efetiva da regra de desmontagem para cada equipamento ativo elegível; a quantidade usa inteiro uniforme de 1 a 3 por equipamento.
 - `workshop_output`: a Oficina é fonte do Kit de Suprimentos (3 Carnes + 2 Ervas → 1 Kit, 5 segundos por unidade).
 - `dependencies[]` contém `workshop_input` para variantes ativas de Carne/Erva. É um consumo por receita, não uma forma de obter esses materiais, e nunca elimina uma lacuna de fonte.

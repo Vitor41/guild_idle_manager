@@ -31,6 +31,17 @@ from app.services.guild_progression_service import add_guild_xp
 from app.services.inventory_capacity_service import add_inventory_quantity_capped, get_inventory_capacity, get_inventory_usage
 from app.services.achievement_service import record_guild_stat, unlock_codex_reference
 from app.services.display_service import clean_generated_name
+from app.services.material_source_manifest import build_material_source_manifest
+
+
+def _obtainable_material_template_ids(db: Session) -> set[int]:
+    """Return materials with an active gameplay source, excluding recipe consumption/output loops."""
+    direct_sources = {"mission", "dungeon_or_boss", "docks_possible_offer", "gathering", "salvage", "workshop_output"}
+    manifest = build_material_source_manifest(db)
+    return {
+        row["item"]["id"] for row in manifest["materials"]
+        if row["item"]["active"] and any(source["type"] in direct_sources for source in row["sources"])
+    }
 
 
 INITIAL_RECIPES = [
@@ -56,13 +67,17 @@ class CraftingError(ValueError):
 
 
 def seed_crafting_recipes(db: Session) -> None:
+    obtainable_material_ids = _obtainable_material_template_ids(db)
     changed = False
     for name, output_name, blacksmith_level, gold_cost, materials in INITIAL_RECIPES:
         if get_recipe_by_name(db, name):
             continue
         output = get_item_template_by_name(db, output_name)
         material_templates = [(get_item_template_by_name(db, item_name), quantity) for item_name, quantity in materials]
-        if output is None or any(item is None for item, _ in material_templates):
+        if output is None or not output.is_active or any(
+            item is None or not item.is_active or item.id not in obtainable_material_ids
+            for item, _ in material_templates
+        ):
             continue
         recipe = create_recipe(db, {
             "name": name,
@@ -93,6 +108,7 @@ def seed_crafting_recipes(db: Session) -> None:
             ItemTemplate.is_active.is_(True),
         ).order_by(ItemTemplate.tier, ItemTemplate.id)
     ))
+    materials = [material for material in materials if material.id in obtainable_material_ids]
     existing_output_ids = {
         recipe.output_item_template_id for recipe in list_active_recipes(db)
     }
