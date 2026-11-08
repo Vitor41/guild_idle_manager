@@ -32,10 +32,6 @@
           {% if awaiting_loot_count > 0 %}<a class="button-link" href="#loot-disponivel">Receber recompensas</a>{% endif %}
         </div>
       </div>
-      <dl class="desktop-operations-intro__counts">
-        <div><dt>Opções nesta faixa</dt><dd>{{ total_templates }}</dd></div>
-        <div><dt>Aguardando coleta</dt><dd>{{ awaiting_loot_count }}</dd></div>
-      </dl>
     </section>{% endif %}
 
     {% if awaiting_loot_count > 0 %}
@@ -66,7 +62,7 @@
       <nav class="filter-tabs" aria-label="Faixas de nível">
         {% for band in mission_level_bands %}<a href="/missions?{{ band_queries[band] }}" class="{% if selected_band == band %}active{% endif %}">Nível {{ band }}</a>{% endfor %}
       </nav>
-      <div class="section-heading"><h2 id="available-missions-title">Missões disponíveis</h2><span>{{ total_templates }} opções nesta faixa</span></div>
+      <div class="section-heading"><h2 id="available-missions-title">Missões disponíveis</h2></div>
       <p class="note">A chance exibida é a base. Missões padrão ajustam esse valor pelo grupo e têm chance final máxima de 95%; missões longas usam a chance fixa informada.</p>
       {% if selected_mode in ('long', 'all') %}<p class="note">Missões longas ativas: {{ long_idle_active_count }}/{{ long_idle_limit }}. Esse limite não afeta missões comuns ou coletas.</p>{% endif %}
       {% if mission_templates %}

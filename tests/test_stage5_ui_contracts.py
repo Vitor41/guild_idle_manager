@@ -145,6 +145,37 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("not allow_regional_supply", mission_service)
         self.assertIn('{"gathering", "long_idle"}', mission_service)
 
+    def test_legacy_header_counters_are_removed_and_contextual_actions_remain(self):
+        missions = self.read("app/templates/missions/index.html")
+        dungeons = self.read("app/templates/dungeons/index.html")
+        theme = self.read("app/static/css/desktop-theme.css")
+
+        for template in (missions, dungeons):
+            self.assertNotIn("desktop-operations-intro__counts", template)
+            self.assertNotIn("<dt>Aguardando coleta</dt>", template)
+        self.assertNotIn("<dt>Opções nesta faixa</dt>", missions)
+        self.assertNotIn("<dt>Desafios nesta faixa</dt>", dungeons)
+        self.assertNotIn("{{ total_templates }} opções nesta faixa", missions)
+        self.assertNotIn("{{ total_templates }} opções nesta faixa", dungeons)
+
+        self.assertIn('id="missions-title"', missions)
+        self.assertIn("Decida, prepare e colete.", missions)
+        self.assertIn('href="#available-missions-title"', missions)
+        self.assertIn('href="/regional#regional-board"', missions)
+        self.assertIn('id="dungeons-title"', dungeons)
+        self.assertIn("Prepare a companhia para a incursão.", dungeons)
+        self.assertIn('href="/regional#regional-board"', dungeons)
+
+        self.assertIn("Receber todos os loots ({{ awaiting_loot_count }})", missions)
+        self.assertIn("Receber todos os loots ({{ awaiting_loot_count }})", dungeons)
+        self.assertIn("Você possui {{ awaiting_loot_count }} recompensa(s) aguardando coleta.", missions)
+        self.assertIn("Você possui {{ awaiting_loot_count }} recompensa(s) aguardando coleta.", dungeons)
+
+        intro_rule = theme.split('body[data-app-mode="desktop"] .desktop-operations-intro {', 1)[1].split('}', 1)[0]
+        self.assertIn("grid-template-columns: minmax(0, 1fr);", intro_rule)
+        self.assertNotIn("auto;", intro_rule)
+        self.assertNotIn("desktop-operations-intro__counts", theme)
+
     def test_selected_supply_is_preserved_during_quote_and_server_revalidates_submit(self):
         script = self.read("app/static/js/regional-supply.js")
         pending = script.split("const refreshQuote = async () => {", 1)[1].split("try {", 1)[0]

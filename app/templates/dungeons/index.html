@@ -35,12 +35,6 @@
           {% endif %}
         </div>
       </div>
-      {% if dungeons_available %}
-      <dl class="desktop-operations-intro__counts">
-        <div><dt>Desafios nesta faixa</dt><dd>{{ total_templates }}</dd></div>
-        <div><dt>Aguardando coleta</dt><dd>{{ awaiting_loot_count }}</dd></div>
-      </dl>
-      {% endif %}
     </section>
     {% endif %}
 
@@ -61,7 +55,7 @@
       </form>
       <nav class="filter-tabs" aria-label="Tipo de desafio"><a href="/dungeons?{{ type_queries.dungeon }}" class="{% if selected_content_type == 'dungeon' %}active{% endif %}">Masmorras</a><a href="/dungeons?{{ type_queries.boss }}" class="{% if selected_content_type == 'boss' %}active{% endif %}">Chefes</a><a href="/dungeons?{{ type_queries.all }}" class="{% if selected_content_type == 'all' %}active{% endif %}">Todos</a></nav>
       <nav class="filter-tabs" aria-label="Faixas de nível">{% for band in level_bands %}<a href="/dungeons?{{ band_queries[band] }}" class="{% if selected_band == band %}active{% endif %}">Nível {{ band }}</a>{% endfor %}</nav>
-      <div class="section-heading"><h2 id="available-dungeons-title">Desafios disponíveis</h2><span>{{ total_templates }} opções nesta faixa</span></div>
+      <div class="section-heading"><h2 id="available-dungeons-title">Desafios disponíveis</h2></div>
       <p class="note">A chance exibida é a base. O grupo e os bônus alteram a chance final, limitada a 95%.</p>
       {% if dungeon_templates %}
         <div class="mission-list">
