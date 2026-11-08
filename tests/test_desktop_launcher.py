@@ -276,6 +276,45 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             self.assertIn("Setup terminou sem confirmar a instalacao do pacote", handoff_log)
             self.assertTrue(installer.is_file(), "A stale result must not make the helper delete its staging files")
 
+            concurrent_setup = Path(windows_dir) / "concurrent-setup.ps1"
+            concurrent_setup.write_text(
+                "Start-Sleep -Seconds 2\n[Console]::Out.WriteLine('CONCURRENT_SETUP')\nexit 17\n",
+                encoding="utf-8",
+            )
+            concurrent_helper = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            concurrent_helper = concurrent_helper.replace(
+                "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
+                "    Add-Type -AssemblyName System.Windows.Forms\n"
+                "    [System.Windows.Forms.MessageBox]::Show(\n"
+                "        $message, 'Guild Idle Manager', 'OK', $icon\n"
+                "    ) | Out-Null\n"
+                "}",
+                "function Show-HandoffMessage([string]$message, [string]$icon) {}",
+            )
+            concurrent_command = (
+                f"$process = Start-Process -FilePath '{real_powershell}' "
+                f"-ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{concurrent_setup}\"' "
+                "-WorkingDirectory $staging -PassThru -Wait -WindowStyle Normal `\n"
+                "    -RedirectStandardOutput $setupStdout -RedirectStandardError $setupStderr"
+            )
+            concurrent_helper = concurrent_helper.replace(setup_start, concurrent_command)
+            concurrent_paths = [Path(windows_dir) / f"concurrent-handoff-{index}.ps1" for index in range(2)]
+            for helper_path in concurrent_paths:
+                helper_path.write_text(concurrent_helper, encoding="utf-8")
+            concurrent_processes = [
+                subprocess.Popen(
+                    [str(real_powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(helper_path)],
+                    cwd=staging_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                )
+                for helper_path in concurrent_paths
+            ]
+            concurrent_results = [process.communicate(timeout=15) for process in concurrent_processes]
+            self.assertTrue(all(process.returncode == 0 for process in concurrent_processes), concurrent_results)
+            handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
+            self.assertEqual(handoff_log.count("CONCURRENT_SETUP"), 1, handoff_log)
+            self.assertEqual(handoff_log.count("Another update handoff is already running"), 1, handoff_log)
+            self.assertTrue(installer.is_file(), "Concurrent failed Setup attempts must preserve the verified package")
+
     @unittest.skipUnless(os.name == "nt", "Verified release handoff uses Windows PowerShell.")
     def test_verified_update_handoff_logs_synchronous_helper_start_failure(self):
         with tempfile.TemporaryDirectory(prefix="gim-release-update-") as staging_dir, \

@@ -192,6 +192,7 @@ $setupResult = Join-Path $staging ('.setup-result-' + [Guid]::NewGuid().ToString
 $parentPid = __PID__
 $setupStarted = $false
 $setupExitCode = $null
+$handoffLock = $null
 function Write-HandoffLog([string]$level, [string]$message) {
     $line = "$(Get-Date -Format o) $level gim.update.handoff $message"
     try {
@@ -214,6 +215,17 @@ function Write-SetupOutputToHandoffLog([string]$path, [string]$streamName) {
     }
 }
 try {
+    try {
+        $handoffLock = [IO.File]::Open(
+            (Join-Path $staging '.handoff.lock'),
+            [IO.FileMode]::OpenOrCreate,
+            [IO.FileAccess]::ReadWrite,
+            [IO.FileShare]::None
+        )
+    } catch {
+        Write-HandoffLog 'WARNING' "Another update handoff is already running for this Setup; duplicate helper skipped: $setup"
+        return
+    }
     Write-HandoffLog 'INFO' "Helper started; waiting for application PID $parentPid; setup=$setup"
     $parent = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
     if ($parent -and -not $parent.WaitForExit(30000)) {
@@ -294,6 +306,9 @@ try {
     Write-HandoffLog 'ERROR' "Handoff failed: $($_.Exception.ToString()); setup preserved at $setup"
     Show-HandoffMessage "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logFile" 'Error'
 } finally {
+    if ($handoffLock -ne $null) {
+        $handoffLock.Dispose()
+    }
     $temp = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
     $full = [IO.Path]::GetFullPath($staging)
     if ($setupStarted -and $setupExitCode -eq 0 -and $full.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -and
