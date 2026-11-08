@@ -41,4 +41,4 @@ Respeitar templates administrativos: versão de conteúdo aditiva corrige soment
 - `compileall` e `git diff --check`: aprovados.
 - O teste legado `test_legacy_campaign_upgrade_backs_up_and_preserves_materialized_offers` permanece falhando com `cpu_completed` vs `expired`, reproduzindo a falha do baseline anterior ao lote.
 
-- CR no commit `64f4954a2f32e7e7496926f84e3b75f3ad6ab550`: um achado P2 acionável sobre estimativas não inicializadas após `replaceGameContent`; corrigido no Lote B com chamada de inicialização e regressão JavaScript. A nova revisão ainda está pendente.
+- CR no commit `64f4954a2f32e7e7496926f84e3b75f3ad6ab550`: um achado P2 acionável sobre estimativas não inicializadas após `replaceGameContent`; corrigido no Lote B com chamada de inicialização e regressão JavaScript. A revisão de reteste aprovou a correção, sem novos achados.
