@@ -211,7 +211,11 @@ function updateMarketEstimate(node) {
   node.textContent = `Base antes da redução: ${formatMarketEstimate(baseTotal)} · redução do Mercado: ${reduction}% · prazo estimado: ${formatMarketEstimate(finalSeconds)}.`;
 }
 
-document.querySelectorAll("[data-market-estimate]").forEach((node) => updateMarketEstimate(node));
+function initializeMarketEstimates(root = document) {
+  root.querySelectorAll("[data-market-estimate]").forEach((node) => updateMarketEstimate(node));
+}
+
+initializeMarketEstimates();
 document.addEventListener("input", (event) => {
   if (!event.target.matches("[data-market-quantity]")) return;
   event.target.closest("form")?.querySelectorAll("[data-market-estimate]").forEach(updateMarketEstimate);
@@ -531,6 +535,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  initializeMarketEstimates(currentMain);
   syncRegionalEventNoticeDialogs(parsedDocument);
   window.initializeGatheringCycles?.();
   const incomingTopbar = parsedDocument.querySelector(".game-topbar");

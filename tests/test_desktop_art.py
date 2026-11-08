@@ -38,6 +38,35 @@ if (!matches(first, sameEvent) || matches(first, nextEvent) || matches(first, ch
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the market estimate regression.")
+    def test_market_estimates_initialize_for_replaced_game_content(self):
+        main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
+        replacement = main.split("function replaceGameContent(", 1)[1].split("function regionalNoticeMatches(", 1)[0]
+        self.assertLess(replacement.index("currentMain.innerHTML = incomingMain.innerHTML"), replacement.index("initializeMarketEstimates(currentMain)"))
+
+        script = r"""
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const format = source.match(/const formatMarketEstimate = \(seconds\) => \{[\s\S]*?\n\};/);
+const update = source.match(/function updateMarketEstimate\(node\) \{[\s\S]*?\n\}/);
+const initialize = source.match(/function initializeMarketEstimates\(root = document\) \{[\s\S]*?\n\}/);
+if (!format || !update || !initialize) throw new Error('Market estimate helpers are missing');
+const initializeMarketEstimates = new Function(`${format[0]}; ${update[0]}; ${initialize[0]}; return initializeMarketEstimates;`)();
+const node = {dataset: {durationBase: '10', timeReduction: '20'}, textContent: '', closest: () => form};
+const quantity = {value: '3'};
+const form = {dataset: {}, querySelector: () => quantity, querySelectorAll: () => [node]};
+const replacementRoot = {querySelectorAll: (selector) => selector === '[data-market-estimate]' ? [node] : []};
+initializeMarketEstimates(replacementRoot);
+if (!node.textContent.includes('prazo estimado: 24 s.')) throw new Error(node.textContent);
+""";
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(STATIC / "js" / "main.js")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_desktop_art_reapplies_to_replaced_game_content_without_duplicate_decorations(self):
         script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
         main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")

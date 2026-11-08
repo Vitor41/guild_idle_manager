@@ -36,7 +36,9 @@ Respeitar templates administrativos: versão de conteúdo aditiva corrige soment
 
 ## Validação final Lote B
 
-- `tests.test_lot_b_materials_market`, `tests.test_gathering_service`, `tests.test_market_max_quantity`, `tests.test_salvage_balance`, o caso direcionado de `tests.test_stage5_runtime_validation` e o caso de versão atual de `tests.test_campaign_content_versioning`: 33 testes aprovados.
+- `tests.test_lot_b_materials_market`, `tests.test_gathering_service`, `tests.test_market_max_quantity`, `tests.test_salvage_balance`, o caso direcionado de `tests.test_stage5_runtime_validation` e o caso de versão atual de `tests.test_campaign_content_versioning`: 34 testes aprovados (inclui regressão da inicialização de estimativas após atualização parcial).
 - `tests.test_desktop_http_smoke`: 1 teste aprovado em 51,8 s, com servidor/campanha loopback temporários. O runner deste Windows precisou de shim de inicialização temporário para contornar consulta WMI e carregar `cryptography` do ambiente desktop; nenhum arquivo de aplicação foi alterado por esse shim.
 - `compileall` e `git diff --check`: aprovados.
 - O teste legado `test_legacy_campaign_upgrade_backs_up_and_preserves_materialized_offers` permanece falhando com `cpu_completed` vs `expired`, reproduzindo a falha do baseline anterior ao lote.
+
+- CR no commit `64f4954a2f32e7e7496926f84e3b75f3ad6ab550`: um achado P2 acionável sobre estimativas não inicializadas após `replaceGameContent`; corrigido no Lote B com chamada de inicialização e regressão JavaScript. A nova revisão ainda está pendente.
