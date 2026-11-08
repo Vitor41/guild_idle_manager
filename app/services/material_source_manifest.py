@@ -10,6 +10,8 @@ from app.models.mission import MissionTemplate
 from app.services.gathering_service import preview_material_for_family
 from app.services.salvage_service import _select_salvage_material, salvage_material_family
 
+MAX_GATHERING_GUILD_LEVEL = 350
+
 
 def build_material_source_manifest(db: Session, guild_level: int | None = None, guild_id: int | None = None) -> dict:
     """Describe configured sources without treating config weights as probabilities.
@@ -20,11 +22,10 @@ def build_material_source_manifest(db: Session, guild_level: int | None = None, 
     materials = list(db.scalars(select(ItemTemplate).where(
         ItemTemplate.item_type == "material"
     ).order_by(ItemTemplate.id)))
-    by_id = {item.id: item for item in materials}
     rows = {item.id: {"item": {"id": item.id, "slug": item.slug, "name": item.name,
         "family": item.material_family, "tier": item.tier, "item_level": item.item_level,
         "required_level": item.required_level, "active": bool(item.is_active)},
-        "required_by": [], "sources": []} for item in materials}
+        "required_by": [], "dependencies": [], "sources": []} for item in materials}
     for recipe, ingredient, item in db.execute(
         select(CraftingRecipe, CraftingRecipeMaterial, ItemTemplate)
         .join(CraftingRecipeMaterial, CraftingRecipeMaterial.recipe_id == CraftingRecipe.id)
@@ -79,7 +80,7 @@ def build_material_source_manifest(db: Session, guild_level: int | None = None, 
                     "provenance": "campaign DockOffer snapshot; scoped to requested guild"})
     families = {item.material_family for item in materials if item.is_active and item.material_family}
     for family in families:
-        levels = [guild_level] if guild_level is not None else range(1, 101)
+        levels = [guild_level] if guild_level is not None else range(1, MAX_GATHERING_GUILD_LEVEL + 1)
         for level in levels:
             chosen = preview_material_for_family(db, family, max(1, int(level)))
             if chosen:
@@ -103,7 +104,7 @@ def build_material_source_manifest(db: Session, guild_level: int | None = None, 
                 "provenance": "live salvage selector + SystemRandom.randint(1, 3)"})
     for item in materials:
         if item.material_family in {"meat", "herb"} and item.is_active:
-            rows[item.id]["sources"].append({"type": "workshop_input", "recipe": "Kit de Suprimentos",
+            rows[item.id]["dependencies"].append({"type": "workshop_input", "recipe": "Kit de Suprimentos",
                 "quantity_per_kit": 3 if item.material_family == "meat" else 2,
                 "condition": "qualquer variante ativa da família; produção em lote",
                 "provenance": "workshop recipe constants"})
@@ -114,7 +115,9 @@ def build_material_source_manifest(db: Session, guild_level: int | None = None, 
     material_rows = list(rows.values())
     for row in material_rows:
         row["sources"].sort(key=lambda source: (source["type"], source.get("name", ""), source.get("guild_level", 0)))
+        row["dependencies"].sort(key=lambda dependency: dependency["type"])
     return {"schema_version": 1, "scope": {"guild_level": guild_level,
+            "gathering_level_range": [guild_level, guild_level] if guild_level is not None else [1, MAX_GATHERING_GUILD_LEVEL],
             "includes_current_dock_snapshot": guild_id is not None},
         "materials": material_rows,
         "gaps": [row["item"] for row in material_rows if row["item"]["active"] and not row["sources"]]}
