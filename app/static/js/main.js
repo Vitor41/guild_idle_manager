@@ -18,10 +18,10 @@ const startupModalQueue = (() => {
     }
   };
   return {
-    enqueue(dialog, priority) {
+    enqueue(dialog, priority, deadline = Number.POSITIVE_INFINITY) {
       if (!(dialog instanceof HTMLDialogElement) || dialog.open || pending.some((row) => row.dialog === dialog)) return;
-      pending.push({ dialog, priority, sequence: sequence++ });
-      pending.sort((left, right) => left.priority - right.priority || left.sequence - right.sequence);
+      pending.push({ dialog, priority, deadline: Number.isFinite(deadline) ? deadline : Number.POSITIVE_INFINITY, sequence: sequence++ });
+      pending.sort((left, right) => left.priority - right.priority || left.deadline - right.deadline || left.sequence - right.sequence);
       advance();
     },
   };
@@ -494,6 +494,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  syncRegionalEventNoticeDialogs(parsedDocument);
   window.initializeGatheringCycles?.();
   const incomingTopbar = parsedDocument.querySelector(".game-topbar");
   const currentTopbar = document.querySelector(".game-topbar");
@@ -504,11 +505,13 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   document.title = parsedDocument.title || document.title;
   const nextUrl = new URL(responseUrl, window.location.origin);
   document.body.dataset.route = nextUrl.pathname;
+  window.GIMApplyDesktopArt?.(currentMain);
   window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   updateGenericCountdowns();
   initializeSalvagePreviews();
   restoreGameFormState(formState);
   window.initializeRegionalSupply?.(currentMain);
+  window.initializeRegionalComparison?.(currentMain);
   showActionToast(currentMain);
 
   const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
@@ -518,7 +521,74 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   });
 }
 
+function syncRegionalEventNoticeDialogs(parsedDocument) {
+  const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
+  const incomingIds = new Set(incoming.map((dialog) => dialog.id));
+  for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
+    if (incomingIds.has(current.id)) continue;
+    if (current.open) current.close();
+    current.remove();
+  }
+  for (const source of incoming) {
+    if (source.id && document.getElementById(source.id)) continue;
+    const dialog = document.importNode(source, true);
+    document.body.append(dialog);
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    window.GIMEnqueueRegionalNotice?.(dialog);
+  }
+}
+
+let regionalComparisonInterval = null;
+function initializeRegionalComparison(root = document) {
+  if (regionalComparisonInterval !== null) {
+    window.clearInterval(regionalComparisonInterval);
+    regionalComparisonInterval = null;
+  }
+  const tableBody = root.querySelector?.("[data-regional-comparison]");
+  if (!tableBody) return;
+  const refresh = async () => {
+    if (!tableBody.isConnected || document.visibilityState === "hidden") return;
+    try {
+      const response = await fetch(tableBody.dataset.refreshUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      for (const row of tableBody.querySelectorAll("tr[data-guild-state-id]")) {
+        const data = payload.guilds?.[row.dataset.guildStateId];
+        if (!data) continue;
+        const values = {
+          wealth: data.wealth,
+          roster: data.roster,
+          tiers: Object.entries(data.tier_counts || {}).sort(([left], [right]) => left.localeCompare(right)).map(([tier, count]) => `${tier} ${count}`).join(" · ") || "—",
+          contracts: data.results?.contracts ?? 0,
+          dungeons: data.results?.dungeons ?? 0,
+          bosses: data.results?.bosses ?? 0,
+          "successes-failures": `${data.results?.successes ?? 0} · ${data.results?.failures ?? 0}`,
+          "event-wins": data.event_wins ?? 0,
+        };
+        for (const [field, value] of Object.entries(values)) {
+          const cell = row.querySelector(`[data-comparison-field="${field}"]`);
+          if (cell) cell.textContent = String(value);
+        }
+      }
+    } catch (_error) {
+      // Keep the last successful comparison visible when a refresh is unavailable.
+    }
+  };
+  refresh();
+  regionalComparisonInterval = window.setInterval(() => {
+    if (!tableBody.isConnected) return;
+    refresh();
+  }, 30000);
+}
+window.initializeRegionalComparison = initializeRegionalComparison;
+initializeRegionalComparison();
+
 document.addEventListener("click", async (event) => {
+  if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+    event.target.closest("[data-regional-notice-close]")?.closest("dialog")?.close();
+  }
   const link = event.target.closest(".game-shell .filter-tabs a, .game-shell .pagination a, [data-async-navigation]");
   if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
   const targetUrl = new URL(link.href, window.location.origin);

@@ -14,6 +14,40 @@ ART_ROOT = STATIC / "assets" / "desktop"
 
 
 class DesktopArtIntegrationTests(unittest.TestCase):
+    def test_desktop_art_reapplies_to_replaced_game_content_without_duplicate_decorations(self):
+        script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
+        main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
+
+        self.assertIn("window.GIMApplyDesktopArt = applyDesktopArt", script)
+        self.assertIn("async function applyDesktopArt(root = document)", script)
+        self.assertIn('element.querySelector(".desktop-entity-art")', script)
+        self.assertIn('element.querySelector(".desktop-resource-art")', script)
+        self.assertIn('window.GIMApplyDesktopArt?.(currentMain)', main)
+
+    def test_regional_event_notices_use_persisted_pending_states_and_reenter_vigil(self):
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
+        dialogs = (STATIC / "js" / "evolution-dialogs.js").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+
+        self.assertIn("request.url.path == '/regional' and pending_rebellion_invite", base)
+        self.assertIn("request.url.path == '/regional' and pending_portal_notice", base)
+        for asset in ("regional-rebellion.webp", "rebellion-shield.png", "dimensional-portal.webp", "portal-gate.png"):
+            self.assertIn(asset, base)
+        self.assertIn("Aceitar convite", base)
+        self.assertIn("Delegar à CPU", base)
+        portal_dialog = base.split('id="regional-portal-notice"', 1)[1].split("</dialog>", 1)[0]
+        self.assertNotIn('name="decision"', portal_dialog)
+        self.assertIn("uma entrada", portal_dialog)
+        self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument)", main)
+        self.assertIn("window.GIMEnqueueRegionalNotice?.(dialog)", main)
+        self.assertIn("deadline - right.deadline", main)
+        self.assertIn('setInterval(() => {\n    if (!tableBody.isConnected) return;', main)
+        self.assertIn('document.visibilityState === "hidden"', main)
+        self.assertIn("dialog.dataset.eventDeadline", dialogs)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", theme)
+        self.assertIn(".regional-event-notice *", theme)
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")

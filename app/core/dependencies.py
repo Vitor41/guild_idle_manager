@@ -10,7 +10,8 @@ from app.core.time import as_utc
 from app.models.guild import Guild
 from app.models.campaign import CampaignMetadata
 from app.models.user import User
-from app.models.regional import RegionalEventParticipant
+from app.models.regional import RegionalEvent, RegionalEventParticipant, RegionalGuildState
+from app.models.dungeon import DungeonTemplate
 from app.repositories.guild_repository import get_guild_by_user_id
 from app.repositories.user_repository import get_user_by_id
 from app.repositories.market_repository import get_guild_activity
@@ -59,7 +60,7 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
     if getattr(request.app.state, "app_mode", "web") == "desktop":
         guild = db.scalar(select(Guild).where(Guild.campaign_id == metadata.campaign_id))
         if guild is not None:
-            from app.services.regional_cycle_service import advance_regional_world
+            from app.services.regional_cycle_service import REGIONS, advance_regional_world
             from app.services.regional_event_service import (
                 active_rebellion,
                 evaluate_open_rebellion,
@@ -74,13 +75,12 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
             if event is None:
                 event = active_rebellion(db, metadata.campaign_id)
             request.state.pending_rebellion_invite = None
+            request.state.pending_portal_notice = None
+            player_state = db.scalar(select(RegionalGuildState).where(
+                RegionalGuildState.campaign_id == metadata.campaign_id,
+                RegionalGuildState.guild_id == guild.id,
+            ))
             if event is not None:
-                from app.models.regional import RegionalGuildState
-
-                player_state = db.scalar(select(RegionalGuildState).where(
-                    RegionalGuildState.campaign_id == metadata.campaign_id,
-                    RegionalGuildState.guild_id == guild.id,
-                ))
                 if player_state is not None:
                     participant = db.scalar(select(RegionalEventParticipant).where(
                         RegionalEventParticipant.event_id == event.id,
@@ -93,6 +93,27 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
                             "region_name": event_region_name(event.region_code),
                             "priority_ends_at_iso": as_utc(event.priority_ends_at_utc).isoformat(),
                         }
+            if player_state is not None:
+                home_code = next((code for code, name in REGIONS if name == metadata.home_region), None)
+                portal = db.scalar(select(RegionalEvent).where(
+                    RegionalEvent.campaign_id == metadata.campaign_id,
+                    RegionalEvent.event_type == "portal",
+                    RegionalEvent.region_code == home_code,
+                    RegionalEvent.status == "active",
+                    RegionalEvent.expires_at_utc > now,
+                ).order_by(RegionalEvent.expires_at_utc, RegionalEvent.id)) if home_code else None
+                entered = db.scalar(select(RegionalEventParticipant.id).where(
+                    RegionalEventParticipant.event_id == portal.id,
+                    RegionalEventParticipant.guild_state_id == player_state.id,
+                )) if portal is not None else None
+                if portal is not None and entered is None:
+                    template = db.get(DungeonTemplate, portal.dungeon_template_id) if portal.dungeon_template_id else None
+                    request.state.pending_portal_notice = {
+                        "event_id": portal.id,
+                        "region_name": metadata.home_region,
+                        "boss_name": template.name if template is not None else "Desafio dimensional",
+                        "expires_at_iso": as_utc(portal.expires_at_utc).isoformat(),
+                    }
             # A campaign-wide route can be the first open request after a
             # cycle boundary; persist the one-time roll before rendering.
             db.commit()

@@ -18,7 +18,7 @@ from unittest.mock import patch
 os.environ["APP_MODE"] = "desktop"
 from app.main import app
 from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
-from app.desktop.lifecycle import open_campaign
+from app.desktop.lifecycle import close_campaign, open_campaign
 from app.services.campaign_service import CampaignService
 from app.database.connection import SessionLocal, configure_database
 from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRunMember, GatheringAssignment, Guild, GuildBuilding, GuildResources,
@@ -26,7 +26,7 @@ from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRun
     MissionRunMember, ProfessionTemplate, ProfessionTraining)
 from app.models.dungeon import DungeonTemplate
 from app.models.item import DungeonTemplateItemDrop
-from app.models.regional import RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome
+from app.models.regional import RegionalCpuCyclePlan, RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome
 from app.models.mercenary import Mercenary
 from app.models.achievement import AchievementTemplate, GuildAchievement
 from app.models.item import GuildItemInstance
@@ -268,9 +268,53 @@ with tempfile.TemporaryDirectory() as data_dir:
             success=True,
             contribution=1,
         ))
+        home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
+        player_regional_state = db.query(RegionalGuildState).filter_by(
+            campaign_id=campaign.campaign_id, guild_id=guild.id,
+        ).one()
+        pending_portal = db.query(RegionalEvent).filter_by(
+            campaign_id=campaign.campaign_id, event_type="portal", region_code=home_region_code, status="active",
+        ).filter(RegionalEvent.expires_at_utc > now).order_by(RegionalEvent.expires_at_utc).first()
+        if pending_portal is None:
+            pending_portal = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="portal", region_code=home_region_code,
+                trigger_cycle_number=10000, rules_version="smoke",
+                seed="portal-notice-smoke", status="active", dungeon_template_id=dungeon_template.id,
+                created_at_utc=now, expires_at_utc=now + timedelta(hours=3), summary_json="{}",
+            )
+            db.add(pending_portal)
+            db.flush()
+        portal_notice_event_id = pending_portal.id
+        portal_notice_state_id = player_regional_state.id
         regional_outcome_region_code = outcome_state.region_code
         regional_outcome_guild_name = outcome_state.name
+        regional_outcome_state_id = outcome_state.id
+        outcome_offer_id = outcome_offer.id
         outcome_offer_type = outcome_offer.offer_type
+        cpu_comparison_state = db.query(RegionalGuildState).filter(
+            RegionalGuildState.campaign_id == campaign.campaign_id,
+            RegionalGuildState.region_code == outcome_state.region_code,
+            RegionalGuildState.guild_id.is_(None),
+            RegionalGuildState.id != outcome_state.id,
+            RegionalGuildState.active.is_(True),
+        ).order_by(RegionalGuildState.slot).first()
+        assert cpu_comparison_state is not None
+        cpu_plan = db.query(RegionalCpuCyclePlan).filter_by(
+            campaign_id=campaign.campaign_id, cycle_id=outcome_offer.cycle_id,
+            guild_state_id=cpu_comparison_state.id,
+        ).one_or_none()
+        if cpu_plan is None:
+            cpu_plan = RegionalCpuCyclePlan(
+                campaign_id=campaign.campaign_id, cycle_id=outcome_offer.cycle_id,
+                guild_state_id=cpu_comparison_state.id, seed="comparison-smoke",
+            )
+            db.add(cpu_plan)
+        cpu_plan.outcomes_json = json.dumps([{"offer_id": outcome_offer.id, "success": False}])
+        cpu_plan.successes = 0
+        cpu_plan.failures = 1
+        db.flush()
+        cpu_plan_id = cpu_plan.id
+        cpu_comparison_state_id = cpu_comparison_state.id
         db.commit()
 
     try:
@@ -315,6 +359,35 @@ with tempfile.TemporaryDirectory() as data_dir:
         result_column = {"contract": 3, "dungeon": 4, "boss": 5}[outcome_offer_type]
         assert outcome_cells[result_column] == b"1", outcome_cells
         assert outcome_cells[6] == b"1 " + bytes([194, 183]) + b" 0", outcome_cells
+        comparison_status, _comparison_location, comparison_body = request(
+            f"/regional/regions/{regional_outcome_region_code}/comparison"
+        )
+        comparison_payload = json.loads(comparison_body)
+        assert comparison_status == 200 and comparison_payload["guilds"][str(regional_outcome_state_id)]["results"]["successes"] == 1
+        cpu_results = comparison_payload["guilds"][str(cpu_comparison_state_id)]["results"]
+        assert cpu_results["contracts"] == 1 and cpu_results["failures"] == 1, cpu_results
+        with SessionLocal() as db:
+            refreshed_plan = db.get(RegionalCpuCyclePlan, cpu_plan_id)
+            refreshed_plan.outcomes_json = json.dumps([{"offer_id": outcome_offer_id, "success": True}])
+            refreshed_plan.successes = 1
+            refreshed_plan.failures = 0
+            db.commit()
+        live_status, _live_location, live_body = request(
+            f"/regional/regions/{regional_outcome_region_code}/comparison"
+        )
+        live_results = json.loads(live_body)["guilds"][str(cpu_comparison_state_id)]["results"]
+        assert live_status == 200 and live_results["successes"] == 1 and live_results["failures"] == 0, live_results
+        close_campaign(app, saves, guard)
+        isolation_campaign = saves.create_campaign("Smoke isolamento", "Guilda isolamento")
+        open_campaign(app, saves, guard, isolation_campaign.campaign_id)
+        isolated_status, _isolated_location, isolated_body = request(
+            f"/regional/regions/{regional_outcome_region_code}/comparison"
+        )
+        isolated_payload = json.loads(isolated_body)
+        assert isolated_status == 200, (isolated_status, isolated_payload)
+        assert isolated_payload["guilds"][str(cpu_comparison_state_id)]["results"]["contracts"] == 0, isolated_payload
+        close_campaign(app, saves, guard)
+        open_campaign(app, saves, guard, campaign.campaign_id)
         assert b"data-market-fill-max" in rendered_pages["/market"]
         assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
 
@@ -736,9 +809,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         supply_script_status, _location, supply_script = request("/static/js/regional-supply.js")
         assert supply_script_status == 200 and b'select[name="run_multiplier"]' in supply_script
         dashboard_with_invite = rendered_pages["/dashboard"]
-        assert b'data-regional-rebellion-auto-open' in dashboard_with_invite
-        assert b'value="accept"' in dashboard_with_invite and b'value="decline"' in dashboard_with_invite
-        assert b'href="/regional#events-title"' in dashboard_with_invite
+        assert b'data-regional-event-notice' not in dashboard_with_invite
+        assert b'value="accept"' not in dashboard_with_invite and b'value="decline"' not in dashboard_with_invite
+        assert b'href="/regional"' in dashboard_with_invite
         assert b'href="/gathering"' in dashboard_with_invite
         assert b'href="/codex"' in dashboard_with_invite
         assert b"Conquistas e C\xc3\xb3dex" in rendered_pages["/codex"]
@@ -786,6 +859,30 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
         assert b'/static/js/evolution-dialogs.js?v=20261030-2' in dashboard_with_invite
+        assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
+        regional_notice_status, _notice_location, regional_notice_body = request("/regional")
+        assert regional_notice_status == 200
+        assert b'id="regional-rebellion-notice"' in regional_notice_body
+        assert b"Aceitar convite" in regional_notice_body and b"Delegar \xc3\xa0 CPU" in regional_notice_body
+        assert b"regional-rebellion.webp" in regional_notice_body and b"rebellion-shield.png" in regional_notice_body
+        assert b'id="regional-portal-notice"' in regional_notice_body
+        assert b"dimensional-portal.webp" in regional_notice_body and b"portal-gate.png" in regional_notice_body
+        portal_dialog = re.search(rb'<dialog[^>]*id="regional-portal-notice".*?</dialog>', regional_notice_body, re.S)
+        assert portal_dialog and b"Enviar equipe" not in portal_dialog.group(0)
+        assert b"Ver equipe e portal" in portal_dialog.group(0)
+        with SessionLocal() as db:
+            db.add(RegionalEventParticipant(
+                event_id=portal_notice_event_id, guild_state_id=portal_notice_state_id, status="participating",
+            ))
+            db.commit()
+        used_portal_status, _used_portal_location, used_portal_body = request("/regional")
+        assert used_portal_status == 200 and b'id="regional-portal-notice"' not in used_portal_body
+        with SessionLocal() as db:
+            expired_portal = db.get(RegionalEvent, portal_notice_event_id)
+            expired_portal.expires_at_utc = datetime.now(timezone.utc) - timedelta(seconds=5)
+            db.commit()
+        expired_portal_status, _expired_portal_location, expired_portal_body = request("/regional")
+        assert expired_portal_status == 200 and b'id="regional-portal-notice"' not in expired_portal_body
         with SessionLocal() as db:
             invite_event = db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion", status="active",
@@ -804,7 +901,9 @@ with tempfile.TemporaryDirectory() as data_dir:
             ).one()
             assert invited_participant.status == "invited"
         repeat_status, _location, repeat_dashboard = request("/dashboard")
-        assert repeat_status == 200 and b'data-regional-rebellion-auto-open' in repeat_dashboard
+        assert repeat_status == 200 and b'data-regional-event-notice' not in repeat_dashboard
+        repeat_regional_status, _location, repeat_regional = request("/regional")
+        assert repeat_regional_status == 200 and b'id="regional-rebellion-notice"' in repeat_regional
         with SessionLocal() as db:
             assert db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion",
@@ -819,7 +918,9 @@ with tempfile.TemporaryDirectory() as data_dir:
             invited_participant = db.query(RegionalEventParticipant).filter_by(event_id=invite_event_id).one()
             assert invite_event.player_decision == "accept" and invited_participant.status == "accepted"
         post_decision_status, _location, post_decision_dashboard = request("/dashboard")
-        assert post_decision_status == 200 and b'data-regional-rebellion-auto-open' not in post_decision_dashboard
+        assert post_decision_status == 200 and b'data-regional-event-notice' not in post_decision_dashboard
+        post_decision_regional_status, _location, post_decision_regional = request("/regional")
+        assert post_decision_regional_status == 200 and b'id="regional-rebellion-notice"' not in post_decision_regional
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
         assert b"/css/desktop-theme.css?v=20261027-1" in rendered_pages["/dashboard"]
         assert b'desktop-resource-row' in rendered_pages["/dashboard"]

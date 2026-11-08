@@ -14,6 +14,7 @@
   <body data-app-mode="{{ request.app.state.app_mode }}" data-route="{{ request.url.path }}">
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
     {% set pending_rebellion_invite = request.state._state.get('pending_rebellion_invite') if request is defined else none %}
+    {% set pending_portal_notice = request.state._state.get('pending_portal_notice') if request is defined else none %}
     {% if has_app_shell %}
       <div class="app-frame" {% if request.app.state.app_mode != 'desktop' %}data-session-started-at="{{ request.scope.get('session', {}).get('session_started_at', 0) }}" data-session-global-seconds="{{ request.scope.get('session', {}).get('session_global_seconds', 18000) }}" data-session-idle-seconds="{{ request.scope.get('session', {}).get('session_idle_seconds', 3600) }}"{% endif %} data-confirmation-preferences='{{ current_user.confirmation_preferences or "{}" }}'>
         <aside class="sidebar" aria-label="Navegacao principal">
@@ -140,18 +141,32 @@
         <div class="confirmation-dialog__actions"><form method="post" action="/tutorial/decline"><button class="secondary-button">Não, pular tutorial</button></form><form method="post" action="/tutorial/start"><button>Sim, iniciar tutorial</button></form></div>
       </dialog>
     {% endif %}
-    {% if has_app_shell and request.app.state.app_mode == 'desktop' and pending_rebellion_invite %}
-      <dialog class="evolution-dialog regional-rebellion-dialog" data-regional-rebellion-auto-open aria-labelledby="regional-rebellion-title" aria-describedby="regional-rebellion-description">
+    {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path == '/regional' and pending_rebellion_invite %}
+      <dialog class="evolution-dialog regional-rebellion-dialog regional-event-notice" id="regional-rebellion-notice" data-regional-event-notice data-event-deadline="{{ pending_rebellion_invite.priority_ends_at_iso }}" aria-labelledby="regional-rebellion-title" aria-describedby="regional-rebellion-description">
         <form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar convite">×</button></form>
         <div class="regional-rebellion-dialog__content">
+          <div class="regional-event-notice__art"><img src="/static/assets/desktop/evolution/illustrations/regional-rebellion.webp" alt=""><img src="/static/assets/desktop/evolution/sprites/ui_64/rebellion-shield.png" width="64" height="64" alt=""></div>
           <p class="evolution-eyebrow">DEFESA REGIONAL · CONVITE PRIORITÁRIO</p>
           <h2 id="regional-rebellion-title">Uma rebelião ameaça {{ pending_rebellion_invite.region_name }}</h2>
-          <p id="regional-rebellion-description">Sua guilda tem prioridade até <time data-evolution-countdown="{{ pending_rebellion_invite.priority_ends_at_iso }}" datetime="{{ pending_rebellion_invite.priority_ends_at_iso }}">{{ pending_rebellion_invite.priority_ends_at_iso }}</time>. Aceite para enviar equipes durante as próximas 12 horas ou delegue a defesa à CPU. O prazo continua offline.</p>
+          <p id="regional-rebellion-description">Prioridade por mais <time data-evolution-countdown="{{ pending_rebellion_invite.priority_ends_at_iso }}" datetime="{{ pending_rebellion_invite.priority_ends_at_iso }}">{{ pending_rebellion_invite.priority_ends_at_iso }}</time>. Ao aceitar, a janela de atividade é de 12 horas. O prazo continua durante sua ausência.</p>
           <div class="regional-rebellion-dialog__actions">
             <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--primary" type="submit" name="decision" value="accept" autofocus>Aceitar convite</button></form>
             <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--secondary" type="submit" name="decision" value="decline">Delegar à CPU</button></form>
           </div>
-          <a class="regional-rebellion-dialog__details" href="/regional#events-title">Ver detalhes em Vigília Regional</a>
+          <a class="regional-rebellion-dialog__details" href="/regional#events-title" data-regional-notice-close>Ver detalhes em Vigília Regional</a>
+        </div>
+      </dialog>
+    {% endif %}
+    {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path == '/regional' and pending_portal_notice %}
+      <dialog class="evolution-dialog regional-portal-dialog regional-event-notice" id="regional-portal-notice" data-regional-event-notice data-event-deadline="{{ pending_portal_notice.expires_at_iso }}" aria-labelledby="regional-portal-title" aria-describedby="regional-portal-description">
+        <form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar aviso do portal">×</button></form>
+        <div class="regional-portal-dialog__content">
+          <div class="regional-event-notice__art"><img src="/static/assets/desktop/evolution/illustrations/dimensional-portal.webp" alt=""><img src="/static/assets/desktop/evolution/sprites/ui_64/portal-gate.png" width="64" height="64" alt=""></div>
+          <p class="evolution-eyebrow">DESAFIO DIMENSIONAL · ENTRADA LIMITADA</p>
+          <h2 id="regional-portal-title">{{ pending_portal_notice.boss_name }}</h2>
+          <p id="regional-portal-description">Portal aberto em {{ pending_portal_notice.region_name }}. A entrada termina em <time data-evolution-countdown="{{ pending_portal_notice.expires_at_iso }}" datetime="{{ pending_portal_notice.expires_at_iso }}">{{ pending_portal_notice.expires_at_iso }}</time>. Sua guilda tem uma entrada; fechar este aviso não a consome.</p>
+          <div class="regional-rebellion-dialog__actions"><a class="evolution-button evolution-button--primary" href="/regional#events-title" data-async-navigation data-scroll-top data-regional-notice-close>Ver equipe e portal na Vigília</a></div>
+          <a class="regional-rebellion-dialog__details" href="/regional#events-title" data-async-navigation data-regional-notice-close>Ver eventos na Vigília</a>
         </div>
       </dialog>
     {% endif %}
