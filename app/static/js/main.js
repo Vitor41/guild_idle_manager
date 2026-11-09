@@ -545,6 +545,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  window.initializeEquipmentDetails?.(currentMain);
   initializeMarketEstimates(currentMain);
   syncRegionalEventNoticeDialogs(parsedDocument);
   window.initializeGatheringCycles?.();

@@ -36,12 +36,17 @@ class LauncherAndEquipmentUiContractTests(unittest.TestCase):
 
     def test_equipment_details_are_accessible_and_reflow_without_hover(self):
         template = (ROOT / "app/templates/mercenaries/detail.html").read_text(encoding="utf-8")
+        base_template = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
         script = (ROOT / "app/static/js/equipment-details.js").read_text(encoding="utf-8")
+        main_script = (ROOT / "app/static/js/main.js").read_text(encoding="utf-8")
         css = (ROOT / "app/static/css/main.css").read_text(encoding="utf-8")
         self.assertIn("aria-expanded=\"false\"", template)
         self.assertIn("aria-controls=\"{{ details_id }}\"", template)
         self.assertIn("data-equipment-details-close", template)
-        self.assertIn("/js/equipment-details.js", template)
+        self.assertIn("/js/equipment-details.js", base_template)
+        self.assertNotIn("/js/equipment-details.js", template)
+        self.assertIn("window.initializeEquipmentDetails?.(currentMain)", main_script)
+        self.assertIn("window.initializeEquipmentDetails = initializeEquipmentDetails", script)
         self.assertIn("pointerenter", script)
         self.assertIn("event.key === \"Escape\"", script)
         self.assertIn("event.pointerType === \"mouse\"", script)

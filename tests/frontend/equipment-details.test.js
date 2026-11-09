@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../../app/static/js/equipment-details.js", import.meta.url), "utf8");
+const mainSource = await readFile(new URL("../../app/static/js/main.js", import.meta.url), "utf8");
 
 function mountDetails({ mobile = false } = {}) {
   const makeClassList = () => {
@@ -15,12 +16,13 @@ function mountDetails({ mobile = false } = {}) {
       contains: (value) => names.has(value),
     };
   };
-  const makeElement = () => ({ listeners: new Map(), addEventListener(name, fn) { this.listeners.set(name, fn); }, dispatch(name, event = {}) { this.listeners.get(name)?.(event); } });
+  const makeElement = () => ({ listeners: new Map(), addEventListener(name, fn) { const handlers = this.listeners.get(name) ?? []; handlers.push(fn); this.listeners.set(name, handlers); }, dispatch(name, event = {}) { this.listeners.get(name)?.forEach((handler) => handler(event)); } });
   const closeButton = makeElement();
   const trigger = makeElement();
   const panel = makeElement();
   const slot = makeElement();
-  const document = { activeElement: {}, querySelectorAll: () => [trigger] };
+  let currentTriggers = [trigger];
+  const document = { activeElement: {}, querySelectorAll: () => currentTriggers };
   trigger.dataset = {};
   trigger.attributes = new Map();
   trigger.setAttribute = (key, value) => trigger.attributes.set(key, value);
@@ -48,7 +50,31 @@ function mountDetails({ mobile = false } = {}) {
     clearTimeout() {},
   };
   vm.runInNewContext(source, { document, window });
-  return { trigger, panel, closeButton, document, mobile };
+  const main = { querySelectorAll: () => currentTriggers };
+  const addDynamicTrigger = () => {
+    const dynamicTrigger = makeElement();
+    const dynamicPanel = makeElement();
+    const dynamicSlot = makeElement();
+    dynamicTrigger.dataset = {};
+    dynamicTrigger.attributes = new Map();
+    dynamicTrigger.setAttribute = (key, value) => dynamicTrigger.attributes.set(key, value);
+    dynamicTrigger.getBoundingClientRect = () => ({ left: 120, right: 180, top: 160 });
+    dynamicTrigger.closest = () => dynamicSlot;
+    dynamicTrigger.contains = () => false;
+    dynamicTrigger.matches = () => false;
+    dynamicPanel.hidden = true;
+    dynamicPanel.scrollHeight = 240;
+    dynamicPanel.style = { values: {}, set left(value) { this.values.left = value; }, set top(value) { this.values.top = value; }, set maxHeight(value) { this.values.maxHeight = value; }, removeProperty(name) { delete this.values[name]; } };
+    dynamicPanel.classList = makeClassList();
+    dynamicPanel.matches = () => false;
+    dynamicPanel.contains = () => false;
+    dynamicPanel.querySelector = () => null;
+    dynamicSlot.querySelector = () => dynamicPanel;
+    dynamicSlot.contains = () => false;
+    currentTriggers = [dynamicTrigger];
+    return { trigger: dynamicTrigger, panel: dynamicPanel };
+  };
+  return { trigger, panel, closeButton, document, mobile, main, window, addDynamicTrigger };
 }
 
 test("equipment details open on mouse hover and close when pointer leaves", () => {
@@ -81,4 +107,16 @@ test("touch-style click toggles the panel and mobile keeps it in normal flow", (
   assert.equal(ui.panel.style.values.left, undefined);
   ui.trigger.dispatch("click");
   assert.equal(ui.panel.hidden, true);
+});
+
+test("equipment details initialize after partial navigation and remain idempotent", () => {
+  const ui = mountDetails();
+  const dynamic = ui.addDynamicTrigger();
+  assert.equal(typeof ui.window.initializeEquipmentDetails, "function");
+  ui.window.initializeEquipmentDetails(ui.main);
+  ui.window.initializeEquipmentDetails(ui.main);
+  dynamic.trigger.dispatch("click");
+  assert.equal(dynamic.panel.hidden, false);
+  assert.equal(dynamic.trigger.attributes.get("aria-expanded"), "true");
+  assert.match(mainSource, /currentMain\.innerHTML = incomingMain\.innerHTML;\s*window\.initializeEquipmentDetails\?\.\(currentMain\);/);
 });

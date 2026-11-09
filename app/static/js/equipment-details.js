@@ -1,6 +1,5 @@
 (() => {
-  const triggers = document.querySelectorAll("[data-equipment-details-trigger]");
-  if (!triggers.length) return;
+  const initializedTriggers = new WeakSet();
 
   const closePanel = (trigger, panel, { restoreFocus = false } = {}) => {
     trigger.setAttribute("aria-expanded", "false");
@@ -32,72 +31,87 @@
     panel.style.maxHeight = `${window.innerHeight - margin * 2}px`;
   };
 
-  for (const trigger of triggers) {
-    const slot = trigger.closest(".equipment-slot");
-    const panel = slot?.querySelector("[data-equipment-details]");
-    if (!slot || !panel) continue;
+  const positionVisiblePanels = () => {
+    document.querySelectorAll("[data-equipment-details-trigger][aria-expanded='true']").forEach((trigger) => {
+      const panel = trigger.closest(".equipment-slot")?.querySelector("[data-equipment-details]");
+      if (panel && !panel.hidden) positionPanel(trigger, panel);
+    });
+  };
+  window.addEventListener("resize", positionVisiblePanels);
+  window.addEventListener("scroll", positionVisiblePanels, true);
 
-    let pinned = false;
-    let closeTimer = 0;
-    const openPanel = () => {
-      window.clearTimeout(closeTimer);
-      panel.hidden = false;
-      panel.classList.add("is-open");
-      panel.classList.toggle("is-pinned", pinned);
-      trigger.setAttribute("aria-expanded", "true");
-      positionPanel(trigger, panel);
-    };
-    const scheduleClose = () => {
-      window.clearTimeout(closeTimer);
-      closeTimer = window.setTimeout(() => {
-        if (pinned || trigger.matches(":hover") || panel.matches(":hover") || trigger.contains(document.activeElement) || panel.contains(document.activeElement)) return;
-        closePanel(trigger, panel);
-      }, 160);
-    };
+  const initializeEquipmentDetails = (root = document) => {
+    const triggers = root.querySelectorAll?.("[data-equipment-details-trigger]") ?? [];
+    for (const trigger of triggers) {
+      if (initializedTriggers.has(trigger)) continue;
+      const slot = trigger.closest(".equipment-slot");
+      const panel = slot?.querySelector("[data-equipment-details]");
+      if (!slot || !panel) continue;
 
-    trigger.addEventListener("pointerenter", (event) => {
-      if (event.pointerType === "mouse") openPanel();
-    });
-    trigger.addEventListener("pointerleave", (event) => {
-      if (event.pointerType === "mouse") scheduleClose();
-    });
-    trigger.addEventListener("focus", () => {
-      if (trigger.dataset.suppressDetailsFocus !== "true") openPanel();
-    });
-    trigger.addEventListener("blur", scheduleClose);
-    trigger.addEventListener("click", () => {
-      pinned = !pinned;
-      if (pinned) openPanel();
-      else if (!trigger.matches(":hover") && !panel.matches(":hover")) closePanel(trigger, panel);
-      else panel.classList.remove("is-pinned");
-    });
-    panel.addEventListener("pointerenter", (event) => {
-      if (event.pointerType === "mouse") window.clearTimeout(closeTimer);
-    });
-    panel.addEventListener("pointerleave", (event) => {
-      if (event.pointerType === "mouse") scheduleClose();
-    });
-    panel.addEventListener("focusin", () => window.clearTimeout(closeTimer));
-    panel.addEventListener("focusout", scheduleClose);
-    panel.querySelector("[data-equipment-details-close]")?.addEventListener("click", () => {
-      pinned = false;
-      closePanel(trigger, panel, { restoreFocus: true });
-    });
-    trigger.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !panel.hidden) {
-        event.preventDefault();
+      let pinned = false;
+      let closeTimer = 0;
+      const openPanel = () => {
+        window.clearTimeout(closeTimer);
+        panel.hidden = false;
+        panel.classList.add("is-open");
+        panel.classList.toggle("is-pinned", pinned);
+        trigger.setAttribute("aria-expanded", "true");
+        positionPanel(trigger, panel);
+      };
+      const scheduleClose = () => {
+        window.clearTimeout(closeTimer);
+        closeTimer = window.setTimeout(() => {
+          if (pinned || trigger.matches(":hover") || panel.matches(":hover") || trigger.contains(document.activeElement) || panel.contains(document.activeElement)) return;
+          closePanel(trigger, panel);
+        }, 160);
+      };
+
+      trigger.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "mouse") openPanel();
+      });
+      trigger.addEventListener("pointerleave", (event) => {
+        if (event.pointerType === "mouse") scheduleClose();
+      });
+      trigger.addEventListener("focus", () => {
+        if (trigger.dataset.suppressDetailsFocus !== "true") openPanel();
+      });
+      trigger.addEventListener("blur", scheduleClose);
+      trigger.addEventListener("click", () => {
+        pinned = !pinned;
+        if (pinned) openPanel();
+        else if (!trigger.matches(":hover") && !panel.matches(":hover")) closePanel(trigger, panel);
+        else panel.classList.remove("is-pinned");
+      });
+      panel.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "mouse") window.clearTimeout(closeTimer);
+      });
+      panel.addEventListener("pointerleave", (event) => {
+        if (event.pointerType === "mouse") scheduleClose();
+      });
+      panel.addEventListener("focusin", () => window.clearTimeout(closeTimer));
+      panel.addEventListener("focusout", scheduleClose);
+      panel.querySelector("[data-equipment-details-close]")?.addEventListener("click", () => {
         pinned = false;
         closePanel(trigger, panel, { restoreFocus: true });
-      }
-    });
-    panel.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        pinned = false;
-        closePanel(trigger, panel, { restoreFocus: true });
-      }
-    });
-    window.addEventListener("resize", () => { if (!panel.hidden) positionPanel(trigger, panel); });
-    window.addEventListener("scroll", () => { if (!panel.hidden) positionPanel(trigger, panel); }, true);
+      });
+      trigger.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !panel.hidden) {
+          event.preventDefault();
+          pinned = false;
+          closePanel(trigger, panel, { restoreFocus: true });
+        }
+      });
+      panel.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          pinned = false;
+          closePanel(trigger, panel, { restoreFocus: true });
+        }
+      });
+      initializedTriggers.add(trigger);
+    }
   }
+
+  window.initializeEquipmentDetails = initializeEquipmentDetails;
+  initializeEquipmentDetails(document);
 })();
