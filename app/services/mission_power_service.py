@@ -15,12 +15,12 @@ from app.services.progression_service import apply_levelup_attributes
 
 COMMON_APRENTICE_REFERENCE_MAX_LEVEL = 350
 REGIONAL_CONTRACT_RANK_POWER_MULTIPLIERS = {
-    "E": 1.00,
-    "D": 1.05,
-    "C": 1.10,
-    "B": 1.20,
-    "A": 1.35,
-    "S": 1.55,
+    "E": 0.70,
+    "D": 0.735,
+    "C": 0.77,
+    "B": 0.84,
+    "A": 0.945,
+    "S": 1.085,
 }
 
 

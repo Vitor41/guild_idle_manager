@@ -35,7 +35,8 @@ from app.services.mission_power_service import (
 
 MULTIPLIER_SCENARIOS = {
     "initial_po": {"E": 1.00, "D": 1.15, "C": 1.30, "B": 1.50, "A": 1.75, "S": 2.00},
-    "conservative": REGIONAL_CONTRACT_RANK_POWER_MULTIPLIERS,
+    "previous_e2": {"E": 1.00, "D": 1.05, "C": 1.10, "B": 1.20, "A": 1.35, "S": 1.55},
+    "adjusted_e2": REGIONAL_CONTRACT_RANK_POWER_MULTIPLIERS,
 }
 LEVEL_GROUPS = ((1, 2), (5, 2), (18, 2), (50, 2), (75, 3), (200, 4), (350, 5))
 RANKS = ("E", "D", "C", "B", "A", "S")
@@ -126,6 +127,13 @@ def _chance(base: int, party_power: int, recommended_power: int, modifier_pp: in
     return min(95, uncapped), uncapped
 
 
+def _maximum_class_bonus(party_count: int) -> int:
+    """Mirror the real party bonus ceiling for the requested number of members."""
+    count = max(0, int(party_count))
+    balanced_party_bonus = 2 if count >= 3 else 0
+    return min(8, 3 * count + balanced_party_bonus)
+
+
 def build_scenario_rows() -> tuple[
     list[dict[str, object]], dict[tuple[int, int], dict[str, int | str]]
 ]:
@@ -150,7 +158,7 @@ def build_scenario_rows() -> tuple[
                         rank,
                         group_size,
                         fallback_power=int(catalog["recommended_power"]),
-                    ) if scenario == "conservative" else max(
+                    ) if scenario == "adjusted_e2" else max(
                         1,
                         ceil(
                             member_power * float(multipliers[rank]) * group_size
@@ -164,7 +172,7 @@ def build_scenario_rows() -> tuple[
                     )
                     max_modifier_chance, _ = _chance(
                         int(catalog["base_success_chance"]), party_power, recommended,
-                        (3 if party_kind == "solo" else 8) + 15,
+                        _maximum_class_bonus(party_count) + 15,
                     )
                     stage = min(4, 1 + max(0, level - 51) // 75) if level >= 51 else 0
                     maximum_rarity_bonus = min(20, floor(5 * stage))
@@ -174,11 +182,11 @@ def build_scenario_rows() -> tuple[
                     )
                     max_supported_chance, _ = _chance(
                         int(catalog["base_success_chance"]), equipment_party_power, recommended,
-                        (3 if party_kind == "solo" else 8) + 15 + maximum_rarity_bonus,
+                        _maximum_class_bonus(party_count) + 15 + maximum_rarity_bonus,
                     )
                     max_supported_with_supply, _ = _chance(
                         int(catalog["base_success_chance"]), equipment_party_power, recommended,
-                        (3 if party_kind == "solo" else 8) + 15 + maximum_rarity_bonus + 5,
+                        _maximum_class_bonus(party_count) + 15 + maximum_rarity_bonus + 5,
                     )
                     rows.append({
                         "level": level,
@@ -228,6 +236,16 @@ def write_evidence(output_dir: Path) -> None:
 
     target_report = output_dir / "lot_e2_ml029_balance_study_2026-11-08.md"
     c18 = baseline[(18, 2)]
+    def scenario_row(level: int, rank: str, party_kind: str, scenario: str = "adjusted_e2"):
+        return next(row for row in rows if row["level"] == level and row["rank"] == rank
+                    and row["party_kind"] == party_kind and row["scenario"] == scenario)
+
+    adjusted_c18_solo = scenario_row(18, "C", "solo")
+    adjusted_c18_group = scenario_row(18, "C", "grupo_maximo")
+    adjusted_e1_solo = scenario_row(1, "E", "solo")
+    adjusted_e1_group = scenario_row(1, "E", "grupo_maximo")
+    adjusted_s350_group = scenario_row(350, "S", "grupo_maximo")
+    previous_c18_group = scenario_row(18, "C", "grupo_maximo", "previous_e2")
     contents = [
         "# ML-029 — estudo de poder recomendado para contratos regionais",
         "",
@@ -260,7 +278,7 @@ def write_evidence(output_dir: Path) -> None:
         "|---:|:---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ])
     for row in rows:
-        if row["scenario"] != "conservative" or row["rank"] not in {"E", "C", "S"}:
+        if row["scenario"] != "adjusted_e2" or row["rank"] not in {"E", "C", "S"}:
             continue
         contents.append(
         f"| {row['level']} | {row['rank']} | {row['group_max']} | {row['party_kind']} | "
@@ -271,25 +289,27 @@ def write_evidence(output_dir: Path) -> None:
         )
     contents.extend([
         "",
-        "A comparação integral Rank E–S, nos dois conjuntos de multiplicadores, está em [CSV de cenários](lot_e2_ml029_scenarios_2026-11-08.csv). `grupo_max` é o tamanho máximo real do template amostrado; `solo` usa um mercenário e `grupo_maximo` usa esse número de Comuns. O baseline de cada nível é igual entre Ranks porque o template atual não escala poder pelo Rank.",
+        "A comparação integral Rank E–S, nos três conjuntos de multiplicadores, está em [CSV de cenários](lot_e2_ml029_scenarios_2026-11-08.csv). `grupo_max` é o tamanho máximo real do template amostrado; `solo` usa um mercenário e `grupo_maximo` usa esse número de Comuns. O baseline de cada nível é igual entre Ranks porque o template atual não escala poder pelo Rank.",
         "",
         "## Multiplicadores avaliados",
         "",
-        "| Rank | PO inicial | Conservador escolhido para teste |",
-        "|:---:|---:|---:|",
+        "| Rank | PO inicial | Primeiro candidato E2 | E2 ajustado para reteste |",
+        "|:---:|---:|---:|---:|",
     ])
     for rank in RANKS:
         contents.append(
             f"| {rank} | {MULTIPLIER_SCENARIOS['initial_po'][rank]:.2f} | "
-            f"{MULTIPLIER_SCENARIOS['conservative'][rank]:.2f} |"
+            f"{MULTIPLIER_SCENARIOS['previous_e2'][rank]:.2f} | "
+            f"{MULTIPLIER_SCENARIOS['adjusted_e2'][rank]:.2f} |"
         )
     contents.extend([
         "",
         "## Decisão e riscos",
         "",
-        "A variante conservadora foi escolhida para aplicação a novas ofertas de contratos regionais de combate. Em Rank C nível 18, ela recomenda `ceil(93 × 1,10 × 2) = 205`: chance Comum sem bônus fica 55% solo e 75% com dois; suprimento eleva para 60%/80%. O baseline de 49 levava os dois cenários a 95%, então +5 p.p. não tinha efeito. O conjunto PO inicial elevaria C18 a 242 e reduziria a chance do grupo a 69% (74% com suprimento), risco maior no começo. Em nível 1, Rank E mantém 36 de poder recomendado, dá 59% solo e 85% com dois Comuns, com suprimento 64%/90%; isso preserva uma entrada solo com risco e recompensa a formação completa. O Rank S completo no nível 1 dá 65% sem bônus, contra 59% com o conjunto PO inicial; no nível 350, grupo completo Rank S dá 21% contra 14% no conjunto inicial, antes de bônus/equipamento.",
+        f"A primeira variante E2 foi revisada após a simulação pareada de CPU: manteve o volume de ações, mas reduziu em cerca de 25 p.p. a taxa média de sucesso dos rivais e em 22–24% o XP líquido por fase. O reteste com redução de 20% melhorou pouco; esta calibração reduz todos os multiplicadores em 30% igualmente para jogador e CPU, sem exceção por origem. Rank C nível 18 recomenda `{adjusted_c18_group['recommended_power']}` (`ceil(93 × {MULTIPLIER_SCENARIOS['adjusted_e2']['C']:.3f} × 2)`), com chance Comum {adjusted_c18_solo['chance_no_modifiers']}% solo e {adjusted_c18_group['chance_no_modifiers']}% em grupo; suprimento leva a {adjusted_c18_solo['chance_with_supply']}%/{adjusted_c18_group['chance_with_supply']}%. O primeiro candidato E2 avaliava o mesmo grupo em {previous_c18_group['recommended_power']} de poder e {previous_c18_group['chance_no_modifiers']}%. No nível 1, Rank E recomenda {adjusted_e1_solo['recommended_power']} e dá {adjusted_e1_solo['chance_no_modifiers']}% solo / {adjusted_e1_group['chance_no_modifiers']}% em grupo (suprimento: {adjusted_e1_solo['chance_with_supply']}%/{adjusted_e1_group['chance_with_supply']}%); C18 fica abaixo do teto de 95%, e o grupo continua mais viável que o solo. Rank S completo no nível 350 fica em {adjusted_s350_group['chance_no_modifiers']}% antes de bônus/equipamento.",
+        "A calibração final de −30% foi pareada em cinco seeds (100 Vigílias por tratamento): sucesso total CPU 72,7%→52,4% (−20,4 p.p.), com ações 50,64→50,63 por Vigília praticamente iguais. O XP líquido caiu 19,3% no início, 18,3% no meio e 20,3% no final; o nível médio final das guildas CPU foi 17,83→15,74. Rebeliões foram 1→4 em cinco campanhas, com 55 rolagens em ambos os lados (chance configurada 2% por rolagem); estados elegíveis foram 216→263 e portais 28→31. Contratos continuaram elegíveis/iniciados em volumes equivalentes. Esses deltas são um risco residual material para progressão e atividade regional. O relatório pareado completo está em [CSV](lot_e2_ml029_cpu_paired_2026-11-09-minus30-final.csv), [Markdown](lot_e2_ml029_cpu_paired_2026-11-09-minus30-final.md) e [JSON por seed](lot_e2_ml029_cpu_paired_2026-11-09-minus30-final.json). O resultado segue pendente de CR e decisão da coordenação; esta evidência não aprova o balanceamento por si só.",
         "",
-        "A chance continua usando cap 95%, classe/skills e os bônus reais; Comuns não recebem bônus de raridade. `get_party_chance_details()` acrescenta até +3 p.p. de classe para solo, até +8 p.p. no grupo e skills até +15 p.p.; raridade pode acrescentar até +20 p.p. em conteúdo de nível alto para elencos não Comuns. Equipamento acrescenta atributos ao poder efetivo, não p.p. direto. O CSV mede o teto de equipamento combinando a melhor peça permitida de cada slot, seu RNG máximo seedado, e os limites de classe, skill e raridade. Esse extremo pode chegar a 95% até no início; no jogo ele depende de obter várias peças fortes, então representa uma fronteira e não uma expectativa. O suprimento demonstra +5 p.p. nos cenários Common sem bônus enquanto há espaço; em qualquer combinação já limitada a 95%, não aumenta a chance. Esse é risco residual explícito para validação de builds equipadas.",
+        "A chance continua usando cap 95%, classe/skills e os bônus reais; Comuns não recebem bônus de raridade. O teto de classe respeita o grupo: até +3 p.p. solo, +6 p.p. em dupla e +8 p.p. a partir de três integrantes; skills chegam a +15 p.p. Raridade pode acrescentar até +20 p.p. em conteúdo alto para elencos não Comuns. Equipamento acrescenta atributos ao poder efetivo, não p.p. direto. O CSV mede o teto de equipamento combinando a melhor peça permitida de cada slot, seu RNG máximo seedado, e os limites de classe, skill e raridade. Esse extremo pode chegar a 95% até no início; no jogo ele depende de obter várias peças fortes, então representa uma fronteira e não uma expectativa. O suprimento demonstra +5 p.p. nos cenários Common sem bônus enquanto há espaço; em qualquer combinação já limitada a 95%, não aumenta a chance. Esse é risco residual explícito para validação de builds equipadas.",
         "",
         "A aplicação calcula apenas o snapshot de novas ofertas do tipo `contract` para templates que não sejam `gathering` ou `long_idle`; o valor do template/admin, requisitos, seed, ofertas já materializadas, snapshots, runs, coleta, missão longa, masmorra e chefe não são recalculados. Níveis fora de 1–350 e Ranks desconhecidos mantêm o poder configurado do template.",
         "",

@@ -10,6 +10,7 @@ from app.services.mission_power_service import (
     recommended_regional_contract_power,
 )
 from app.services.regional_cycle_service import _add_offer
+from scripts.balance.study_ml029_contract_power import _maximum_class_bonus
 
 
 class _CaptureSession:
@@ -21,6 +22,11 @@ class _CaptureSession:
 
 
 class MissionPowerTests(unittest.TestCase):
+    def test_balance_study_class_bonus_cap_matches_actual_party_size(self):
+        self.assertEqual(_maximum_class_bonus(1), 3)
+        self.assertEqual(_maximum_class_bonus(2), 6)
+        self.assertEqual(_maximum_class_bonus(3), 8)
+
     def test_reference_curve_uses_maximum_valid_common_apprentice_roll(self):
         self.assertEqual(
             common_apprentice_max_initial_attributes(),
@@ -49,8 +55,8 @@ class MissionPowerTests(unittest.TestCase):
 
     def test_recommended_power_is_monotonic_and_rounds_up(self):
         self.assertEqual(common_apprentice_reference_power(18), 93)
-        self.assertEqual(recommended_regional_contract_power(1, "E", 2, fallback_power=10), 36)
-        self.assertEqual(recommended_regional_contract_power(18, "C", 2, fallback_power=49), 205)
+        self.assertEqual(recommended_regional_contract_power(1, "E", 2, fallback_power=10), 26)
+        self.assertEqual(recommended_regional_contract_power(18, "C", 2, fallback_power=49), 144)
         levels = [recommended_regional_contract_power(level, "C", 2, fallback_power=1)
                   for level in (1, 5, 18, 50, 75, 200, 350)]
         self.assertEqual(levels, sorted(levels))
@@ -60,7 +66,7 @@ class MissionPowerTests(unittest.TestCase):
         by_group = [recommended_regional_contract_power(18, "C", size, fallback_power=1)
                     for size in range(1, 6)]
         self.assertEqual(by_group, sorted(by_group))
-        self.assertEqual(recommended_regional_contract_power(1, "E", 3, fallback_power=0), 54)
+        self.assertEqual(recommended_regional_contract_power(1, "E", 3, fallback_power=0), 38)
         self.assertEqual(recommended_regional_contract_power(351, "S", 5, fallback_power=77), 77)
         self.assertEqual(recommended_regional_contract_power(18, "X", 5, fallback_power=77), 77)
 
@@ -95,14 +101,14 @@ class MissionPowerTests(unittest.TestCase):
             template,
             "C",
         )
-        self.assertEqual(offer.recommended_power_snapshot, 205)
+        self.assertEqual(offer.recommended_power_snapshot, 144)
         self.assertEqual((offer.min_party_size_snapshot, offer.max_party_size_snapshot), (1, 2))
         self.assertEqual(template.recommended_power, 49)
         self.assertEqual(db.added, [offer])
 
         template.recommended_power = 700
         template.max_party_size = 5
-        self.assertEqual(offer.recommended_power_snapshot, 205)
+        self.assertEqual(offer.recommended_power_snapshot, 144)
         self.assertEqual(offer.max_party_size_snapshot, 2)
 
     def test_gathering_and_long_idle_contracts_keep_configured_power(self):
