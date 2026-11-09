@@ -84,7 +84,9 @@ if ($targetExists) { Assert-ManagedInstall $target }
 $token = [Guid]::NewGuid().ToString('N')
 $staging = Join-Path $programs "GuildIdleManager.stage-$token"
 $backup = Join-Path $programs "GuildIdleManager.backup-$token"
-$result = Join-Path $env:TEMP "GuildIdleManager-smoke-$token.txt"
+$smokeProfile = Join-Path $staging '.smoke-profile'
+$smokeTempRoot = Join-Path $smokeProfile 'Temp'
+$result = Join-Path $smokeProfile 'campaign-result.txt'
 $backupCreated = $false
 $installCommitted = $false
 function Copy-DirectoryContents([string]$SourceDirectory, [string]$DestinationDirectory) {
@@ -117,27 +119,78 @@ try {
         throw "Versao embutida $actualVersion diverge da versao declarada no pacote $appVersion."
     }
 
+    Assert-NoReparsePoint $smokeProfile
+    $previousSmokeLocalAppData = $env:LOCALAPPDATA
+    $previousSmokeAppData = $env:APPDATA
+    $previousSmokeTempRoot = $env:GIM_SMOKE_TEMP_DIR
+    $previousSmokeResult = $env:GIM_SMOKE_RESULT
+    $previousSmokeTemp = $env:TEMP
+    $previousSmokeTmp = $env:TMP
+    New-Item -ItemType Directory -Path $smokeTempRoot,(Join-Path $smokeProfile 'LocalAppData'),(Join-Path $smokeProfile 'Roaming') -Force | Out-Null
+    $env:LOCALAPPDATA = Join-Path $smokeProfile 'LocalAppData'
+    $env:APPDATA = Join-Path $smokeProfile 'Roaming'
+    $env:GIM_SMOKE_TEMP_DIR = $smokeTempRoot
     $env:GIM_SMOKE_RESULT = $result
-    $smoke = Start-Process -FilePath (Join-Path $staging 'GuildIdleManager.exe') -ArgumentList '--smoke' -PassThru -Wait -WindowStyle Hidden
+    $env:TEMP = $smokeTempRoot
+    $env:TMP = $smokeTempRoot
+    try {
+        $smoke = Start-Process -FilePath (Join-Path $staging 'GuildIdleManager.exe') -ArgumentList '--smoke' -PassThru -WindowStyle Hidden
+        if (-not $smoke.WaitForExit(120000)) {
+            $smokeProcess = Get-Process -Id $smoke.Id -ErrorAction SilentlyContinue
+            $expectedSmokeExe = [IO.Path]::GetFullPath((Join-Path $staging 'GuildIdleManager.exe'))
+            if ($smokeProcess -and $smokeProcess.Path -and [IO.Path]::GetFullPath($smokeProcess.Path).Equals($expectedSmokeExe, [StringComparison]::OrdinalIgnoreCase)) {
+                Stop-Process -Id $smokeProcess.Id -Force
+            }
+            throw 'O teste offline da copia de instalacao excedeu o limite de 120 segundos.'
+        }
+    } finally {
+        if ($null -eq $previousSmokeLocalAppData) { Remove-Item Env:LOCALAPPDATA -ErrorAction SilentlyContinue } else { $env:LOCALAPPDATA = $previousSmokeLocalAppData }
+        if ($null -eq $previousSmokeAppData) { Remove-Item Env:APPDATA -ErrorAction SilentlyContinue } else { $env:APPDATA = $previousSmokeAppData }
+        if ($null -eq $previousSmokeTempRoot) { Remove-Item Env:GIM_SMOKE_TEMP_DIR -ErrorAction SilentlyContinue } else { $env:GIM_SMOKE_TEMP_DIR = $previousSmokeTempRoot }
+        if ($null -eq $previousSmokeResult) { Remove-Item Env:GIM_SMOKE_RESULT -ErrorAction SilentlyContinue } else { $env:GIM_SMOKE_RESULT = $previousSmokeResult }
+        if ($null -eq $previousSmokeTemp) { Remove-Item Env:TEMP -ErrorAction SilentlyContinue } else { $env:TEMP = $previousSmokeTemp }
+        if ($null -eq $previousSmokeTmp) { Remove-Item Env:TMP -ErrorAction SilentlyContinue } else { $env:TMP = $previousSmokeTmp }
+    }
     if ($smoke.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $result -PathType Leaf)) {
         throw 'O teste offline da copia de instalacao falhou; a versao instalada foi preservada.'
     }
-    if ((Get-Content -LiteralPath $result -Raw) -notmatch '^PASS:') {
-        throw 'O teste offline nao confirmou os arquivos e dados incluidos no pacote.'
+    if ((Get-Content -LiteralPath $result -Raw) -notmatch '^PASS:.*seleção de campanhas') {
+        throw 'O teste offline nao confirmou a tela de selecao de campanhas e os dados do pacote.'
     }
 
-    $launcherSmokeResult = Join-Path $env:TEMP "GuildIdleManager-launcher-smoke-$token.txt"
+    $launcherSmokeResult = Join-Path $smokeProfile 'launcher-result.txt'
+    $previousLauncherSmokeResult = $env:GIM_LAUNCHER_SMOKE_RESULT
+    $previousLauncherTemp = $env:TEMP
+    $previousLauncherTmp = $env:TMP
+    $env:GIM_SMOKE_TEMP_DIR = $smokeTempRoot
     $env:GIM_LAUNCHER_SMOKE_RESULT = $launcherSmokeResult
+    $env:TEMP = $smokeTempRoot
+    $env:TMP = $smokeTempRoot
     try {
         $launcherSmoke = Start-Process -FilePath (Join-Path $staging 'GuildIdleManager.exe') -ArgumentList '--launcher-smoke' -PassThru -Wait -WindowStyle Hidden
     } finally {
-        Remove-Item Env:GIM_LAUNCHER_SMOKE_RESULT -ErrorAction SilentlyContinue
+        if ($null -eq $previousLauncherSmokeResult) { Remove-Item Env:GIM_LAUNCHER_SMOKE_RESULT -ErrorAction SilentlyContinue } else { $env:GIM_LAUNCHER_SMOKE_RESULT = $previousLauncherSmokeResult }
+        if ($null -eq $previousSmokeTempRoot) { Remove-Item Env:GIM_SMOKE_TEMP_DIR -ErrorAction SilentlyContinue } else { $env:GIM_SMOKE_TEMP_DIR = $previousSmokeTempRoot }
+        if ($null -eq $previousLauncherTemp) { Remove-Item Env:TEMP -ErrorAction SilentlyContinue } else { $env:TEMP = $previousLauncherTemp }
+        if ($null -eq $previousLauncherTmp) { Remove-Item Env:TMP -ErrorAction SilentlyContinue } else { $env:TMP = $previousLauncherTmp }
     }
     if ($launcherSmoke.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $launcherSmokeResult -PathType Leaf) -or
         (Get-Content -LiteralPath $launcherSmokeResult -Raw) -notmatch '^PASS: packaged launcher entry') {
         throw 'O executavel empacotado nao confirmou os estados do launcher independente.'
     }
     Remove-Item -LiteralPath $launcherSmokeResult -Force
+
+    $smokeProfileFullPath = [System.IO.Path]::GetFullPath($smokeProfile)
+    $stagingPrefix = [System.IO.Path]::GetFullPath($staging).TrimEnd('\') + '\'
+    if (-not $smokeProfileFullPath.StartsWith($stagingPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Pasta temporaria de smoke fora do staging de instalacao.'
+    }
+    Assert-NoReparsePoint $smokeProfileFullPath
+    $reparseEntries = Get-ChildItem -LiteralPath $smokeProfileFullPath -Force -Recurse | Where-Object {
+        ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0
+    }
+    if ($reparseEntries) { throw 'Pasta temporaria de smoke contem junction/reparse point.' }
+    Remove-Item -LiteralPath $smokeProfileFullPath -Recurse -Force
 
     $markerPath = Join-Path $staging $markerName
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)

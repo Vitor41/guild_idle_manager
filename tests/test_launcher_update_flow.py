@@ -6,12 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from threading import Event
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from app.desktop.update_launcher import classify_launcher_result
+from app.desktop.update_launcher import classify_launcher_result, run_launcher_smoke
 from app.services import github_releases as updates
 
 
@@ -36,6 +36,27 @@ class LauncherUpdateFlowTests(unittest.TestCase):
         self.assertEqual(classify_launcher_result({"available": True}, object()), "update-ready")
         self.assertEqual(classify_launcher_result({"failed": True}, None), "recoverable-error")
         self.assertEqual(classify_launcher_result({"query_enabled": False}, None), "unconfigured")
+
+    def test_packaged_launcher_smoke_builds_window_without_starting_network_check(self):
+        with patch("app.desktop.update_launcher.tk.Tk") as make_root, patch(
+            "app.desktop.update_launcher.LauncherWindow"
+        ) as make_window, patch("app.desktop.update_launcher.user_log_directory") as user_log_directory:
+            root = make_root.return_value
+            root.title.return_value = "Guild Idle Manager"
+            root.winfo_exists.return_value = True
+            window = make_window.return_value
+            window.state_label.cget.return_value = "Versão atualizada"
+            window.primary_button.cget.return_value = "Abrir jogo"
+
+            run_launcher_smoke()
+
+        root.withdraw.assert_called_once_with()
+        make_window.assert_called_once_with(root, auto_check=False, log_file=ANY)
+        self.assertIn("gim-launcher-window-smoke-", str(make_window.call_args.kwargs["log_file"]))
+        user_log_directory.assert_not_called()
+        window._show_result.assert_called_once_with({"available": False, "query_enabled": True}, None)
+        root.update_idletasks.assert_called_once_with()
+        root.destroy.assert_called_once_with()
 
     def test_download_false_verifies_signed_manifest_without_downloading_setup(self):
         private = Ed25519PrivateKey.generate()

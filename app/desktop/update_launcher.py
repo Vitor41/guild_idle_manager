@@ -9,6 +9,7 @@ from pathlib import Path
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -67,7 +68,7 @@ def _asset_file(name: str) -> Path:
 
 
 class LauncherWindow:
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, *, auto_check: bool = True, log_file: Path | None = None):
         self.root = root
         self.messages: queue.Queue[tuple[object, ...]] = queue.Queue()
         self.cancel_event = threading.Event()
@@ -77,13 +78,14 @@ class LauncherWindow:
         self.close_when_finished = False
         self.transfer_started = False
         self.outcome: str | None = None
-        self.log_file = user_log_directory() / "update-launcher.log"
+        self.log_file = log_file or (user_log_directory() / "update-launcher.log")
         self._images: dict[str, tk.PhotoImage] = {}
         self._configure_window()
         self._build_widgets()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(80, self._drain_messages)
-        self.root.after(0, self.check_updates)
+        if auto_check:
+            self.root.after(0, self.check_updates)
 
     def _configure_window(self) -> None:
         self.root.title("Guild Idle Manager")
@@ -91,7 +93,7 @@ class LauncherWindow:
         self.root.geometry("460x390")
         self.root.minsize(380, 340)
         self.root.resizable(True, True)
-        self.root.option_add("*Font", "Segoe UI 10")
+        self.root.option_add("*Font", ("Segoe UI", 10))
         self.root.option_add("*Foreground", _PALETTE["text"])
         self.root.option_add("*Background", _PALETTE["background"])
         try:
@@ -434,7 +436,16 @@ def run_prelaunch() -> None:
 
 
 def run_launcher_smoke() -> None:
-    """Exercise the packaged launcher's state routing without network or install side effects."""
+    """Create the real launcher window without network or install side effects."""
+    result_path = os.environ.get("GIM_LAUNCHER_SMOKE_RESULT")
+
+    def record(message: str) -> None:
+        if result_path:
+            result_file = Path(result_path)
+            result_file.parent.mkdir(parents=True, exist_ok=True)
+            result_file.write_text(message + "\n", encoding="utf-8")
+
+    record("RUNNING: checking launcher state routing")
     checks = (
         ({"available": False, "query_enabled": True}, None, "current"),
         ({"available": True, "query_enabled": True}, object(), "update-ready"),
@@ -444,7 +455,48 @@ def run_launcher_smoke() -> None:
     for status, prepared, expected in checks:
         if classify_launcher_result(status, prepared) != expected:
             raise RuntimeError(f"Launcher state smoke failed: expected {expected}")
-    result_path = os.environ.get("GIM_LAUNCHER_SMOKE_RESULT")
+
+    record("RUNNING: creating Tcl/Tk root")
+    configured_temp_root = os.environ.get("GIM_SMOKE_TEMP_DIR")
+    temporary_root = Path(configured_temp_root) if configured_temp_root else None
+    if temporary_root is not None:
+        temporary_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="gim-launcher-window-smoke-",
+        dir=str(temporary_root) if temporary_root is not None else None,
+    ) as smoke_profile:
+        root: tk.Tk | None = None
+        try:
+            root = tk.Tk()
+            record("RUNNING: Tcl/Tk root created")
+            root.withdraw()
+            window = LauncherWindow(
+                root,
+                auto_check=False,
+                log_file=Path(smoke_profile) / "update-launcher.log",
+            )
+            record("RUNNING: launcher widgets created")
+            window._show_result({"available": False, "query_enabled": True}, None)
+            root.update_idletasks()
+            if not root.winfo_exists() or root.title() != "Guild Idle Manager":
+                raise RuntimeError("Launcher window did not initialize with its expected title.")
+            if window.state_label.cget("text") != "Versão atualizada":
+                raise RuntimeError("Launcher window did not render its current-version state.")
+            if window.primary_button.cget("text") != "Abrir jogo":
+                raise RuntimeError("Launcher window did not expose the action to open the game.")
+            record("RUNNING: launcher window state verified")
+        finally:
+            if root is not None:
+                try:
+                    root.destroy()
+                except tk.TclError:
+                    pass
+
     if result_path:
-        Path(result_path).write_text("PASS: packaged launcher entry and update states\n", encoding="utf-8")
-    print("PASS: packaged launcher entry and update states")
+        result_file = Path(result_path)
+        result_file.parent.mkdir(parents=True, exist_ok=True)
+        result_file.write_text(
+            "PASS: packaged launcher entry; window initialized, current-version state and open-game action rendered\n",
+            encoding="utf-8",
+        )
+    print("PASS: packaged launcher entry; window initialized, current-version state and open-game action rendered")

@@ -2,27 +2,24 @@
 
 ## Estado
 
-**Não aprovado para aceite visual/E2E ou release.** O commit `0e0dcd0e16ebffae6580bb95e10f0d38dfc60ba1` contém a implementação e os testes focados, mas ainda não há evidência de uma atualização instalada de ponta a ponta em perfil temporário.
+**Candidato apto para revisão CR; release continua fechado.** O smoke empacotado confirmou a abertura do launcher e a rota de seleção de campanhas. O script do Setup corrigido também concluiu a instalação no perfil temporário e preservou o save. Não houve inspeção visual manual nem criação/publicação de um novo Setup IExpress nesta rodada.
 
-## Evidência disponível
+## Evidência
 
-- Testes Python focados: 21 passaram, cobrindo fluxo do launcher, contratos de interface, Guia e duração de venda.
-- Testes frontend: 6 passaram, cobrindo exportação do Guia e detalhes de equipamento.
-- `compileall` e `git diff --check` passaram.
-- O smoke HTTP (`tests.test_desktop_http_smoke`) não iniciou: FastAPI exige `python-multipart`, ausente em `.venv-desktop`. A dependência consta em `requirements-desktop-dev.txt` (linha 27), mas não foi localizado wheel na instalação nem no cache local.
-- Há um processo `GuildIdleManager.exe` cujo caminho aponta para `%LOCALAPPDATA%\Programs\GuildIdleManager`, a instalação normal. Ele não foi encerrado nem usado para testes. Nenhuma nova instalação foi iniciada.
-- As capturas anteriores registram falha ao abrir o Setup validado por bloqueio de arquivo em uso (`WinError 32`); portanto, não comprovam atualização concluída nem preservação do save após instalação.
+- `tests.test_launcher_update_flow` e `tests.test_launcher_ui_contracts`: 10 testes passaram.
+- Smoke offline do executável empacotado: `PASS: SQLite, campanhas temporárias, seleção de campanhas, nomes e manifesto local`.
+- Smoke do launcher empacotado: `PASS: packaged launcher entry; window initialized, current-version state and open-game action rendered`.
+- Executável candidato: 12.849.610 bytes, SHA-256 `5531E99AB7C3481654363C9D01C2F6E1683F4EB6BB369751975D78DCA32579C4`. A cópia usada no pacote com o script atualizado tem o mesmo hash. As alterações posteriores ao build validado foram no script do Setup; nenhum arquivo Python do aplicativo mudou.
+- ZIP temporário com o Setup corrigido: 74.566.800 bytes, SHA-256 `74B1900A4DAAECD9F202748FCEE9FA771D3F2977335D971E5081B7D56902014D`.
+- `Install-Desktop-Dev.ps1` foi executado diretamente, com elevação, apenas em `%TEMP%\GIM-Updater-E2E-mw1d4lce\profile-handoff-regression`. O marcador final indica canal DEV, versão 0.8.0 e produto `org.guildidlemanager.desktop`.
+- Save `860858a7-e9bc-49e3-b3f3-8e7e2e698408.db`: 5.439.488 bytes; SHA-256 antes e depois `0D23110C11C19027D9436F163C686C669F585CEAFEEC80296B5E8BE73AAC0C03`.
+- A falha anterior do Setup foi causada por atribuir a saída vazia de `Assert-NoReparsePoint` a `$smokeProfile`. O script agora apenas executa a validação e preserva o caminho.
+- Um novo build com o runtime embeddable sem Tk não é evidência válida: PyInstaller avisou que excluiria tkinter e o smoke não gerou marcador. O EXE acima vem do build anterior, cujo smoke passou; a cópia e o hash foram conferidos antes do teste do Setup.
 
-## Plano para fechar o gate
+## Limites e próximos gates
 
-1. Preparar um ambiente descartável de build/teste a partir de `requirements-desktop-dev.txt`, usando um wheel já disponível ou o ambiente isolado de CI; não alterar o ambiente global nem instalar dependências na instalação do jogo.
-2. Executar o smoke HTTP e os testes de launcher após a dependência estar disponível.
-3. Criar ou restaurar um perfil descartável sob `%TEMP%` e confirmar que seu `LOCALAPPDATA` aponta exclusivamente para esse diretório. Registrar a versão inicial e o hash dos arquivos de save de teste.
-4. Construir o Setup candidato deste branch e executar o instalador somente com o perfil descartável selecionado. Não fechar processo cujo caminho não pertença claramente a esse perfil.
-5. Confirmar que o instalador termina, a versão exibida é 0.8.0, o launcher chega à seleção de campanhas, os saves mantêm os mesmos hashes e os logs registram o handoff sem erro.
-6. Fazer a inspeção visual nas larguras 1440, 1024, 760 e 420 px, zoom 200%, mouse, teclado e toque; registrar capturas e resultados para cada critério ML-031–034 e BUG-009.
-7. Encaminhar o commit e as evidências à revisão CR. Manter o gate de release fechado até E2E, inspeção visual e CR aprovados.
-
-## Limites
-
-Este relatório não altera nem aprova os critérios. Testes unitários e de contrato não substituem a instalação temporária, a comparação do save, a inspeção visual ou a revisão CR. Perfil real, release publicada e instalação no perfil normal permanecem fora deste teste.
+- A criação do wrapper IExpress falhou com código 1 neste ambiente; o teste cobriu o script de instalação diretamente e o ZIP atualizado, não um novo `Setup.exe` autônomo.
+- A execução combinada de 24 testes também encontrou falhas nos testes de assinatura e no smoke HTTP porque `tempfile` caiu no diretório do repositório e o SQLite não conseguiu abrir o banco durante a carga de modelos. Esses resultados não foram tratados como aprovados. A bateria limpa de 10 testes de launcher passou.
+- Não houve inspeção visual nas larguras 1440, 1024, 760 e 420 px, zoom 200%, nem verificação manual de mouse, teclado e toque. Os critérios ML-031–034 e BUG-009 ainda exigem gate visual.
+- Não se deve publicar ou liberar o Setup/release até produzir um wrapper final rastreável, repetir os smokes sobre esse artefato e fechar a revisão CR e a inspeção visual.
+- O perfil normal e seus saves não foram usados. O processo normal que já estava aberto permaneceu intocado.

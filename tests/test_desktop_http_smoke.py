@@ -120,6 +120,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         smoke_market_item_template_id = item_template.id
         mercenary_class_id = mercenary_class.id
         mercenary = create_mercenary(db, guild.id, mercenary_class, "Teste visual")
+        db.flush()
         equipped_detail_item = GuildItemInstance(
             guild_id=guild.id,
             item_template_id=equipment_template.id,

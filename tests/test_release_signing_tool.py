@@ -184,6 +184,17 @@ class ReleaseSigningToolTests(unittest.TestCase):
         self.assertIn("GIM_BUILD_RELEASE_CONFIG_FILE", build_script)
         self.assertIn('GIM_BUILD_RELEASE_CONFIG_FILE', spec)
 
+    def test_build_script_smokes_packaged_campaign_database_and_launcher_window(self):
+        root = Path(__file__).resolve().parents[1]
+        build_script = (root / "scripts" / "build_desktop_dev.ps1").read_text(encoding="utf-8")
+        offline_smoke = (root / "app/desktop/offline_smoke.py").read_text(encoding="utf-8")
+        self.assertIn("ArgumentList '--smoke'", build_script)
+        self.assertIn("ArgumentList '--launcher-smoke'", build_script)
+        self.assertIn("GIM_SMOKE_TEMP_DIR", build_script)
+        self.assertIn("CampaignService", offline_smoke)
+        self.assertIn("campaigns_page(request)", offline_smoke)
+        self.assertIn("Criar e jogar", offline_smoke)
+
     def test_packaged_update_channel_is_taken_from_installation_marker(self):
         with patch.object(github_releases, "_packaged_distribution_config_path", return_value=Path("missing-config.json")), \
                 patch.object(github_releases, "_legacy_packaged_key_path", return_value=Path("missing-key.txt")), \
