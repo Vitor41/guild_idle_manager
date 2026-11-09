@@ -58,7 +58,7 @@ class RegionalCpuSimulationTests(unittest.TestCase):
                 )
                 self.assertEqual(db.execute("SELECT campaign_id FROM owned_rows").fetchone()[0], old_id)
 
-    def test_rebellion_funnel_aligns_prior_snapshot_and_attributes_cooldown(self):
+    def test_rebellion_funnel_aligns_prior_snapshot_without_regional_cooldown(self):
         campaign = {
             "rebellion_funnel_by_cycle": [
                 {
@@ -88,7 +88,8 @@ class RegionalCpuSimulationTests(unittest.TestCase):
         self.assertEqual(funnel[0]["threshold_eligible_regions"], [])
         self.assertEqual(funnel[1]["threshold_eligible_regions"], ["vale-fronteira"])
         self.assertEqual(funnel[1]["selected_roll_region"], "vale-fronteira")
-        self.assertEqual(funnel[2]["cooldown_veto_regions"], ["vale-fronteira"])
+        self.assertEqual(funnel[2]["cooldown_veto_regions"], [])
+        self.assertEqual(funnel[2]["single_roll_cap_veto_regions"], [])
         self.assertEqual(
             campaign["regional_rebellion_funnel"]["vale-fronteira"]["pressure_target_cycles"],
             2,

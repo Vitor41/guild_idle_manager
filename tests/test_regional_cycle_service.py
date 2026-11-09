@@ -52,6 +52,65 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
+    def test_cpu_offer_policy_ranks_expected_reward_rate_before_rank(self):
+        from app.services.regional_cycle_service import _cpu_offer_preference
+
+        strong_expected = SimpleNamespace(
+            offer_type="contract", rank="E", success_chance_snapshot=90,
+            recommended_power_snapshot=100, gold_reward_snapshot=50,
+            xp_reward_snapshot=50, duration_seconds_snapshot=900,
+            cpu_failure_risk_snapshot=0, id=1,
+        )
+        high_rank_low_value = SimpleNamespace(
+            offer_type="contract", rank="S", success_chance_snapshot=45,
+            recommended_power_snapshot=100, gold_reward_snapshot=5,
+            xp_reward_snapshot=5, duration_seconds_snapshot=3600,
+            cpu_failure_risk_snapshot=0, id=2,
+        )
+        best = _cpu_offer_preference(strong_expected, "contracts", 100, 2, 0)
+        weaker = _cpu_offer_preference(high_rank_low_value, "contracts", 100, 2, 0)
+        self.assertLess(best, weaker)
+
+    def test_cpu_boss_equipment_requirement_applies_to_every_party_member(self):
+        from app.services.regional_cycle_service import _cpu_offer_party
+
+        start = datetime(2026, 11, 9)
+        offer = SimpleNamespace(
+            required_guild_level_snapshot=1,
+            min_party_size_snapshot=2,
+            max_party_size_snapshot=2,
+            required_min_mercenary_level_snapshot=1,
+            required_class_code_snapshot=None,
+            required_total_power_snapshot=0,
+            required_tank_count_snapshot=0,
+            required_support_count_snapshot=0,
+            required_damage_count_snapshot=0,
+            required_equipment_tier_snapshot=2,
+        )
+        party = [
+            SimpleNamespace(
+                id=1, slot=1, level=1, class_code="warrior", power=20,
+                vitality=0, agility=0, intelligence=0, luck=0, armor=0,
+                equipment_bonus_json='{"equipment_tier": 2}',
+            ),
+            SimpleNamespace(
+                id=2, slot=2, level=1, class_code="mage", power=20,
+                vitality=0, agility=0, intelligence=0, luck=0, armor=0,
+                equipment_bonus_json='{"equipment_tier": 1}',
+            ),
+        ]
+        choice = _cpu_offer_party(
+            offer, SimpleNamespace(level=1), party,
+            {1: start, 2: start}, start + timedelta(hours=4), {},
+        )
+        self.assertIsNone(choice)
+        party[1].equipment_bonus_json = '{"equipment_tier": 2}'
+        choice = _cpu_offer_party(
+            offer, SimpleNamespace(level=1), party,
+            {1: start, 2: start}, start + timedelta(hours=4), {},
+        )
+        self.assertIsNotNone(choice)
+
     def test_cpu_throughput_scales_with_roster_and_pressure_selects_highest_risk(self):
         strong = RegionalGuildState(
             region_code="vale-fronteira", slot=1, name="Forte", profile="strong", archetype="balanced",
@@ -130,6 +189,12 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     RegionalGuildState.region_code == region_code,
                     RegionalGuildState.profile == "strong",
                 ))
+                for other_cpu in db.scalars(select(RegionalGuildState).where(
+                    RegionalGuildState.campaign_id == created.campaign_id,
+                    RegionalGuildState.guild_id.is_(None),
+                )):
+                    if other_cpu.id != cpu.id:
+                        other_cpu.active = False
                 cpu.archetype = "exploration"
                 template = DungeonTemplate(
                     name="Chefe de teste do portal", description="Encontro regional", content_type="boss",
@@ -1121,7 +1186,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                             if decision["offer_type"] == "portal":
                                 event = db.get(regional_cycle_service.RegionalEvent, decision["event_id"])
                                 self.assertIsNotNone(event)
-                                self.assertLessEqual(end_at, event.expires_at_utc)
+                                self.assertLessEqual(end_at, regional_cycle_service._utc(event.expires_at_utc))
                                 self.assertLessEqual(len(decision["mercenary_slots"]), 5)
                             else:
                                 offer = offer_by_id[decision["offer_id"]]
@@ -1203,12 +1268,17 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         )
                     self.assertGreater(max_cpu_completed_in_home_cycle, 8)
 
+                    regular_cpu_actions = sum(
+                        decision["offer_type"] != "portal"
+                        for plan in db.scalars(select(RegionalCpuCyclePlan).where(
+                            RegionalCpuCyclePlan.campaign_id == first.campaign_id,
+                        ))
+                        for decision in json.loads(plan.decisions_json)
+                    )
                     self.assertEqual(db.scalar(select(func.count(RegionalOffer.id)).where(
                         RegionalOffer.campaign_id == first.campaign_id,
                         RegionalOffer.status == "cpu_completed",
-                    )), sum(plan.actions for plan in db.scalars(select(RegionalCpuCyclePlan).where(
-                        RegionalCpuCyclePlan.campaign_id == first.campaign_id,
-                    ))))
+                    )), regular_cpu_actions)
 
                 campaigns.activate_campaign(second.campaign_id)
                 with SessionLocal() as db:

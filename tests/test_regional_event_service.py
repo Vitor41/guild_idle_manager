@@ -227,7 +227,7 @@ class RegionalEventServiceTests(unittest.TestCase):
             cycle = RegionalCycle(
                 campaign_id=self.campaign_id, cycle_number=27,
                 starts_at_utc=self.now, ends_at_utc=self.now + timedelta(hours=6),
-                seed="portal-audit-parity", rules_version="vigilia-v2",
+                seed="portal-audit-parity", rules_version="vigilia-v7",
             )
             regions = [RegionalRegionState(
                 campaign_id=self.campaign_id, region_code=code, region_name=name,
@@ -426,21 +426,21 @@ class RegionalEventServiceTests(unittest.TestCase):
                 first_event.region_code if first_event is not None else None,
             )
 
-    def test_rebellion_roll_rotates_vulnerable_regions_and_observes_cooldown(self):
+    def test_rebellion_roll_retries_each_eligible_cycle_without_regional_cooldown(self):
         with SessionLocal() as db:
             campaign = db.get(CampaignMetadata, self.campaign_id)
-            regions = [RegionalRegionState(
+            region = RegionalRegionState(
                 campaign_id=self.campaign_id,
-                region_code=f"rotate-{index}", region_name=f"Rotação {index}",
+                region_code="repeat-eligible", region_name="Elegível contínua",
                 security=25, threat=85,
-            ) for index in range(5)]
+            )
             cycles = [RegionalCycle(
                 campaign_id=self.campaign_id, cycle_number=index,
                 starts_at_utc=self.now + timedelta(hours=6 * index),
                 ends_at_utc=self.now + timedelta(hours=6 * (index + 1)),
-                seed=f"rotation-{index}", rules_version="vigilia-v2",
-            ) for index in range(7)]
-            db.add_all([*regions, *cycles])
+                seed=f"rotation-{index}", rules_version="vigilia-v7",
+            ) for index in range(2)]
+            db.add_all([region, *cycles])
             db.flush()
             with patch("app.services.regional_event_service._rng") as rng_factory:
                 rng_factory.return_value.random.return_value = 0.99
@@ -460,9 +460,85 @@ class RegionalEventServiceTests(unittest.TestCase):
                     None,
                 )
                 selected.append(selected_event.region_code if selected_event is not None else None)
-            self.assertEqual(len(set(selected[:5])), 5)
-            self.assertIsNone(selected[5])
-            self.assertEqual(selected[6], selected[0])
+            self.assertEqual(selected, [region.region_code, region.region_code])
+
+    def test_v6_rebellion_cycle_retains_its_regional_cooldown(self):
+        with SessionLocal() as db:
+            campaign = db.get(CampaignMetadata, self.campaign_id)
+            region = RegionalRegionState(
+                campaign_id=self.campaign_id,
+                region_code="legacy-repeat", region_name="Região de regra antiga",
+                security=25, threat=85,
+            )
+            cycles = [RegionalCycle(
+                campaign_id=self.campaign_id, cycle_number=index,
+                starts_at_utc=self.now + timedelta(hours=6 * index),
+                ends_at_utc=self.now + timedelta(hours=6 * (index + 1)),
+                seed=f"legacy-rebellion-{index}", rules_version="vigilia-v6",
+            ) for index in range(2)]
+            db.add_all([region, *cycles])
+            db.flush()
+            with patch("app.services.regional_event_service._rng") as rng_factory:
+                rng_factory.return_value.random.return_value = 0.99
+                for cycle in cycles:
+                    evaluate_open_rebellion(
+                        db, campaign, cycle, guild_id=999, now=cycle.starts_at_utc,
+                    )
+            next_cycle_event = db.scalar(select(RegionalEvent).where(
+                RegionalEvent.campaign_id == self.campaign_id,
+                RegionalEvent.event_type == "rebellion",
+                RegionalEvent.trigger_cycle_number == 1,
+                RegionalEvent.region_code == region.region_code,
+            ))
+            summary = json.loads(next_cycle_event.summary_json)
+            self.assertEqual(summary["region_roll_cooldown_cycles"], 5)
+            self.assertFalse(summary["roll_selected"])
+
+    def test_portal_pool_includes_stage_eligible_intro_boss_and_excludes_late_guild_boss(self):
+        with SessionLocal() as db:
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id, cycle_number=31,
+                starts_at_utc=self.now, ends_at_utc=self.now + timedelta(hours=6),
+                seed="portal-stage-pool", rules_version="vigilia-v7", player_level_snapshot=1,
+            )
+            region = RegionalRegionState(
+                campaign_id=self.campaign_id, region_code="stage-1", region_name="Estágio 1",
+                security=50, threat=100,
+            )
+            intro = DungeonTemplate(
+                name="Chefe introdutório", description="L1",
+                content_type="boss", level_band="1-20", recommended_level=1,
+                required_guild_level=1, biome="fortress", duration_seconds=1200,
+                base_gold_reward=0, base_xp_reward=0, base_success_chance=50, is_active=True,
+            )
+            late = DungeonTemplate(
+                name="Chefe tardio", description="L240",
+                content_type="boss", level_band="201+", recommended_level=240,
+                required_guild_level=30, biome="portal", duration_seconds=3600,
+                base_gold_reward=0, base_xp_reward=0, base_success_chance=50, is_active=True,
+            )
+            db.add_all([cycle, region, intro, late])
+            db.flush()
+            db.add(ItemTemplate(
+                name="Loot de estágio", description="Fixture",
+                item_type="equipment", rarity="rare", level_band="1-20",
+                equipment_slot="main_hand", required_level=1, tier=1, base_sell_value=0,
+                rng_bonus_min=0, rng_bonus_max=0, is_active=True,
+            ))
+            db.flush()
+            with patch("app.services.regional_event_service._rng") as rng_factory:
+                rng_factory.return_value.random.return_value = 0.0
+                rng_factory.return_value.randrange.return_value = 0
+                create_cycle_portals(db, self.campaign_id, cycle, [region])
+            event = db.scalar(select(RegionalEvent).where(
+                RegionalEvent.campaign_id == self.campaign_id,
+                RegionalEvent.event_type == "portal",
+                RegionalEvent.trigger_cycle_number == cycle.cycle_number,
+            ))
+            summary = json.loads(event.summary_json)
+            self.assertEqual(event.dungeon_template_id, intro.id)
+            self.assertEqual(summary["portal_boss"]["template"]["id"], intro.id)
+            self.assertEqual(summary["progression_stage_level_snapshot"], 1)
 
     def test_concurrent_portal_and_rebellion_triggers_are_campaign_idempotent(self):
         class FixedRng:

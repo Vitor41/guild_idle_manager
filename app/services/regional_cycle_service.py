@@ -48,8 +48,8 @@ from app.services.tavern_service import get_discounted_hire_cost, get_tavern_app
 
 
 LEGACY_VIGILIA_RULES_VERSION = "vigilia-v2"
-VIGILIA_RULES_VERSION = "vigilia-v6"
-RIVAL_CALM_RULES_VERSIONS = frozenset({"vigilia-v3", "vigilia-v4", "vigilia-v5", "vigilia-v6"})
+VIGILIA_RULES_VERSION = "vigilia-v7"
+RIVAL_CALM_RULES_VERSIONS = frozenset({"vigilia-v3", "vigilia-v4", "vigilia-v5", "vigilia-v6", "vigilia-v7"})
 CYCLE_SECONDS = 6 * 60 * 60
 RANKS = ("E", "D", "C", "B", "A", "S")
 # Confirmed GDD reference for a Vigília with no regional actions.
@@ -1190,6 +1190,9 @@ def _cpu_offer_party(
     available_at: dict[int, datetime],
     cycle_end: datetime,
     class_roles: dict[str, str],
+    *,
+    include_synergy_power: bool = True,
+    require_equipment_for_each_member: bool = True,
 ) -> tuple[datetime, list[RegionalCpuMercenary]] | None:
     if state.level < offer.required_guild_level_snapshot:
         return None
@@ -1210,17 +1213,34 @@ def _cpu_offer_party(
             if required_class and not any(member.class_code.casefold() == required_class for member in party):
                 continue
             roles = {"tank": 0, "support": 0, "damage": 0}
-            equipment_tier = 0
+            equipment_tiers = []
             power = 0
             for member in party:
                 role = (class_roles.get(member.class_code, "damage") or "damage").casefold()
                 roles[role if role in roles else "damage"] += 1
                 bonuses = json.loads(member.equipment_bonus_json or "{}")
-                equipment_tier = max(equipment_tier, int(bonuses.get("equipment_tier", bonuses.get("tier", 0)) or 0))
+                equipment_tiers.append(int(bonuses.get("equipment_tier", bonuses.get("tier", 0)) or 0))
                 power += _cpu_member_power(member)
-            if (power < required_power or roles["tank"] < required_tank
+            equipment_ineligible = (
+                required_equipment > 0 and (
+                    any(tier < required_equipment for tier in equipment_tiers)
+                    if require_equipment_for_each_member
+                    else max(equipment_tiers, default=0) < required_equipment
+                )
+            )
+            if (roles["tank"] < required_tank
                     or roles["support"] < required_support or roles["damage"] < required_damage
-                    or equipment_tier < required_equipment):
+                    or equipment_ineligible):
+                continue
+            if any((required_tank, required_support, required_damage)):
+                has_synergy = (
+                    roles["tank"] >= required_tank
+                    and roles["support"] >= required_support
+                    and roles["damage"] >= required_damage
+                )
+            else:
+                has_synergy = all(roles[role] > 0 for role in ("tank", "support", "damage"))
+            if power + (200 if include_synergy_power and has_synergy else 0) < required_power:
                 continue
             start = max((available_at.get(member.id, cycle_end) for member in party))
             if start >= cycle_end:
@@ -1231,7 +1251,37 @@ def _cpu_offer_party(
     return (earliest[0], earliest[2]) if earliest is not None else None
 
 
-def _cpu_offer_preference(offer: RegionalOffer, archetype: str) -> tuple[int, ...]:
+def _cpu_offer_preference(
+    offer: RegionalOffer,
+    archetype: str,
+    party_power: int,
+    party_size: int,
+    class_bonus: int,
+) -> tuple[int, ...]:
+    """Rank feasible actions by expected reward rate, then preserve archetype preference."""
+    chance = max(5, min(95, offer.success_chance_snapshot
+                       + power_success_adjustment(party_power, offer.recommended_power_snapshot)
+                       + class_bonus - int(getattr(offer, "cpu_failure_risk_snapshot", 0) or 0)))
+    success_reward = offer.gold_reward_snapshot + offer.xp_reward_snapshot * party_size
+    failure_reward = max(0, offer.xp_reward_snapshot // 4) * party_size
+    expected_reward = chance * success_reward + (100 - chance) * failure_reward
+    duration = max(1, int(offer.duration_seconds_snapshot))
+    reward_rate = expected_reward // duration
+    if offer.offer_type == "portal":
+        archetype_preference = 0 if archetype == "exploration" else 1
+    elif archetype == "security":
+        archetype_preference = 0 if offer.offer_type == "contract" else 1
+    elif archetype == "exploration":
+        archetype_preference = 0 if offer.offer_type in {"dungeon", "boss"} else 1
+    elif archetype == "contracts":
+        archetype_preference = 0 if offer.offer_type == "contract" else 1
+    else:
+        archetype_preference = 0
+    return (-reward_rate, -chance, archetype_preference, -offer.recommended_power_snapshot, offer.id)
+
+
+def _cpu_offer_preference_v6(offer: RegionalOffer, archetype: str) -> tuple[int, ...]:
+    """Preserve the v6 ordering for any cycle that has not reached v7 rules."""
     sort_value = _offer_sort_value(offer)
     if offer.offer_type == "portal":
         return (-1 if archetype == "exploration" else 1, *sort_value[:2])
@@ -1258,6 +1308,7 @@ def _cpu_plan_for_guild_v6(
     ))
     if existing is not None:
         raise RegionalCycleError("Foi encontrado um plano CPU parcialmente persistido; o ciclo não foi reaplicado.")
+    v7_rules = cycle.rules_version == "vigilia-v7"
 
     roster = list(db.scalars(select(RegionalCpuMercenary).where(
         RegionalCpuMercenary.guild_state_id == state.id,
@@ -1318,10 +1369,22 @@ def _cpu_plan_for_guild_v6(
         portal_summary = json.loads(portal.summary_json or "{}")
         portal_boss = portal_summary.get("portal_boss", {}).get("template", {})
         portal_rng = _rng(portal.seed, plan_seed, "cpu-portal-entry")
-        if (portal_rng.random() < 0.25 and not portal_boss.get("required_building_type")
-                and int(portal_boss.get("required_building_level") or 0) == 0):
+        if portal_rng.random() < 0.25 and (
+            v7_rules or (not portal_boss.get("required_building_type")
+                         and int(portal_boss.get("required_building_level") or 0) == 0)
+        ):
+            introductory_boss = (
+                v7_rules
+                and
+                portal_boss.get("content_type") == "boss"
+                and portal_boss.get("level_band") == "1-20"
+                and int(portal_boss.get("recommended_level") or 1) <= 1
+            )
             portal_offer = SimpleNamespace(
-                id=-portal.id,
+                # A shared event can be entered by several CPU guilds; the
+                # synthetic decision ID is unique per guild while event_id
+                # still links every entry to the same portal snapshot.
+                id=(-(portal.id * 1_000_000 + state.id) if v7_rules else -portal.id),
                 offer_type="portal",
                 rank="C",
                 status="available",
@@ -1337,12 +1400,14 @@ def _cpu_plan_for_guild_v6(
                 required_guild_level_snapshot=max(1, int(portal_boss.get("required_guild_level") or 1)),
                 required_min_mercenary_level_snapshot=max(1, int(portal_boss.get("required_min_mercenary_level") or 1)),
                 cpu_failure_risk_snapshot=cpu_failure_risk_for_region(region.threat, region.security),
-                required_total_power_snapshot=max(0, int(portal_boss.get("required_total_power") or 0)),
-                required_class_code_snapshot=portal_boss.get("required_class_code"),
-                required_tank_count_snapshot=max(0, int(portal_boss.get("required_tank_count") or 0)),
-                required_support_count_snapshot=max(0, int(portal_boss.get("required_support_count") or 0)),
-                required_damage_count_snapshot=max(0, int(portal_boss.get("required_damage_count") or 0)),
-                required_equipment_tier_snapshot=max(0, int(portal_boss.get("required_equipment_tier") or 0)),
+                # Player access skips the total-power check for the introductory boss;
+                # CPU planning must use the same encounter rule.
+                required_total_power_snapshot=(0 if introductory_boss else max(0, int(portal_boss.get("required_total_power") or 0))),
+                required_class_code_snapshot=(None if introductory_boss else portal_boss.get("required_class_code")),
+                required_tank_count_snapshot=(0 if introductory_boss else max(0, int(portal_boss.get("required_tank_count") or 0))),
+                required_support_count_snapshot=(0 if introductory_boss else max(0, int(portal_boss.get("required_support_count") or 0))),
+                required_damage_count_snapshot=(0 if introductory_boss else max(0, int(portal_boss.get("required_damage_count") or 0))),
+                required_equipment_tier_snapshot=(0 if introductory_boss else max(0, int(portal_boss.get("required_equipment_tier") or 0))),
                 duration_seconds_snapshot=max(1, int(portal_boss.get("duration_seconds") or 1)),
                 expires_at_utc=_utc(portal.expires_at_utc),
                 event_id=portal.id,
@@ -1385,12 +1450,14 @@ def _cpu_plan_for_guild_v6(
             if defensive:
                 candidates = defensive
 
-        feasible: list[tuple[tuple[datetime, tuple[int, int, int, int], int], RegionalOffer, list[RegionalCpuMercenary]]] = []
+        feasible: list[tuple[tuple[int, int, datetime, int, int, int], RegionalOffer, list[RegionalCpuMercenary]]] = []
         any_eligible = False
         for offer in candidates:
             offer_deadline = min(cycle_end, offer.expires_at_utc) if offer.offer_type == "portal" else cycle_end
             party_choice = _cpu_offer_party(
                 offer, state, roster, busy_until, offer_deadline, class_roles,
+                include_synergy_power=v7_rules,
+                require_equipment_for_each_member=v7_rules,
             )
             if party_choice is None:
                 continue
@@ -1399,9 +1466,20 @@ def _cpu_plan_for_guild_v6(
             end_at = start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot))
             if end_at > offer_deadline:
                 continue
-            preference = _cpu_offer_preference(offer, state.archetype)
-            type_preference = preferred_types.index(offer.offer_type) if offer.offer_type in preferred_types else len(preferred_types)
-            feasible.append(((start_at, preference, type_preference, offer.id), offer, party))
+            party_power = sum(_cpu_member_power(member) for member in party)
+            class_bonus = min(8, sum(CLASS_SUCCESS_BONUS.get(member.class_code, 0) for member in party))
+            if v7_rules:
+                preference = _cpu_offer_preference(
+                    offer, state.archetype, party_power, len(party), class_bonus,
+                )
+                sort_key = (preference[0], preference[1], start_at,
+                            preference[2], preference[3], preference[4])
+            else:
+                preference = _cpu_offer_preference_v6(offer, state.archetype)
+                type_preference = (preferred_types.index(offer.offer_type)
+                                   if offer.offer_type in preferred_types else len(preferred_types))
+                sort_key = (start_at, preference, type_preference, offer.id)
+            feasible.append((sort_key, offer, party))
         if any_eligible:
             eligible_actions += 1
         if not feasible:
@@ -1530,7 +1608,7 @@ def _cpu_plan_for_guild(
     region: RegionalRegionState,
     state: RegionalGuildState,
 ) -> tuple[RegionalCpuCyclePlan, float, float, int, int, int]:
-    if cycle.rules_version != VIGILIA_RULES_VERSION:
+    if cycle.rules_version not in {"vigilia-v6", VIGILIA_RULES_VERSION}:
         return _cpu_plan_for_guild_legacy(db, campaign_id, cycle, region, state)
     return _cpu_plan_for_guild_v6(db, campaign_id, cycle, region, state)
 

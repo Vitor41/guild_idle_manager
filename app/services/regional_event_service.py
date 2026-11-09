@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from threading import Lock
 
-from sqlalchemy import event as sqlalchemy_event, select
+from sqlalchemy import event as sqlalchemy_event, or_, select
 from sqlalchemy.orm import Session as SqlAlchemySession
 from sqlalchemy.orm import Session
 
@@ -32,12 +32,14 @@ from app.services.regional_cycle_service import (
 )
 
 
-EVENT_RULES_VERSION = "regional-events-v3"
+EVENT_RULES_VERSION = "regional-events-v4"
+LEGACY_EVENT_RULES_VERSION = "regional-events-v3"
 PORTAL_LOOT_VERSION = "portal-loot-v1"
 PORTAL_LOOT_CHANCE_BY_RARITY = {"rare": 20, "epic": 6, "legendary": 1}
-PORTAL_BOSS_SNAPSHOT_VERSION = "portal-boss-v1"
+PORTAL_BOSS_SNAPSHOT_VERSION = "portal-boss-v2"
 REBELLION_CHANCE = 0.02
-REBELLION_REGION_ROLL_COOLDOWN_CYCLES = 5
+REBELLION_REGION_ROLL_COOLDOWN_CYCLES = 0
+LEGACY_REBELLION_REGION_ROLL_COOLDOWN_CYCLES = 5
 PORTAL_TTL = timedelta(hours=3)
 PORTAL_REGION_COOLDOWN_CYCLES = 24
 REBELLION_PRIORITY = timedelta(hours=1)
@@ -85,6 +87,10 @@ def _release_campaign_event_locks(db: Session, transaction) -> None:
 
 def _utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _event_rules_version_for_cycle(cycle: RegionalCycle) -> str:
+    return EVENT_RULES_VERSION if cycle.rules_version == "vigilia-v7" else LEGACY_EVENT_RULES_VERSION
 
 
 def _summary(event: RegionalEvent) -> dict[str, object]:
@@ -376,11 +382,28 @@ def _create_cycle_portals_locked(
 ) -> None:
     cycle_end = _utc(cycle.ends_at_utc)
     expire_due_events(db, campaign_id, cycle_end)
-    portal_bosses = list(db.scalars(select(DungeonTemplate).where(
+    event_rules_version = _event_rules_version_for_cycle(cycle)
+    stage_eligible = event_rules_version == EVENT_RULES_VERSION
+    # New rules add the introductory boss and gate portal bosses by the
+    # campaign stage. Older cycles retain their original portal-biome pool.
+    boss_query = select(DungeonTemplate).where(
         DungeonTemplate.is_active.is_(True),
         DungeonTemplate.content_type == "boss",
-        DungeonTemplate.biome == "portal",
-    ).order_by(DungeonTemplate.recommended_level, DungeonTemplate.id)))
+    )
+    if stage_eligible:
+        stage_level = max(1, int(cycle.player_level_snapshot or 1))
+        boss_query = boss_query.where(
+            DungeonTemplate.required_guild_level <= stage_level,
+            or_(
+                DungeonTemplate.biome == "portal",
+                (DungeonTemplate.level_band == "1-20") & (DungeonTemplate.recommended_level <= 1),
+            ),
+        )
+    else:
+        boss_query = boss_query.where(DungeonTemplate.biome == "portal")
+    portal_bosses = list(db.scalars(boss_query.order_by(
+        DungeonTemplate.recommended_level, DungeonTemplate.id,
+    )))
     if not portal_bosses:
         return
     for region in sorted(regions, key=lambda row: row.region_code):
@@ -425,7 +448,7 @@ def _create_cycle_portals_locked(
             + detection_bonus_pp / 100.0,
         )
         seed = _seed_text(
-            campaign_id, cycle.cycle_number, region.region_code, EVENT_RULES_VERSION, "portal",
+            campaign_id, cycle.cycle_number, region.region_code, event_rules_version, "portal",
         )
         rng = _rng(seed)
         if rng.random() >= chance:
@@ -439,7 +462,7 @@ def _create_cycle_portals_locked(
             event_type="portal",
             region_code=region.region_code,
             trigger_cycle_number=cycle.cycle_number,
-            rules_version=EVENT_RULES_VERSION,
+            rules_version=event_rules_version,
             seed=seed,
             status="active",
             dungeon_template_id=template.id,
@@ -451,9 +474,13 @@ def _create_cycle_portals_locked(
                 "threat_snapshot": round(region.threat, 4),
                 "deadline_policy": "continues_offline",
                 "region_cooldown_cycles": PORTAL_REGION_COOLDOWN_CYCLES,
-                "content_policy": "active_portal_biome_boss_template",
+                "content_policy": ("active_stage_eligible_portal_or_introductory_boss"
+                                   if stage_eligible else "active_portal_biome_boss_template"),
+                "progression_stage_level_snapshot": (
+                    max(1, int(cycle.player_level_snapshot or 1)) if stage_eligible else None
+                ),
                 "portal_boss": {
-                    "version": PORTAL_BOSS_SNAPSHOT_VERSION,
+                    "version": PORTAL_BOSS_SNAPSHOT_VERSION if stage_eligible else "portal-boss-v1",
                     "template": build_portal_boss_snapshot(template),
                 },
                 "portal_loot": loot_snapshot,
@@ -483,6 +510,11 @@ def _evaluate_open_rebellion_locked(
 ) -> RegionalEvent | None:
     current = _utc(now)
     expire_due_events(db, campaign.campaign_id, current)
+    event_rules_version = _event_rules_version_for_cycle(cycle)
+    rebellion_cooldown = (
+        REBELLION_REGION_ROLL_COOLDOWN_CYCLES if event_rules_version == EVENT_RULES_VERSION
+        else LEGACY_REBELLION_REGION_ROLL_COOLDOWN_CYCLES
+    )
     active = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign.campaign_id,
         RegionalEvent.event_type == "rebellion",
@@ -509,7 +541,7 @@ def _evaluate_open_rebellion_locked(
     seeds: dict[str, str] = {}
     for region in regions:
         seed = _seed_text(
-            campaign.campaign_id, cycle.cycle_number, region.region_code, EVENT_RULES_VERSION, "rebellion",
+            campaign.campaign_id, cycle.cycle_number, region.region_code, event_rules_version, "rebellion",
         )
         seeds[region.region_code] = seed
     prior_rolls = list(db.scalars(select(RegionalEvent).where(
@@ -528,7 +560,7 @@ def _evaluate_open_rebellion_locked(
     available = [
         region for region in eligible.values()
         if region.region_code not in last_targeted
-        or cycle.cycle_number - last_targeted[region.region_code] > REBELLION_REGION_ROLL_COOLDOWN_CYCLES
+        or cycle.cycle_number - last_targeted[region.region_code] > rebellion_cooldown
     ]
     if available:
         roll_target = min(
@@ -555,7 +587,7 @@ def _evaluate_open_rebellion_locked(
             event_type="rebellion",
             region_code=region.region_code,
             trigger_cycle_number=cycle.cycle_number,
-            rules_version=EVENT_RULES_VERSION,
+            rules_version=event_rules_version,
             seed=seeds[region.region_code],
             status="active" if chosen else ("suppressed" if candidate else "not_triggered"),
             created_at_utc=current,
@@ -574,7 +606,7 @@ def _evaluate_open_rebellion_locked(
                 "security_snapshot": round(region.security, 4),
                 "generated_while_campaign_open": chosen,
                 "suppressed_by_global_limit": False,
-                "region_roll_cooldown_cycles": REBELLION_REGION_ROLL_COOLDOWN_CYCLES,
+                "region_roll_cooldown_cycles": rebellion_cooldown,
                 "simultaneous_candidates": len(rolled),
             }, ensure_ascii=False, sort_keys=True),
         )
@@ -740,7 +772,7 @@ def record_cpu_event_activity(
         ))
         if participant_exists is None:
             rng = _rng(portal.seed, plan.seed, "cpu-portal-entry")
-            if cycle.rules_version in {"vigilia-v5", "vigilia-v6"}:
+            if cycle.rules_version in {"vigilia-v5", "vigilia-v6", "vigilia-v7"}:
                 decisions = json.loads(plan.decisions_json or "[]")
                 outcomes = json.loads(plan.outcomes_json or "[]")
                 outcome_by_offer = {item.get("offer_id"): item for item in outcomes}

@@ -7,13 +7,13 @@
 - **Rebelião:** E4 observou 1.035 região-ciclos elegíveis e 220 rolagens selecionadas; 714 elegibilidades foram vetadas pelo cooldown regional de cinco Vigílias e 9 por evento global ativo. A 2% por rolagem selecionada, a expectativa é 4,4 aberturas; foram 6. A taxa não é o erro: a maioria das Vigílias elegíveis não recebe a rolagem. O máximo observado foi uma região vulnerável e uma rebelião ativa por vez.
 - **Escolha CPU:** o grupo respeita disponibilidade, tamanho, nível mínimo e requisitos declarados, mas contratos têm poder total requerido igual a zero. O planner ordena primeiro pelo Rank do contrato; não estima a chance com o poder do grupo escolhido. A resolução ainda usa o cálculo de poder normal. O planner não compra nem aplica suprimentos, então sua comparação deve assumir chance/recompensa sem suprimento.
 
-## Menor proposta estrutural
+## Mudanças implementadas
 
-1. Priorizar ofertas CPU pelo valor esperado de XP/recursos por duração, calculado com o poder, composição, disponibilidade e a mesma chance já usada na resolução. Não mudar fórmula, Rank, recompensa, bônus ou custo; não supor suprimento.
-2. Manter chefes `portal` atuais e incluir o catálogo ativo de chefes níveis 1–20 no sorteio do boss congelado do portal. CPU e jogador recebem o mesmo snapshot e enfrentam os mesmos requisitos. Remover apenas o filtro CPU de construção que o fluxo jogador não aplica; preservar a rolagem de participação de 25%, os requisitos restantes e o prazo de 3h. A ação continua sujeita ao grupo real e à duração antes do prazo.
-3. Rolar 2% em cada região-ciclo elegível, removendo o cooldown regional que impede a tentativa. Preservar no máximo uma região escolhida por Vigília e no máximo uma rebelião ativa global. Esta alteração exige alinhar o trecho correspondente do GDD.
+1. O planner CPU ordena ações viáveis pelo valor esperado de XP/ouro por duração, usando chance calculada do poder, formação, bônus de classe e risco já congelados. Preferência de arquétipo desempata. Fórmula de resolução, Rank, recompensas e custos não mudaram; o planner não supõe nem compra suprimentos.
+2. O sorteio do portal considera chefes ativos do bioma `portal` cujo nível de guilda requerido cabe no estágio atual da campanha, além do chefe introdutório ativo de nível recomendado 1. Evento congela o encontro e o loot no mesmo snapshot para jogador e CPU. O filtro CPU exclusivo para construção foi removido, mantendo equivalência com o fluxo jogador; os requisitos que esse fluxo valida, o limite de 25% de participação CPU e o prazo de 3h seguem em vigor. A regra especial de acesso do chefe introdutório (sem checagem avançada de poder/composição/equipamento) agora também vale para CPU; nível mínimo e tamanho do grupo continuam obrigatórios.
+3. Uma Vigília com uma ou mais regiões elegíveis agora escolhe uma para um único sorteio de 2%; sem cooldown regional. A trava global continua permitindo no máximo uma rebelião ativa. O GDD foi alinhado.
 
-Isso amplia uma rota de portal sem baixar os chefes existentes nem alterar o contrato Rank C18. A referência Rank C nível 18/grupo 2 continua exigindo poder 144. Nenhum bônus escondido será dado à CPU.
+Isso amplia a rota de portal sem baixar os chefes existentes nem alterar o contrato Rank C18. A referência Rank C nível 18/grupo 2 continua exigindo poder 144. O bônus de sinergia de formação de +200 poder conta na verificação de requisito de equipe tanto para CPU como para jogador; não altera a chance de resolução CPU nem concede bônus oculto.
 
 ## Invariantes e testes do lote
 
@@ -22,3 +22,19 @@ Isso amplia uma rota de portal sem baixar os chefes existentes nem alterar o con
 - Um portal usa um único snapshot comum para jogador e CPU; a entrada CPU só gera participação ligada a uma ação resolvida. Sem suprimento implícito.
 - Rebelião mantém 2% por tentativa elegível, máximo uma região sorteada por Vigília e máximo uma rebelião ativa.
 - Regressões: seleção de contrato/grupo por chance esperada e disponibilidade; entrada em portal de baixo nível versus chefe alto inviável; paridade dos requisitos jogador/CPU; `Rank C18 = poder 144`; chance/cap global de rebelião; e comparação integrada de 20 seeds × 100 Vigílias com os gates E5.
+
+## Validação integrada
+
+Runner de serviços reais com 20 campanhas SQLite descartáveis, seeds `2026110301–2026110320`, 100 Vigílias cada e nenhuma ação do jogador: [resumo detalhado da simulação E5](lot_e5_cpu_strategy_event_2026-11-09.md), com resultados compactos por seed em [CSV](lot_e5_cpu_strategy_event_2026-11-09.csv). Comparação E4 pareada usa as mesmas seeds e os totais integrados E4 já registrados.
+
+| Indicador | E4 | E5 | Resultado |
+|---|---:|---:|---:|
+| Campanhas com rebelião | 6/20 | 17/20 | Gate >10/20 atingido |
+| Rebeliões abertas | 6 | 23 | 978 rolagens selecionadas ×2%; 19,56 esperadas |
+| Rebeliões simultâneas máximas | 1 | 1 | Cap preservado |
+| Entradas CPU em portal | 0 | 142 | 87 sucessos e 55 falhas |
+| XP líquido CPU | 24.555.686 | 25.944.801 | +5,65% |
+| Sucesso CPU | 52,64% | 52,31% | −0,33 ponto percentual |
+| Portais abertos | 125 | 122 | −3; entradas CPU habilitadas |
+
+No E5 houve 1.016 região-ciclos elegíveis; 978 tiveram rolagem selecionada e 38 foram bloqueados pela rebelião global ativa. Nenhum foi bloqueado por cooldown regional. Testes focados de eventos, funil, Rank C18, política CPU de oferta e requisito de equipamento passaram 32/32. A regressão de campanha completa 100 Vigílias confirmou IDs de ação distintos por guilda, reservas de equipe sem sobreposição e respeito ao prazo de portal; esse teste também foi repetido com as alterações finais de equivalência CPU/jogador. A execução no Windows usou SQLite temporário com `temp_store=MEMORY` e o override local de `platform.machine` para contornar WMI; essas adaptações ficaram fora do código do jogo.

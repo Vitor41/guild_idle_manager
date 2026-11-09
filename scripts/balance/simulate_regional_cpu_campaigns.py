@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import hashlib
 import math
@@ -25,6 +26,7 @@ from app.models.regional import (
     RegionalCycle,
     RegionalCycleRegion,
     RegionalEvent,
+    RegionalEventActivity,
     RegionalGuildState,
     RegionalRegionState,
 )
@@ -315,6 +317,22 @@ def run_campaign(seed: int, saves_root: Path, template_database: Path | None = N
         plans = list(db.scalars(select(RegionalCpuCyclePlan).where(
             RegionalCpuCyclePlan.campaign_id == created.campaign_id,
         )))
+        cpu_xp_net = 0
+        cpu_gold_net = 0
+        for plan in plans:
+            before = json.loads(plan.resources_before_json or "{}")
+            after = json.loads(plan.resources_after_json or "{}")
+            cpu_xp_net += int(after.get("xp", 0)) - int(before.get("xp", 0))
+            cpu_gold_net += int(after.get("gold", 0)) - int(before.get("gold", 0))
+        portal_cpu_activities = list(db.scalars(select(RegionalEventActivity).join(
+            RegionalEvent, RegionalEvent.id == RegionalEventActivity.event_id,
+        ).where(
+            RegionalEvent.campaign_id == created.campaign_id,
+            RegionalEvent.event_type == "portal",
+            RegionalEventActivity.source_type == "cpu_portal",
+        )))
+        cpu_portal_successes = sum(activity.successes for activity in portal_cpu_activities)
+        cpu_portal_failures = sum(activity.failures for activity in portal_cpu_activities)
         old_baseline_by_region = Counter()
         for state in db.scalars(select(RegionalGuildState).where(
             RegionalGuildState.campaign_id == created.campaign_id,
@@ -389,6 +407,11 @@ def run_campaign(seed: int, saves_root: Path, template_database: Path | None = N
             "cpu_successes": cpu_successes,
             "cpu_failures": cpu_failures,
             "cpu_success_rate": round(cpu_successes / max(1, cpu_successes + cpu_failures), 4),
+            "cpu_xp_net": cpu_xp_net,
+            "cpu_gold_net": cpu_gold_net,
+            "cpu_portal_entries": len(portal_cpu_activities),
+            "cpu_portal_successes": cpu_portal_successes,
+            "cpu_portal_failures": cpu_portal_failures,
             "cpu_scope_phase": cpu_scope_phase,
             "home_region_cpu_actions_per_cycle": round(
                 region_metrics[home_code]["actions"] / HORIZON, 2,
@@ -519,6 +542,8 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
                 "cycles_with_vulnerable_region", "max_simultaneous_rebellions",
                 "cpu_actions_total", "cpu_actions_per_cycle_global", "cpu_successes",
                 "cpu_failures", "cpu_success_rate", "home_region_cpu_actions_per_cycle",
+                "cpu_xp_net", "cpu_gold_net", "cpu_portal_entries", "cpu_portal_successes",
+                "cpu_portal_failures",
                 "other_regions_cpu_actions_per_cycle", "final_security_min_max", "final_threat_min_max",
             )
         } | {
@@ -628,7 +653,7 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         "cycles_per_campaign": HORIZON,
         "rules": {
             "rebellion_chance": 0.02,
-            "rebellion_region_cooldown_cycles": 5,
+            "rebellion_region_cooldown_cycles": 0,
             "portal_region_cooldown_cycles": regional_event_service.PORTAL_REGION_COOLDOWN_CYCLES,
             "one_rebellion_roll_region_per_cycle_max": 1,
             "one_pressure_target_per_cycle": True,
@@ -684,6 +709,11 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         },
         "total_opened_portals": sum(row["opened_portals"] for row in results),
         "total_opened_rebellions": sum(row["opened_rebellions"] for row in results),
+        "total_cpu_xp_net": sum(row["cpu_xp_net"] for row in results),
+        "total_cpu_gold_net": sum(row["cpu_gold_net"] for row in results),
+        "total_cpu_portal_entries": sum(row["cpu_portal_entries"] for row in results),
+        "total_cpu_portal_successes": sum(row["cpu_portal_successes"] for row in results),
+        "total_cpu_portal_failures": sum(row["cpu_portal_failures"] for row in results),
         "mean_cpu_success_rate": round(sum(row["cpu_success_rate"] for row in results) / len(results), 4),
         "maximum_simultaneous_rebellions": max(
             row["max_simultaneous_rebellions"] for row in results
@@ -813,6 +843,10 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         f"mean cycles with a vulnerable region: **{report['mean_cycles_with_vulnerable_region']}**.",
         f"- Maximum simultaneous active global rebellions: **{report['maximum_simultaneous_rebellions']}**.",
         f"- Mean CPU success rate: **{report['mean_cpu_success_rate']:.1%}**.",
+        f"- CPU portal entries: **{report['total_cpu_portal_entries']}** "
+        f"({report['total_cpu_portal_successes']} successes, {report['total_cpu_portal_failures']} failures).",
+        f"- Net CPU XP / gold over the horizon: **{report['total_cpu_xp_net']:,} XP / "
+        f"{report['total_cpu_gold_net']:,} gold**.",
         f"- Mean CPU actions per global Vigília: **{report['mean_cpu_actions_per_cycle_global']}** "
         "with throughput set by eligible offers, available mercenaries, activity durations, and 1h player priority.",
         f"- CPU actions per Vigília: guilda da região natal **{report['home_vs_other_regions_cpu_actions_per_cycle']['home_region']['mean']}**; "
@@ -840,7 +874,7 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         f"= {funnel['expected_openings_at_configured_chance']} expected openings; "
         f"{funnel['rebellions_opened']} observed, {funnel['observed_rng_failures']} RNG failures.",
         f"- Eligible region-cycles withheld by regional cooldown: {funnel['region_cooldown_veto_region_cycles']}; "
-        f"by one-roll-per-cycle cap: {funnel['one_roll_per_cycle_veto_region_cycles']}; "
+        f"by one-region-per-cycle selection cap: {funnel['one_roll_per_cycle_veto_region_cycles']}; "
         f"by active global event limit: {funnel['global_limit_veto_region_cycles']} "
         f"across {funnel['global_limit_veto_cycles']} campaign-cycles; "
         f"unclassified: {funnel['unclassified_eligible_region_cycles']}.",
@@ -915,9 +949,9 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
     lines.extend([
         "",
         f"Each {regional_cycle_service.REGIONAL_PRESSURE_WINDOW_CYCLES}-cycle pressure window targets one region; "
-        "off-window threat and security recovery limits "
-        "overlapping crises. The cooldown permits at most one hidden regional rebellion roll per eligible "
-        "cycle. CPU action scheduling continues in all five regions.",
+        "off-window threat and security recovery limits overlapping crises. Rebellion rolls at 2% on every "
+        "eligible cycle, selecting at most one region per cycle and allowing at most one active global event. "
+        "CPU action scheduling continues in all five regions.",
         "",
     ])
     return report, "\n".join(lines)
@@ -961,6 +995,19 @@ def main() -> None:
     }
     json_path = output_prefix.with_suffix(".json")
     markdown_path = output_prefix.with_suffix(".md")
+    csv_path = output_prefix.with_suffix(".csv")
+    csv_fields = (
+        "seed", "home_region", "opened_portals", "opened_rebellions",
+        "first_portal_cycle", "first_rebellion_cycle", "selected_rebellion_roll_windows",
+        "cycles_with_vulnerable_region", "max_simultaneous_rebellions", "cpu_portal_entries",
+        "cpu_portal_successes", "cpu_portal_failures", "cpu_actions_total", "cpu_successes",
+        "cpu_failures", "cpu_success_rate", "cpu_xp_net", "cpu_gold_net",
+    )
+    with csv_path.open("w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(handle, fieldnames=csv_fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(report["campaign_results"])
+    markdown += f"\n\nPer-seed outcomes: [{csv_path.name}]({csv_path.name}).\n"
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     markdown_path.write_text(markdown, encoding="utf-8")
     print(json.dumps({key: value for key, value in report.items() if key != "campaign_results"},
