@@ -36,6 +36,7 @@ from app.models.tavern import TavernSpecialOffer
 from app.repositories.mercenary_repository import create_mercenary
 from app.services.regional_cycle_service import REGIONS, ensure_campaign_world, get_regional_board
 from app.services.regional_event_service import expire_due_events
+from app.services.equipment_service import RARITY_BONUS_RULES, get_item_bonus_rolls
 from sqlalchemy import select
 import uvicorn
 
@@ -1182,8 +1183,23 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert portal_instance.required_level == portal_item_snapshot["required_level"]
             assert portal_instance.bonus_power == portal_item_snapshot["bonus_power"]
             assert portal_instance.bonus_vitality == portal_item_snapshot["bonus_vitality"]
-            if portal_item_snapshot["rng_bonus_max"] > 0:
-                assert portal_item_snapshot["rng_bonus_min"] <= portal_instance.rng_bonus_value <= portal_item_snapshot["rng_bonus_max"]
+            min_types, max_types, min_points, max_points = RARITY_BONUS_RULES[portal_item_snapshot["rarity"]]
+            portal_bonus_rolls = get_item_bonus_rolls(portal_instance)
+            assert min_types <= len(portal_bonus_rolls) <= max_types
+            assert len({roll["attribute"] for roll in portal_bonus_rolls}) == len(portal_bonus_rolls)
+            for bonus_roll in portal_bonus_rolls:
+                if bonus_roll["kind"] == "normal":
+                    assert min_points <= bonus_roll["value"] <= max_points
+                else:
+                    assert bonus_roll["kind"] == "strong"
+                    assert 10 <= bonus_roll["value"] <= 20
+            strong_rolls = [roll for roll in portal_bonus_rolls if roll["kind"] == "strong"]
+            assert len(strong_rolls) == (
+                1 if portal_item_snapshot["rarity"] == "legendary"
+                else (2 if portal_item_snapshot["rarity"] == "mythic" else 0)
+            ) or (
+                portal_item_snapshot["rarity"] == "mythic" and len(strong_rolls) >= 2
+            )
             expire_due_events(db, campaign.campaign_id, portal_event.expires_at_utc)
             db.refresh(portal_event)
             portal_summary = json.loads(portal_event.summary_json)
