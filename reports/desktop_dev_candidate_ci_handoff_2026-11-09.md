@@ -15,7 +15,11 @@ Adicionar validação manual de um commit candidato por SHA exato, incluindo bui
 
 ## Como executar depois de disponibilizar os workflows
 
-O arquivo de build precisa estar na branch padrão para que o GitHub permita `workflow_dispatch`. Após a aprovação e integração desta infraestrutura, selecione a branch candidata e informe em `candidate_commit_sha` o SHA completo da revisão exata. O job aceita somente quando o valor coincide com a revisão selecionada e com o checkout. O Setup e o ZIP ficam em artifacts temporários por três dias, sem assinatura de release e sem publicação.
+**Bootstrap escolhido: PR exclusivo de infraestrutura.** O GitHub exige que `workflow_dispatch` exista na branch padrão antes de aceitar o primeiro dispatch. Um trigger `pull_request` adicionado somente no branch candidato também não inicia esse primeiro run, pois a definição do workflow precisa existir no branch base.
+
+Abra um PR pequeno contendo apenas o workflow build-only, seus scripts de validação/verificação, testes e documentação aprovados pela CR. A série de commits de infraestrutura nesta branch é `8ba4f98`, `76a9779` e `212f204`; aplique somente essas mudanças sobre `main`, sem trazer os commits de produto que antecedem `4f3922a`. Integre somente essa infraestrutura à branch padrão; não inclua as alterações de produto 0.8.0. Depois, faça dispatch do workflow já presente em `main`, selecionando a branch candidata no campo de referência (`--ref`/`ref`) e informando em `candidate_commit_sha` o SHA completo do topo dessa branch. A checagem exige igualdade entre o SHA informado, `GITHUB_SHA` da referência selecionada e o commit do checkout. Assim o Setup é validado antes da integração do pacote de produto.
+
+O Setup e o ZIP ficam em artifacts temporários por três dias, sem assinatura de release e sem publicação.
 
 O release assinado continua sendo outro fluxo: somente após revisão/integração e criação de uma tag DEV ancestral ao branch padrão, o workflow de publicação acessa a chave e valida o manifesto antes de publicar. Não execute esse fluxo para testar um candidato.
 
