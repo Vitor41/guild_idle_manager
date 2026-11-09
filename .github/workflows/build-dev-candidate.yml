@@ -1,0 +1,134 @@
+name: Build DEV candidate without publishing
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_commit_sha:
+        description: "Full commit SHA at the selected candidate branch"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    if: github.repository == 'Vitor41/guild_idle_manager' && github.event_name == 'workflow_dispatch'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - name: Check out the exact candidate commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.candidate_commit_sha }}
+          persist-credentials: false
+
+      - name: Validate candidate SHA and app version
+        id: source
+        shell: pwsh
+        env:
+          CANDIDATE_COMMIT_SHA: ${{ inputs.candidate_commit_sha }}
+        run: |
+          if ($env:CANDIDATE_COMMIT_SHA -notmatch '^[0-9a-f]{40}$' -or $env:CANDIDATE_COMMIT_SHA -ne $env:GITHUB_SHA) {
+            throw 'Informe o SHA completo exato da branch selecionada no workflow_dispatch.'
+          }
+          $checkedOutSha = (git rev-parse HEAD).Trim()
+          if ($checkedOutSha -ne $env:CANDIDATE_COMMIT_SHA) {
+            throw "Checkout divergente do SHA solicitado: $checkedOutSha"
+          }
+          $match = Select-String -Path app/core/version.py -Pattern '^APP_VERSION\s*=\s*"([^"\r\n]+)"$'
+          if (-not $match -or $match.Matches[0].Groups[1].Value -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
+            throw 'APP_VERSION ausente ou não SemVer no commit candidato.'
+          }
+          $appVersion = $match.Matches[0].Groups[1].Value
+          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "app-version=$appVersion`n")
+
+      - name: Set up exact CPython
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Install pinned build dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv-desktop
+          .\.venv-desktop\Scripts\python.exe -m pip install --disable-pip-version-check pip==26.3
+          .\.venv-desktop\Scripts\python.exe -m pip install --disable-pip-version-check -r requirements-desktop-dev.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao instalar dependências travadas do build.' }
+
+      - name: Build package and Setup
+        shell: pwsh
+        env:
+          CANDIDATE_COMMIT_SHA: ${{ inputs.candidate_commit_sha }}
+          RELEASE_PUBLIC_KEY_B64: ${{ vars.GIM_RELEASE_PUBLIC_KEY_B64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_PUBLIC_KEY_B64)) {
+            throw 'Configure a variável Actions GIM_RELEASE_PUBLIC_KEY_B64.'
+          }
+          $output = "dist/staging/candidate-$env:CANDIDATE_COMMIT_SHA-$env:GITHUB_RUN_ID"
+          ./scripts/build_desktop_dev.ps1 -Channel DEV -GitHubPublicKeyBase64 $env:RELEASE_PUBLIC_KEY_B64 -OutputRoot $output
+          if ($LASTEXITCODE -ne 0) { throw 'O build do candidato falhou.' }
+
+      - name: Install final Setup in an isolated profile and smoke it
+        shell: pwsh
+        env:
+          CANDIDATE_COMMIT_SHA: ${{ inputs.candidate_commit_sha }}
+          APP_VERSION: ${{ steps.source.outputs.app-version }}
+        run: |
+          $output = Join-Path 'dist/staging' "candidate-$env:CANDIDATE_COMMIT_SHA-$env:GITHUB_RUN_ID"
+          $setup = Join-Path $output 'GuildIdleManager-DEV-Setup.exe'
+          $evidence = Join-Path $output 'candidate-evidence'
+          $profile = Join-Path $env:RUNNER_TEMP ("gim-setup-profile-" + [Guid]::NewGuid().ToString('N'))
+          ./scripts/validate_desktop_setup_candidate.ps1 `
+            -SetupPath $setup `
+            -ExpectedVersion $env:APP_VERSION `
+            -ProfileRoot $profile `
+            -EvidenceDirectory $evidence `
+            -PythonPath (Join-Path (Get-Location).Path '.venv-desktop\Scripts\python.exe')
+
+      - name: Record build inputs and hashes
+        shell: pwsh
+        env:
+          CANDIDATE_COMMIT_SHA: ${{ inputs.candidate_commit_sha }}
+          APP_VERSION: ${{ steps.source.outputs.app-version }}
+        run: |
+          $output = Join-Path 'dist/staging' "candidate-$env:CANDIDATE_COMMIT_SHA-$env:GITHUB_RUN_ID"
+          $setup = Join-Path $output 'GuildIdleManager-DEV-Setup.exe'
+          $zip = Join-Path $output 'GuildIdleManager-DEV.zip'
+          $metadata = [ordered]@{
+            schema_version = 1
+            repository = $env:GITHUB_REPOSITORY
+            source_branch = $env:GITHUB_REF_NAME
+            source_commit_sha = $env:CANDIDATE_COMMIT_SHA
+            app_version = $env:APP_VERSION
+            runner_image = $env:ImageOS
+            runner_image_version = $env:ImageVersion
+            python = (& .\.venv-desktop\Scripts\python.exe -VV | Out-String).Trim()
+            pip = (& .\.venv-desktop\Scripts\python.exe -m pip --version | Out-String).Trim()
+            dependencies = (& .\.venv-desktop\Scripts\python.exe -m pip freeze | Out-String).Trim()
+            setup_bytes = (Get-Item -LiteralPath $setup).Length
+            setup_sha256 = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+            zip_bytes = (Get-Item -LiteralPath $zip).Length
+            zip_sha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          [System.IO.File]::WriteAllText(
+            (Join-Path $output 'candidate-metadata.json'),
+            ($metadata | ConvertTo-Json -Depth 5),
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          $artifact = Join-Path $output 'candidate-artifact'
+          New-Item -ItemType Directory -Path $artifact -Force | Out-Null
+          Copy-Item -LiteralPath $setup -Destination $artifact
+          Copy-Item -LiteralPath $zip -Destination $artifact
+          Copy-Item -LiteralPath (Join-Path $output 'GuildIdleManager-DEV\gim-app-version.txt') -Destination $artifact
+          Copy-Item -LiteralPath (Join-Path $output 'candidate-metadata.json') -Destination $artifact
+          Copy-Item -LiteralPath (Join-Path $output 'candidate-evidence\candidate-setup-validation.json') -Destination $artifact
+
+      - name: Upload unsigned, tested candidate for the trusted signing workflow
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gim-dev-candidate-${{ inputs.candidate_commit_sha }}-${{ github.run_id }}
+          path: dist/staging/candidate-${{ inputs.candidate_commit_sha }}-${{ github.run_id }}/candidate-artifact/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0

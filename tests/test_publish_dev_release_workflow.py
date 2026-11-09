@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-dev-release.yml"
+BUILD_ONLY_WORKFLOW = ROOT / ".github" / "workflows" / "build-dev-candidate.yml"
 BUILD_SCRIPT = ROOT / "scripts" / "build_desktop_dev.ps1"
 SIGNER = ROOT / "scripts" / "sign_github_release.py"
 
@@ -70,6 +71,73 @@ class PublishDevReleaseWorkflowTests(unittest.TestCase):
         signer_step = signer_step.split("- name: Publicar release", 1)[0]
         self.assertIn("--setup \"$output/GuildIdleManager-DEV-Setup.exe\"", signer_step)
         self.assertIn("--app-version-file $appVersionFile", signer_step)
+
+    def test_release_smokes_use_an_isolated_profile_and_check_campaigns_and_launcher(self):
+        smoke_step = self.workflow_text.split("- name: Verificar pacote em perfil temporario isolado", 1)[1].split(
+            "- name: Assinar manifesto do Setup", 1
+        )[0]
+        for required in (
+            "$env:RUNNER_TEMP",
+            "$env:LOCALAPPDATA",
+            "$env:APPDATA",
+            "$env:GIM_SMOKE_TEMP_DIR",
+            "$env:TEMP",
+            "$env:TMP",
+            "--smoke",
+            "--launcher-smoke",
+            "WaitForExit(120000)",
+            "WaitForExit(30000)",
+            "seleção de campanhas",
+            "PASS: packaged launcher entry",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, smoke_step)
+
+    def test_build_only_candidate_workflow_is_sha_pinned_secret_free_and_non_publishing(self):
+        workflow = BUILD_ONLY_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("candidate_commit_sha", workflow)
+        self.assertIn("runs-on: windows-2025", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertIn("${{ inputs.candidate_commit_sha }}", workflow)
+        self.assertIn("validate_desktop_setup_candidate.ps1", workflow)
+        self.assertIn("GIM_RELEASE_PUBLIC_KEY_B64", workflow)
+        self.assertIn("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", workflow)
+        self.assertNotIn("GIM_RELEASE_PRIVATE_KEY_B64", workflow)
+        self.assertNotIn("gh release create", workflow)
+        self.assertNotIn("workflow_run:", workflow)
+        self.assertFalse((ROOT / ".github" / "workflows" / "sign-dev-candidate.yml").exists())
+
+    def test_release_verifies_signed_manifest_before_publishing(self):
+        verify_step = self.workflow_text.split("- name: Verificar assinatura do manifesto localmente", 1)[1].split(
+            "- name: Publicar release", 1
+        )[0]
+        for required in (
+            "scripts/verify_signed_release.py",
+            "--setup \"$output/GuildIdleManager-DEV-Setup.exe\"",
+            "--manifest \"$output/gim-release.json\"",
+            "--signature \"$output/gim-release.json.sig\"",
+            "--public-key-base64 $env:RELEASE_PUBLIC_KEY_B64",
+            "--version $version",
+            "--channel DEV",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, verify_step)
+        self.assertLess(
+            self.workflow_text.index("- name: Verificar assinatura do manifesto localmente"),
+            self.workflow_text.index("- name: Publicar release"),
+        )
+
+    def test_release_signing_requires_default_branch_merged_tag_and_environment(self):
+        for required in (
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            "environment: release-signing",
+            "git merge-base --is-ancestor $env:RELEASE_TAG HEAD",
+            "github.event_name == 'workflow_dispatch'",
+            "RELEASE_PRIVATE_KEY_B64: ${{ secrets.GIM_RELEASE_PRIVATE_KEY_B64 }}",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, self.workflow_text)
 
     def test_signer_sidecar_resolution_matches_the_built_package_layout(self):
         signer_step = self.workflow_text.split("- name: Assinar manifesto do Setup", 1)[1]
