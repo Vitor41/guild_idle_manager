@@ -16,7 +16,6 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-dev-release.yml"
 BUILD_ONLY_WORKFLOW = ROOT / ".github" / "workflows" / "build-dev-candidate.yml"
-SIGN_CANDIDATE_WORKFLOW = ROOT / ".github" / "workflows" / "sign-dev-candidate.yml"
 BUILD_SCRIPT = ROOT / "scripts" / "build_desktop_dev.ps1"
 SIGNER = ROOT / "scripts" / "sign_github_release.py"
 
@@ -106,20 +105,39 @@ class PublishDevReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", workflow)
         self.assertNotIn("GIM_RELEASE_PRIVATE_KEY_B64", workflow)
         self.assertNotIn("gh release create", workflow)
+        self.assertNotIn("workflow_run:", workflow)
+        self.assertFalse((ROOT / ".github" / "workflows" / "sign-dev-candidate.yml").exists())
 
-    def test_candidate_signing_workflow_signs_and_verifies_without_release_permissions(self):
-        workflow = SIGN_CANDIDATE_WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("workflow_run:", workflow)
-        self.assertIn("head_repository.full_name == github.repository", workflow)
-        self.assertIn("workflow_dispatch", workflow)
-        self.assertIn("permissions:\n  actions: read\n  contents: read", workflow)
-        self.assertIn("environment: release-signing", workflow)
-        self.assertIn("scripts/sign_github_release.py", workflow)
-        self.assertIn("scripts/verify_signed_release.py", workflow)
-        self.assertIn("actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333", workflow)
-        self.assertIn("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", workflow)
-        self.assertNotIn("permissions:\n  contents: write", workflow)
-        self.assertNotIn("gh release create", workflow)
+    def test_release_verifies_signed_manifest_before_publishing(self):
+        verify_step = self.workflow_text.split("- name: Verificar assinatura do manifesto localmente", 1)[1].split(
+            "- name: Publicar release", 1
+        )[0]
+        for required in (
+            "scripts/verify_signed_release.py",
+            "--setup \"$output/GuildIdleManager-DEV-Setup.exe\"",
+            "--manifest \"$output/gim-release.json\"",
+            "--signature \"$output/gim-release.json.sig\"",
+            "--public-key-base64 $env:RELEASE_PUBLIC_KEY_B64",
+            "--version $version",
+            "--channel DEV",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, verify_step)
+        self.assertLess(
+            self.workflow_text.index("- name: Verificar assinatura do manifesto localmente"),
+            self.workflow_text.index("- name: Publicar release"),
+        )
+
+    def test_release_signing_requires_default_branch_merged_tag_and_environment(self):
+        for required in (
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            "environment: release-signing",
+            "git merge-base --is-ancestor $env:RELEASE_TAG HEAD",
+            "github.event_name == 'workflow_dispatch'",
+            "RELEASE_PRIVATE_KEY_B64: ${{ secrets.GIM_RELEASE_PRIVATE_KEY_B64 }}",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, self.workflow_text)
 
     def test_signer_sidecar_resolution_matches_the_built_package_layout(self):
         signer_step = self.workflow_text.split("- name: Assinar manifesto do Setup", 1)[1]

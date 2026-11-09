@@ -175,6 +175,23 @@ jobs:
           finally {
             Remove-Item -LiteralPath $keyFile -Force -ErrorAction SilentlyContinue
           }
+      - name: Verificar assinatura do manifesto localmente
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PUBLIC_KEY_B64: ${{ vars.GIM_RELEASE_PUBLIC_KEY_B64 }}
+        run: |
+          $version = $env:RELEASE_TAG.Substring(5)
+          $output = "dist/staging/release-$env:RELEASE_TAG"
+          .\.venv-desktop\Scripts\python.exe scripts/verify_signed_release.py `
+            --setup "$output/GuildIdleManager-DEV-Setup.exe" `
+            --manifest "$output/gim-release.json" `
+            --signature "$output/gim-release.json.sig" `
+            --public-key-base64 $env:RELEASE_PUBLIC_KEY_B64 `
+            --version $version `
+            --channel DEV `
+            --minimum-supported-version 0.3.1
+          if ($LASTEXITCODE -ne 0) { throw 'A assinatura, os campos do manifesto ou o hash do Setup não conferem.' }
       - name: Publicar release
         shell: pwsh
         env:
