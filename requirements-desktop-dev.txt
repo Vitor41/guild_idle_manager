@@ -24,6 +24,7 @@ pydantic_core==2.50.1
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.9
 python-dotenv==1.2.4
+python-multipart==0.0.20
 pythonnet==3.2.1
 pywebview==6.2.1
 pywin32-ctypes==0.2.3

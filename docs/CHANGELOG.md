@@ -1,5 +1,10 @@
 # Histórico de alterações
 
+## 0.7.1 — Correção da inicialização desktop
+
+- Inclui `python-multipart` no pacote para processar formulários das Oficinas sem falha na abertura.
+- Bloqueia a publicação de releases cujo executável não passe no teste de inicialização empacotada.
+
 ## 0.7.0 — Lotes de economia, oficinas, guia e equilíbrio regional
 
 - Adiciona novas opções de mercado e coleta, com cancelamento de ofertas e fontes de materiais integradas à progressão; remove a cota móvel de venda de materiais.

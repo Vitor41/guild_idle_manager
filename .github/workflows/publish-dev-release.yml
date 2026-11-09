@@ -72,6 +72,27 @@ jobs:
         run: |
           $output = "dist/staging/release-$env:RELEASE_TAG"
           ./scripts/build_desktop_dev.ps1 -Channel DEV -GitHubPublicKeyBase64 $env:RELEASE_PUBLIC_KEY_B64 -OutputRoot $output
+      - name: Verificar inicializacao do pacote
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $output = "dist/staging/release-$env:RELEASE_TAG"
+          $executable = Join-Path $output 'GuildIdleManager-DEV/GuildIdleManager/GuildIdleManager.exe'
+          $result = Join-Path $env:RUNNER_TEMP 'gim-release-smoke.txt'
+          $env:GIM_SMOKE_RESULT = $result
+          try {
+            $process = Start-Process -FilePath $executable -ArgumentList '--smoke' -PassThru -Wait -WindowStyle Hidden
+            if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $result -PathType Leaf)) {
+              throw 'O aplicativo empacotado falhou no smoke de inicializacao.'
+            }
+            if ((Get-Content -LiteralPath $result -Raw) -notmatch '^PASS:') {
+              throw 'O smoke de inicializacao nao confirmou o pacote.'
+            }
+          }
+          finally {
+            Remove-Item Env:GIM_SMOKE_RESULT -ErrorAction SilentlyContinue
+          }
       - name: Assinar manifesto do Setup
         shell: pwsh
         env:

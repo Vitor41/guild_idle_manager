@@ -5,6 +5,7 @@ sqlalchemy
 alembic
 psycopg2-binary
 python-dotenv
+python-multipart
 bcrypt
 itsdangerous
 cryptography>=42,<50
