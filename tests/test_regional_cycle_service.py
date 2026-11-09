@@ -52,7 +52,7 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
-    def test_cpu_offer_policy_ranks_expected_reward_rate_before_rank(self):
+    def test_cpu_offer_policy_ranks_expected_xp_rate_before_rank(self):
         from app.services.regional_cycle_service import _cpu_offer_preference
 
         strong_expected = SimpleNamespace(
@@ -70,6 +70,27 @@ class RegionalCycleSimulationTests(unittest.TestCase):
         best = _cpu_offer_preference(strong_expected, "contracts", 100, 2, 0)
         weaker = _cpu_offer_preference(high_rank_low_value, "contracts", 100, 2, 0)
         self.assertLess(best, weaker)
+
+    def test_cpu_offer_policy_does_not_treat_gold_as_xp(self):
+        from app.services.regional_cycle_service import _cpu_offer_preference
+
+        xp_contract = SimpleNamespace(
+            offer_type="contract", rank="E", success_chance_snapshot=80,
+            recommended_power_snapshot=100, gold_reward_snapshot=0,
+            xp_reward_snapshot=100, duration_seconds_snapshot=900,
+            cpu_failure_risk_snapshot=0, id=1,
+        )
+        gold_contract = SimpleNamespace(
+            offer_type="contract", rank="S", success_chance_snapshot=80,
+            recommended_power_snapshot=100, gold_reward_snapshot=10000,
+            xp_reward_snapshot=1, duration_seconds_snapshot=900,
+            cpu_failure_risk_snapshot=0, id=2,
+        )
+
+        self.assertLess(
+            _cpu_offer_preference(xp_contract, "contracts", 100, 1, 0),
+            _cpu_offer_preference(gold_contract, "contracts", 100, 1, 0),
+        )
 
     def test_cpu_boss_equipment_requirement_applies_to_every_party_member(self):
         from app.services.regional_cycle_service import _cpu_offer_party
@@ -110,6 +131,180 @@ class RegionalCycleSimulationTests(unittest.TestCase):
             {1: start, 2: start}, start + timedelta(hours=4), {},
         )
         self.assertIsNotNone(choice)
+
+    def test_v7_cpu_party_prefers_later_team_when_expected_xp_rate_is_better(self):
+        from app.services.regional_cycle_service import _cpu_offer_party
+
+        start = datetime(2026, 11, 9)
+        offer = SimpleNamespace(
+            required_guild_level_snapshot=1,
+            min_party_size_snapshot=1,
+            max_party_size_snapshot=1,
+            required_min_mercenary_level_snapshot=1,
+            required_class_code_snapshot=None,
+            required_total_power_snapshot=0,
+            required_tank_count_snapshot=0,
+            required_support_count_snapshot=0,
+            required_damage_count_snapshot=0,
+            required_equipment_tier_snapshot=0,
+            success_chance_snapshot=50,
+            cpu_failure_risk_snapshot=0,
+            recommended_power_snapshot=100,
+            xp_reward_snapshot=100,
+            duration_seconds_snapshot=3600,
+        )
+        roster = [
+            SimpleNamespace(
+                id=1, slot=1, level=1, class_code="warrior", power=20,
+                vitality=0, agility=0, intelligence=0, luck=0, armor=0,
+                equipment_bonus_json="{}",
+            ),
+            SimpleNamespace(
+                id=2, slot=2, level=1, class_code="mage", power=100,
+                vitality=0, agility=0, intelligence=0, luck=0, armor=0,
+                equipment_bonus_json="{}",
+            ),
+        ]
+        choice = _cpu_offer_party(
+            offer, SimpleNamespace(level=1), roster,
+            {1: start, 2: start + timedelta(minutes=30)},
+            start + timedelta(hours=4), {}, optimize_cpu_value=True,
+        )
+
+        self.assertIsNotNone(choice)
+        self.assertEqual(choice[0], start + timedelta(minutes=30))
+        self.assertEqual([member.id for member in choice[1]], [2])
+
+    def test_v7_cpu_party_skips_team_that_cannot_finish_before_deadline(self):
+        from app.services.regional_cycle_service import _cpu_offer_party
+
+        start = datetime(2026, 11, 9)
+        offer = SimpleNamespace(
+            required_guild_level_snapshot=1,
+            min_party_size_snapshot=1,
+            max_party_size_snapshot=1,
+            required_min_mercenary_level_snapshot=1,
+            required_class_code_snapshot=None,
+            required_total_power_snapshot=0,
+            required_tank_count_snapshot=0,
+            required_support_count_snapshot=0,
+            required_damage_count_snapshot=0,
+            required_equipment_tier_snapshot=0,
+            success_chance_snapshot=50,
+            cpu_failure_risk_snapshot=0,
+            recommended_power_snapshot=100,
+            xp_reward_snapshot=100,
+            duration_seconds_snapshot=3600,
+        )
+        mercenary = SimpleNamespace(
+            id=1, slot=1, level=1, class_code="warrior", power=100,
+            vitality=0, agility=0, intelligence=0, luck=0, armor=0,
+            equipment_bonus_json="{}",
+        )
+
+        choice = _cpu_offer_party(
+            offer, SimpleNamespace(level=1), [mercenary],
+            {1: start + timedelta(hours=3, minutes=30)},
+            start + timedelta(hours=4), {}, optimize_cpu_value=True,
+        )
+
+        self.assertIsNone(choice)
+
+    def test_open_v6_cycle_keeps_targeted_pressure_and_cpu_rotation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            with patch(
+                "app.services.campaign_service.uuid4",
+                return_value=UUID("00000000-0000-4000-8000-000000000071"),
+            ):
+                created = campaigns.create_campaign("Ciclo v6 aberto", "Guilda v6")
+            campaigns.activate_campaign(created.campaign_id)
+            try:
+                with SessionLocal() as db:
+                    campaign = db.get(CampaignMetadata, created.campaign_id)
+                    guild, _resources = get_current_guild_context(db, created.campaign_id)
+                    start = campaign.created_at_utc
+                    advance_regional_world(db, campaign, guild, start)
+                    regional_cycle_service.get_regional_board(db, campaign, guild, start)
+                    cycle_zero = db.scalar(select(RegionalCycle).where(
+                        RegionalCycle.campaign_id == created.campaign_id,
+                        RegionalCycle.cycle_number == 0,
+                    ))
+                    cycle_zero.rules_version = regional_cycle_service.VIGILIA_V6_RULES_VERSION
+                    db.flush()
+
+                    first_cycle_order = []
+                    original_plan = regional_cycle_service._cpu_plan_for_guild
+
+                    def record_first_order(db_session, campaign_id, cycle, region, state):
+                        if cycle.id == cycle_zero.id:
+                            first_cycle_order.append((region.region_code, state.slot))
+                        return original_plan(db_session, campaign_id, cycle, region, state)
+
+                    with patch.object(
+                        regional_cycle_service, "_cpu_plan_for_guild", side_effect=record_first_order,
+                    ):
+                        advance_regional_world(
+                            db, campaign, guild, start + timedelta(seconds=CYCLE_SECONDS),
+                        )
+                    snapshots = list(db.scalars(select(RegionalCycleRegion).where(
+                        RegionalCycleRegion.cycle_id == cycle_zero.id,
+                    )))
+                    target_regions = {
+                        json.loads(row.summary_json)["gradual_pressure"]["target_region"]
+                        for row in snapshots
+                    }
+                    self.assertEqual(len(target_regions), 1)
+                    self.assertLessEqual(sum(
+                        json.loads(row.summary_json)["gradual_pressure"]["targeted"]
+                        for row in snapshots
+                    ), 1)
+                    expected_first_order = [
+                        (region_code, slot)
+                        for region_code in sorted({row[0] for row in first_cycle_order})
+                        for slot in sorted(slot for code, slot in first_cycle_order if code == region_code)
+                    ]
+                    self.assertEqual(first_cycle_order, expected_first_order)
+
+                    cycle_one_time = start + timedelta(seconds=CYCLE_SECONDS)
+                    regional_cycle_service.get_regional_board(db, campaign, guild, cycle_one_time)
+                    cycle_one = db.scalar(select(RegionalCycle).where(
+                        RegionalCycle.campaign_id == created.campaign_id,
+                        RegionalCycle.cycle_number == 1,
+                    ))
+                    cycle_one.rules_version = regional_cycle_service.VIGILIA_V6_RULES_VERSION
+                    db.flush()
+                    second_cycle_order = []
+                    risk_by_region = {}
+
+                    def record_second_order(db_session, campaign_id, cycle, region, state):
+                        if cycle.id == cycle_one.id:
+                            second_cycle_order.append((region.region_code, state.slot))
+                            risk_by_region.setdefault(
+                                region.region_code,
+                                float(region.threat) + 100.0 - float(region.security),
+                            )
+                        return original_plan(db_session, campaign_id, cycle, region, state)
+
+                    with patch.object(
+                        regional_cycle_service, "_cpu_plan_for_guild", side_effect=record_second_order,
+                    ):
+                        advance_regional_world(
+                            db, campaign, guild, start + timedelta(seconds=2 * CYCLE_SECONDS),
+                        )
+                    expected_second_order = []
+                    for region_code in sorted(
+                        risk_by_region,
+                        key=lambda code: (-risk_by_region[code], code),
+                    ):
+                        slots = sorted(slot for code, slot in second_cycle_order if code == region_code)
+                        rotation = 1 % len(slots)
+                        expected_second_order.extend(
+                            (region_code, slot) for slot in slots[rotation:] + slots[:rotation]
+                        )
+                    self.assertEqual(second_cycle_order, expected_second_order)
+            finally:
+                campaigns.close_active_campaign(created.campaign_id)
 
     def test_cpu_throughput_scales_with_roster_and_pressure_selects_highest_risk(self):
         strong = RegionalGuildState(

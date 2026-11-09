@@ -48,7 +48,9 @@ from app.services.tavern_service import get_discounted_hire_cost, get_tavern_app
 
 
 LEGACY_VIGILIA_RULES_VERSION = "vigilia-v2"
+VIGILIA_V6_RULES_VERSION = "vigilia-v6"
 VIGILIA_RULES_VERSION = "vigilia-v7"
+TARGETED_PRESSURE_RULES_VERSIONS = frozenset({VIGILIA_V6_RULES_VERSION, VIGILIA_RULES_VERSION})
 RIVAL_CALM_RULES_VERSIONS = frozenset({"vigilia-v3", "vigilia-v4", "vigilia-v5", "vigilia-v6", "vigilia-v7"})
 CYCLE_SECONDS = 6 * 60 * 60
 RANKS = ("E", "D", "C", "B", "A", "S")
@@ -1193,6 +1195,7 @@ def _cpu_offer_party(
     *,
     include_synergy_power: bool = True,
     require_equipment_for_each_member: bool = True,
+    optimize_cpu_value: bool = False,
 ) -> tuple[datetime, list[RegionalCpuMercenary]] | None:
     if state.level < offer.required_guild_level_snapshot:
         return None
@@ -1206,6 +1209,8 @@ def _cpu_offer_party(
     required_damage = max(0, int(offer.required_damage_count_snapshot or 0))
     required_equipment = max(0, int(offer.required_equipment_tier_snapshot or 0))
     earliest: tuple[datetime, int, list[RegionalCpuMercenary]] | None = None
+    best_value: tuple[tuple[float, int, datetime, int, int], datetime,
+                      list[RegionalCpuMercenary]] | None = None
     for size in range(party_size, min(maximum_size, len(roster)) + 1):
         for party in combinations(roster, size):
             if any(member.level < minimum_level for member in party):
@@ -1245,9 +1250,39 @@ def _cpu_offer_party(
             start = max((available_at.get(member.id, cycle_end) for member in party))
             if start >= cycle_end:
                 continue
-            key = (start, -power, list(party))
-            if earliest is None or key[:2] < earliest[:2]:
-                earliest = key
+            if optimize_cpu_value:
+                duration = max(1, int(offer.duration_seconds_snapshot))
+                if start + timedelta(seconds=duration) > cycle_end:
+                    continue
+                class_bonus = min(
+                    8, sum(CLASS_SUCCESS_BONUS.get(member.class_code, 0) for member in party),
+                )
+                chance = max(
+                    5,
+                    min(
+                        95,
+                        int(getattr(offer, "success_chance_snapshot", 50) or 50)
+                        + power_success_adjustment(power, int(offer.recommended_power_snapshot))
+                        + class_bonus
+                        - int(getattr(offer, "cpu_failure_risk_snapshot", 0) or 0),
+                    ),
+                )
+                success_xp = max(0, int(getattr(offer, "xp_reward_snapshot", 0) or 0))
+                failure_xp = success_xp // 4
+                expected_xp_rate = (
+                    chance * success_xp + (100 - chance) * failure_xp
+                ) * len(party) / (100 * duration)
+                value_key = (
+                    -expected_xp_rate, -chance, start, -power, -len(party),
+                )
+                if best_value is None or value_key < best_value[0]:
+                    best_value = (value_key, start, list(party))
+            else:
+                key = (start, -power, list(party))
+                if earliest is None or key[:2] < earliest[:2]:
+                    earliest = key
+    if optimize_cpu_value:
+        return (best_value[1], best_value[2]) if best_value is not None else None
     return (earliest[0], earliest[2]) if earliest is not None else None
 
 
@@ -1257,16 +1292,16 @@ def _cpu_offer_preference(
     party_power: int,
     party_size: int,
     class_bonus: int,
-) -> tuple[int, ...]:
-    """Rank feasible actions by expected reward rate, then preserve archetype preference."""
+) -> tuple[float | int, ...]:
+    """Rank feasible actions by expected XP rate, then chance and archetype preference."""
     chance = max(5, min(95, offer.success_chance_snapshot
                        + power_success_adjustment(party_power, offer.recommended_power_snapshot)
                        + class_bonus - int(getattr(offer, "cpu_failure_risk_snapshot", 0) or 0)))
-    success_reward = offer.gold_reward_snapshot + offer.xp_reward_snapshot * party_size
+    success_reward = offer.xp_reward_snapshot * party_size
     failure_reward = max(0, offer.xp_reward_snapshot // 4) * party_size
     expected_reward = chance * success_reward + (100 - chance) * failure_reward
     duration = max(1, int(offer.duration_seconds_snapshot))
-    reward_rate = expected_reward // duration
+    reward_rate = expected_reward / duration
     if offer.offer_type == "portal":
         archetype_preference = 0 if archetype == "exploration" else 1
     elif archetype == "security":
@@ -1458,6 +1493,7 @@ def _cpu_plan_for_guild_v6(
                 offer, state, roster, busy_until, offer_deadline, class_roles,
                 include_synergy_power=v7_rules,
                 require_equipment_for_each_member=v7_rules,
+                optimize_cpu_value=v7_rules,
             )
             if party_choice is None:
                 continue
@@ -1608,7 +1644,7 @@ def _cpu_plan_for_guild(
     region: RegionalRegionState,
     state: RegionalGuildState,
 ) -> tuple[RegionalCpuCyclePlan, float, float, int, int, int]:
-    if cycle.rules_version not in {"vigilia-v6", VIGILIA_RULES_VERSION}:
+    if cycle.rules_version not in TARGETED_PRESSURE_RULES_VERSIONS:
         return _cpu_plan_for_guild_legacy(db, campaign_id, cycle, region, state)
     return _cpu_plan_for_guild_v6(db, campaign_id, cycle, region, state)
 
@@ -1652,7 +1688,7 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
         RegionalRegionState.campaign_id == campaign_id,
     ).order_by(RegionalRegionState.region_code)))
     pressure_target = None
-    if cycle.rules_version == VIGILIA_RULES_VERSION and regions:
+    if cycle.rules_version in TARGETED_PRESSURE_RULES_VERSIONS and regions:
         current_window_start = (
             cycle.cycle_number // REGIONAL_PRESSURE_WINDOW_CYCLES
         ) * REGIONAL_PRESSURE_WINDOW_CYCLES
@@ -1693,7 +1729,7 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
             pressure_target = regional_pressure_target_code(
                 campaign_id, cycle.cycle_number, regions, recently_targeted_regions,
             )
-    if cycle.rules_version == VIGILIA_RULES_VERSION:
+    if cycle.rules_version in TARGETED_PRESSURE_RULES_VERSIONS:
         regions.sort(key=lambda region: (
             -(float(region.threat) + 100.0 - float(region.security)),
             region.region_code,
@@ -1734,7 +1770,7 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
             RegionalGuildState.guild_id.is_(None),
             RegionalGuildState.active.is_(True),
         ).order_by(RegionalGuildState.slot)))
-        if cycle.rules_version == VIGILIA_RULES_VERSION and cpu_guilds:
+        if cycle.rules_version in TARGETED_PRESSURE_RULES_VERSIONS and cpu_guilds:
             rotation = cycle.cycle_number % len(cpu_guilds)
             cpu_guilds = cpu_guilds[rotation:] + cpu_guilds[:rotation]
         archetype_totals: dict[str, int] = {}

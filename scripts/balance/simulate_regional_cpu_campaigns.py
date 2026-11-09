@@ -28,6 +28,7 @@ from app.models.regional import (
     RegionalEvent,
     RegionalEventActivity,
     RegionalGuildState,
+    RegionalOffer,
     RegionalRegionState,
 )
 from app.services.campaign_service import CampaignService
@@ -46,6 +47,7 @@ from app.services.regional_cycle_service import (
 ROOT = Path(__file__).resolve().parents[2]
 SEEDS = tuple(range(2026110301, 2026110321))
 HORIZON = 100
+E1_E3_BASELINE_PATH = ROOT / "reports" / "lot_e2_ml029_cpu_paired_2026-11-09-e4-integrated.json"
 
 
 def _percentile(values: list[int], percentile: float) -> float:
@@ -317,6 +319,113 @@ def run_campaign(seed: int, saves_root: Path, template_database: Path | None = N
         plans = list(db.scalars(select(RegionalCpuCyclePlan).where(
             RegionalCpuCyclePlan.campaign_id == created.campaign_id,
         )))
+        cycles_by_id = {
+            row.id: row for row in db.scalars(select(RegionalCycle).where(
+                RegionalCycle.campaign_id == created.campaign_id,
+                RegionalCycle.cycle_number < HORIZON,
+            ))
+        }
+        offers = list(db.scalars(select(RegionalOffer).where(
+            RegionalOffer.campaign_id == created.campaign_id,
+            RegionalOffer.cycle_number < HORIZON,
+        )))
+        offer_by_id = {offer.id: offer for offer in offers}
+        board_by_rank_level = Counter()
+        started_by_rank_level = Counter()
+        action_metrics_by_rank_level = {}
+        offer_starts_by_cycle_region = Counter()
+        board_slots_by_cycle_region = Counter()
+        for offer in offers:
+            level_band = str(offer.level_band_snapshot or f"nível {offer.recommended_level_snapshot}")
+            key = (offer.offer_type, offer.rank, level_band)
+            board_by_rank_level[key] += 1
+            board_slots_by_cycle_region[(offer.cycle_number, offer.region_code)] += 1
+        blocker_counts = Counter()
+        for plan in plans:
+            cycle_number = cycles_by_id[plan.cycle_id].cycle_number
+            state = db.get(RegionalGuildState, plan.guild_state_id)
+            blocker_counts["plans"] += 1
+            blocker_counts["planned_offer_slots"] += int(plan.planned_actions or 0)
+            blocker_counts["eligible_planning_passes"] += int(plan.eligible_actions or 0)
+            blocker_counts["started_actions"] += int(plan.started_actions or 0)
+            blocker_counts["zero_eligible_plans"] += int((plan.eligible_actions or 0) == 0)
+            blocker_counts["offers_available_but_none_fit"] += int(
+                (plan.eligible_actions or 0) == 0 and (plan.planned_actions or 0) > 0,
+            )
+            blocker_counts["board_already_empty"] += int(
+                (plan.eligible_actions or 0) == 0 and (plan.planned_actions or 0) == 0,
+            )
+            blocker_counts["terminal_duration_blocks"] += max(
+                0, int(plan.eligible_actions or 0) - int(plan.started_actions or 0),
+            )
+            decisions = json.loads(plan.decisions_json or "[]")
+            outcomes_by_action = {
+                int(outcome.get("action", 0)): outcome
+                for outcome in json.loads(plan.outcomes_json or "[]")
+            }
+            for decision in decisions:
+                offer = offer_by_id.get(int(decision.get("offer_id", 0)))
+                if offer is None:
+                    continue
+                level_band = str(offer.level_band_snapshot or f"nível {offer.recommended_level_snapshot}")
+                key = (offer.offer_type, offer.rank, level_band)
+                started_by_rank_level[key] += 1
+                bucket = action_metrics_by_rank_level.setdefault(key, {
+                    "started": 0, "successes": 0, "failures": 0, "chance_sum": 0,
+                    "xp_awarded": 0, "duration_seconds_sum": 0, "party_size_sum": 0,
+                })
+                action = int(decision.get("action", 0))
+                outcome = outcomes_by_action.get(action, {})
+                party_size = len(decision.get("mercenary_slots", []))
+                success = bool(outcome.get("success"))
+                bucket["started"] += 1
+                bucket["successes"] += int(success)
+                bucket["failures"] += int(not success)
+                bucket["chance_sum"] += int(decision.get("success_chance", 0))
+                bucket["xp_awarded"] += int(outcome.get("xp", 0)) * party_size
+                bucket["duration_seconds_sum"] += int(decision.get(
+                    "duration_seconds", offer.duration_seconds_snapshot,
+                ))
+                bucket["party_size_sum"] += party_size
+                offer_starts_by_cycle_region[(cycle_number, offer.region_code)] += 1
+        cpu_strategy_by_rank_level = []
+        for key in sorted(board_by_rank_level):
+            offer_type, rank, level_band = key
+            board_count = board_by_rank_level[key]
+            actions = action_metrics_by_rank_level.get(key, {})
+            started = int(actions.get("started", 0))
+            cpu_strategy_by_rank_level.append({
+                "offer_type": offer_type,
+                "rank": rank,
+                "level_band": level_band,
+                "offers_generated": board_count,
+                "cpu_started": started,
+                "offers_unstarted": board_count - started,
+                "successes": int(actions.get("successes", 0)),
+                "failures": int(actions.get("failures", 0)),
+                "chance_sum": int(actions.get("chance_sum", 0)),
+                "xp_awarded": int(actions.get("xp_awarded", 0)),
+                "duration_seconds_sum": int(actions.get("duration_seconds_sum", 0)),
+                "party_size_sum": int(actions.get("party_size_sum", 0)),
+            })
+        coverage_ratios = [
+            offer_starts_by_cycle_region[key] / max(1, slots)
+            for key, slots in board_slots_by_cycle_region.items()
+        ]
+        cpu_offer_coverage = {
+            "region_cycle_count": len(board_slots_by_cycle_region),
+            "offers_generated": sum(board_slots_by_cycle_region.values()),
+            "cpu_starts_from_board": sum(offer_starts_by_cycle_region.values()),
+            "offers_unstarted": sum(board_slots_by_cycle_region.values())
+                - sum(offer_starts_by_cycle_region.values()),
+            "mean_fraction_of_board_started_per_region_cycle": round(
+                sum(coverage_ratios) / max(1, len(coverage_ratios)), 4,
+            ),
+            "min_starts_per_region_cycle": min(offer_starts_by_cycle_region.get(key, 0)
+                                                 for key in board_slots_by_cycle_region),
+            "max_starts_per_region_cycle": max(offer_starts_by_cycle_region.get(key, 0)
+                                                 for key in board_slots_by_cycle_region),
+        }
         cpu_xp_net = 0
         cpu_gold_net = 0
         for plan in plans:
@@ -409,6 +518,9 @@ def run_campaign(seed: int, saves_root: Path, template_database: Path | None = N
             "cpu_success_rate": round(cpu_successes / max(1, cpu_successes + cpu_failures), 4),
             "cpu_xp_net": cpu_xp_net,
             "cpu_gold_net": cpu_gold_net,
+            "cpu_strategy_by_rank_level": cpu_strategy_by_rank_level,
+            "cpu_offer_coverage": cpu_offer_coverage,
+            "cpu_planner_blockers": dict(blocker_counts),
             "cpu_portal_entries": len(portal_cpu_activities),
             "cpu_portal_successes": cpu_portal_successes,
             "cpu_portal_failures": cpu_portal_failures,
@@ -519,6 +631,9 @@ def _align_rebellion_funnel_to_roll_cycles(results: list[dict]) -> list[dict]:
                 "unclassified_eligible_regions": sorted(unclassified_regions),
             })
         campaign["rebellion_funnel_by_cycle"] = aligned_cycles
+        campaign["cycles_with_vulnerable_region"] = sum(
+            bool(cycle["threshold_eligible_regions"]) for cycle in aligned_cycles
+        )
         campaign["funnel_alignment"] = "snapshot N-1 to event check N"
         campaign["regional_rebellion_funnel"] = {
             code: dict(values) for code, values in regional.items()
@@ -545,12 +660,59 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
                 "cpu_xp_net", "cpu_gold_net", "cpu_portal_entries", "cpu_portal_successes",
                 "cpu_portal_failures",
                 "other_regions_cpu_actions_per_cycle", "final_security_min_max", "final_threat_min_max",
+                "cpu_strategy_by_rank_level", "cpu_offer_coverage", "cpu_planner_blockers",
             )
         } | {
             "selected_roll_cycles": selected_cycles,
             "rebellion_opened_cycles": opened_cycles,
             "regional_rebellion_funnel": regional_funnel,
         })
+    strategy_totals = {}
+    planner_blockers_total = Counter()
+    coverage_totals = Counter()
+    for row in results:
+        coverage_totals.update(row["cpu_offer_coverage"])
+        planner_blockers_total.update(row["cpu_planner_blockers"])
+        for item in row["cpu_strategy_by_rank_level"]:
+            key = (item["offer_type"], item["rank"], item["level_band"])
+            total = strategy_totals.setdefault(key, {
+                "offers_generated": 0, "cpu_started": 0, "successes": 0, "failures": 0,
+                "chance_sum": 0, "xp_awarded": 0, "duration_seconds_sum": 0,
+                "party_size_sum": 0,
+            })
+            for metric in total:
+                total[metric] += item[metric]
+    cpu_strategy_by_rank_level = []
+    for (offer_type, rank, level_band), values in sorted(strategy_totals.items()):
+        started = values["cpu_started"]
+        cpu_strategy_by_rank_level.append({
+            "offer_type": offer_type,
+            "rank": rank,
+            "level_band": level_band,
+            **values,
+            "offers_unstarted": values["offers_generated"] - started,
+            "success_rate": round(values["successes"] / max(1, started), 4),
+            "mean_success_chance": round(values["chance_sum"] / max(1, started), 2),
+            "mean_xp_awarded_per_start": round(values["xp_awarded"] / max(1, started), 2),
+            "mean_duration_seconds": round(values["duration_seconds_sum"] / max(1, started), 1),
+            "mean_party_size": round(values["party_size_sum"] / max(1, started), 2),
+        })
+    coverage_summary = {
+        "region_cycle_count": coverage_totals["region_cycle_count"],
+        "offers_generated": coverage_totals["offers_generated"],
+        "cpu_starts_from_board": coverage_totals["cpu_starts_from_board"],
+        "offers_unstarted": coverage_totals["offers_unstarted"],
+        "fraction_of_board_started": round(
+            coverage_totals["cpu_starts_from_board"] / max(1, coverage_totals["offers_generated"]), 4,
+        ),
+        "mean_fraction_of_board_started_per_region_cycle": round(
+            sum(row["cpu_offer_coverage"]["mean_fraction_of_board_started_per_region_cycle"]
+                for row in results) / len(results), 4,
+        ),
+    }
+    cpu_mission_starts = sum(item["cpu_started"] for item in cpu_strategy_by_rank_level)
+    cpu_mission_successes = sum(item["successes"] for item in cpu_strategy_by_rank_level)
+    cpu_mission_failures = sum(item["failures"] for item in cpu_strategy_by_rank_level)
     portal_cycles = [row["first_portal_cycle"] for row in results if row["first_portal_cycle"] is not None]
     rebellion_cycles = [row["first_rebellion_cycle"] for row in results
                         if row["first_rebellion_cycle"] is not None]
@@ -711,6 +873,15 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         "total_opened_rebellions": sum(row["opened_rebellions"] for row in results),
         "total_cpu_xp_net": sum(row["cpu_xp_net"] for row in results),
         "total_cpu_gold_net": sum(row["cpu_gold_net"] for row in results),
+        "cpu_strategy_by_rank_level": cpu_strategy_by_rank_level,
+        "cpu_mission_starts": cpu_mission_starts,
+        "cpu_mission_successes": cpu_mission_successes,
+        "cpu_mission_failures": cpu_mission_failures,
+        "cpu_mission_success_rate": round(
+            cpu_mission_successes / max(1, cpu_mission_starts), 4,
+        ),
+        "cpu_offer_coverage": coverage_summary,
+        "cpu_planner_blockers": dict(planner_blockers_total),
         "total_cpu_portal_entries": sum(row["cpu_portal_entries"] for row in results),
         "total_cpu_portal_successes": sum(row["cpu_portal_successes"] for row in results),
         "total_cpu_portal_failures": sum(row["cpu_portal_failures"] for row in results),
@@ -826,6 +997,30 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         ),
         "campaign_results": campaign_summaries,
     }
+    baseline_data = json.loads(E1_E3_BASELINE_PATH.read_text(encoding="utf-8"))
+    baseline_phases = [
+        baseline_data["totals"]["baseline"][f"global|{phase}"]
+        for phase in ("early", "mid", "late")
+    ]
+    baseline_xp = sum(phase["resource_net_xp"] for phase in baseline_phases)
+    baseline_successes = sum(phase["all_cpu_successes"] for phase in baseline_phases)
+    baseline_failures = sum(phase["all_cpu_failures"] for phase in baseline_phases)
+    baseline_success_rate = baseline_successes / max(1, baseline_successes + baseline_failures)
+    xp_delta = report["total_cpu_xp_net"] / max(1, baseline_xp) - 1
+    success_delta_pp = (report["cpu_mission_success_rate"] - baseline_success_rate) * 100
+    report["accepted_e1_e3_baseline"] = {
+        "source": E1_E3_BASELINE_PATH.name,
+        "cpu_xp_net": baseline_xp,
+        "mission_successes": baseline_successes,
+        "mission_failures": baseline_failures,
+        "mission_success_rate": round(baseline_success_rate, 4),
+    }
+    report["cpu_strategy_gate"] = {
+        "cpu_xp_delta_fraction": round(xp_delta, 4),
+        "mission_success_delta_percentage_points": round(success_delta_pp, 2),
+        "xp_within_10_percent": abs(xp_delta) <= 0.10,
+        "success_within_10_percentage_points": abs(success_delta_pp) <= 10,
+    }
     lines = [
         "# Regional CPU event balance — 20 campaigns",
         "",
@@ -833,6 +1028,17 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         "Events, timers, CPU plans, snapshots and region state use the live services.",
         "The funnel aligns pressure and threshold state from snapshot N−1 to the rebellion check when Vigília N opens; "
         "global-lock cycles are inferred from the active event deadline and the preceding snapshot.",
+        "",
+        "## CPU strategy gate vs E1+E3 baseline",
+        "",
+        "Paired seeds and a 100-Vigília horizon; XP is campaign resource net, and success excludes portal entries.",
+        "",
+        "| Measure | E1+E3 baseline | E5 strategy | Difference | Acceptance gate |",
+        "|---|---:|---:|---:|---|",
+        f"| CPU XP net | {baseline_xp:,} | {report['total_cpu_xp_net']:,} | {xp_delta:+.1%} | ±10%: {'pass' if abs(xp_delta) <= 0.10 else 'fail'} |",
+        f"| Mission success | {baseline_success_rate:.1%} | {report['cpu_mission_success_rate']:.1%} | {success_delta_pp:+.2f} pp | ±10 pp: {'pass' if abs(success_delta_pp) <= 10 else 'fail'} |",
+        "",
+        "V7 scores candidates by expected XP per second using the existing success formula and quarter-XP failure reward; chance breaks ties before archetype. Team composition is evaluated against each member's availability, and a delayed team is accepted only if the full duration fits the deadline. No gold-as-XP value, Rank bonus, resolution bonus, or success-rate bonus is applied. ML-029 recommended power remains unchanged; Rank C level 18 remains 144.",
         "",
         f"- Campaigns with at least one portal: **{report['campaigns_with_portal']}/{len(results)}**; "
         f"without portal: **{report['campaigns_without_portal']}**; "
@@ -843,12 +1049,23 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         f"mean cycles with a vulnerable region: **{report['mean_cycles_with_vulnerable_region']}**.",
         f"- Maximum simultaneous active global rebellions: **{report['maximum_simultaneous_rebellions']}**.",
         f"- Mean CPU success rate: **{report['mean_cpu_success_rate']:.1%}**.",
+        f"- Mission-only CPU success rate (excluding portal entries): **{report['cpu_mission_success_rate']:.1%}** "
+        f"over {report['cpu_mission_starts']:,} started contracts, dungeons, and bosses.",
         f"- CPU portal entries: **{report['total_cpu_portal_entries']}** "
         f"({report['total_cpu_portal_successes']} successes, {report['total_cpu_portal_failures']} failures).",
         f"- Net CPU XP / gold over the horizon: **{report['total_cpu_xp_net']:,} XP / "
         f"{report['total_cpu_gold_net']:,} gold**.",
         f"- Mean CPU actions per global Vigília: **{report['mean_cpu_actions_per_cycle_global']}** "
         "with throughput set by eligible offers, available mercenaries, activity durations, and 1h player priority.",
+        f"- Board coverage: **{report['cpu_offer_coverage']['cpu_starts_from_board']:,}/"
+        f"{report['cpu_offer_coverage']['offers_generated']:,}** region-board offers started by CPU "
+        f"({report['cpu_offer_coverage']['fraction_of_board_started']:.1%}); "
+        f"{report['cpu_offer_coverage']['offers_unstarted']:,} remained unstarted.",
+        f"- Planner stop reasons: **{report['cpu_planner_blockers'].get('offers_available_but_none_fit', 0):,}** plans "
+        "had board offers but no party-offer pair eligible; **"
+        f"{report['cpu_planner_blockers'].get('board_already_empty', 0):,}** reached an already-used board; **"
+        f"{report['cpu_planner_blockers'].get('terminal_duration_blocks', 0):,}** terminal passes found a party "
+        "but no selected action could finish inside the cycle.",
         f"- CPU actions per Vigília: guilda da região natal **{report['home_vs_other_regions_cpu_actions_per_cycle']['home_region']['mean']}**; "
         f"nas outras quatro regiões, juntas, **{report['home_vs_other_regions_cpu_actions_per_cycle']['other_regions']['mean']}**.",
         f"- Minimum regional Vigílias with at least one CPU action: "
@@ -864,6 +1081,24 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
         ) + ".",
         "",
     ]
+    lines.extend([
+        "## CPU outcomes by Rank and level band",
+        "",
+        "Unstarted offers are counted against the generated regional board. Success chance and XP are measured "
+        "only for started offers; XP includes all mercenaries in the party.",
+        "",
+        "| Tipo | Rank | Faixa de nível | Ofertas | Iniciadas | Não iniciadas | Sucesso | Chance média | XP/início | Duração s | Grupo |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ])
+    for item in report["cpu_strategy_by_rank_level"]:
+        lines.append(
+            f"| {item['offer_type']} | {item['rank']} | {item['level_band']} | "
+            f"{item['offers_generated']} | {item['cpu_started']} | {item['offers_unstarted']} | "
+            f"{item['success_rate']:.1%} | {item['mean_success_chance']:.1f}% | "
+            f"{item['mean_xp_awarded_per_start']:.1f} | {item['mean_duration_seconds']:.0f} | "
+            f"{item['mean_party_size']:.2f} |"
+        )
+    lines.append("")
     funnel = report["rebellion_funnel"]
     lines.extend([
         f"- Rebellion funnel across {funnel['campaigns']}×{funnel['cycles_per_campaign']} Vigílias: "
@@ -958,12 +1193,20 @@ def build_report(results: list[dict]) -> tuple[dict, str]:
 
 
 def main() -> None:
+    global HORIZON
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pressure-window", type=int, default=regional_cycle_service.REGIONAL_PRESSURE_WINDOW_CYCLES)
+    parser.add_argument("--seed-start", type=int, default=SEEDS[0])
+    parser.add_argument("--campaign-count", type=int, default=len(SEEDS))
+    parser.add_argument("--horizon-cycles", type=int, default=HORIZON)
     parser.add_argument("--output-prefix", default="reports/regional_cpu_incidence_2026-11-03")
     args = parser.parse_args()
     if args.pressure_window < 1:
         parser.error("--pressure-window must be positive")
+    if args.campaign_count < 1 or args.horizon_cycles < 1:
+        parser.error("--campaign-count and --horizon-cycles must be positive")
+    HORIZON = args.horizon_cycles
+    seeds = tuple(range(args.seed_start, args.seed_start + args.campaign_count))
     regional_cycle_service.REGIONAL_PRESSURE_WINDOW_CYCLES = args.pressure_window
     output_prefix = Path(args.output_prefix)
     if not output_prefix.is_absolute():
@@ -976,11 +1219,11 @@ def main() -> None:
         CampaignService(template_saves).activate_campaign(template.campaign_id)
         results = []
         try:
-            for index, seed in enumerate(SEEDS, start=1):
+            for index, seed in enumerate(seeds, start=1):
                 result = run_campaign(seed, saves_root, template.database_path)
                 results.append(result)
                 print(
-                    f"[{index}/{len(SEEDS)}] seed={seed} portals={result['opened_portals']} "
+                    f"[{index}/{len(seeds)}] seed={seed} portals={result['opened_portals']} "
                     f"rebellions={result['opened_rebellions']} "
                     f"security={result['final_security_min_max']} threat={result['final_threat_min_max']}",
                     flush=True,
@@ -990,7 +1233,7 @@ def main() -> None:
     report, markdown = build_report(results)
     report["calibration"] = {
         "pressure_window_cycles": args.pressure_window,
-        "seeds": list(SEEDS),
+        "seeds": list(seeds),
         "runner": "live campaign services with cloned, fully seeded disposable SQLite save per deterministic UUID seed",
     }
     json_path = output_prefix.with_suffix(".json")
