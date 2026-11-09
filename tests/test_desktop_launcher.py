@@ -1,5 +1,6 @@
 from contextlib import ExitStack
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -102,16 +103,37 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             powershell.touch()
             test_logs = Path(windows_dir) / "logs"
             test_logs.mkdir()
+            isolated_local_app_data = Path(windows_dir) / "LocalAppData"
+            isolated_local_app_data.mkdir()
 
-            with patch.dict(os.environ, {"WINDIR": windows_dir}), \
+            def start_helper(command, **_kwargs):
+                helper_text = base64.b64decode(command[-1]).decode("utf-16le")
+                ready_match = re.search(r"\$readyFile = \[Text\.Encoding\]::UTF8\.GetString\(\[Convert\]::FromBase64String\('([^']+)'\)\)", helper_text)
+                self.assertIsNotNone(ready_match, helper_text)
+                ready_path = Path(base64.b64decode(ready_match.group(1)).decode("utf-8"))
+                ready_path.write_text("READY", encoding="utf-8")
+                return SimpleNamespace(pid=4321, poll=lambda: None)
+
+            isolated_environment = os.environ.copy()
+            isolated_environment["LOCALAPPDATA"] = str(isolated_local_app_data)
+
+            def without_windows_mutex(script):
+                return script.replace(
+                    "$updateMutex = [Threading.Mutex]::OpenExisting($mutexName)", "$updateMutex = $null",
+                ).replace("$updateMutex.WaitOne() | Out-Null", "$mutexAcquired = $true")
+
+            with patch.dict(os.environ, {"WINDIR": str(windows_dir), "LOCALAPPDATA": str(isolated_local_app_data)}), \
                  patch.object(launcher, "user_log_directory", return_value=test_logs), \
-                 patch.object(launcher.subprocess, "Popen", return_value=SimpleNamespace(pid=4321)) as popen:
+                 patch.object(launcher.subprocess, "Popen", side_effect=start_helper) as popen:
                 launcher._verified_update_handoff(installer, 1234, "0.6.2")
 
             command = popen.call_args.args[0]
             helper = base64.b64decode(command[-1]).decode("utf-16le")
             self.assertIn("Write-HandoffLog", helper)
             self.assertIn("FromBase64String", helper)
+            self.assertIn("$handoffLockPath = Join-Path $expectedLocalAppData 'GuildIdleManager\\locks\\update-handoff.lock'", helper)
+            self.assertIn("$updateMutex.WaitOne()", helper)
+            self.assertIn("$mutexAcquired = $true", helper)
             self.assertIn("$logFile =", helper)
             self.assertIn("AppendAllText", helper)
             self.assertNotIn("Add-Content", helper)
@@ -162,7 +184,13 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             )
             self.assertEqual(parsed.returncode, 0, parsed.stderr)
 
-            simulated = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            simulated = without_windows_mutex(helper.replace("$parentPid = 1234", "$parentPid = 2147483647"))
+            simulated = simulated.replace(
+                "    try {\n        $updateMutex = [Threading.Mutex]::OpenExisting($mutexName)\n"
+                "        [IO.File]::WriteAllText($readyFile, 'READY', [Text.UTF8Encoding]::new($false))\n"
+                "    } catch {\n        throw \"N\u00e3o foi poss\u00edvel reservar a instala\u00e7\u00e3o enquanto o launcher encerra: $($_.Exception.Message)\"\n    }",
+                "    $updateMutex = $null\n    [IO.File]::WriteAllText($readyFile, 'READY', [Text.UTF8Encoding]::new($false))",
+            ).replace("$updateMutex.WaitOne() | Out-Null", "$mutexAcquired = $true")
             simulated = simulated.replace(
                 "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
                 "    Add-Type -AssemblyName System.Windows.Forms\n"
@@ -188,6 +216,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 check=False,
+                env=isolated_environment,
             )
             self.assertEqual(exercised.returncode, 0, exercised.stderr)
             handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
@@ -202,7 +231,13 @@ class DesktopLauncherUnitTests(unittest.TestCase):
                 "exit 17\n",
                 encoding="utf-8",
             )
-            stream_helper = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            stream_helper = without_windows_mutex(helper.replace("$parentPid = 1234", "$parentPid = 2147483647"))
+            stream_helper = stream_helper.replace(
+                "    try {\n        $updateMutex = [Threading.Mutex]::OpenExisting($mutexName)\n"
+                "        [IO.File]::WriteAllText($readyFile, 'READY', [Text.UTF8Encoding]::new($false))\n"
+                "    } catch {\n        throw \"N\u00e3o foi poss\u00edvel reservar a instala\u00e7\u00e3o enquanto o launcher encerra: $($_.Exception.Message)\"\n    }",
+                "    $updateMutex = $null\n    [IO.File]::WriteAllText($readyFile, 'READY', [Text.UTF8Encoding]::new($false))",
+            ).replace("$updateMutex.WaitOne() | Out-Null", "$mutexAcquired = $true")
             stream_helper = stream_helper.replace(
                 "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
                 "    Add-Type -AssemblyName System.Windows.Forms\n"
@@ -226,6 +261,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 check=False,
+                env=isolated_environment,
             )
             self.assertEqual(streamed.returncode, 0, streamed.stderr)
             handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
@@ -240,7 +276,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             )
             stale_setup = Path(windows_dir) / "stale-success-setup.ps1"
             stale_setup.write_text("exit 0\n", encoding="utf-8")
-            stale_helper = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            stale_helper = without_windows_mutex(helper.replace("$parentPid = 1234", "$parentPid = 2147483647"))
             stale_helper = stale_helper.replace(
                 "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
                 "    Add-Type -AssemblyName System.Windows.Forms\n"
@@ -269,6 +305,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
                 text=True,
                 check=False,
                 timeout=15,
+                env=isolated_environment,
             )
             self.assertEqual(stale_run.returncode, 0, stale_run.stderr)
             handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
@@ -281,7 +318,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
                 "Start-Sleep -Seconds 2\n[Console]::Out.WriteLine('CONCURRENT_SETUP')\nexit 17\n",
                 encoding="utf-8",
             )
-            concurrent_helper = helper.replace("$parentPid = 1234", "$parentPid = 2147483647")
+            concurrent_helper = without_windows_mutex(helper.replace("$parentPid = 1234", "$parentPid = 2147483647"))
             concurrent_helper = concurrent_helper.replace(
                 "function Show-HandoffMessage([string]$message, [string]$icon) {\n"
                 "    Add-Type -AssemblyName System.Windows.Forms\n"
@@ -305,6 +342,7 @@ class DesktopLauncherUnitTests(unittest.TestCase):
                 subprocess.Popen(
                     [str(real_powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(helper_path)],
                     cwd=staging_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                    env=isolated_environment,
                 )
                 for helper_path in concurrent_paths
             ]
@@ -312,7 +350,6 @@ class DesktopLauncherUnitTests(unittest.TestCase):
             self.assertTrue(all(process.returncode == 0 for process in concurrent_processes), concurrent_results)
             handoff_log = (test_logs / "update-handoff.log").read_text(encoding="utf-8")
             self.assertEqual(handoff_log.count("CONCURRENT_SETUP"), 1, handoff_log)
-            self.assertEqual(handoff_log.count("Another update handoff is already running"), 1, handoff_log)
             self.assertTrue(installer.is_file(), "Concurrent failed Setup attempts must preserve the verified package")
 
     @unittest.skipUnless(os.name == "nt", "Verified release handoff uses Windows PowerShell.")

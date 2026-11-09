@@ -126,6 +126,19 @@ try {
         throw 'O teste offline nao confirmou os arquivos e dados incluidos no pacote.'
     }
 
+    $launcherSmokeResult = Join-Path $env:TEMP "GuildIdleManager-launcher-smoke-$token.txt"
+    $env:GIM_LAUNCHER_SMOKE_RESULT = $launcherSmokeResult
+    try {
+        $launcherSmoke = Start-Process -FilePath (Join-Path $staging 'GuildIdleManager.exe') -ArgumentList '--launcher-smoke' -PassThru -Wait -WindowStyle Hidden
+    } finally {
+        Remove-Item Env:GIM_LAUNCHER_SMOKE_RESULT -ErrorAction SilentlyContinue
+    }
+    if ($launcherSmoke.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $launcherSmokeResult -PathType Leaf) -or
+        (Get-Content -LiteralPath $launcherSmokeResult -Raw) -notmatch '^PASS: packaged launcher entry') {
+        throw 'O executavel empacotado nao confirmou os estados do launcher independente.'
+    }
+    Remove-Item -LiteralPath $launcherSmokeResult -Force
+
     $markerPath = Join-Path $staging $markerName
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($markerPath, $markerValue, $utf8NoBom)

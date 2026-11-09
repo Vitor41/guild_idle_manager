@@ -1897,6 +1897,48 @@ textarea {
   font-size: 0.78rem;
 }
 
+.equipment-slot__trigger {
+  display: grid;
+  justify-items: center;
+  width: 100%;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.equipment-slot__trigger:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; border-radius: 8px; }
+.equipment-slot__hint { margin-top: 5px; color: var(--gold-2); font-size: .68rem; }
+.equipment-details[hidden] { display: none; }
+.equipment-details.is-open {
+  position: fixed;
+  z-index: 1200;
+  width: min(360px, calc(100vw - 24px));
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: #172327;
+  color: var(--text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .6);
+}
+.equipment-details__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.equipment-details__header h3 { margin: 0; color: #fff6d8; }
+.equipment-details__close { flex: 0 0 36px; min-height: 36px !important; padding: 0 !important; font-size: 1.2rem !important; }
+.equipment-details__meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.equipment-details__meta > div { min-width: 0; padding: 8px; border: 1px solid rgba(233, 198, 116, .18); border-radius: 8px; background: rgba(0, 0, 0, .14); }
+.equipment-details__meta dt { color: var(--muted); font-size: .72rem; }
+.equipment-details__meta dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.equipment-details h4 { margin: 12px 0 8px; color: var(--gold-2); }
+.equipment-details__bonuses { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.equipment-details__bonuses li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; padding: 8px; border: 1px solid rgba(233, 198, 116, .15); border-radius: 8px; background: rgba(0, 0, 0, .12); }
+.equipment-details__bonuses li > strong { min-width: 3ch; color: var(--parchment); }
+.equipment-details__total { margin-left: auto; color: var(--gold-2); font-size: .78rem; }
+.equipment-details .bonus-pill { display: inline-flex; align-items: center; gap: 4px; }
+.equipment-details .bonus-pill img { flex: 0 0 auto; }
+
 .slot-helmet { grid-area: helmet; }
 .slot-chest { grid-area: chest; min-height: 200px; }
 .slot-main { grid-area: main; min-height: 150px; }
@@ -1931,17 +1973,25 @@ textarea {
 .market-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .market-sale-card, .market-item-row { border: 1px solid var(--border); border-radius: 8px; background: rgba(0, 0, 0, 0.14); }
 .market-sale-card { display: grid; gap: 12px; padding: 16px; }
-.market-item-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; }
+.market-item-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) minmax(200px, 260px); align-items: center; gap: 10px; padding: 10px; }
 .market-item-row small { display: block; margin-top: 3px; color: var(--muted); }
-.market-item-row .inline-form { grid-template-columns: minmax(64px, 76px) 48px auto; }
+.market-item-info { min-width: 0; overflow-wrap: anywhere; }
+.market-item-info > strong { display: block; line-height: 1.25; overflow-wrap: anywhere; }
+.market-item-row--material .market-item-action { grid-column: 3; grid-row: 1 / span 2; }
+.market-material-form { display: grid; grid-template-columns: minmax(64px, 76px) 48px minmax(72px, 1fr); align-items: end; gap: 8px; }
+.market-quantity-label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .75rem; }
+.market-quantity-label input { width: 100%; min-width: 0; }
 .market-max-button { min-width: 40px; min-height: 40px; padding: 6px; }
 .market-item-action { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
-.market-item-action .inline-form { max-width: 100%; }
-.market-item-action small { max-width: 32ch; }
-.market-duration-reference { margin: 14px 0; max-width: 420px; }
-.market-duration-reference h2 { font-size: 1rem; margin: 0 0 8px; }
-.market-duration-reference table { width: 100%; border-collapse: collapse; }
-.market-duration-reference th, .market-duration-reference td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.market-item-action .market-material-form { max-width: 100%; }
+.market-material-form .market-sale-estimate { grid-column: 1 / 3; grid-row: 2; align-self: center; }
+.market-material-form .market-item-availability { grid-column: 1 / -1; }
+.market-material-form .market-sell-button { grid-column: 3; grid-row: 2; justify-self: end; min-width: 72px; min-height: 40px; }
+.market-item-availability { line-height: 1.35; }
+.market-item-row--equipment { grid-template-columns: 48px minmax(0, 1fr) auto; }
+.market-equipment-form { display: grid; justify-items: end; align-content: center; gap: 4px; }
+.market-equipment-form .market-sell-button { min-width: 72px; min-height: 40px; }
+.market-equipment-form .market-sale-estimate { max-width: 24ch; text-align: right; }
 .market-sale-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .market-sale-actions button { min-width: 40px; min-height: 40px; }
 .market-sale-estimate { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: .82rem; line-height: 1.35; }
@@ -1953,8 +2003,12 @@ textarea {
 .gathering-target-empty { padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
 @media (max-width: 600px) {
   .market-columns { grid-template-columns: minmax(0, 1fr); }
-  .market-item-row { grid-template-columns: 48px minmax(0, 1fr); }
-  .market-item-row .market-item-action, .market-item-row > form { grid-column: 1 / -1; }
+  .market-item-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .market-item-row--material .market-item-action, .market-item-row--equipment .market-equipment-form { grid-column: 1 / -1; grid-row: auto; }
+  .market-material-form { grid-template-columns: minmax(72px, 1fr) 48px minmax(72px, auto); }
+  .market-material-form .market-sell-button { grid-column: 3; }
+  .market-equipment-form { grid-template-columns: minmax(0, 1fr); justify-items: end; width: 100%; }
+  .market-equipment-form .market-sale-estimate { max-width: none; }
   .market-sale-actions { align-items: stretch; flex-direction: column; }
 }
 .offline-summary { padding: 20px 24px; }
@@ -2517,6 +2571,17 @@ html { scroll-behavior: smooth; }
   .salvage-slot-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
+  .equipment-details.is-open {
+    position: static;
+    width: 100%;
+    max-height: none !important;
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    box-shadow: none;
+  }
+  .equipment-details__meta { grid-template-columns: 1fr; }
+  .equipment-details__total { margin-left: 0; }
+  .market-columns { grid-template-columns: minmax(0, 1fr); }
   .dungeon-purpose-strip { grid-template-columns: 1fr; }
   .dashboard-grid-four, .dashboard-grid-three, .dashboard-grid-two { grid-template-columns: 1fr; }
   .topbar-power-button { align-self: flex-end; }
@@ -2527,6 +2592,43 @@ html { scroll-behavior: smooth; }
 }
 @media (max-width: 360px) { .mission-history-kpis { grid-template-columns: 1fr; } }
 .desktop-clock-warning { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #c6a25c; color: #f0d99f; background: #302719; }
+
+.market-item-row--material .item-icon-frame,
+.market-item-row--equipment .item-icon-frame { width: 48px; height: 48px; }
+.market-material-form input[type="number"] { min-width: 0; }
+.market-material-form .market-sale-estimate { margin-top: 0; }
+.market-equipment-form .market-sale-estimate { margin: 0; }
+.market-item-row .market-sell-button:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
+@media (max-width: 900px) {
+  .market-columns { grid-template-columns: minmax(0, 1fr); }
+  .market-item-row--material { grid-template-columns: 48px minmax(0, 1fr) minmax(220px, 280px); }
+}
+@media (max-width: 600px) {
+  .market-item-row--material,
+  .market-item-row--equipment { grid-template-columns: 44px minmax(0, 1fr); }
+  .market-item-row--material .market-item-action,
+  .market-item-row--equipment .market-equipment-form { grid-column: 1 / -1; grid-row: auto; }
+  .market-item-row--material .market-item-info,
+  .market-item-row--equipment .market-item-info { align-self: center; }
+  .market-material-form { grid-template-columns: minmax(0, 1fr) 48px minmax(80px, auto); }
+  .market-equipment-form { grid-template-columns: minmax(0, 1fr); width: 100%; }
+}
+
+.guide-market-timing { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 420px); gap: 16px; align-items: center; margin: 18px 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.guide-market-timing h3 { margin: 0 0 8px; }
+.guide-market-timing p { margin: 0; }
+.guide-market-timing__table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.guide-market-timing__table { width: 100%; border-collapse: collapse; color: var(--parchment-soft); }
+.guide-market-timing__table th, .guide-market-timing__table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.guide-market-timing__table th { color: var(--gold-2); background: var(--surface-3); }
+.guide-market-timing__table tr:last-child td { border-bottom: 0; }
+.guide-export-feedback { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; min-height: 24px; }
+.guide-export-feedback[hidden], .guide-export-progress[hidden] { display: none; }
+.guide-export-feedback p { margin: 0; }
+.guide-export-progress { position: relative; flex: 0 0 24px; width: 24px; height: 24px; overflow: hidden; border: 2px solid rgba(230,185,101,.35); border-top-color: var(--gold); border-radius: 50%; animation: guide-export-spin .8s linear infinite; }
+@keyframes guide-export-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .guide-export-progress { animation-duration: 2s; } }
+@media (max-width: 760px) { .guide-market-timing { grid-template-columns: minmax(0, 1fr); } }
 
 .guide-search { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 10px 18px; align-items: end; margin: 20px 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .guide-search__form { display: grid; gap: 8px; }

@@ -11,6 +11,7 @@ import re
 import shutil
 import sys
 import tempfile
+from threading import Event
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
@@ -68,6 +69,10 @@ class PreparedReleaseUpdate:
 
 class GitHubReleasesError(ValueError):
     pass
+
+
+class ReleaseDownloadCancelled(GitHubReleasesError):
+    """The user cancelled a download before the verified Setup was ready."""
 
 
 def configured_source() -> GitHubReleasesConfig:
@@ -389,7 +394,14 @@ def _load_and_verify_manifest(
     return {**manifest, "minimum_supported_version": minimum}
 
 
-def _stream_download(url: str, destination: Path, expected_sha256: str) -> int:
+def _stream_download(
+    url: str,
+    destination: Path,
+    expected_sha256: str,
+    *,
+    progress_callback=None,
+    cancel_event: Event | None = None,
+) -> int:
     parsed = urlsplit(url)
     if (parsed.scheme != "https" or parsed.hostname != "github.com" or parsed.username
             or parsed.password or parsed.port not in (None, 443) or parsed.fragment):
@@ -412,8 +424,13 @@ def _stream_download(url: str, destination: Path, expected_sha256: str) -> int:
             length = response.headers.get("Content-Length")
             if length and int(length) > _MAX_INSTALLER_BYTES:
                 raise GitHubReleasesError("Setup excede o limite máximo de tamanho.")
+            total_bytes = int(length) if length and length.isdigit() else None
             with destination.open("xb") as output:
+                if progress_callback:
+                    progress_callback(0, total_bytes)
                 while True:
+                    if cancel_event and cancel_event.is_set():
+                        raise ReleaseDownloadCancelled("Download cancelado pelo usuário.")
                     chunk = response.read(_READ_CHUNK)
                     if not chunk:
                         break
@@ -422,10 +439,14 @@ def _stream_download(url: str, destination: Path, expected_sha256: str) -> int:
                         raise GitHubReleasesError("Setup excede o limite máximo de tamanho.")
                     digest.update(chunk)
                     output.write(chunk)
+                    if progress_callback:
+                        progress_callback(total, total_bytes)
                 output.flush()
         logger.info("Updater download response complete: destination=%s bytes=%s", destination, total)
-    except (HTTPError, URLError, TimeoutError, OSError) as error:
+    except (HTTPError, URLError, TimeoutError, OSError, ReleaseDownloadCancelled) as error:
         destination.unlink(missing_ok=True)
+        if isinstance(error, ReleaseDownloadCancelled):
+            raise
         raise GitHubReleasesError("Não foi possível baixar o Setup assinado.") from error
     if total == 0 or digest.hexdigest() != expected_sha256:
         destination.unlink(missing_ok=True)
@@ -448,8 +469,11 @@ def check_for_update(
     installed_channel: str | None,
     *,
     config: GitHubReleasesConfig | None = None,
+    download: bool = True,
+    progress_callback=None,
+    cancel_event: Event | None = None,
 ) -> tuple[dict[str, object], PreparedReleaseUpdate | None]:
-    """Query, verify and stage a newer signed Setup. Incomplete config makes no request."""
+    """Query and verify a newer release, optionally downloading its signed Setup."""
     config = config or configured_source()
     issues = configuration_issues(config)
     if issues:
@@ -462,12 +486,17 @@ def check_for_update(
         return provider_status(installed_channel, config), None
     phase = "release-list"
     staging: Path | None = None
+    required = False
     try:
+        if cancel_event and cancel_event.is_set():
+            raise ReleaseDownloadCancelled("Consulta cancelada pelo usuário.")
         logger.info(
             "Updater check started: current_version=%s channel=%s installed_channel=%s temp_root=%s",
             current_version, config.channel, installed_channel, tempfile.gettempdir(),
         )
         releases = json.loads(_request_bytes(api_url, _MAX_API_BYTES, api_json=True).decode("utf-8"))
+        if cancel_event and cancel_event.is_set():
+            raise ReleaseDownloadCancelled("Consulta cancelada pelo usuário.")
         release = _select_release(releases, config)
         if release is None:
             return {
@@ -478,6 +507,8 @@ def check_for_update(
         phase = "signed-manifest"
         logger.info("Updater release selected: channel=%s version=%s", config.channel, version)
         manifest = _load_and_verify_manifest(release, config, version)
+        if cancel_event and cancel_event.is_set():
+            raise ReleaseDownloadCancelled("Consulta cancelada pelo usuário.")
         logger.info("Updater manifest signature and metadata verified: version=%s", version)
         version_key = _semver_key(version)
         if version_key <= current_key:
@@ -491,13 +522,38 @@ def check_for_update(
         asset_url = _validate_asset_url(
             asset, _release_asset_url(config, str(release["tag_name"]), asset_name)
         )
+        minimum_key = _semver_key(manifest["minimum_supported_version"])
+        required = current_key < minimum_key
+        if not download:
+            return {
+                **provider_status(installed_channel, config),
+                "query_enabled": True,
+                "available": True,
+                "install_enabled": False,
+                "available_version": version,
+                "minimum_supported_version": str(manifest["minimum_supported_version"]),
+                "required_update": required,
+                "asset_name": asset_name,
+                "asset_size": _release_asset(release, asset_name).get("size"),
+                "reason": (
+                    f"Atualização obrigatória disponível: {version}; feche a campanha e abra o launcher para atualizar."
+                    if required else
+                    f"Versão {version} disponível. Feche a campanha e abra o launcher pelo atalho para atualizar."
+                ),
+            }, None
         phase = "create-staging"
         staging = Path(tempfile.mkdtemp(prefix="gim-release-update-"))
         installer_path = staging / asset_name
         logger.info("Updater staging created: directory=%s exists=%s", staging, staging.is_dir())
         phase = "download-and-hash"
         try:
-            size = _stream_download(asset_url, installer_path, str(manifest["asset_sha256"]))
+            size = _stream_download(
+                asset_url,
+                installer_path,
+                str(manifest["asset_sha256"]),
+                progress_callback=progress_callback,
+                cancel_event=cancel_event,
+            )
         except Exception:
             cleanup_prepared_update(PreparedReleaseUpdate(
                 str(config.channel), version, str(manifest["minimum_supported_version"]),
@@ -507,7 +563,6 @@ def check_for_update(
         phase = "prepare-handoff"
         if not installer_path.is_file():
             raise FileNotFoundError(f"Setup verificado desapareceu do staging: {installer_path}")
-        minimum_key = _semver_key(manifest["minimum_supported_version"])
         prepared = PreparedReleaseUpdate(
             channel=str(config.channel),
             version=version,
@@ -517,7 +572,6 @@ def check_for_update(
             installer_path=installer_path,
             staging_directory=staging,
         )
-        required = current_key < minimum_key
         logger.info(
             "Updater check prepared: version=%s installer=%s size=%s sha256=%s required=%s",
             version, installer_path, size, prepared.asset_sha256, required,
@@ -538,6 +592,19 @@ def check_for_update(
                 f"Atualização obrigatória: instale {version}; esta versão instalada está abaixo do mínimo suportado."
             ),
         }, prepared
+    except ReleaseDownloadCancelled as error:
+        logger.info("Updater download cancelled by user: phase=%s", phase)
+        return {
+            **provider_status(installed_channel, config),
+            "query_enabled": True,
+            "available": None,
+            "install_enabled": False,
+            "failed": True,
+            "cancelled": True,
+            "required_update": required,
+            "failure_phase": phase,
+            "reason": str(error),
+        }, None
     except (GitHubReleasesError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError, OSError) as error:
         logger.exception(
             "Updater check failed: phase=%s current_version=%s channel=%s staging=%s",
@@ -549,6 +616,7 @@ def check_for_update(
             "available": None,
             "install_enabled": False,
             "failed": True,
+            "required_update": required,
             "failure_phase": phase,
             "reason": str(error),
         }, None

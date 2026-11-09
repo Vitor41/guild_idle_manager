@@ -55,6 +55,10 @@ class GuideRouteTests(unittest.TestCase):
         html = response.body.decode("utf-8")
         self.assertIn('data-guide-search-form', html)
         self.assertIn('Baixar Guia em Markdown', html)
+        self.assertIn('id="docas-mercado"', html)
+        for duration in ("10 s", "25 s", "60 s", "180 s", "600 s", "1.200 s"):
+            self.assertIn(duration, html)
+        self.assertNotIn("Tempo base por raridade", html)
         self.assertIn('id="equipamentos-materiais"', html)
         self.assertIn('data-filter-name', html)
         self.assertIn('data-filter-family', html)
@@ -99,8 +103,11 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("text/markdown", markdown_response.headers["content-type"])
         self.assertIn("attachment; filename=\"guia-guild-idle-manager.md\"", markdown_response.headers["content-disposition"])
         markdown = markdown_response.body.decode("utf-8")
-        self.assertIn("Versão: 0.6.4", markdown)
+        self.assertIn("Versão: 0.8.0", markdown)
         self.assertIn("Gerado em:", markdown)
+        self.assertIn("| Raridade | Tempo-base por unidade |", markdown)
+        for rarity, duration in (("Comum", "10 s"), ("Incomum", "25 s"), ("Raro", "60 s"), ("Épico", "180 s"), ("Lendário", "600 s"), ("Mítico", "1.200 s")):
+            self.assertIn(f"{rarity} | {duration}", markdown)
         self.assertIn(equipment["name"], markdown)
         self.assertIn(material["name"], markdown)
         self.assertIn("base por entrada de drop", markdown)

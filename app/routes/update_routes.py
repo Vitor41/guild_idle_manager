@@ -2,19 +2,15 @@ import ast
 import logging
 from pathlib import Path
 import sys
-import threading
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.core.config import settings
 from app.core.dependencies import DbSession, get_current_player
 from app.services.guild_service import get_current_guild_context
 from app.services.github_releases import (
-    PreparedReleaseUpdate,
     check_for_update,
-    cleanup_prepared_update,
-    prepared_file_is_valid,
     provider_status,
     read_installed_channel,
 )
@@ -24,7 +20,6 @@ router = APIRouter()
 logger = logging.getLogger("gim.update")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
-_release_update_lock = threading.Lock()
 
 
 @router.get("/updates")
@@ -83,15 +78,11 @@ def _local_checkout_update_status(request: Request) -> dict[str, object]:
         "current_version": request.app.version,
         "available_version": disk_version,
         "available": is_newer,
-        "apply_action": "Reiniciar e aplicar a versão já presente no checkout." if is_newer else None,
-        "reason": "Checkout local já está nesta versão." if not is_newer else None,
+        "reason": (
+            f"O checkout contém a versão {disk_version}; feche a campanha e reabra o aplicativo."
+            if is_newer else "Checkout local já está nesta versão."
+        ),
     }
-
-
-def _schedule_local_checkout_restart(callback) -> None:
-    timer = threading.Timer(0.75, callback)
-    timer.daemon = True
-    timer.start()
 
 
 @router.get("/updates/check")
@@ -100,22 +91,18 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
         return JSONResponse({"channel": "unavailable", "available": False, "reason": "Abra uma campanha para consultar atualizações."}, status_code=401)
     if request.app.state.app_mode == "desktop" and getattr(sys, "frozen", False):
         logger.info("Updater check route requested: version=%s", request.app.version)
-        with _release_update_lock:
-            previous = getattr(request.app.state, "prepared_release_update", None)
-            cleanup_prepared_update(previous)
-            request.app.state.prepared_release_update = None
-            installed_channel = read_installed_channel()
-            logger.info("Updater check reading installation marker: channel=%s", installed_channel)
-            release_status, prepared = check_for_update(
-                request.app.version,
-                installed_channel,
-            )
-            request.app.state.prepared_release_update = prepared
-            logger.info(
-                "Updater check route completed: available=%s install_enabled=%s version=%s failed=%s",
-                release_status.get("available"), release_status.get("install_enabled"),
-                release_status.get("available_version"), release_status.get("failed", False),
-            )
+        installed_channel = read_installed_channel()
+        logger.info("Updater check reading installation marker: channel=%s", installed_channel)
+        release_status, _offer = check_for_update(
+            request.app.version,
+            installed_channel,
+            download=False,
+        )
+        logger.info(
+            "Updater check route completed: available=%s version=%s failed=%s",
+            release_status.get("available"), release_status.get("available_version"),
+            release_status.get("failed", False),
+        )
         return JSONResponse({**release_status, "current_version": request.app.version})
     if settings.app_env != "local" or getattr(sys, "frozen", False):
         release_status = provider_status()
@@ -131,89 +118,3 @@ def check_local_update(request: Request, current_user=Depends(get_current_player
             ),
         })
     return JSONResponse(_local_checkout_update_status(request))
-
-
-def _schedule_verified_update_install(callback, installer_path: Path, expected_version: str) -> None:
-    logger.info("Scheduling verified installer handoff: installer=%s", installer_path)
-    timer = threading.Timer(0.75, callback, args=(installer_path, expected_version))
-    timer.daemon = True
-    timer.start()
-
-
-@router.post("/updates/install-release")
-def install_verified_release_update(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    current_user=Depends(get_current_player),
-):
-    if current_user is None:
-        return JSONResponse({"reason": "Abra uma campanha para instalar a atualização."}, status_code=401)
-    if request.app.state.app_mode != "desktop" or not getattr(sys, "frozen", False):
-        logger.warning("Rejected release installer request outside packaged desktop mode")
-        return JSONResponse({"reason": "A instalação via GitHub Releases só está disponível no aplicativo instalado."}, status_code=404)
-
-    with _release_update_lock:
-        prepared: PreparedReleaseUpdate | None = getattr(request.app.state, "prepared_release_update", None)
-        if prepared is None:
-            logger.warning("Rejected release installer request without a prepared update")
-            return JSONResponse({"reason": "Verifique e valide uma atualização antes de solicitar a instalação."}, status_code=409)
-        if not prepared_file_is_valid(prepared, read_installed_channel()):
-            logger.error("Prepared release installer failed its final channel/hash validation")
-            cleanup_prepared_update(prepared)
-            request.app.state.prepared_release_update = None
-            return JSONResponse({"reason": "O Setup preparado não corresponde mais ao hash ou canal verificado. Verifique novamente."}, status_code=409)
-        install_callback = getattr(request.app.state, "request_verified_update_install", None)
-        if not callable(install_callback):
-            logger.error("Release installer callback is unavailable in the desktop launcher")
-            return JSONResponse({"reason": "O launcher não disponibilizou a abertura segura do Setup."}, status_code=503)
-        logger.info(
-            "Accepted verified release install: version=%s installer=%s",
-            prepared.version,
-            prepared.installer_path,
-        )
-        request.app.state.prepared_release_update = None
-
-    background_tasks.add_task(
-        _schedule_verified_update_install,
-        install_callback,
-        prepared.installer_path,
-        prepared.version,
-    )
-    return JSONResponse({
-        "channel": "github-releases",
-        "installing": True,
-        "version": prepared.version,
-        "reason": "O aplicativo será fechado com segurança; depois o Setup validado será aberto para confirmar a instalação.",
-    })
-
-
-@router.post("/updates/apply-local")
-def apply_local_checkout_update(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    current_user=Depends(get_current_player),
-):
-    if current_user is None:
-        return JSONResponse({"reason": "Abra uma campanha para aplicar a versão local."}, status_code=401)
-    if (
-        request.app.state.app_mode != "desktop"
-        or settings.app_env != "local"
-        or getattr(sys, "frozen", False)
-    ):
-        return JSONResponse({"reason": "A ação só está disponível no checkout desktop local."}, status_code=404)
-
-    status = _local_checkout_update_status(request)
-    if not status.get("available"):
-        return JSONResponse(status, status_code=409)
-    restart_callback = getattr(request.app.state, "request_local_checkout_restart", None)
-    if not callable(restart_callback):
-        return JSONResponse({"reason": "O launcher não disponibilizou o reinício gracioso."}, status_code=503)
-
-    background_tasks.add_task(_schedule_local_checkout_restart, restart_callback)
-    return JSONResponse({
-        "channel": "dev-local",
-        "restarting": True,
-        "current_version": request.app.version,
-        "available_version": status["available_version"],
-        "reason": "A janela será fechada e o checkout local reiniciado.",
-    })

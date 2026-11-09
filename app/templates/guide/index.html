@@ -22,7 +22,10 @@
     <div class="guide-search__actions"><button type="button" class="secondary" data-guide-export>Baixar Guia em Markdown</button>
       <small>Conteúdo atual do Guia, em PT-BR.</small></div>
     <p data-guide-search-status role="status" aria-live="polite"></p>
-    <p data-guide-export-status role="status" aria-live="polite"></p>
+    <div class="guide-export-feedback" data-guide-export-feedback hidden>
+      <span class="guide-export-progress" data-guide-export-progress role="progressbar" aria-label="Preparando o arquivo Markdown do Guia" hidden></span>
+      <p data-guide-export-status role="status" aria-live="polite"></p>
+    </div>
   </section>
 
   <nav class="guide-index" aria-label="Índice do guia">
@@ -32,6 +35,7 @@
     <a href="#construcoes">Construções</a>
     <a href="#progressao">Progressão</a>
     <a href="#economia">Economia</a>
+    <a href="#docas-mercado">Docas e Mercado</a>
     <a href="#equipamentos-materiais">Equipamentos e Materiais</a>
     <a href="#conselhos">Conselhos</a>
   </nav>
@@ -127,6 +131,13 @@
       <article><span>2</span><h3>Transforme o resultado</h3><p>Materiais alimentam progressão e criação. Equipamentos podem fortalecer o elenco, seguir para o Mercado ou, com Ferreiro nível 10, ser refinados.</p></article>
       <article><span>3</span><h3>Reinvista com propósito</h3><p>Ouro parado não desenvolve a companhia. Priorize o gargalo que bloqueia seu próximo objetivo.</p></article>
     </div>
+    <article class="guide-market-timing" id="docas-mercado">
+      <div><p class="eyebrow">Docas e Mercado</p><h3>Prazo-base de venda</h3>
+        <p>O prazo cresce com a quantidade anunciada. O nível do Mercado reduz o tempo total, respeitando o mínimo de 5 segundos. A estimativa de cada item no Mercado já considera a quantidade escolhida e a redução vigente.</p></div>
+      <div class="guide-market-timing__table-wrap"><table class="guide-market-timing__table"><thead><tr><th scope="col">Raridade</th><th scope="col">Tempo-base por unidade</th></tr></thead><tbody>
+        {% for duration in market_rarity_durations %}<tr><td><span class="rarity-badge rarity-{{ duration.rarity }}">{{ market_rarity_label(duration.rarity) }}</span></td><td>{{ duration.formatted_seconds }} s</td></tr>{% endfor %}
+      </tbody></table></div>
+    </article>
     <div class="guide-note-grid">
       <article><h3>Tier e raridade</h3><p>Tier indica a faixa estrutural do item; raridade representa sua qualidade. Dois itens do mesmo Tier podem ter raridades, bônus gerados e valor bem diferentes.</p></article>
       <article><h3>Docas e Mercado</h3><p>As Docas ajudam a encontrar recursos e equipamentos rotativos. O Mercado converte excedentes em ouro. O prazo de cada anúncio usa a raridade e a quantidade, com redução conforme o nível do Mercado; o prazo definido ao anunciar permanece igual. É possível cancelar antes do prazo para devolver os itens e liberar o espaço, sem receber ouro. Depois do prazo, a venda fica pronta para coleta. A quantidade anunciada depende do estoque disponível e dos espaços livres.</p></article>

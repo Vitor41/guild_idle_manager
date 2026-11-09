@@ -28,15 +28,22 @@ class DesktopAlreadyRunningError(RuntimeError):
     pass
 
 
+def _instance_mutex_name(local_app_data: str | None = None) -> str:
+    profile_root = local_app_data or os.environ.get("LOCALAPPDATA")
+    if not profile_root:
+        raise RuntimeError("A pasta de dados local não está disponível.")
+    identity = os.path.normcase(os.path.abspath(profile_root)).encode("utf-8")
+    suffix = hashlib.sha256(identity).hexdigest()[:24]
+    return f"Local\\GuildIdleManager-{suffix}"
+
+
 def _acquire_single_instance_mutex(local_app_data: str | None = None):
     if os.name != "nt":
         return None
     profile_root = local_app_data or os.environ.get("LOCALAPPDATA")
     if not profile_root:
         raise RuntimeError("A pasta de dados local não está disponível.")
-    identity = os.path.normcase(os.path.abspath(profile_root)).encode("utf-8")
-    suffix = hashlib.sha256(identity).hexdigest()[:24]
-    mutex_name = f"Local\\GuildIdleManager-{suffix}"
+    mutex_name = _instance_mutex_name(profile_root)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
     kernel32.CreateMutexW.restype = ctypes.c_void_p
@@ -188,11 +195,16 @@ $setupStdout = Join-Path $staging 'setup.stdout.log'
 $setupStderr = Join-Path $staging 'setup.stderr.log'
 $expectedLocalAppData = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
 $installDirectory = Join-Path $expectedLocalAppData 'Programs\GuildIdleManager'
+$handoffLockPath = Join-Path $expectedLocalAppData 'GuildIdleManager\locks\update-handoff.lock'
+$mutexName = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__MUTEX__'))
+$readyFile = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__READY__'))
 $setupResult = Join-Path $staging ('.setup-result-' + [Guid]::NewGuid().ToString('N') + '.txt')
 $parentPid = __PID__
 $setupStarted = $false
 $setupExitCode = $null
 $handoffLock = $null
+$updateMutex = $null
+$mutexAcquired = $false
 function Write-HandoffLog([string]$level, [string]$message) {
     $line = "$(Get-Date -Format o) $level gim.update.handoff $message"
     try {
@@ -215,16 +227,30 @@ function Write-SetupOutputToHandoffLog([string]$path, [string]$streamName) {
     }
 }
 try {
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($handoffLockPath)) -Force | Out-Null
     try {
         $handoffLock = [IO.File]::Open(
-            (Join-Path $staging '.handoff.lock'),
+            $handoffLockPath,
             [IO.FileMode]::OpenOrCreate,
             [IO.FileAccess]::ReadWrite,
             [IO.FileShare]::None
         )
     } catch {
-        Write-HandoffLog 'WARNING' "Another update handoff is already running for this Setup; duplicate helper skipped: $setup"
+        Write-HandoffLog 'WARNING' "Another update handoff is already running for this user profile; duplicate helper skipped: $setup"
         return
+    }
+    try {
+        $updateMutex = [Threading.Mutex]::OpenExisting($mutexName)
+        [IO.File]::WriteAllText($readyFile, 'READY', [Text.UTF8Encoding]::new($false))
+    } catch {
+        throw "Não foi possível reservar a instalação enquanto o launcher encerra: $($_.Exception.Message)"
+    }
+    try {
+        $updateMutex.WaitOne() | Out-Null
+        $mutexAcquired = $true
+    } catch [Threading.AbandonedMutexException] {
+        $mutexAcquired = $true
+        Write-HandoffLog 'WARNING' 'Previous launcher exited unexpectedly; update helper acquired its abandoned profile mutex'
     }
     Write-HandoffLog 'INFO' "Helper started; waiting for application PID $parentPid; setup=$setup"
     $parent = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
@@ -295,6 +321,14 @@ try {
         }
         Remove-Item -LiteralPath $versionProbe -Force
         Write-HandoffLog 'INFO' "Installed version verified: $installedVersion"
+        if ($mutexAcquired) {
+            $updateMutex.ReleaseMutex()
+            $mutexAcquired = $false
+        }
+        $updateMutex.Dispose()
+        $updateMutex = $null
+        Write-HandoffLog 'INFO' 'Starting updated campaign selector through the installed shortcut target'
+        Start-Process -FilePath $installedExe -ArgumentList '--play' -WorkingDirectory $installDirectory -WindowStyle Normal | Out-Null
     }
     if ($setupExitCode -ne 0) {
         Show-HandoffMessage "O Setup terminou com o código $setupExitCode. O arquivo foi preservado para uma nova tentativa em:`n$setup`n`nRegistro: $logFile" 'Warning'
@@ -306,6 +340,10 @@ try {
     Write-HandoffLog 'ERROR' "Handoff failed: $($_.Exception.ToString()); setup preserved at $setup"
     Show-HandoffMessage "Não foi possível abrir o Setup validado. O arquivo foi preservado para uma tentativa manual em:`n$setup`n`nMotivo: $($_.Exception.Message)`n`nRegistro: $logFile" 'Error'
 } finally {
+    if ($updateMutex -ne $null) {
+        if ($mutexAcquired) { try { $updateMutex.ReleaseMutex() } catch { } }
+        $updateMutex.Dispose()
+    }
     if ($handoffLock -ne $null) {
         $handoffLock.Dispose()
     }
@@ -328,6 +366,11 @@ try {
         base64.b64encode((expected_version or "").encode("utf-8")).decode("ascii"),
     )
     helper = helper.replace("__PID__", str(parent_pid))
+    mutex_name = _instance_mutex_name()
+    helper = helper.replace("__MUTEX__", base64.b64encode(mutex_name.encode("utf-8")).decode("ascii"))
+    ready_file = staging / ".handoff-ready"
+    ready_file.unlink(missing_ok=True)
+    helper = helper.replace("__READY__", base64.b64encode(str(ready_file).encode("utf-8")).decode("ascii"))
     encoded = base64.b64encode(helper.encode("utf-16le")).decode("ascii")
     windows = Path(os.environ.get("WINDIR", r"C:\Windows"))
     powershell = windows / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
@@ -350,6 +393,14 @@ try {
         _append_update_handoff_log(log_file, "ERROR", f"Could not start PowerShell helper; setup preserved at {installer}; error={exc}")
         raise
     _append_update_handoff_log(log_file, "INFO", f"PowerShell helper process started; pid={process.pid}")
+    ready_deadline = time.monotonic() + 8
+    while time.monotonic() < ready_deadline and not ready_file.is_file():
+        if callable(getattr(process, "poll", None)) and process.poll() is not None:
+            break
+        time.sleep(0.05)
+    if not ready_file.is_file():
+        raise RuntimeError("O processo auxiliar não reservou o perfil para concluir a atualização.")
+    ready_file.unlink(missing_ok=True)
     logging.info("Verified update PowerShell helper started: pid=%s", process.pid)
 
 

@@ -17,6 +17,18 @@ elif "--smoke" in sys.argv:
     from app.desktop.offline_smoke import run_offline_smoke
 
     run_offline_smoke()
+elif "--launcher-smoke" in sys.argv:
+    from app.desktop.update_launcher import run_launcher_smoke
+
+    run_launcher_smoke()
+elif "--play" in sys.argv:
+    from app.desktop.launcher import run
+
+    run()
+elif getattr(sys, "frozen", False):
+    from app.desktop.update_launcher import run_prelaunch
+
+    run_prelaunch()
 else:
     from app.desktop.launcher import run
 

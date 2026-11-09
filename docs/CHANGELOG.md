@@ -1,5 +1,12 @@
 # Histórico de alterações
 
+## 0.8.0 — Launcher, Mercado e equipamentos
+
+- Abre um launcher independente antes da seleção de campanhas, com verificação de atualização assinada, progresso e opções para adiar ou usar a versão instalada quando compatível.
+- Restringe Atualizações dentro da campanha à consulta de versão e encaminha a instalação ao launcher.
+- Move os prazos-base de venda para o Guia, melhora os cards do Mercado e confirma o estado e nome do arquivo na exportação Markdown.
+- Exibe detalhes do equipamento equipado em painel contextual acessível, sem recalcular bônus.
+
 ## 0.7.1 — Correção da inicialização desktop
 
 - Inclui `python-multipart` no pacote para processar formulários das Oficinas sem falha na abertura.

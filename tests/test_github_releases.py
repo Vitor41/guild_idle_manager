@@ -156,21 +156,15 @@ def test_bad_setup_hash_is_rejected(monkeypatch, tmp_path):
     assert status["install_enabled"] is False
 
 
-def test_release_install_confirmation_uses_the_shared_accessible_dialog():
+def test_running_game_updates_page_cannot_install_or_restart_releases():
     root = Path(__file__).resolve().parents[1]
     template = (root / "app" / "templates" / "updates.html").read_text(encoding="utf-8")
-    main_js = (root / "app" / "static" / "js" / "main.js").read_text(encoding="utf-8")
-    launcher = (root / "app" / "desktop" / "launcher.py").read_text(encoding="utf-8")
+    route = (root / "app" / "routes" / "update_routes.py").read_text(encoding="utf-8")
 
-    assert "window.confirm" not in template
-    assert "data-confirm-always" in template
-    assert 'action="/updates/install-release" method="post" data-native-submit="true"' in template
-    assert 'aria-haspopup="dialog" aria-controls="confirmation-dialog"' in template
-    assert "`Instalar versão ${preparedReleaseVersion}?`" in template
-    assert "!form.dataset.confirmAlways" in main_js
-    message_assignment = template.index("releaseInstallForm.dataset.confirmMessage =")
-    submit_listener = template.index("releaseInstallForm?.addEventListener('submit'")
-    make_button_available = template.index("releaseInstallForm.hidden = false")
-    assert message_assignment < make_button_available < submit_listener
-    assert "O arquivo baixado foi preservado para tentativa manual" in launcher
-    assert "Motivo: $($_.Exception.Message)" in launcher
+    assert 'data-check-release-update' in template
+    assert "Feche a campanha e abra o launcher pelo atalho para atualizar." in template
+    assert "install-release" not in template
+    assert "apply-local" not in template
+    assert "def install_verified_release_update" not in route
+    assert "def apply_local_checkout_update" not in route
+    assert "download=False" in route
