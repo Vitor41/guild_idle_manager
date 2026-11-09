@@ -33,6 +33,16 @@ const startupModalQueue = (() => {
 })();
 window.GIMStartupModalQueue = startupModalQueue;
 
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-bonus-dialog-open]");
+  if (trigger) {
+    const dialog = document.getElementById(trigger.dataset.bonusDialogOpen);
+    if (dialog instanceof HTMLDialogElement) dialog.showModal();
+    return;
+  }
+  if (event.target.matches(".bonus-details-dialog")) event.target.close();
+});
+
 function formatGenericRemaining(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);

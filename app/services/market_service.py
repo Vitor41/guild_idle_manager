@@ -21,6 +21,7 @@ from app.repositories.market_repository import (
     list_market_sales_by_guild,
 )
 from app.services.building_service import ensure_guild_buildings, get_building_level
+from app.services.equipment_service import annotate_item_bonus_view
 from app.services.guild_progression_service import add_guild_xp
 from app.services.inventory_service import get_equipment_for_guild, get_inventory_for_guild
 from app.core.game_balance import MARKET_RARITY_SECONDS
@@ -86,14 +87,19 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
     for sale in active_sales:
         prepare_timer_context(sale, now)
         sale.cancelable = not sale.ready_for_loot
+        if sale.item_instance is not None:
+            annotate_item_bonus_view(sale.item_instance)
     completed_sales = [sale for sale in sales if sale.status in {"completed", "cancelled"}][:10]
+    equipment_items = [
+        item for item in get_equipment_for_guild(db, guild.id)
+        if item.equipped_to_mercenary_id is None and item.market_sale is None
+    ]
+    for item in equipment_items:
+        annotate_item_bonus_view(item)
     return {
         "market": market,
         "inventory_items": inventory_items,
-        "equipment_items": [
-            item for item in get_equipment_for_guild(db, guild.id)
-            if item.equipped_to_mercenary_id is None and item.market_sale is None
-        ],
+        "equipment_items": equipment_items,
         "active_sales": active_sales,
         "ready_sales_count": sum(1 for sale in active_sales if sale.ready_for_loot),
         "completed_sales": completed_sales,

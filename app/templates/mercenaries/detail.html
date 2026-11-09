@@ -125,6 +125,7 @@
             {% if equipped %}
               <strong>{{ equipped.display_name }}{% if equipped.upgrade_level > 0 %} +{{ equipped.upgrade_level }}{% endif %}</strong>
               <small>{{ equipped.rarity_label }} · nível mínimo {{ equipped.required_level }}</small>
+              {% if equipped.strong_bonuses_view %}<small class="strong-bonus-count"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16"> {{ equipped.strong_bonuses_view|length }} bônus FORTE</small>{% endif %}
               <form method="post" action="/mercenaries/{{ mercenary.id }}/unequip">
                 <input type="hidden" name="item_instance_id" value="{{ equipped.id }}">
                 <button type="submit">Remover</button>
@@ -138,7 +139,10 @@
       {% if attribute_summary.get('equipment_items') %}
         <div class="bonus-list table-panel">
           {% for item in attribute_summary.get('equipment_items', []) %}
-            <span class="bonus-pill">{{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} · {{ item.slot_label }}</span>
+            <strong>{{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} · {{ item.slot_label }}</strong>
+            {% for roll in item.normal_base_bonuses_view %}<span class="bonus-pill">{{ roll.label }} · normal</span>{% endfor %}
+            {% for roll in item.normal_bonuses_view %}<span class="bonus-pill rng-bonus">{{ roll.label }}</span>{% endfor %}
+            {% for roll in item.strong_bonuses_view %}<span class="bonus-pill strong-bonus"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16">FORTE {{ roll.label }} +{{ roll.value }} · total {{ item.bonus_attribute_totals[roll.attribute] }}</span>{% endfor %}
           {% endfor %}
         </div>
       {% else %}
@@ -162,7 +166,7 @@
             {% for item in available_equipment %}
               <option value="{{ item.id }}">
                 {{ item.view_icon if item.view_icon is defined else '◇' }} {{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} | {{ item.slot_label }} | {{ item.rarity_label }} | nível mínimo {{ item.required_level }}
-                {% if item.rng_bonus_attribute %}| Bônus +{{ item.rng_bonus_value }} {{ bonus_attribute_labels.get(item.rng_bonus_attribute, item.rng_bonus_attribute) }}{% endif %}
+                {% for roll in item.bonus_rolls_view %}| {% if roll.kind == 'strong' %}FORTE {{ roll.label }} +{{ roll.value }}{% else %}{{ roll.label }}{% endif %}{% endfor %}
                 | Poder {{ item.equipment_power_score }} | {{ '+' if item.comparison_delta >= 0 else '' }}{{ item.comparison_delta }}{% if item.comparison_current_name %} vs. {{ item.comparison_current_name }}{% endif %}
                 | {{ item.class_restriction_label }}
               </option>

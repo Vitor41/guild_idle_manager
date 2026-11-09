@@ -2441,6 +2441,12 @@ tr:hover td {
   border-color: var(--rarity-color, var(--border));
 }
 .rng-bonus { border-color: #5ca8d8; color: #a9dcff; background: rgba(65,142,190,.12); }
+.strong-bonus { display: inline-flex; align-items: center; gap: .25rem; border: 1px solid #c9a86a; color: #f2dfb3; background: #293332; }
+.strong-bonus img, .strong-bonus-count img { flex: 0 0 auto; object-fit: contain; }
+.strong-bonus-count { display: inline-flex; align-items: center; gap: .3rem; color: #f2dfb3; }
+.bonus-details-dialog { width: min(32rem, calc(100vw - 2rem)); max-height: 80vh; overflow: auto; color: var(--text-primary, #eee); background: #17201f; border: 1px solid #c9a86a; border-radius: .8rem; padding: 1rem 1.25rem; }
+.bonus-details-dialog::backdrop { background: rgb(0 0 0 / .68); }
+.bonus-details-dialog li { margin-block: .3rem; }
 .item-tier-card.tier-border-1 { border-color: #817767 !important; }
 .item-tier-card.tier-border-2 { border-color: #60a855 !important; }
 .item-tier-card.tier-border-3 { border-color: #4e93c7 !important; }

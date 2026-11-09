@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.connection import Base
@@ -104,6 +104,7 @@ class GuildItemInstance(Base):
     bonus_armor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rng_bonus_attribute: Mapped[str | None] = mapped_column(String(30), nullable=True)
     rng_bonus_value: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bonus_rolls: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     upgrade_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

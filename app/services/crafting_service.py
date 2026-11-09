@@ -26,7 +26,7 @@ from app.services.building_service import get_building_level
 from app.services.building_balance_service import docks_values
 from app.services.economy_pricing_service import effective_crafting_gold_cost, effective_dock_unit_price
 from app.services.salvage_service import _select_salvage_material
-from app.services.equipment_service import create_equipment_instance_from_template, get_item_power_score
+from app.services.equipment_service import annotate_item_bonus_view, create_equipment_instance_from_template, get_item_power_score
 from app.services.guild_progression_service import add_guild_xp
 from app.services.inventory_capacity_service import add_inventory_quantity_capped, get_inventory_capacity, get_inventory_usage
 from app.services.achievement_service import record_guild_stat, unlock_codex_reference
@@ -251,6 +251,7 @@ def get_blacksmith_context(db: Session, guild: Guild) -> dict[str, object]:
         item for item in list_item_instances_by_guild(db, guild.id) if item.market_sale is None
     ]
     for item in equipment:
+        annotate_item_bonus_view(item)
         item.current_power = get_item_power_score(item)
         item.refine_cap = REFINE_RARITY_CAPS.get(item.item_template.rarity, 3)
         item.refine_gold_cost = REFINE_BASE_GOLD_COST * (item.upgrade_level + 1) * max(1, item.item_template.tier)
