@@ -12,6 +12,12 @@ from app.services.mercenary_name_service import choose_random_mercenary_names
 
 
 def run_offline_smoke() -> None:
+    # Form parsing can fail only when the first POST arrives, so check it at package build time.
+    from python_multipart.multipart import parse_options_header
+    from app.main import app
+
+    if not app.routes or parse_options_header(b"multipart/form-data; boundary=smoke")[0] != b"multipart/form-data":
+        raise RuntimeError("Rotas ou suporte a formularios nao foram incluidos no pacote.")
     configured_result_path = os.environ.get("GIM_SMOKE_RESULT")
     if not configured_result_path:
         raise RuntimeError("GIM_SMOKE_RESULT precisa apontar para o arquivo de resultado do smoke.")
