@@ -1,0 +1,169 @@
+﻿level,rank,group_max,party_kind,party_size,common_power_each,party_power,baseline_template_power,baseline_chance,scenario,multiplier,recommended_power,chance_no_modifiers,chance_uncapped_no_modifiers,chance_with_supply,chance_with_supply_uncapped,chance_with_max_class_and_skill,max_seeded_equipment_power_each,chance_with_max_seeded_equipment,max_rarity_bonus_pp,chance_with_max_equipment_class_skill_rarity,chance_with_max_modifiers_and_supply,base_chance,template_recommended_level,baseline_template
+1,E,2,solo,1,18,18,10,95,initial_po,1.0,36,59,59,64,64,77,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,E,2,solo,1,18,18,10,95,conservative,1.0,36,59,59,64,64,77,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,E,2,grupo_maximo,2,18,36,10,95,initial_po,1.0,36,85,85,90,90,95,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,E,2,grupo_maximo,2,18,36,10,95,conservative,1.0,36,85,85,90,90,95,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,D,2,solo,1,18,18,10,95,initial_po,1.15,42,56,56,61,61,74,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,D,2,solo,1,18,18,10,95,conservative,1.05,38,58,58,63,63,76,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,D,2,grupo_maximo,2,18,36,10,95,initial_po,1.15,42,75,75,80,80,95,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,D,2,grupo_maximo,2,18,36,10,95,conservative,1.05,38,79,79,84,84,95,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,C,2,solo,1,18,18,10,95,initial_po,1.3,47,54,54,59,59,72,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,C,2,solo,1,18,18,10,95,conservative,1.1,40,57,57,62,62,75,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,C,2,grupo_maximo,2,18,36,10,95,initial_po,1.3,47,71,71,76,76,94,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,C,2,grupo_maximo,2,18,36,10,95,conservative,1.1,40,77,77,82,82,95,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,B,2,solo,1,18,18,10,95,initial_po,1.5,54,51,51,56,56,69,57,91,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,B,2,solo,1,18,18,10,95,conservative,1.2,44,55,55,60,60,73,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,B,2,grupo_maximo,2,18,36,10,95,initial_po,1.5,54,66,66,71,71,89,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,B,2,grupo_maximo,2,18,36,10,95,conservative,1.2,44,73,73,78,78,95,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,A,2,solo,1,18,18,10,95,initial_po,1.75,63,49,49,54,54,67,57,88,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,A,2,solo,1,18,18,10,95,conservative,1.35,49,53,53,58,58,71,57,94,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,A,2,grupo_maximo,2,18,36,10,95,initial_po,1.75,63,62,62,67,67,85,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,A,2,grupo_maximo,2,18,36,10,95,conservative,1.35,49,70,70,75,75,93,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,S,2,solo,1,18,18,10,95,initial_po,2.0,72,48,48,53,53,66,57,85,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,S,2,solo,1,18,18,10,95,conservative,1.55,56,51,51,56,56,69,57,91,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,S,2,grupo_maximo,2,18,36,10,95,initial_po,2.0,72,59,59,64,64,82,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+1,S,2,grupo_maximo,2,18,36,10,95,conservative,1.55,56,65,65,70,70,88,57,95,0,95,95,82,1,Conter Mapa Fragmentado em Arredores da Guilda
+5,E,2,solo,1,35,35,19,93,initial_po,1.0,70,55,55,60,60,73,59,87,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,E,2,solo,1,35,35,19,93,conservative,1.0,70,55,55,60,60,73,59,87,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,E,2,grupo_maximo,2,35,70,19,93,initial_po,1.0,70,81,81,86,86,95,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,E,2,grupo_maximo,2,35,70,19,93,conservative,1.0,70,81,81,86,86,95,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,D,2,solo,1,35,35,19,93,initial_po,1.15,81,52,52,57,57,70,59,83,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,D,2,solo,1,35,35,19,93,conservative,1.05,74,54,54,59,59,72,59,85,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,D,2,grupo_maximo,2,35,70,19,93,initial_po,1.15,81,71,71,76,76,94,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,D,2,grupo_maximo,2,35,70,19,93,conservative,1.05,74,75,75,80,80,95,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,C,2,solo,1,35,35,19,93,initial_po,1.3,91,50,50,55,55,68,59,81,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,C,2,solo,1,35,35,19,93,conservative,1.1,77,53,53,58,58,71,59,84,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,C,2,grupo_maximo,2,35,70,19,93,initial_po,1.3,91,67,67,72,72,90,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,C,2,grupo_maximo,2,35,70,19,93,conservative,1.1,77,73,73,78,78,95,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,B,2,solo,1,35,35,19,93,initial_po,1.5,105,47,47,52,52,65,59,73,0,91,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,B,2,solo,1,35,35,19,93,conservative,1.2,84,51,51,56,56,69,59,83,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,B,2,grupo_maximo,2,35,70,19,93,initial_po,1.5,105,62,62,67,67,85,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,B,2,grupo_maximo,2,35,70,19,93,conservative,1.2,84,70,70,75,75,93,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,A,2,solo,1,35,35,19,93,initial_po,1.75,123,45,45,50,50,63,59,67,0,85,90,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,A,2,solo,1,35,35,19,93,conservative,1.35,95,49,49,54,54,67,59,77,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,A,2,grupo_maximo,2,35,70,19,93,initial_po,1.75,123,58,58,63,63,81,59,90,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,A,2,grupo_maximo,2,35,70,19,93,conservative,1.35,95,66,66,71,71,89,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,S,2,solo,1,35,35,19,93,initial_po,2.0,140,44,44,49,49,62,59,63,0,81,86,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,S,2,solo,1,35,35,19,93,conservative,1.55,109,47,47,52,52,65,59,71,0,89,94,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,S,2,grupo_maximo,2,35,70,19,93,initial_po,2.0,140,55,55,60,60,78,59,87,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+5,S,2,grupo_maximo,2,35,70,19,93,conservative,1.55,109,61,61,66,66,84,59,93,0,95,95,78,5,Explorar Batedores Hostis em Bosque dos Sinos
+18,E,2,solo,1,93,93,49,95,initial_po,1.0,186,57,57,62,62,75,59,71,0,89,94,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,E,2,solo,1,93,93,49,95,conservative,1.0,186,57,57,62,62,75,59,71,0,89,94,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,E,2,grupo_maximo,2,93,186,49,95,initial_po,1.0,186,83,83,88,88,95,59,94,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,E,2,grupo_maximo,2,93,186,49,95,conservative,1.0,186,83,83,88,88,95,59,94,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,D,2,solo,1,93,93,49,95,initial_po,1.15,214,54,54,59,59,72,59,66,0,84,89,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,D,2,solo,1,93,93,49,95,conservative,1.05,196,56,56,61,61,74,59,69,0,87,92,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,D,2,grupo_maximo,2,93,186,49,95,initial_po,1.15,214,74,74,79,79,95,59,90,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,D,2,grupo_maximo,2,93,186,49,95,conservative,1.05,196,77,77,82,82,95,59,92,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,C,2,solo,1,93,93,49,95,initial_po,1.3,242,52,52,57,57,70,59,63,0,81,86,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,C,2,solo,1,93,93,49,95,conservative,1.1,205,55,55,60,60,73,59,68,0,86,91,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,C,2,grupo_maximo,2,93,186,49,95,initial_po,1.3,242,69,69,74,74,92,59,87,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,C,2,grupo_maximo,2,93,186,49,95,conservative,1.1,205,75,75,80,80,95,59,91,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,B,2,solo,1,93,93,49,95,initial_po,1.5,279,49,49,54,54,67,59,59,0,77,82,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,B,2,solo,1,93,93,49,95,conservative,1.2,224,53,53,58,58,71,59,65,0,83,88,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,B,2,grupo_maximo,2,93,186,49,95,initial_po,1.5,279,64,64,69,69,87,59,84,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,B,2,grupo_maximo,2,93,186,49,95,conservative,1.2,224,72,72,77,77,95,59,89,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,A,2,solo,1,93,93,49,95,initial_po,1.75,326,47,47,52,52,65,59,55,0,73,78,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,A,2,solo,1,93,93,49,95,conservative,1.35,252,51,51,56,56,69,59,62,0,80,85,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,A,2,grupo_maximo,2,93,186,49,95,initial_po,1.75,326,60,60,65,65,83,59,76,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,A,2,grupo_maximo,2,93,186,49,95,conservative,1.35,252,68,68,73,73,91,59,86,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,S,2,solo,1,93,93,49,95,initial_po,2.0,372,46,46,51,51,64,59,53,0,71,76,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,S,2,solo,1,93,93,49,95,conservative,1.55,289,49,49,54,54,67,59,58,0,76,81,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,S,2,grupo_maximo,2,93,186,49,95,initial_po,2.0,372,57,57,62,62,80,59,71,0,94,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+18,S,2,grupo_maximo,2,93,186,49,95,conservative,1.55,289,63,63,68,68,86,59,83,0,95,95,80,18,Localizar Suprimentos Perdidos em Bosque dos Sinos
+50,E,2,solo,1,231,231,131,87,initial_po,1.0,462,49,49,54,54,67,141,63,0,81,86,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,E,2,solo,1,231,231,131,87,conservative,1.0,462,49,49,54,54,67,141,63,0,81,86,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,E,2,grupo_maximo,2,231,462,131,87,initial_po,1.0,462,75,75,80,80,95,141,85,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,E,2,grupo_maximo,2,231,462,131,87,conservative,1.0,462,75,75,80,80,95,141,85,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,D,2,solo,1,231,231,131,87,initial_po,1.15,532,46,46,51,51,64,141,58,0,76,81,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,D,2,solo,1,231,231,131,87,conservative,1.05,486,48,48,53,53,66,141,61,0,79,84,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,D,2,grupo_maximo,2,231,462,131,87,initial_po,1.15,532,66,66,71,71,89,141,82,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,D,2,grupo_maximo,2,231,462,131,87,conservative,1.05,486,69,69,74,74,92,141,84,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,C,2,solo,1,231,231,131,87,initial_po,1.3,601,44,44,49,49,62,141,54,0,72,77,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,C,2,solo,1,231,231,131,87,conservative,1.1,509,47,47,52,52,65,141,59,0,77,82,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,C,2,grupo_maximo,2,231,462,131,87,initial_po,1.3,601,61,61,66,66,84,141,79,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,C,2,grupo_maximo,2,231,462,131,87,conservative,1.1,509,67,67,72,72,90,141,83,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,B,2,solo,1,231,231,131,87,initial_po,1.5,693,41,41,46,46,59,141,51,0,69,74,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,B,2,solo,1,231,231,131,87,conservative,1.2,555,45,45,50,50,63,141,57,0,75,80,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,B,2,grupo_maximo,2,231,462,131,87,initial_po,1.5,693,56,56,61,61,79,141,76,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,B,2,grupo_maximo,2,231,462,131,87,conservative,1.2,555,64,64,69,69,87,141,81,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,A,2,solo,1,231,231,131,87,initial_po,1.75,809,39,39,44,44,57,141,47,0,65,70,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,A,2,solo,1,231,231,131,87,conservative,1.35,624,43,43,48,48,61,141,53,0,71,76,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,A,2,grupo_maximo,2,231,462,131,87,initial_po,1.75,809,52,52,57,57,75,141,68,0,91,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,A,2,grupo_maximo,2,231,462,131,87,conservative,1.35,624,60,60,65,65,83,141,78,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,S,2,solo,1,231,231,131,87,initial_po,2.0,924,38,38,43,43,56,141,45,0,63,68,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,S,2,solo,1,231,231,131,87,conservative,1.55,717,41,41,46,46,59,141,50,0,68,73,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,S,2,grupo_maximo,2,231,462,131,87,initial_po,2.0,924,49,49,54,54,72,141,63,0,86,91,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+50,S,2,grupo_maximo,2,231,462,131,87,conservative,1.55,717,55,55,60,60,78,141,75,0,95,95,72,50,Recuperar Acampamento Inimigo em Mata das Corujas
+75,E,3,solo,1,339,339,196,79,initial_po,1.0,1017,33,33,38,38,51,215,43,5,66,71,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,E,3,solo,1,339,339,196,79,conservative,1.0,1017,33,33,38,38,51,215,43,5,66,71,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,E,3,grupo_maximo,3,339,1017,196,79,initial_po,1.0,1017,67,67,72,72,90,215,78,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,E,3,grupo_maximo,3,339,1017,196,79,conservative,1.0,1017,67,67,72,72,90,215,78,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,D,3,solo,1,339,339,196,79,initial_po,1.15,1170,32,32,37,37,50,215,40,5,63,68,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,D,3,solo,1,339,339,196,79,conservative,1.05,1068,33,33,38,38,51,215,42,5,65,70,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,D,3,grupo_maximo,3,339,1017,196,79,initial_po,1.15,1170,58,58,63,63,81,215,74,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,D,3,grupo_maximo,3,339,1017,196,79,conservative,1.05,1068,61,61,66,66,84,215,77,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,C,3,solo,1,339,339,196,79,initial_po,1.3,1323,30,30,35,35,48,215,37,5,60,65,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,C,3,solo,1,339,339,196,79,conservative,1.1,1119,32,32,37,37,50,215,41,5,64,69,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,C,3,grupo_maximo,3,339,1017,196,79,initial_po,1.3,1323,53,53,58,58,76,215,71,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,C,3,grupo_maximo,3,339,1017,196,79,conservative,1.1,1119,59,59,64,64,82,215,75,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,B,3,solo,1,339,339,196,79,initial_po,1.5,1526,28,28,33,33,46,215,35,5,58,63,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,B,3,solo,1,339,339,196,79,conservative,1.2,1221,31,31,36,36,49,215,39,5,62,67,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,B,3,grupo_maximo,3,339,1017,196,79,initial_po,1.5,1526,48,48,53,53,71,215,68,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,B,3,grupo_maximo,3,339,1017,196,79,conservative,1.2,1221,56,56,61,61,79,215,73,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,A,3,solo,1,339,339,196,79,initial_po,1.75,1780,27,27,32,32,45,215,33,5,56,61,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,A,3,solo,1,339,339,196,79,conservative,1.35,1373,30,30,35,35,48,215,37,5,60,65,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,A,3,grupo_maximo,3,339,1017,196,79,initial_po,1.75,1780,44,44,49,49,67,215,61,5,89,94,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,A,3,grupo_maximo,3,339,1017,196,79,conservative,1.35,1373,52,52,57,57,75,215,70,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,S,3,solo,1,339,339,196,79,initial_po,2.0,2034,26,26,31,31,44,215,31,5,54,59,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,S,3,solo,1,339,339,196,79,conservative,1.55,1577,28,28,33,33,46,215,34,5,57,62,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,S,3,grupo_maximo,3,339,1017,196,79,initial_po,2.0,2034,41,41,46,46,64,215,55,5,83,88,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+75,S,3,grupo_maximo,3,339,1017,196,79,conservative,1.55,1577,48,48,53,53,71,215,67,5,95,95,64,75,Explorar Peregrinos Cercados em Floresta Rubra
+200,E,4,solo,1,881,881,499,66,initial_po,1.0,3524,17,17,22,22,35,424,22,10,50,55,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,E,4,solo,1,881,881,499,66,conservative,1.0,3524,17,17,22,22,35,424,22,10,50,55,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,E,4,grupo_maximo,4,881,3524,499,66,initial_po,1.0,3524,54,54,59,59,77,424,62,10,95,95,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,E,4,grupo_maximo,4,881,3524,499,66,conservative,1.0,3524,54,54,59,59,77,424,62,10,95,95,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,D,4,solo,1,881,881,499,66,initial_po,1.15,4053,15,15,20,20,33,424,20,10,48,53,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,D,4,solo,1,881,881,499,66,conservative,1.05,3701,16,16,21,21,34,424,21,10,49,54,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,D,4,grupo_maximo,4,881,3524,499,66,initial_po,1.15,4053,45,45,50,50,68,424,59,10,92,95,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,D,4,grupo_maximo,4,881,3524,499,66,conservative,1.05,3701,48,48,53,53,71,424,61,10,94,95,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,C,4,solo,1,881,881,499,66,initial_po,1.3,4582,14,14,19,19,32,424,18,10,46,51,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,C,4,solo,1,881,881,499,66,conservative,1.1,3877,16,16,21,21,34,424,21,10,49,54,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,C,4,grupo_maximo,4,881,3524,499,66,initial_po,1.3,4582,40,40,45,45,63,424,56,10,89,94,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,C,4,grupo_maximo,4,881,3524,499,66,conservative,1.1,3877,46,46,51,51,69,424,60,10,93,95,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,B,4,solo,1,881,881,499,66,initial_po,1.5,5286,13,13,18,18,31,424,17,10,45,50,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,B,4,solo,1,881,881,499,66,conservative,1.2,4229,15,15,20,20,33,424,19,10,47,52,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,B,4,grupo_maximo,4,881,3524,499,66,initial_po,1.5,5286,35,35,40,40,58,424,50,10,83,88,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,B,4,grupo_maximo,4,881,3524,499,66,conservative,1.2,4229,43,43,48,48,66,424,58,10,91,95,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,A,4,solo,1,881,881,499,66,initial_po,1.75,6167,12,12,17,17,30,424,15,10,43,48,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,A,4,solo,1,881,881,499,66,conservative,1.35,4758,14,14,19,19,32,424,18,10,46,51,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,A,4,grupo_maximo,4,881,3524,499,66,initial_po,1.75,6167,31,31,36,36,54,424,44,10,77,82,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,A,4,grupo_maximo,4,881,3524,499,66,conservative,1.35,4758,39,39,44,44,62,424,55,10,88,93,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,S,4,solo,1,881,881,499,66,initial_po,2.0,7048,11,11,16,16,29,424,14,10,42,47,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,S,4,solo,1,881,881,499,66,conservative,1.55,5463,13,13,18,18,31,424,16,10,44,49,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,S,4,grupo_maximo,4,881,3524,499,66,initial_po,2.0,7048,28,28,33,33,51,424,39,10,72,77,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+200,S,4,grupo_maximo,4,881,3524,499,66,conservative,1.55,5463,35,35,40,40,58,424,48,10,81,86,51,200,Recuperar Relíquia Desaparecida em Ermos Imperiais
+350,E,5,solo,1,1531,1531,868,52,initial_po,1.0,7655,5,5,6,6,19,721,5,20,43,48,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,E,5,solo,1,1531,1531,868,52,conservative,1.0,7655,5,5,6,6,19,721,5,20,43,48,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,E,5,grupo_maximo,5,1531,7655,868,52,initial_po,1.0,7655,40,40,45,45,63,721,48,20,91,95,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,E,5,grupo_maximo,5,1531,7655,868,52,conservative,1.0,7655,40,40,45,45,63,721,48,20,91,95,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,D,5,solo,1,1531,1531,868,52,initial_po,1.15,8804,5,5,5,5,17,721,5,20,41,46,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,D,5,solo,1,1531,1531,868,52,conservative,1.05,8038,5,5,5,5,18,721,5,20,42,47,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,D,5,grupo_maximo,5,1531,7655,868,52,initial_po,1.15,8804,31,31,36,36,54,721,45,20,88,93,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,D,5,grupo_maximo,5,1531,7655,868,52,conservative,1.05,8038,34,34,39,39,57,721,47,20,90,95,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,C,5,solo,1,1531,1531,868,52,initial_po,1.3,9952,5,5,5,5,16,721,5,20,40,45,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,C,5,solo,1,1531,1531,868,52,conservative,1.1,8421,5,5,5,5,18,721,5,20,42,47,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,C,5,grupo_maximo,5,1531,7655,868,52,initial_po,1.3,9952,26,26,31,31,49,721,42,20,85,90,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,C,5,grupo_maximo,5,1531,7655,868,52,conservative,1.1,8421,32,32,37,37,55,721,46,20,89,94,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,B,5,solo,1,1531,1531,868,52,initial_po,1.5,11483,5,5,5,5,15,721,5,20,38,43,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,B,5,solo,1,1531,1531,868,52,conservative,1.2,9186,5,5,5,5,17,721,5,20,41,46,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,B,5,grupo_maximo,5,1531,7655,868,52,initial_po,1.5,11483,21,21,26,26,44,721,36,20,79,84,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,B,5,grupo_maximo,5,1531,7655,868,52,conservative,1.2,9186,29,29,34,34,52,721,44,20,87,92,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,A,5,solo,1,1531,1531,868,52,initial_po,1.75,13397,5,5,5,5,15,721,5,20,37,42,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,A,5,solo,1,1531,1531,868,52,conservative,1.35,10335,5,5,5,5,16,721,5,20,39,44,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,A,5,grupo_maximo,5,1531,7655,868,52,initial_po,1.75,13397,17,17,22,22,40,721,29,20,72,77,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,A,5,grupo_maximo,5,1531,7655,868,52,conservative,1.35,10335,25,25,30,30,48,721,41,20,84,89,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,S,5,solo,1,1531,1531,868,52,initial_po,2.0,15310,5,5,5,5,15,721,5,20,36,41,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,S,5,solo,1,1531,1531,868,52,conservative,1.55,11866,5,5,5,5,15,721,5,20,38,43,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,S,5,grupo_maximo,5,1531,7655,868,52,initial_po,2.0,15310,14,14,19,19,37,721,25,20,68,73,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
+350,S,5,grupo_maximo,5,1531,7655,868,52,conservative,1.55,11866,21,21,26,26,44,721,34,20,77,82,37,350,Recuperar Criaturas da Névoa em Aurora Extinta
