@@ -2,7 +2,7 @@
 
 ## 0.7.0 — Lotes de economia, oficinas, guia e equilíbrio regional
 
-- Adiciona novas opções de mercado e coleta, com cancelamento de ofertas, cotas e fontes de materiais integradas à progressão.
+- Adiciona novas opções de mercado e coleta, com cancelamento de ofertas e fontes de materiais integradas à progressão; remove a cota móvel de venda de materiais.
 - Permite preparar lotes temporizados nas oficinas e consultar as fontes de materiais no jogo.
 - Amplia o Guia do Jogo com catálogo pesquisável de equipamentos e materiais e exportação em Markdown.
 - Ajusta equipamentos e contratos regionais para equilibrar bônus, poder e risco da estratégia da CPU; corrige a elegibilidade de eventos regionais.
