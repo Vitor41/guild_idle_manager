@@ -81,12 +81,12 @@ A comparação integral Rank E–S, nos três conjuntos de multiplicadores, est�
 
 | Rank | PO inicial | Primeiro candidato E2 | E2 ajustado para reteste |
 |:---:|---:|---:|---:|
-| E | 1.00 | 1.00 | 0.70 |
-| D | 1.15 | 1.05 | 0.73 |
-| C | 1.30 | 1.10 | 0.77 |
-| B | 1.50 | 1.20 | 0.84 |
-| A | 1.75 | 1.35 | 0.94 |
-| S | 2.00 | 1.55 | 1.08 |
+| E | 1.00 | 1.00 | 0.700 |
+| D | 1.15 | 1.05 | 0.735 |
+| C | 1.30 | 1.10 | 0.770 |
+| B | 1.50 | 1.20 | 0.840 |
+| A | 1.75 | 1.35 | 0.945 |
+| S | 2.00 | 1.55 | 1.085 |
 
 ## Decisão e riscos
 

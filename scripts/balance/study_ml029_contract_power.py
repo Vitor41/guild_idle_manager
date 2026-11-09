@@ -300,7 +300,7 @@ def write_evidence(output_dir: Path) -> None:
         contents.append(
             f"| {rank} | {MULTIPLIER_SCENARIOS['initial_po'][rank]:.2f} | "
             f"{MULTIPLIER_SCENARIOS['previous_e2'][rank]:.2f} | "
-            f"{MULTIPLIER_SCENARIOS['adjusted_e2'][rank]:.2f} |"
+            f"{MULTIPLIER_SCENARIOS['adjusted_e2'][rank]:.3f} |"
         )
     contents.extend([
         "",
