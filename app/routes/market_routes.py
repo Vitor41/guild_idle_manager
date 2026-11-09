@@ -15,6 +15,7 @@ from app.services.icon_service import get_item_icon_path
 from app.services.market_service import (
     MarketError,
     collect_all_ready_market_sales,
+    cancel_market_sale,
     collect_market_sale,
     get_market_page_context,
     start_equipment_sale,
@@ -34,6 +35,7 @@ def market_index(request: Request, db: DbSession, current_user: User | None = De
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     context = get_market_page_context(db, guild)
+    attention_sale_id = request.query_params.get("sale_id", "")
     for item in [*context["inventory_items"], *context["equipment_items"]]:
         item.icon_path = get_item_icon_path(item)
         item.rarity_label = rarity_label(item.item_template.rarity)
@@ -43,6 +45,7 @@ def market_index(request: Request, db: DbSession, current_user: User | None = De
     return templates.TemplateResponse(request=request, name="market/index.html", context={
         "current_user": current_user, "guild": guild, "resources": resources,
         "message": request.query_params.get("message"), "error": request.query_params.get("error"), **context,
+        "attention_sale_id": attention_sale_id,
     })
 
 
@@ -89,6 +92,24 @@ def collect_all(db: DbSession, current_user: User | None = Depends(get_current_p
         return RedirectResponse(f"/market?error={quote(str(error))}", status_code=303)
     message = quote(f"{result['count']} vendas coletadas: {result['gold']} ouro.")
     return RedirectResponse(f"/market?message={message}", status_code=303)
+
+
+@router.post("/{sale_id}/cancel")
+def cancel(sale_id: int, request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
+    if current_user is None:
+        return RedirectResponse("/login", status_code=303)
+    guild, _resources = get_current_guild_context(db, current_user.id)
+    if guild is None:
+        return RedirectResponse("/guild/create", status_code=303)
+    try:
+        sale = cancel_market_sale(db, guild, sale_id)
+    except MarketError as error:
+        db.rollback()
+        return RedirectResponse(f"/market?error={quote(str(error))}&sale_id={sale_id}", status_code=303)
+    return RedirectResponse(
+        f"/market?message=Venda%20cancelada.%20Itens%20devolvidos;%20nenhum%20ouro%20recebido.&sale_id={sale.id}",
+        status_code=303,
+    )
 
 
 @router.post("/{sale_id}/collect")

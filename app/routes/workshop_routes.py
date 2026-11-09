@@ -1,7 +1,7 @@
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -12,6 +12,7 @@ from app.services.workshop_service import WorkshopError, craft_supply_kit, get_s
 
 router = APIRouter(prefix="/workshops")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+templates.env.globals["utc_iso"] = lambda value: value.isoformat() if value else None
 
 
 @router.get("")
@@ -30,16 +31,15 @@ def workshops_index(request: Request, db: DbSession, current_user: User | None =
 
 
 @router.post("/supply/craft")
-def craft_supply_route(db: DbSession, current_user: User | None = Depends(get_current_player)):
+def craft_supply_route(db: DbSession, quantity: int = Form(1), current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
     guild, _resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     try:
-        craft_supply_kit(db, guild)
-        db.commit()
+        craft_supply_kit(db, guild, quantity)
     except WorkshopError as exc:
         db.rollback()
         return RedirectResponse(f"/workshops?error={quote(str(exc))}", status_code=303)
-    return RedirectResponse("/workshops?message=Kit%20de%20Suprimentos%20fabricado.", status_code=303)
+    return RedirectResponse("/workshops?message=Produ%C3%A7%C3%A3o%20iniciada.", status_code=303)

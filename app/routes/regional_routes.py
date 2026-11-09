@@ -50,6 +50,112 @@ router = APIRouter(prefix="/regional")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
 
 
+def _regional_comparison_data(db, campaign, guild, region_code: str):
+    from app.services.regional_cycle_service import REGIONS
+    region_name = dict(REGIONS).get(region_code)
+    if region_name is None:
+        return None
+    get_regional_board(db, campaign, guild)
+    states = list(db.scalars(select(RegionalGuildState).where(
+        RegionalGuildState.campaign_id == campaign.campaign_id,
+        RegionalGuildState.region_code == region_code,
+        RegionalGuildState.active.is_(True),
+    ).order_by(RegionalGuildState.influence.desc(), RegionalGuildState.reputation.desc(), RegionalGuildState.name)))
+    regions = list(db.scalars(select(RegionalRegionState).where(
+        RegionalRegionState.campaign_id == campaign.campaign_id,
+    ).order_by(RegionalRegionState.region_name)))
+    selected = next((row for row in regions if row.region_code == region_code), None)
+    state_ids = [row.id for row in states]
+    members = list(db.scalars(select(RegionalCpuMercenary).where(
+        RegionalCpuMercenary.guild_state_id.in_(state_ids), RegionalCpuMercenary.active.is_(True),
+    ))) if state_ids else []
+    resources = list(db.scalars(select(RegionalCpuResource).where(
+        RegionalCpuResource.guild_state_id.in_(state_ids),
+    ))) if state_ids else []
+    outcomes = list(db.execute(select(RegionalRunOutcome, RegionalOffer).join(
+        RegionalOffer, RegionalOffer.id == RegionalRunOutcome.offer_id,
+    ).where(
+        RegionalRunOutcome.guild_state_id.in_(state_ids),
+        RegionalRunOutcome.campaign_id == campaign.campaign_id,
+        RegionalOffer.campaign_id == campaign.campaign_id,
+        RegionalOffer.region_code == region_code,
+        RegionalOffer.offer_type.in_(("contract", "dungeon", "boss")),
+    ))) if state_ids else []
+    rosters: dict[int, list] = {}
+    wealth: dict[int, int] = {}
+    results: dict[int, dict[str, int]] = {}
+    for member in members:
+        rosters.setdefault(member.guild_state_id, []).append(member)
+    for resource in resources:
+        if resource.resource_code in {"gold", "gold_coins"}:
+            wealth[resource.guild_state_id] = resource.amount
+
+    def result_counts(state_id: int):
+        return results.setdefault(state_id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0})
+
+    for outcome, offer in outcomes:
+        key = {"contract": "contracts", "dungeon": "dungeons", "boss": "bosses"}.get(offer.offer_type)
+        if key:
+            counts = result_counts(outcome.guild_state_id)
+            counts[key] += 1
+            counts["successes" if outcome.success else "failures"] += 1
+
+    cpu_plans = list(db.execute(select(RegionalCpuCyclePlan, RegionalGuildState).join(
+        RegionalGuildState, RegionalGuildState.id == RegionalCpuCyclePlan.guild_state_id,
+    ).where(
+        RegionalCpuCyclePlan.campaign_id == campaign.campaign_id,
+        RegionalCpuCyclePlan.guild_state_id.in_(state_ids),
+        RegionalGuildState.campaign_id == campaign.campaign_id,
+        RegionalGuildState.region_code == region_code,
+        RegionalGuildState.guild_id.is_(None),
+    ))) if state_ids else []
+    for plan, state in cpu_plans:
+        try:
+            plan_outcomes = json.loads(plan.outcomes_json or "[]")
+        except (TypeError, ValueError):
+            plan_outcomes = []
+        known = 0
+        if isinstance(plan_outcomes, list):
+            for item in plan_outcomes:
+                if not isinstance(item, dict) or not isinstance(item.get("offer_id"), int):
+                    continue
+                offer = db.get(RegionalOffer, item["offer_id"])
+                if (offer is None or offer.campaign_id != campaign.campaign_id or offer.region_code != region_code
+                        or offer.offer_type not in {"contract", "dungeon", "boss"}):
+                    continue
+                counts = result_counts(state.id)
+                counts[{"contract": "contracts", "dungeon": "dungeons", "boss": "bosses"}[offer.offer_type]] += 1
+                counts["successes" if bool(item.get("success")) else "failures"] += 1
+                known += 1
+        if not known and not plan_outcomes:
+            counts = result_counts(state.id)
+            counts["successes"] += max(0, int(plan.successes or 0))
+            counts["failures"] += max(0, int(plan.failures or 0))
+
+    rows = []
+    for state in states:
+        roster = rosters.get(state.id, [])
+        tiers: dict[str, int] = {}
+        for member in roster:
+            tiers[member.rarity] = tiers.get(member.rarity, 0) + 1
+        current_wealth = wealth.get(state.id, 0)
+        if state.guild_id == guild.id:
+            roster = list(db.scalars(select(Mercenary).where(
+                Mercenary.guild_id == guild.id, Mercenary.status != "dismissed",
+            )))
+            tiers = {}
+            for member in roster:
+                tiers[member.rarity] = tiers.get(member.rarity, 0) + 1
+            resources_now = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
+            current_wealth = resources_now.gold if resources_now else current_wealth
+        rows.append({
+            "state": state, "wealth": current_wealth, "roster": len(roster) or state.roster_size,
+            "tier_counts": tiers,
+            "results": results.get(state.id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0}),
+        })
+    return region_name, regions, selected, rows
+
+
 @router.get("/regions/{region_code}")
 def regional_region_detail(
     region_code: str,
@@ -64,73 +170,39 @@ def regional_region_detail(
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     from app.services.regional_cycle_service import REGIONS
-
-    get_regional_board(db, campaign, guild)
-
-    region_name = dict(REGIONS).get(region_code)
-    if region_name is None:
+    data = _regional_comparison_data(db, campaign, guild, region_code)
+    if data is None:
         return RedirectResponse("/regional", status_code=303)
-    states = list(db.scalars(select(RegionalGuildState).where(
-        RegionalGuildState.campaign_id == campaign.campaign_id,
-        RegionalGuildState.region_code == region_code,
-        RegionalGuildState.active.is_(True),
-    ).order_by(RegionalGuildState.influence.desc(), RegionalGuildState.reputation.desc(), RegionalGuildState.name)))
-    region_snapshots = list(db.scalars(select(RegionalRegionState).where(
-        RegionalRegionState.campaign_id == campaign.campaign_id,
-    ).order_by(RegionalRegionState.region_name)))
-    selected_region = next((row for row in region_snapshots if row.region_code == region_code), None)
-    state_ids = [state.id for state in states]
-    mercenaries = list(db.scalars(select(RegionalCpuMercenary).where(
-        RegionalCpuMercenary.guild_state_id.in_(state_ids), RegionalCpuMercenary.active.is_(True),
-    ))) if state_ids else []
-    resources = list(db.scalars(select(RegionalCpuResource).where(RegionalCpuResource.guild_state_id.in_(state_ids)))) if state_ids else []
-    outcomes = list(db.execute(select(RegionalRunOutcome, RegionalOffer).join(
-        RegionalOffer, RegionalOffer.id == RegionalRunOutcome.offer_id,
-    ).where(RegionalRunOutcome.guild_state_id.in_(state_ids))).all()) if state_ids else []
-    roster_by_state: dict[int, list[RegionalCpuMercenary]] = {}
-    resources_by_state: dict[int, int] = {}
-    results_by_state: dict[int, dict[str, int]] = {}
-    for member in mercenaries:
-        roster_by_state.setdefault(member.guild_state_id, []).append(member)
-    for resource in resources:
-        if resource.resource_code in {"gold", "gold_coins"}:
-            resources_by_state[resource.guild_state_id] = resource.amount
-    for outcome, offer in outcomes:
-        key = "contracts" if offer.offer_type == "contract" else "bosses" if offer.offer_type == "boss" else "dungeons"
-        counts = results_by_state.setdefault(outcome.guild_state_id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0})
-        counts[key] += 1
-        counts["successes" if outcome.success else "failures"] += 1
-    rows = []
-    for state in states:
-        roster = roster_by_state.get(state.id, [])
-        tier_counts: dict[str, int] = {}
-        for member in roster:
-            tier_counts[member.rarity] = tier_counts.get(member.rarity, 0) + 1
-        wealth = resources_by_state.get(state.id, 0)
-        if state.guild_id == guild.id:
-            real_roster = list(db.scalars(select(Mercenary).where(
-                Mercenary.guild_id == guild.id,
-                Mercenary.status != "dismissed",
-            )))
-            tier_counts = {}
-            for member in real_roster:
-                tier_counts[member.rarity] = tier_counts.get(member.rarity, 0) + 1
-            roster = real_roster
-            live_resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
-            wealth = live_resources.gold if live_resources else wealth
-        rows.append({
-            "state": state,
-            "wealth": wealth,
-            "roster": len(roster) or state.roster_size,
-            "tier_counts": tier_counts,
-            "results": results_by_state.get(state.id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0}),
-        })
+    region_name, region_snapshots, selected_region, rows = data
     return templates.TemplateResponse(request=request, name="regional/detail.html", context={
         "current_user": current_user, "guild": guild, "resources": _resources, "region_name": region_name,
         "region_code": region_code, "guild_rows": rows, "regions": region_snapshots,
         "selected_region": selected_region,
         "home_region_code": next((code for code, name in REGIONS if name == campaign.home_region), ""),
     })
+
+
+@router.get("/regions/{region_code}/comparison")
+def regional_region_comparison(
+    region_code: str, request: Request, db: DbSession,
+    current_user: User | None = Depends(get_current_player),
+    campaign: CampaignMetadata | None = Depends(get_current_campaign),
+):
+    if current_user is None or campaign is None:
+        return JSONResponse({"detail": "Campanha indisponível."}, status_code=401)
+    guild, _resources = get_current_guild_context(db, current_user.id)
+    if guild is None:
+        return JSONResponse({"detail": "Guilda indisponível."}, status_code=404)
+    data = _regional_comparison_data(db, campaign, guild, region_code)
+    if data is None:
+        return JSONResponse({"detail": "Região indisponível."}, status_code=404)
+    _region_name, _regions, _selected, rows = data
+    return JSONResponse({"guilds": {
+        str(row["state"].id): {
+            "wealth": row["wealth"], "roster": row["roster"], "tier_counts": row["tier_counts"],
+            "results": row["results"], "event_wins": row["state"].event_wins,
+        } for row in rows
+    }})
 
 
 def _datetime_iso(value: datetime | None) -> str | None:

@@ -568,6 +568,8 @@ class CampaignService:
                         deactivate_legacy_defaults=False,
                         repair_required_gathering_materials=True,
                     )
+                    from app.services.gathering_service import freeze_legacy_assignment_targets
+                    freeze_legacy_assignment_targets(db)
                     metadata.content_version = PACK_VERSION
                     metadata.updated_at_utc = datetime.now(timezone.utc)
                     db.commit()

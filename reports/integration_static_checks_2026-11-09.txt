@@ -1,0 +1,20 @@
+node --test tests/guide_frontend_utils.test.js
+✔ global guide search ignores case and repeated whitespace and returns original text range (1.2016ms)
+✔ global guide search returns no match for empty or absent terms (0.1686ms)
+✔ catalog combines name, type, family, band, tier, and source filters (0.9005ms)
+✔ source filters distinguish commerce from drops and expose source-less items only in all/none (0.2352ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 104.7807
+node --check app/static/js/guide.js
+node --check app/static/js/guide-utils.js
+python -m compileall -q app tests scripts
+git diff --check
+warning: in the working copy of 'AGENTS.md', LF will be replaced by CRLF the next time Git touches it
+python -m alembic heads
+0a1b2c3d4e5f (head)

@@ -8,7 +8,7 @@ from app.core.dependencies import DbSession, get_current_player
 from app.desktop.gameplay_diagnostics import log_gathering_advancement
 from app.models.user import User
 from app.services.guild_service import get_current_guild_context
-from app.services.equipment_service import get_equipment_slot_label
+from app.services.equipment_service import annotate_item_bonus_view, get_equipment_slot_label
 from app.services.icon_service import get_item_icon, get_item_icon_path
 from app.services.display_service import BONUS_ATTRIBUTE_LABELS, clean_generated_name, item_type_label, rarity_label
 from app.services.inventory_service import get_equipment_for_guild, get_inventory_for_guild
@@ -55,6 +55,7 @@ def inventory_index(
         item.icon_path = get_item_icon_path(item)
         item.slot_label = get_equipment_slot_label(item.equipment_slot)
         item.rarity_label = rarity_label(item.item_template.rarity)
+        annotate_item_bonus_view(item)
 
     selected_category = request.query_params.get("category", "all")
     selected_rarity = request.query_params.get("rarity", "all")

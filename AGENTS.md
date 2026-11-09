@@ -43,3 +43,8 @@ Cada entrega do DEV deve conter:
 - confirmação de que arquivos alheios e dados reais do usuário foram preservados.
 
 Sem branch/hash imutáveis e evidência dos testes, a tarefa não está pronta para revisão do CR.
+
+## Catálogo e busca do Guia
+
+- O catálogo de Equipamentos e Materiais deve continuar derivado das fontes ativas da campanha e compartilhar a mesma estrutura com a tela e a exportação Markdown. Não trate ingredientes consumidos como fontes de obtenção, não invente chances e preserve os requisitos que limitam cada atividade.
+- Ao alterar os filtros, normalização de nomes, fontes ou exportação, mantenha testes de paridade API/HTML/Markdown e verifique que nenhuma resposta ou arquivo exportado contenha IDs, estoques ou progresso privados da guilda.

@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -41,9 +42,14 @@ class WorkshopServiceTests(unittest.TestCase):
         self._stock(self.herb, 4)
         self.assertTrue(get_supply_workshop_context(self.db, self.guild)["can_craft"])
 
-        resulting_kit_stock = craft_supply_kit(self.db, self.guild)
+        job = craft_supply_kit(self.db, self.guild, 1, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
 
-        self.assertEqual(resulting_kit_stock, 1)
+        self.assertEqual(job.kit_quantity, 1)
+        self.assertEqual(job.ends_at - job.started_at, timedelta(seconds=5))
+        self.assertEqual(get_supply_workshop_context(self.db, self.guild, now=job.ends_at - timedelta(seconds=1))["stock"]["kit"], 0)
+        completed = get_supply_workshop_context(self.db, self.guild, now=job.ends_at)
+        self.assertEqual(completed["stock"]["kit"], 1)
+        self.assertEqual(get_supply_workshop_context(self.db, self.guild, now=job.ends_at + timedelta(seconds=1))["stock"]["kit"], 1)
         self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
             GuildInventoryItem.guild_id == self.guild.id,
             GuildInventoryItem.item_template_id == self.meat.id,
@@ -88,7 +94,9 @@ class WorkshopServiceTests(unittest.TestCase):
         self._stock(self.herb, 2)
         self.assertTrue(get_supply_workshop_context(self.db, self.guild)["can_craft"])
 
-        self.assertEqual(craft_supply_kit(self.db, self.guild), 1)
+        job = craft_supply_kit(self.db, self.guild, 1, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
+        self.assertEqual(job.kit_quantity, 1)
+        self.assertEqual(get_supply_workshop_context(self.db, self.guild, now=job.ends_at)["stock"]["kit"], 1)
 
         self.assertEqual(int(self.db.scalar(select(GuildInventoryItem.quantity).where(
             GuildInventoryItem.guild_id == self.guild.id,
@@ -130,6 +138,20 @@ class WorkshopServiceTests(unittest.TestCase):
             GuildInventoryItem.item_template_id == self.herb.id,
         )), 1)
 
+    def test_batch_debits_once_reserves_output_and_blocks_second_job(self):
+        self._stock(self.meat, 9)
+        self._stock(self.herb, 6)
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        job = craft_supply_kit(self.db, self.guild, 3, now=now)
+        self.assertEqual((job.kit_quantity, job.ends_at - job.started_at), (3, timedelta(seconds=15)))
+        with self.assertRaisesRegex(ValueError, "produção em andamento"):
+            craft_supply_kit(self.db, self.guild, 1, now=now)
+        self.assertEqual(get_supply_workshop_context(self.db, self.guild, now=now)["max_batch"], 0)
+        self.assertEqual(get_inventory_usage(self.db, self.guild.id), 3)
+        context = get_supply_workshop_context(self.db, self.guild, now=job.ends_at)
+        self.assertEqual(context["stock"]["kit"], 3)
+        self.assertEqual(get_inventory_usage(self.db, self.guild.id), 3)
+
     def test_full_warehouse_allows_recipe_that_reduces_usage_without_exceeding_capacity(self):
         filler = ItemTemplate(
             name="Material de preenchimento", description="", item_type="material", rarity="common",
@@ -144,7 +166,9 @@ class WorkshopServiceTests(unittest.TestCase):
         self.assertEqual(get_inventory_usage(self.db, self.guild.id), capacity)
         self.assertTrue(get_supply_workshop_context(self.db, self.guild)["can_craft"])
 
-        craft_supply_kit(self.db, self.guild)
+        job = craft_supply_kit(self.db, self.guild, 1, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
 
         self.assertEqual(get_inventory_usage(self.db, self.guild.id), capacity - 4)
         self.assertLessEqual(get_inventory_usage(self.db, self.guild.id), capacity)
+        get_supply_workshop_context(self.db, self.guild, now=job.ends_at)
+        self.assertEqual(get_inventory_usage(self.db, self.guild.id), capacity - 4)

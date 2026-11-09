@@ -17,6 +17,7 @@ from app.models.content import ContentSeedRun, ProfessionTemplate, ProfessionTra
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.campaign import CampaignMetadata, OfflineReturnReport
 from app.models.gathering import GatheringAssignment
+from app.models.workshop import SupplyWorkshopJob
 from app.models.regional import (
     RegionalCpuCyclePlan,
     RegionalCpuMercenary,
@@ -53,6 +54,7 @@ __all__ = [
     "GuildBuilding",
     "GuildResources",
     "GatheringAssignment",
+    "SupplyWorkshopJob",
     "RegionalCpuCyclePlan",
     "RegionalCpuMercenary",
     "RegionalCpuResource",

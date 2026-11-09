@@ -97,9 +97,15 @@ class LegendaryAchievementTests(unittest.TestCase):
             for instance in instances:
                 template = next(row for row in milestones if row.reward_item_template_id == instance.item_template_id)
                 self.assertEqual(instance.equipment_slot, template.reward_item_template.equipment_slot)
-                self.assertIn(instance.rng_bonus_attribute, {"power", "vitality", "agility", "intelligence", "luck", "armor"})
-                self.assertGreaterEqual(instance.rng_bonus_value, template.reward_item_template.rng_bonus_min)
-                self.assertLessEqual(instance.rng_bonus_value, template.reward_item_template.rng_bonus_max)
+                self.assertGreaterEqual(len(instance.bonus_rolls), 5)
+                self.assertLessEqual(len(instance.bonus_rolls), 7)
+                strong = [roll for roll in instance.bonus_rolls if roll["kind"] == "strong"]
+                normal = [roll for roll in instance.bonus_rolls if roll["kind"] == "normal"]
+                self.assertEqual(len(strong), 1)
+                self.assertTrue(all(5 <= roll["value"] <= 7 for roll in normal))
+                self.assertEqual(instance.rng_bonus_attribute, normal[0]["attribute"])
+                self.assertEqual(instance.rng_bonus_value, normal[0]["value"])
+                self.assertEqual((template.reward_item_template.rng_bonus_min, template.reward_item_template.rng_bonus_max), (2, 5))
 
             for achievement_id, item_id, _slot in claimed:
                 with self.assertRaises(AchievementError):

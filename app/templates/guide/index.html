@@ -13,6 +13,18 @@
     <div class="guide-crest" aria-hidden="true"><span><b>G</b></span><small>Honra · Ouro · Legado</small></div>
   </header>
 
+  <section class="guide-search" aria-label="Busca e exportação do Guia">
+    <form class="guide-search__form" data-guide-search-form role="search">
+      <label for="guide-search-query">Buscar no Guia</label>
+      <div><input id="guide-search-query" type="search" autocomplete="off" placeholder="Digite um termo do Guia">
+        <button type="submit">Buscar</button></div>
+    </form>
+    <div class="guide-search__actions"><button type="button" class="secondary" data-guide-export>Baixar Guia em Markdown</button>
+      <small>Conteúdo atual do Guia, em PT-BR.</small></div>
+    <p data-guide-search-status role="status" aria-live="polite"></p>
+    <p data-guide-export-status role="status" aria-live="polite"></p>
+  </section>
+
   <nav class="guide-index" aria-label="Índice do guia">
     <a href="#lore">A história</a>
     <a href="#idle">Progresso offline</a>
@@ -20,6 +32,7 @@
     <a href="#construcoes">Construções</a>
     <a href="#progressao">Progressão</a>
     <a href="#economia">Economia</a>
+    <a href="#equipamentos-materiais">Equipamentos e Materiais</a>
     <a href="#conselhos">Conselhos</a>
   </nav>
 
@@ -89,11 +102,11 @@
     <header class="guide-section-heading"><span class="guide-number">03</span><div><p class="eyebrow">A fortaleza molda a estratégia</p><h2>Construções que mudam o jogo</h2></div></header>
     <div class="guide-building-grid">
       <article><span>⌂</span><h3>Alojamento</h3><p>Controla a capacidade do elenco. Evolua antes de planejar uma grande contratação.</p></article>
-      <article><span>⚔</span><h3>Campo de Treino</h3><p>Acelera XP e participa dos requisitos para evoluções de classe.</p><small>Bônus atual: +{{ building_bonuses.xp_bonus_percent }}% XP</small></article>
-      <article><span>⚒</span><h3>Ferreiro</h3><p>No nível 1, abre a oficina, as receitas rotativas e uma bancada de desmontagem. A segunda bancada chega no nível 25 e a terceira no 50. O refino de equipamentos começa no nível 10. O total de ouro de cada receita aparece na oficina e é o valor exato debitado; ele pode variar com as ofertas e o nível das Docas quando isso impede lucro garantido ao revender o resultado.</p><small>Bônus atual: +{{ building_bonuses.equipment_drop_bonus_percent }}%</small></article>
-      <article><span>▣</span><h3>Armazém</h3><p>Adiciona uma quantidade fixa ao material principal obtido e também contribui para a produção offline.</p><small>Bônus atual: +{{ building_bonuses.material_quantity_bonus }} materiais principais</small></article>
-      <article><span>✦</span><h3>Escritório de Missões</h3><p>Melhora ouro e XP dos contratos e reduz seu tempo conforme o nível do prédio. O tamanho dos grupos vem do contrato e não exige comprar o Escritório.</p><small>Bônus atual de recompensa: +{{ building_bonuses.contract_reward_bonus_percent }}%</small></article>
-      <article><span>◇</span><h3>Exploradores</h3><p>Abre Masmorras e libera multiplicadores que trocam mais tempo por mais recompensas.</p><small>Multiplicador atual: {{ building_bonuses.max_run_multiplier }}x</small></article>
+      <article><span>⚔</span><h3>Campo de Treino</h3><p>Acelera XP e participa dos requisitos para evoluções de classe.</p><small class="guide-private-value">Bônus atual: +{{ building_bonuses.xp_bonus_percent }}% XP</small></article>
+      <article><span>⚒</span><h3>Ferreiro</h3><p>No nível 1, abre a oficina, as receitas rotativas e uma bancada de desmontagem. A segunda bancada chega no nível 25 e a terceira no 50. O refino de equipamentos começa no nível 10. O total de ouro de cada receita aparece na oficina e é o valor exato debitado; ele pode variar com as ofertas e o nível das Docas quando isso impede lucro garantido ao revender o resultado.</p><small class="guide-private-value">Bônus atual: +{{ building_bonuses.equipment_drop_bonus_percent }}%</small></article>
+      <article><span>▣</span><h3>Armazém</h3><p>Adiciona uma quantidade fixa ao material principal obtido e também contribui para a produção offline.</p><small class="guide-private-value">Bônus atual: +{{ building_bonuses.material_quantity_bonus }} materiais principais</small></article>
+      <article><span>✦</span><h3>Escritório de Missões</h3><p>Melhora ouro e XP dos contratos e reduz seu tempo conforme o nível do prédio. O tamanho dos grupos vem do contrato e não exige comprar o Escritório.</p><small class="guide-private-value">Bônus atual de recompensa: +{{ building_bonuses.contract_reward_bonus_percent }}%</small></article>
+      <article><span>◇</span><h3>Exploradores</h3><p>Abre Masmorras e libera multiplicadores que trocam mais tempo por mais recompensas.</p><small class="guide-private-value">Multiplicador atual: {{ building_bonuses.max_run_multiplier }}x</small></article>
     </div>
   </section>
 
@@ -102,7 +115,7 @@
     <div class="guide-columns">
       <article><h3>Aprendizes têm potencial diferente</h3><p>Raridade, atributos iniciais e crescimento tornam cada contratação uma aposta. Compare poder e distribuição de atributos; o maior número nem sempre é o melhor encaixe para o caminho desejado.</p></article>
       <article><h3>Evoluir exige preparação</h3><p>Trocas de classe dependem do nível do mercenário, da guilda e do Campo de Treino. Apenas candidatos elegíveis aparecem na seleção, e a mudança é concluída após a missão especial.</p></article>
-      <article><h3>Profissão e combate são decisões distintas</h3><p>A profissão melhora famílias específicas de coleta sem substituir a classe de combate. Escolha pensando nos materiais que sua guilda mais procura.</p></article>
+      <article><h3>Profissão e combate são decisões distintas</h3><p>A profissão melhora famílias específicas de coleta sem substituir a classe de combate. Escolha pensando nos materiais que sua guilda mais procura. Cada posto escolhe um material ativo já desbloqueado pelo nível da guilda; o alvo fica fixo até liberar o trabalhador e designá-lo novamente.</p></article>
       <article><h3>Raridade recompensa investimento</h3><p>Mercenários mais raros recebem uma vantagem gradual de crescimento. Equipamentos também usam raridade e Tier, mas cada sistema representa uma qualidade diferente.</p></article>
     </div>
   </section>
@@ -116,14 +129,40 @@
     </div>
     <div class="guide-note-grid">
       <article><h3>Tier e raridade</h3><p>Tier indica a faixa estrutural do item; raridade representa sua qualidade. Dois itens do mesmo Tier podem ter raridades, bônus gerados e valor bem diferentes.</p></article>
-      <article><h3>Docas e Mercado</h3><p>As Docas ajudam a encontrar recursos e equipamentos rotativos. O Mercado converte excedentes em ouro. Cada anúncio ocupa um espaço até a venda ser coletada; a quantidade de materiais anunciada depende do estoque disponível e dos espaços livres.</p></article>
+      <article><h3>Docas e Mercado</h3><p>As Docas ajudam a encontrar recursos e equipamentos rotativos. O Mercado converte excedentes em ouro. O prazo de cada anúncio usa a raridade e a quantidade, com redução conforme o nível do Mercado; o prazo definido ao anunciar permanece igual. É possível cancelar antes do prazo para devolver os itens e liberar o espaço, sem receber ouro. Depois do prazo, a venda fica pronta para coleta. A quantidade anunciada depende do estoque disponível e dos espaços livres.</p></article>
       <article><h3>Multiplicadores</h3><p>Multiplicar uma atividade aumenta tempo e recompensas sem elevar a chance de sucesso. Use quando confiar no grupo e quiser reduzir interações.</p></article>
       <article><h3>Desmontagem no Ferreiro</h3><p>Equipamentos livres podem virar materiais de sua composição: madeira, minério, couro, tecido ou gemas. Cada item retorna de 1 a 3 unidades; quantidade, custo e tempo crescem juntos. O equipamento e seus aprimoramentos são consumidos ao iniciar, então compare essa escolha com a venda no Mercado.</p></article>
+      <article><h3>Bônus FORTE</h3><p>Equipamentos Lendários e Míticos podem trazer FORTE FOR, VIT, AGI ou INT, indicado por uma estrela. O valor FORTE sorteado fica entre +10 e +20 e soma ao bônus normal do mesmo atributo; por exemplo, FOR +8 e FORTE FOR +15 resultam em +23 de Força. Os bônus normais usam estes tipos e faixas de pontos: Comum 1–2 tipos com +1–2; Incomum 2–3 com +2–3; Raro 3–4 com +3–4; Épico 4–5 com +4–5; Lendário 5–7 com +5–7; Mítico 8–10 com +8–10. As quantidades contam tipos FORTE junto dos normais. Lendários de 7 tipos têm pelo menos 1 FORTE; Míticos têm pelo menos 2 e os de 10 tipos têm os 4. O bônus fica gravado na instância e não é sorteado novamente ao abrir, equipar ou refinar o item.</p></article>
+    </div>
+  </section>
+
+  <section class="guide-section" id="equipamentos-materiais" aria-labelledby="guide-catalog-title">
+    <header class="guide-section-heading"><span class="guide-number">07</span><div><p class="eyebrow">Catálogo vivo</p><h2 id="guide-catalog-title">Equipamentos e Materiais</h2></div></header>
+    <p>Fontes e requisitos vêm das configurações ativas desta campanha. Chances de drop são por entrada após o sucesso da atividade; bônus de equipe e multiplicadores podem alterar o resultado. Compra, coleta, desmontagem e criação são identificadas separadamente.</p>
+    <nav class="guide-source-index" aria-label="Fontes de equipamentos e materiais">
+      <a href="#guide-source-missions">Missões</a><a href="#guide-source-dungeons">Masmorras</a><a href="#guide-source-bosses">Chefes</a>
+      <a href="#guide-source-gathering">Coleta</a><a href="#guide-source-docks">Docas</a><a href="#guide-source-salvage">Desmontagem</a>
+      <a href="#guide-source-special">Outras fontes</a>
+    </nav>
+    <form class="guide-catalog-controls" data-guide-filters>
+      <label>Nome do item<input type="search" data-filter-name placeholder="Buscar pelo nome"></label>
+      <label>Tipo<select data-filter-type><option value="all">Todos</option><option value="equipment">Equipamento</option><option value="material">Material</option></select></label>
+      <label>Família<select data-filter-family><option value="all">Todas</option></select></label>
+      <label>Faixa<select data-filter-band><option value="all">Todas</option></select></label>
+      <label>Tier<select data-filter-tier><option value="all">Todos</option></select></label>
+      <label>Fonte<select data-filter-source><option value="all">Todas</option></select></label>
+      <button type="button" class="secondary" data-clear-guide-filters>Limpar filtros</button>
+    </form>
+    <p class="guide-catalog-status" data-guide-catalog-status role="status" aria-live="polite">Carregando catálogo…</p>
+    <div class="guide-catalog-error" data-guide-catalog-error hidden role="alert"><p>Não foi possível carregar o catálogo agora.</p><button type="button" data-guide-catalog-retry>Tentar novamente</button></div>
+    <p class="guide-catalog-empty" data-guide-catalog-empty hidden role="status">Nenhum item corresponde aos filtros. <button type="button" class="secondary" data-clear-guide-filters>Limpar filtros</button></p>
+    <div class="guide-catalog-table-wrap" data-guide-catalog-wrap hidden>
+      <table class="guide-catalog-table"><thead><tr><th scope="col">Fonte/atividade</th><th scope="col">Item</th><th scope="col">Requisito</th><th scope="col">Chance</th><th scope="col">Quantidade</th></tr></thead><tbody data-guide-catalog-rows></tbody></table>
     </div>
   </section>
 
   <section class="guide-section guide-final" id="conselhos">
-    <header class="guide-section-heading"><span class="guide-number">06</span><div><p class="eyebrow">Conselho do intendente</p><h2>Antes de partir</h2></div></header>
+    <header class="guide-section-heading"><span class="guide-number">08</span><div><p class="eyebrow">Conselho do intendente</p><h2>Antes de partir</h2></div></header>
     <ol class="guide-advice-list">
       <li><span>01</span><p>Defina um objetivo por vez: ampliar o elenco, trocar uma classe, melhorar equipamentos ou preparar uma Masmorra.</p></li>
       <li><span>02</span><p>Não escolha atividades apenas pela recompensa bruta. Tempo, chance e loot possível mudam o valor real.</p></li>
@@ -133,4 +172,6 @@
     <div class="guide-actions"><a class="button-link" href="/dashboard">Voltar à guilda</a><a class="button-link secondary" href="/tutorial?replay=1">Rever tutorial básico</a></div>
   </section>
 </section>
+<script src="{{ url_for('static', path='/js/guide-utils.js') }}" defer></script>
+<script src="{{ url_for('static', path='/js/guide.js') }}" defer></script>
 {% endblock %}

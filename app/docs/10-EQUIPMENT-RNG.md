@@ -260,6 +260,20 @@ No MVP, manter simples:
 rng_bonus_value = número aleatório entre rng_bonus_min e rng_bonus_max
 ```
 
+## Regra atual ML-030 — bônus por raridade
+
+O conteúdo acima descreve o RNG legado. A geração atual de instâncias é definida por `RARITY_BONUS_RULES` em `equipment_service.py`; os campos `item_templates.rng_bonus_min/max` e `guild_item_instances.rng_bonus_attribute/value` continuam no banco para compatibilidade, mas os dois campos de template já não limitam novas rolagens. A tela do admin informa isso e mantém os valores legados sem alteração ao editar o item.
+
+Cada instância nova grava `bonus_rolls` como um snapshot JSON de `{kind, attribute, value}`. O tipo normal é um dos seis atributos atuais; `kind="strong"` identifica FORTE FOR/VIT/AGI/INT. Os campos RNG antigos espelham o primeiro bônus normal da lista, para leitores legados. Cálculos usam `bonus_rolls` quando existe e usam o par antigo apenas em instâncias antigas com lista vazia; assim, o espelho não soma duas vezes.
+
+As quantidades de tipos/pontos normais são Comum 1–2 / 1–2, Incomum 2–3 / 2–3, Raro 3–4 / 3–4, Épico 4–5 / 4–5, Lendário 5–7 / 5–7 e Mítico 8–10 / 8–10. A quantidade total inclui FORTE. Lendários recebem exatamente um FORTE para manter um teto de poder menor que o piso Mítico; Míticos recebem 2–4, sempre FORTE FOR, e um item de 10 tipos recebe os quatro. Cada FORTE vale 10–20.
+
+Todos os itens novos incluem um bônus normal de Força e, se tiverem mais de um bônus normal, ao menos um dos demais tipos usa Vitalidade, Agilidade, Inteligência ou Armadura. Isso, junto às faixas, mantém a contribuição de poder de cada raridade dentro do piso/teto da seguinte, inclusive em valores efetivos segundo `calculate_power_score`.
+
+Templates e seus bônus-base administrativos permanecem intactos. Ao criar item de raridade superior, a instância pode receber um ajuste adicional em `bonus_power` para que, no mesmo nível mínimo e slot, seu menor poder efetivo não fique abaixo do maior poder de uma raridade inferior já configurada. O ajuste somente afeta a nova instância; raridades sem pares equivalentes no catálogo não ganham correção a partir de comparações inexistentes. Refino acrescenta o mesmo +1 de Força por nível e não altera `bonus_rolls`.
+
+Uma migration aditiva cria `guild_item_instances.bonus_rolls` com `[]` para saves antigos. Os campos RNG antigos das instâncias não são regravados. Ao abrir um save existente, instâncias com lista vazia continuam usando seus valores antigos e não recebem rerrolagem.
+
 ## Equipar item
 
 Regra:

@@ -103,8 +103,9 @@
         <label>Bônus inteligência <input type="number" name="bonus_intelligence" min="0" value="{{ form.bonus_intelligence if form else item.bonus_intelligence if item else 0 }}"></label>
         <label>Bônus sorte <input type="number" name="bonus_luck" min="0" value="{{ form.bonus_luck if form else item.bonus_luck if item else 0 }}"></label>
         <label>Bônus armadura <input type="number" name="bonus_armor" min="0" value="{{ form.bonus_armor if form else item.bonus_armor if item else 0 }}"></label>
-        <label>Bônus aleatório mínimo <input type="number" name="rng_bonus_min" min="0" value="{{ form.rng_bonus_min if form else item.rng_bonus_min if item else 0 }}"></label>
-        <label>Bônus aleatório máximo <input type="number" name="rng_bonus_max" min="0" value="{{ form.rng_bonus_max if form else item.rng_bonus_max if item else 0 }}"></label>
+        <div class="form-note"><strong>Geração aleatória por raridade</strong><p>Novas instâncias usam as faixas de tipos e pontos da raridade e não são limitadas pelos campos RNG legados. Os valores antigos abaixo são preservados para compatibilidade do catálogo.</p></div>
+        <input type="hidden" name="rng_bonus_min" value="{{ item.rng_bonus_min if item else form.rng_bonus_min if form else 0 }}">
+        <input type="hidden" name="rng_bonus_max" value="{{ item.rng_bonus_max if item else form.rng_bonus_max if form else 0 }}">
       </div>
       <label class="check-row"><input type="checkbox" name="is_active" {% if (form and form.is_active is defined) or (not form and (item is none or item.is_active)) %}checked{% endif %}> Ativo</label>
       <button type="submit">Salvar</button>

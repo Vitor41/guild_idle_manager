@@ -52,6 +52,14 @@
     }
   },
   "sprites": {
+    "bonus-strong-star": {
+      "paths": {
+        "64": "sprites/64/bonus-strong-star.png",
+        "128": "sprites/128/bonus-strong-star.png",
+        "512": "sprites/master_512/bonus-strong-star.png"
+      },
+      "master_project_path": "design/originals/ml030-strong-bonus/strong-bonus-star-master.png"
+    },
     "biome-cave": {
       "paths": {
         "64": "sprites/64/biome-cave.png",

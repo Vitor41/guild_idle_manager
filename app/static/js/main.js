@@ -18,15 +18,30 @@ const startupModalQueue = (() => {
     }
   };
   return {
-    enqueue(dialog, priority) {
+    enqueue(dialog, priority, deadline = Number.POSITIVE_INFINITY) {
       if (!(dialog instanceof HTMLDialogElement) || dialog.open || pending.some((row) => row.dialog === dialog)) return;
-      pending.push({ dialog, priority, sequence: sequence++ });
-      pending.sort((left, right) => left.priority - right.priority || left.sequence - right.sequence);
+      pending.push({ dialog, priority, deadline: Number.isFinite(deadline) ? deadline : Number.POSITIVE_INFINITY, sequence: sequence++ });
+      pending.sort((left, right) => left.priority - right.priority || left.deadline - right.deadline || left.sequence - right.sequence);
       advance();
+    },
+    remove(dialog) {
+      const index = pending.findIndex((row) => row.dialog === dialog);
+      if (index >= 0) pending.splice(index, 1);
+      if (active === dialog && dialog.open) dialog.close();
     },
   };
 })();
 window.GIMStartupModalQueue = startupModalQueue;
+
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-bonus-dialog-open]");
+  if (trigger) {
+    const dialog = document.getElementById(trigger.dataset.bonusDialogOpen);
+    if (dialog instanceof HTMLDialogElement) dialog.showModal();
+    return;
+  }
+  if (event.target.matches(".bonus-details-dialog")) event.target.close();
+});
 
 function formatGenericRemaining(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -178,6 +193,42 @@ document.addEventListener("click", (event) => {
   document.querySelectorAll(".multi-select-filter[open]").forEach((dropdown) => {
     if (!dropdown.contains(event.target)) dropdown.open = false;
   });
+});
+
+const formatMarketEstimate = (seconds) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  if (safeSeconds < 60) return `${safeSeconds} s`;
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  if (minutes < 60) return remainder ? `${minutes} min ${remainder} s` : `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
+};
+
+function updateMarketEstimate(node) {
+  const form = node.closest("form");
+  const quantityInput = form?.querySelector("[data-market-quantity]");
+  const quantity = quantityInput ? Number.parseInt(quantityInput.value, 10) : 1;
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    node.textContent = "Informe a quantidade para estimar o prazo.";
+    return;
+  }
+  const baseSeconds = Number.parseInt(node.dataset.durationBase || form?.dataset.durationBase || "30", 10);
+  const reduction = Number.parseInt(node.dataset.timeReduction || form?.dataset.timeReduction || "0", 10);
+  const baseTotal = Math.max(1, baseSeconds) * quantity;
+  const finalSeconds = Math.max(5, Math.floor(baseTotal * (100 - Math.min(100, Math.max(0, reduction))) / 100));
+  node.textContent = `Base antes da redução: ${formatMarketEstimate(baseTotal)} · redução do Mercado: ${reduction}% · prazo estimado: ${formatMarketEstimate(finalSeconds)}.`;
+}
+
+function initializeMarketEstimates(root = document) {
+  root.querySelectorAll("[data-market-estimate]").forEach((node) => updateMarketEstimate(node));
+}
+
+initializeMarketEstimates();
+document.addEventListener("input", (event) => {
+  if (!event.target.matches("[data-market-quantity]")) return;
+  event.target.closest("form")?.querySelectorAll("[data-market-estimate]").forEach(updateMarketEstimate);
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -494,6 +545,8 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  initializeMarketEstimates(currentMain);
+  syncRegionalEventNoticeDialogs(parsedDocument);
   window.initializeGatheringCycles?.();
   const incomingTopbar = parsedDocument.querySelector(".game-topbar");
   const currentTopbar = document.querySelector(".game-topbar");
@@ -504,11 +557,13 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   document.title = parsedDocument.title || document.title;
   const nextUrl = new URL(responseUrl, window.location.origin);
   document.body.dataset.route = nextUrl.pathname;
+  window.GIMApplyDesktopArt?.(currentMain);
   window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   updateGenericCountdowns();
   initializeSalvagePreviews();
   restoreGameFormState(formState);
   window.initializeRegionalSupply?.(currentMain);
+  window.initializeRegionalComparison?.(currentMain);
   showActionToast(currentMain);
 
   const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
@@ -518,7 +573,82 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   });
 }
 
+function regionalNoticeMatches(current, replacement) {
+  return current.dataset.eventId === replacement.dataset.eventId
+    && current.dataset.eventDeadline === replacement.dataset.eventDeadline;
+}
+window.GIMRegionalNoticeMatches = regionalNoticeMatches;
+
+function syncRegionalEventNoticeDialogs(parsedDocument) {
+  const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
+  const incomingById = new Map(incoming.filter((dialog) => dialog.id).map((dialog) => [dialog.id, dialog]));
+  for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
+    const replacement = incomingById.get(current.id);
+    if (replacement && regionalNoticeMatches(current, replacement)) continue;
+    window.GIMStartupModalQueue?.remove(current);
+    if (current.open) current.close();
+    current.remove();
+  }
+  for (const source of incoming) {
+    if (source.id && document.getElementById(source.id)) continue;
+    const dialog = document.importNode(source, true);
+    document.body.append(dialog);
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    window.GIMEnqueueRegionalNotice?.(dialog);
+  }
+}
+
+let regionalComparisonInterval = null;
+function initializeRegionalComparison(root = document) {
+  if (regionalComparisonInterval !== null) {
+    window.clearInterval(regionalComparisonInterval);
+    regionalComparisonInterval = null;
+  }
+  const tableBody = root.querySelector?.("[data-regional-comparison]");
+  if (!tableBody) return;
+  const refresh = async () => {
+    if (!tableBody.isConnected || document.visibilityState === "hidden") return;
+    try {
+      const response = await fetch(tableBody.dataset.refreshUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      for (const row of tableBody.querySelectorAll("tr[data-guild-state-id]")) {
+        const data = payload.guilds?.[row.dataset.guildStateId];
+        if (!data) continue;
+        const values = {
+          wealth: data.wealth,
+          roster: data.roster,
+          tiers: Object.entries(data.tier_counts || {}).sort(([left], [right]) => left.localeCompare(right)).map(([tier, count]) => `${tier} ${count}`).join(" · ") || "—",
+          contracts: data.results?.contracts ?? 0,
+          dungeons: data.results?.dungeons ?? 0,
+          bosses: data.results?.bosses ?? 0,
+          "successes-failures": `${data.results?.successes ?? 0} · ${data.results?.failures ?? 0}`,
+          "event-wins": data.event_wins ?? 0,
+        };
+        for (const [field, value] of Object.entries(values)) {
+          const cell = row.querySelector(`[data-comparison-field="${field}"]`);
+          if (cell) cell.textContent = String(value);
+        }
+      }
+    } catch (_error) {
+      // Keep the last successful comparison visible when a refresh is unavailable.
+    }
+  };
+  refresh();
+  regionalComparisonInterval = window.setInterval(() => {
+    if (!tableBody.isConnected) return;
+    refresh();
+  }, 30000);
+}
+window.initializeRegionalComparison = initializeRegionalComparison;
+initializeRegionalComparison();
+
 document.addEventListener("click", async (event) => {
+  if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+    event.target.closest("[data-regional-notice-close]")?.closest("dialog")?.close();
+  }
   const link = event.target.closest(".game-shell .filter-tabs a, .game-shell .pagination a, [data-async-navigation]");
   if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
   const targetUrl = new URL(link.href, window.location.origin);

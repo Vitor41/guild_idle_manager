@@ -16,10 +16,10 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("window.GIMStartupModalQueue = startupModalQueue", main)
         self.assertIn("startupModalQueue.enqueue(offlineDialog, 0)", main)
         self.assertIn("startupModalQueue.enqueue(tutorialInvite, 1)", main)
-        self.assertIn("window.GIMStartupModalQueue?.enqueue(dialog, 2)", evolution)
+        self.assertIn("window.GIMStartupModalQueue?.enqueue(dialog, 2, deadline)", evolution)
         self.assertIn('next.addEventListener("close"', main)
         self.assertIn("pending.sort((left, right) => left.priority - right.priority", main)
-        self.assertNotIn("dialog.showModal()", evolution.split('document.querySelectorAll("dialog[data-regional-rebellion-auto-open]")', 1)[1].split("document.querySelectorAll(\".evolution-page img\")", 1)[0])
+        self.assertNotIn("dialog.showModal()", evolution.split('document.querySelectorAll("dialog[data-regional-event-notice]")', 1)[1].split("document.querySelectorAll(\".evolution-page img\")", 1)[0])
 
     def test_offline_dialog_scrolls_body_and_keeps_acknowledgement_reachable(self):
         css = self.read("app/static/css/main.css")
@@ -227,7 +227,7 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("controller.abort(), 750", main)
         submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
         self.assertNotIn('form.submit()', submit_catch)
-        self.assertIn("?v=20261101-2", base)
+        self.assertRegex(base, r"main\.css.*?\?v=20\d{6}-\d+")
 
     def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
         gathering = self.read("app/templates/gathering/index.html")

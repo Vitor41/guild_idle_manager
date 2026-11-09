@@ -7,13 +7,51 @@
   {% if error %}<p class="error-message" role="alert">{{ error }}</p>{% endif %}
   <section class="panel" aria-labelledby="supply-workshop-title">
     <div class="section-heading"><div><p class="eyebrow">Oficina ativa</p><h2 id="supply-workshop-title">Oficina de Suprimentos</h2></div></div>
-    <p>Transforme <strong>3 Carnes + 2 Ervas</strong> em <strong>1 Kit de Suprimentos</strong>.</p>
-    <dl class="inline-stats"><div><dt>Carne disponível</dt><dd>{{ stock.meat }} / 3</dd></div><div><dt>Ervas disponíveis</dt><dd>{{ stock.herb }} / 2</dd></div><div><dt>Kits armazenados</dt><dd>{{ stock.kit }}</dd></div></dl>
-    {% if meat_item is none or herb_item is none %}<p class="note">Os materiais da receita ainda não estão disponíveis no catálogo desta campanha.</p>
-    {% elif stock.meat < 3 %}<p class="note">Reúna mais Carne no posto Terras de caça para completar a receita.</p>
-    {% elif stock.herb < 2 %}<p class="note">Reúna mais Ervas no posto Horta silvestre para completar a receita.</p>
-    {% elif not can_craft %}<p class="note">Libere espaço no Armazém para fabricar o kit.</p>{% endif %}
-    <form method="post" action="/workshops/supply/craft"><button type="submit" {% if not can_craft %}disabled{% endif %}>Fabricar 1 Kit</button></form>
+    <p>Transforme <strong>3 Carnes + 2 Ervas</strong> em <strong>1 Kit de Suprimentos</strong>. Cada Kit leva 5 segundos.</p>
+    <dl class="inline-stats"><div><dt>Carne disponível</dt><dd>{{ stock.meat }}</dd></div><div><dt>Ervas disponíveis</dt><dd>{{ stock.herb }}</dd></div><div><dt>Kits armazenados</dt><dd>{{ stock.kit }}</dd></div></dl>
+    {% if job and job.status == 'in_progress' %}
+      <div class="supply-preparation-progress" role="status" aria-live="off">
+        <strong>Produzindo {{ job.kit_quantity }} Kit(s) de Suprimentos</strong>
+        <progress max="100" value="0" data-workshop-progress data-starts-at="{{ utc_iso(job.started_at) }}" data-ends-at="{{ utc_iso(job.ends_at) }}" aria-label="Progresso da produção">0%</progress>
+        <p>Tempo restante: <time data-workshop-remaining data-ends-at="{{ utc_iso(job.ends_at) }}">calculando...</time></p>
+        <small>Materiais debitados: {{ job.meat_per_kit * job.kit_quantity }} Carnes + {{ job.herb_per_kit * job.kit_quantity }} Ervas. Os Kits serão entregues automaticamente ao concluir.</small>
+      </div>
+    {% elif completed_job %}<p class="success-message" role="status">Produção concluída: {{ completed_job.kit_quantity }} Kit(s) adicionados ao Armazém.</p>
+    {% else %}
+      {% if meat_item is none or herb_item is none %}<p class="note">Os materiais da receita ainda não estão disponíveis no catálogo desta campanha.</p>
+      {% elif max_batch < 1 %}<p class="note">Reúna 3 Carnes e 2 Ervas para iniciar a produção.</p>{% endif %}
+      <form method="post" action="/workshops/supply/craft" class="workshop-batch-form">
+        <label for="workshop-quantity">Quantidade de Kits</label>
+        <div><input id="workshop-quantity" name="quantity" type="number" min="1" max="{{ max_batch }}" value="1" required {% if not can_craft %}disabled{% endif %}>
+        <button type="button" class="secondary" data-workshop-max {% if not can_craft %}disabled{% endif %}>Máximo ({{ max_batch }})</button></div>
+        <p class="note" data-workshop-estimate data-seconds-per-kit="{{ seconds_per_kit }}">Custo: 3 Carnes + 2 Ervas · Tempo: 5 segundos por Kit.</p>
+        <button type="submit" {% if not can_craft %}disabled{% endif %}>Iniciar produção</button>
+      </form>
+    {% endif %}
   </section>
 </section>
+<script>
+(() => {
+  const updateProgress = () => document.querySelectorAll("[data-workshop-progress]").forEach((bar) => {
+    const start = Date.parse(bar.dataset.startsAt || "");
+    const end = Date.parse(bar.dataset.endsAt || "");
+    const span = Math.max(1, end - start);
+    const percent = Math.max(0, Math.min(100, ((Date.now() - start) / span) * 100));
+    bar.value = percent;
+    bar.textContent = `${Math.floor(percent)}%`;
+  });
+  updateProgress();
+  window.setInterval(updateProgress, 1000);
+  const form = document.querySelector(".workshop-batch-form");
+  if (!form) return;
+  const input = form.querySelector("#workshop-quantity");
+  const estimate = form.querySelector("[data-workshop-estimate]");
+  form.querySelector("[data-workshop-max]")?.addEventListener("click", () => { input.value = input.max; input.dispatchEvent(new Event("input")); });
+  input.addEventListener("input", () => {
+    const n = Math.max(1, Number(input.value) || 1);
+    const seconds = n * Number(estimate.dataset.secondsPerKit || 5);
+    estimate.textContent = `Custo: ${n * 3} Carnes + ${n * 2} Ervas · Tempo estimado: ${seconds} segundo(s).`;
+  });
+})();
+</script>
 {% endblock %}

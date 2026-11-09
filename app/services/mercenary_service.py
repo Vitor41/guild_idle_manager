@@ -19,6 +19,7 @@ from app.repositories.mercenary_repository import (
 )
 from app.services.building_service import ensure_guild_buildings, get_mercenary_limit
 from app.services.equipment_service import (
+    annotate_item_bonus_view,
     EquipmentError,
     equip_item,
     get_available_equipment_for_mercenary,
@@ -179,6 +180,7 @@ def get_mercenary_detail_context(
         item.view_icon = get_item_icon(item)
         item.icon_path = get_item_icon_path(item)
         item.slot_label = get_equipment_slot_label(item.equipment_slot)
+        annotate_item_bonus_view(item)
     available_equipment = get_available_equipment_for_mercenary(db, guild.id, mercenary)
     skills = ensure_mercenary_skills(db, mercenary)
     for item in available_equipment:
@@ -187,6 +189,7 @@ def get_mercenary_detail_context(
         item.view_icon = get_item_icon(item)
         item.icon_path = get_item_icon_path(item)
         item.slot_label = get_equipment_slot_label(item.equipment_slot)
+        annotate_item_bonus_view(item)
     return {
         "mercenary": mercenary,
         "attribute_summary": summary,

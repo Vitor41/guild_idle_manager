@@ -31,6 +31,10 @@
         <article class="panel gathering-card" data-gathering-card="{{ family }}">
           <div class="gathering-card__heading"><span class="eyebrow">{{ node }}</span><h2>{{ label }}</h2></div>
           {% if assignment %}
+            {% if assignment.target_item_template %}<div class="gathering-target" role="group" aria-label="Alvo desta designação">
+              <span class="asset-placeholder item-icon-frame" aria-hidden="true" data-desktop-item-group="{{ assignment.target_item_template.icon_group or family }}" data-desktop-item-family="{{ assignment.target_item_template.material_family or family }}">◇</span>
+              <p><strong>Alvo desta designação:</strong> {{ assignment.target_item_template.name }} · {{ {'common':'Comum','uncommon':'Incomum','rare':'Raro','epic':'Épico','legendary':'Lendário','mythic':'Mítico'}.get(assignment.target_item_template.rarity, assignment.target_item_template.rarity) }}<small>Este alvo permanece fixo até liberar o trabalhador. Para escolher outro material disponível, designe novamente.</small></p>
+            </div>{% else %}<p class="gathering-target" role="status">Alvo ainda não definido. O primeiro avanço escolherá e congelará um material disponível para este posto.</p>{% endif %}
             {% if assignment.capacity_paused %}
               <p class="gathering-status" role="status" data-gathering-status>Pausada · Armazém cheio · <strong>{{ assignment.mercenary.name }}</strong></p>
               <p>Libere espaço no Armazém para retomar a produção. O tempo em pausa não acumula ciclos.</p>
@@ -50,6 +54,10 @@
             </form>
           {% else %}
             <p class="gathering-status">Posto disponível</p>
+            {% if material_previews.get(family) %}<div class="gathering-target" role="group" aria-label="Material disponível para nova designação">
+              <span class="asset-placeholder item-icon-frame" aria-hidden="true" data-desktop-item-group="{{ material_previews[family].icon_group or family }}" data-desktop-item-family="{{ material_previews[family].material_family or family }}">◇</span>
+              <p><strong>Próximo alvo disponível:</strong> {{ material_previews[family].name }} · {{ material_previews[family].rarity_label }}<small>Desbloqueio: nível de guilda {{ material_previews[family].required_level }}.</small></p>
+            </div>{% else %}<p class="gathering-target-empty" role="status">Nenhum material disponível para este posto no nível {{ guild.level }}. Nenhum item foi selecionado.</p>{% endif %}
             <p class="gathering-inventory-count">Armazenado: <strong data-gathering-family-count="{{ family }}">{{ inventory_by_family.get(family, 0) }}</strong></p>
             {% if workers %}
               <form method="post" action="/gathering/assign" class="gathering-assignment-form">
@@ -60,7 +68,7 @@
                 </select>
                 <label for="target-{{ family }}">Meta de unidades (opcional; vazio = contínua)</label>
                 <input id="target-{{ family }}" name="target_quantity" type="number" min="1" max="100000" inputmode="numeric">
-                <button type="submit">Designar para coleta</button>
+                <button type="submit" {% if not material_previews.get(family) %}disabled{% endif %}>Designar para coleta</button>
               </form>
             {% else %}
               <p>Não há mercenários disponíveis. Libere alguém de uma atividade para iniciar a coleta.</p>

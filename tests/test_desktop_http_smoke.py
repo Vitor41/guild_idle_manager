@@ -18,7 +18,7 @@ from unittest.mock import patch
 os.environ["APP_MODE"] = "desktop"
 from app.main import app
 from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
-from app.desktop.lifecycle import open_campaign
+from app.desktop.lifecycle import close_campaign, open_campaign
 from app.services.campaign_service import CampaignService
 from app.database.connection import SessionLocal, configure_database
 from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRunMember, GatheringAssignment, Guild, GuildBuilding, GuildResources,
@@ -26,7 +26,7 @@ from app.models import (CampaignMetadata, ClassChangeRun, DungeonRun, DungeonRun
     MissionRunMember, ProfessionTemplate, ProfessionTraining)
 from app.models.dungeon import DungeonTemplate
 from app.models.item import DungeonTemplateItemDrop
-from app.models.regional import RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome
+from app.models.regional import RegionalCpuCyclePlan, RegionalCycle, RegionalEvent, RegionalEventActivity, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome
 from app.models.mercenary import Mercenary
 from app.models.achievement import AchievementTemplate, GuildAchievement
 from app.models.item import GuildItemInstance
@@ -36,6 +36,7 @@ from app.models.tavern import TavernSpecialOffer
 from app.repositories.mercenary_repository import create_mercenary
 from app.services.regional_cycle_service import REGIONS, ensure_campaign_world, get_regional_board
 from app.services.regional_event_service import expire_due_events
+from app.services.equipment_service import RARITY_BONUS_RULES, get_item_bonus_rolls
 from sqlalchemy import select
 import uvicorn
 
@@ -107,9 +108,12 @@ with tempfile.TemporaryDirectory() as data_dir:
     with SessionLocal() as db:
         guild = db.query(Guild).first()
         mercenary_class = db.query(MercenaryClass).order_by(MercenaryClass.id).first()
-        item_template = db.query(ItemTemplate).filter(ItemTemplate.icon_group.is_not(None)).order_by(ItemTemplate.id).first()
+        item_template = db.query(ItemTemplate).filter(
+            ItemTemplate.icon_group.is_not(None), ItemTemplate.item_type == "material",
+        ).order_by(ItemTemplate.id).first()
         assert guild and mercenary_class and item_template, "campaign must seed display entities for the desktop art smoke"
         guild_id = guild.id
+        smoke_market_item_template_id = item_template.id
         mercenary_class_id = mercenary_class.id
         mercenary = create_mercenary(db, guild.id, mercenary_class, "Teste visual")
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
@@ -219,8 +223,12 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.flush()
         db.add_all([MissionRunMember(mission_run_id=mission_run.id, mercenary_id=mercenary.id),
             DungeonRunMember(dungeon_run_id=dungeon_run.id, mercenary_id=mercenary.id)])
-        db.add(MarketSale(guild_id=guild.id, item_template_id=item_template.id, quantity=1, unit_value=1,
-            total_value=1, started_at=now, ends_at=later))
+        smoke_market_sale = MarketSale(guild_id=guild.id, item_template_id=item_template.id, quantity=1, unit_value=1,
+            total_value=1, started_at=now, ends_at=later)
+        db.add(smoke_market_sale)
+        db.flush()
+        smoke_market_sale_id = smoke_market_sale.id
+        initial_market_gold = db.query(GuildResources).filter_by(guild_id=guild.id).one().gold
         db.add(ProfessionTraining(guild_id=guild.id, mercenary_id=mercenary.id, profession_id=profession.id,
             started_at=now, ends_at=later))
         db.add(ClassChangeRun(guild_id=guild.id, mercenary_id=mercenary.id, from_class_id=mercenary.class_id,
@@ -268,9 +276,53 @@ with tempfile.TemporaryDirectory() as data_dir:
             success=True,
             contribution=1,
         ))
+        home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
+        player_regional_state = db.query(RegionalGuildState).filter_by(
+            campaign_id=campaign.campaign_id, guild_id=guild.id,
+        ).one()
+        pending_portal = db.query(RegionalEvent).filter_by(
+            campaign_id=campaign.campaign_id, event_type="portal", region_code=home_region_code, status="active",
+        ).filter(RegionalEvent.expires_at_utc > now).order_by(RegionalEvent.expires_at_utc).first()
+        if pending_portal is None:
+            pending_portal = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="portal", region_code=home_region_code,
+                trigger_cycle_number=10000, rules_version="smoke",
+                seed="portal-notice-smoke", status="active", dungeon_template_id=dungeon_template.id,
+                created_at_utc=now, expires_at_utc=now + timedelta(hours=3), summary_json="{}",
+            )
+            db.add(pending_portal)
+            db.flush()
+        portal_notice_event_id = pending_portal.id
+        portal_notice_state_id = player_regional_state.id
         regional_outcome_region_code = outcome_state.region_code
         regional_outcome_guild_name = outcome_state.name
+        regional_outcome_state_id = outcome_state.id
+        outcome_offer_id = outcome_offer.id
         outcome_offer_type = outcome_offer.offer_type
+        cpu_comparison_state = db.query(RegionalGuildState).filter(
+            RegionalGuildState.campaign_id == campaign.campaign_id,
+            RegionalGuildState.region_code == outcome_state.region_code,
+            RegionalGuildState.guild_id.is_(None),
+            RegionalGuildState.id != outcome_state.id,
+            RegionalGuildState.active.is_(True),
+        ).order_by(RegionalGuildState.slot).first()
+        assert cpu_comparison_state is not None
+        cpu_plan = db.query(RegionalCpuCyclePlan).filter_by(
+            campaign_id=campaign.campaign_id, cycle_id=outcome_offer.cycle_id,
+            guild_state_id=cpu_comparison_state.id,
+        ).one_or_none()
+        if cpu_plan is None:
+            cpu_plan = RegionalCpuCyclePlan(
+                campaign_id=campaign.campaign_id, cycle_id=outcome_offer.cycle_id,
+                guild_state_id=cpu_comparison_state.id, seed="comparison-smoke",
+            )
+            db.add(cpu_plan)
+        cpu_plan.outcomes_json = json.dumps([{"offer_id": outcome_offer.id, "success": False}])
+        cpu_plan.successes = 0
+        cpu_plan.failures = 1
+        db.flush()
+        cpu_plan_id = cpu_plan.id
+        cpu_comparison_state_id = cpu_comparison_state.id
         db.commit()
 
     try:
@@ -296,7 +348,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert "RuntimeError: Falha de consulta da tela de atividades" in desktop_trace
         rendered_pages = {}
         regional_outcome_path = f"/regional/regions/{regional_outcome_region_code}"
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", regional_outcome_path, "/codex", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", regional_outcome_path, "/codex", "/guide", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
         for path in page_paths:
             if path in {"/dashboard", "/regional"}:
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
@@ -315,8 +367,61 @@ with tempfile.TemporaryDirectory() as data_dir:
         result_column = {"contract": 3, "dungeon": 4, "boss": 5}[outcome_offer_type]
         assert outcome_cells[result_column] == b"1", outcome_cells
         assert outcome_cells[6] == b"1 " + bytes([194, 183]) + b" 0", outcome_cells
+        comparison_status, _comparison_location, comparison_body = request(
+            f"/regional/regions/{regional_outcome_region_code}/comparison"
+        )
+        comparison_payload = json.loads(comparison_body)
+        assert comparison_status == 200 and comparison_payload["guilds"][str(regional_outcome_state_id)]["results"]["successes"] == 1
+        cpu_results = comparison_payload["guilds"][str(cpu_comparison_state_id)]["results"]
+        assert cpu_results["contracts"] == 1 and cpu_results["failures"] == 1, cpu_results
+        with SessionLocal() as db:
+            refreshed_plan = db.get(RegionalCpuCyclePlan, cpu_plan_id)
+            refreshed_plan.outcomes_json = json.dumps([{"offer_id": outcome_offer_id, "success": True}])
+            refreshed_plan.successes = 1
+            refreshed_plan.failures = 0
+            db.commit()
+        live_status, _live_location, live_body = request(
+            f"/regional/regions/{regional_outcome_region_code}/comparison"
+        )
+        live_results = json.loads(live_body)["guilds"][str(cpu_comparison_state_id)]["results"]
+        assert live_status == 200 and live_results["successes"] == 1 and live_results["failures"] == 0, live_results
+        close_campaign(app, saves, guard)
+        isolation_campaign = saves.create_campaign("Smoke isolamento", "Guilda isolamento")
+        open_campaign(app, saves, guard, isolation_campaign.campaign_id)
+        isolated_status, _isolated_location, isolated_body = request(
+            f"/regional/regions/{regional_outcome_region_code}/comparison"
+        )
+        isolated_payload = json.loads(isolated_body)
+        assert isolated_status == 200, (isolated_status, isolated_payload)
+        assert isolated_payload["guilds"][str(cpu_comparison_state_id)]["results"]["contracts"] == 0, isolated_payload
+        close_campaign(app, saves, guard)
+        open_campaign(app, saves, guard, campaign.campaign_id)
         assert b"data-market-fill-max" in rendered_pages["/market"]
+        assert b"alvo fica fixo at\xc3\xa9 liberar o trabalhador" in rendered_pages["/guide"]
+        assert b"cancelar antes do prazo" in rendered_pages["/guide"]
         assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
+        assert b">Tempo base por raridade<" in rendered_pages["/market"]
+        assert b"data-market-estimate" in rendered_pages["/market"]
+        assert b"/market/" + str(smoke_market_sale_id).encode("ascii") + b"/cancel" in rendered_pages["/market"]
+        assert b"T1\xe2\x80\x93T8" not in rendered_pages["/market"] and b"T1-T8" not in rendered_pages["/market"]
+        for duration in (b"10 s por unidade", b"25 s por unidade", b"60 s por unidade", b"180 s por unidade", b"600 s por unidade", b"1200 s por unidade"):
+            assert duration in rendered_pages["/market"], duration
+        assert b"Pr\xc3\xb3ximo alvo dispon\xc3\xadvel" in rendered_pages["/gathering"]
+
+        cancel_status, cancel_location, cancel_body = request(
+            f"/market/{smoke_market_sale_id}/cancel", method="POST",
+        )
+        assert cancel_status == 303 and "Venda%20cancelada" in cancel_location, (cancel_status, cancel_location, cancel_body[:400])
+        with SessionLocal() as db:
+            cancelled_sale = db.get(MarketSale, smoke_market_sale_id)
+            assert cancelled_sale.status == "cancelled" and cancelled_sale.cancelled_at is not None
+            assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == initial_market_gold
+            assert db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=smoke_market_item_template_id,
+            ).one().quantity >= 2
+            assert db.query(MarketSale).filter_by(guild_id=guild_id, status="in_progress").count() == 0
+        cancelled_market_status, _cancelled_market_location, cancelled_market_body = request("/market")
+        assert cancelled_market_status == 200 and b"Cancelada \xc2\xb7 itens devolvidos" in cancelled_market_body
 
         with SessionLocal() as db:
             db.query(GuildBuilding).filter_by(guild_id=guild_id).delete(synchronize_session=False)
@@ -535,6 +640,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         with SessionLocal() as db:
             assignment = db.query(GatheringAssignment).filter_by(mercenary_id=gathering_worker_id, resource_family="wood").one_or_none()
             assert assignment is not None, "gathering form POST must persist its worker assignment"
+            assert assignment.target_item_template_id is not None, "new assignment must persist its exact material target"
+            wood_target_id = assignment.target_item_template_id
             gathering_worker = db.get(Mercenary, gathering_worker_id)
             assert gathering_worker.status == "gathering"
             from app.services.gathering_service import advance_all_assignments
@@ -546,6 +653,18 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.commit()
             db.refresh(assignment)
             assert assignment.cycle_count == 1 and assignment.progress_seconds == 0
+            assert assignment.target_item_template_id == wood_target_id
+
+        with SessionLocal() as db:
+            db.get(Guild, guild_id).level = 7
+            db.commit()
+        stable_gathering_status, _stable_gathering_location, stable_gathering_body = request("/gathering")
+        assert stable_gathering_status == 200 and b"Alvo desta designa\xc3\xa7\xc3\xa3o" in stable_gathering_body
+        with SessionLocal() as db:
+            assignment = db.query(GatheringAssignment).filter_by(mercenary_id=gathering_worker_id).one()
+            assert assignment.target_item_template_id == wood_target_id
+            db.get(Guild, guild_id).level = 1
+            db.commit()
 
         with SessionLocal() as db:
             assignment = db.query(GatheringAssignment).filter_by(
@@ -596,6 +715,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert live_status == 200, live_body[:300]
         assert live_payload["advanced"]["leather"]["cycles"] == 1, live_payload
         assert live_payload["inventory_by_family"]["leather"] == 1, live_payload
+        assert live_payload["assignments"]["leather"]["target_item_template_id"] is not None
+        assert live_payload["assignments"]["leather"]["target_item_name"]
         with SessionLocal() as db:
             wood_assignment = db.query(GatheringAssignment).filter_by(
                 mercenary_id=gathering_worker_id, resource_family="wood",
@@ -736,9 +857,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         supply_script_status, _location, supply_script = request("/static/js/regional-supply.js")
         assert supply_script_status == 200 and b'select[name="run_multiplier"]' in supply_script
         dashboard_with_invite = rendered_pages["/dashboard"]
-        assert b'data-regional-rebellion-auto-open' in dashboard_with_invite
-        assert b'value="accept"' in dashboard_with_invite and b'value="decline"' in dashboard_with_invite
-        assert b'href="/regional#events-title"' in dashboard_with_invite
+        assert b'data-regional-event-notice' not in dashboard_with_invite
+        assert b'value="accept"' not in dashboard_with_invite and b'value="decline"' not in dashboard_with_invite
+        assert b'href="/regional"' in dashboard_with_invite
         assert b'href="/gathering"' in dashboard_with_invite
         assert b'href="/codex"' in dashboard_with_invite
         assert b"Conquistas e C\xc3\xb3dex" in rendered_pages["/codex"]
@@ -786,6 +907,30 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
         assert b'/static/js/evolution-dialogs.js?v=20261030-2' in dashboard_with_invite
+        assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
+        regional_notice_status, _notice_location, regional_notice_body = request("/regional")
+        assert regional_notice_status == 200
+        assert b'id="regional-rebellion-notice"' in regional_notice_body
+        assert b"Aceitar convite" in regional_notice_body and b"Delegar \xc3\xa0 CPU" in regional_notice_body
+        assert b"regional-rebellion.webp" in regional_notice_body and b"rebellion-shield.png" in regional_notice_body
+        assert b'id="regional-portal-notice"' in regional_notice_body
+        assert b"dimensional-portal.webp" in regional_notice_body and b"portal-gate.png" in regional_notice_body
+        portal_dialog = re.search(rb'<dialog[^>]*id="regional-portal-notice".*?</dialog>', regional_notice_body, re.S)
+        assert portal_dialog and b"Enviar equipe" not in portal_dialog.group(0)
+        assert b"Ver equipe e portal" in portal_dialog.group(0)
+        with SessionLocal() as db:
+            db.add(RegionalEventParticipant(
+                event_id=portal_notice_event_id, guild_state_id=portal_notice_state_id, status="participating",
+            ))
+            db.commit()
+        used_portal_status, _used_portal_location, used_portal_body = request("/regional")
+        assert used_portal_status == 200 and b'id="regional-portal-notice"' not in used_portal_body
+        with SessionLocal() as db:
+            expired_portal = db.get(RegionalEvent, portal_notice_event_id)
+            expired_portal.expires_at_utc = datetime.now(timezone.utc) - timedelta(seconds=5)
+            db.commit()
+        expired_portal_status, _expired_portal_location, expired_portal_body = request("/regional")
+        assert expired_portal_status == 200 and b'id="regional-portal-notice"' not in expired_portal_body
         with SessionLocal() as db:
             invite_event = db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion", status="active",
@@ -804,7 +949,9 @@ with tempfile.TemporaryDirectory() as data_dir:
             ).one()
             assert invited_participant.status == "invited"
         repeat_status, _location, repeat_dashboard = request("/dashboard")
-        assert repeat_status == 200 and b'data-regional-rebellion-auto-open' in repeat_dashboard
+        assert repeat_status == 200 and b'data-regional-event-notice' not in repeat_dashboard
+        repeat_regional_status, _location, repeat_regional = request("/regional")
+        assert repeat_regional_status == 200 and b'id="regional-rebellion-notice"' in repeat_regional
         with SessionLocal() as db:
             assert db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion",
@@ -819,7 +966,9 @@ with tempfile.TemporaryDirectory() as data_dir:
             invited_participant = db.query(RegionalEventParticipant).filter_by(event_id=invite_event_id).one()
             assert invite_event.player_decision == "accept" and invited_participant.status == "accepted"
         post_decision_status, _location, post_decision_dashboard = request("/dashboard")
-        assert post_decision_status == 200 and b'data-regional-rebellion-auto-open' not in post_decision_dashboard
+        assert post_decision_status == 200 and b'data-regional-event-notice' not in post_decision_dashboard
+        post_decision_regional_status, _location, post_decision_regional = request("/regional")
+        assert post_decision_regional_status == 200 and b'id="regional-rebellion-notice"' not in post_decision_regional
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
         assert b"/css/desktop-theme.css?v=20261027-1" in rendered_pages["/dashboard"]
         assert b'desktop-resource-row' in rendered_pages["/dashboard"]
@@ -1034,8 +1183,24 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert portal_instance.required_level == portal_item_snapshot["required_level"]
             assert portal_instance.bonus_power == portal_item_snapshot["bonus_power"]
             assert portal_instance.bonus_vitality == portal_item_snapshot["bonus_vitality"]
-            if portal_item_snapshot["rng_bonus_max"] > 0:
-                assert portal_item_snapshot["rng_bonus_min"] <= portal_instance.rng_bonus_value <= portal_item_snapshot["rng_bonus_max"]
+            min_types, max_types, min_points, max_points = RARITY_BONUS_RULES[portal_item_snapshot["rarity"]]
+            portal_bonus_rolls = get_item_bonus_rolls(portal_instance)
+            assert min_types <= len(portal_bonus_rolls) <= max_types
+            bonus_keys = {(roll["kind"], roll["attribute"]) for roll in portal_bonus_rolls}
+            assert len(bonus_keys) == len(portal_bonus_rolls)
+            for bonus_roll in portal_bonus_rolls:
+                if bonus_roll["kind"] == "normal":
+                    assert min_points <= bonus_roll["value"] <= max_points
+                else:
+                    assert bonus_roll["kind"] == "strong"
+                    assert 10 <= bonus_roll["value"] <= 20
+            strong_rolls = [roll for roll in portal_bonus_rolls if roll["kind"] == "strong"]
+            if portal_item_snapshot["rarity"] == "legendary":
+                assert len(strong_rolls) == 1
+            elif portal_item_snapshot["rarity"] == "mythic":
+                assert 2 <= len(strong_rolls) <= 4
+            else:
+                assert strong_rolls == []
             expire_due_events(db, campaign.campaign_id, portal_event.expires_at_utc)
             db.refresh(portal_event)
             portal_summary = json.loads(portal_event.summary_json)

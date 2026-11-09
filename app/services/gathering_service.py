@@ -41,7 +41,11 @@ def _utc(value: datetime) -> datetime:
 def list_assignments(db: Session, guild_id: int) -> list[GatheringAssignment]:
     return list(db.scalars(
         select(GatheringAssignment)
-        .options(joinedload(GatheringAssignment.mercenary), joinedload(GatheringAssignment.mercenary, Mercenary.profession))
+        .options(
+            joinedload(GatheringAssignment.mercenary),
+            joinedload(GatheringAssignment.mercenary, Mercenary.profession),
+            joinedload(GatheringAssignment.target_item_template),
+        )
         .where(GatheringAssignment.guild_id == guild_id)
         .order_by(GatheringAssignment.resource_family)
     ))
@@ -54,14 +58,45 @@ def _material_template(db: Session, family: str, guild_level: int) -> ItemTempla
             ItemTemplate.item_type == "material",
             ItemTemplate.material_family == family,
             ItemTemplate.is_active.is_(True),
+            ItemTemplate.required_level <= max(1, guild_level),
             ItemTemplate.item_level <= max(1, guild_level),
         )
-        .order_by(ItemTemplate.item_level.desc(), ItemTemplate.tier.desc(), ItemTemplate.id)
-    ) or db.scalar(
-        select(ItemTemplate)
-        .where(ItemTemplate.item_type == "material", ItemTemplate.material_family == family, ItemTemplate.is_active.is_(True))
-        .order_by(ItemTemplate.item_level, ItemTemplate.tier, ItemTemplate.id)
+        .order_by(
+            ItemTemplate.required_level.desc(), ItemTemplate.item_level.desc(),
+            ItemTemplate.tier.desc(), ItemTemplate.id,
+        )
     )
+
+
+def preview_material_for_family(db: Session, family: str, guild_level: int) -> ItemTemplate | None:
+    """Return only an actually active and unlocked material for this post."""
+    if family not in RESOURCE_FAMILIES:
+        return None
+    return _material_template(db, family, guild_level)
+
+
+def freeze_legacy_assignment_targets(db: Session) -> int:
+    """Backfill one deterministic eligible target for each legacy assignment."""
+    frozen = 0
+    assignments = db.scalars(
+        select(GatheringAssignment)
+        .where(GatheringAssignment.target_item_template_id.is_(None))
+        .order_by(GatheringAssignment.id)
+    )
+    for assignment in assignments:
+        guild = db.get(Guild, assignment.guild_id)
+        if guild is None:
+            continue
+        template = _material_template(db, assignment.resource_family, guild.level)
+        if template is None:
+            continue
+        assignment.target_item_template_id = template.id
+        assignment.target_item_template = template
+        db.add(assignment)
+        frozen += 1
+    if frozen:
+        db.flush()
+    return frozen
 
 
 def get_inventory_quantity_by_family(db: Session, guild_id: int) -> dict[str, int]:
@@ -89,7 +124,8 @@ def assign_worker(
 ) -> GatheringAssignment:
     if resource_family not in RESOURCE_FAMILIES:
         raise ValueError("Escolha uma família de recurso disponível para coleta.")
-    if _material_template(db, resource_family, guild.level) is None:
+    target_template = _material_template(db, resource_family, guild.level)
+    if target_template is None:
         raise ValueError(
             f"O material de {FAMILY_LABELS[resource_family]} não está disponível no catálogo. "
             "Nenhum trabalhador foi designado; verifique Atualizações ou contate o suporte."
@@ -113,6 +149,7 @@ def assign_worker(
     assignment = GatheringAssignment(
         guild_id=guild.id,
         mercenary_id=mercenary.id,
+        target_item_template_id=target_template.id,
         resource_family=resource_family,
         node_code=NODE_CODES[resource_family],
         progress_seconds=0,
@@ -160,7 +197,17 @@ def advance_assignment(
     elapsed = max(0, floor((timestamp - _utc(assignment.checkpoint_at_utc)).total_seconds()))
     if max_seconds is not None:
         elapsed = min(elapsed, max(0, max_seconds))
-    template = _material_template(db, assignment.resource_family, guild.level)
+    template = assignment.target_item_template
+    if template is None and assignment.target_item_template_id is not None:
+        template = db.get(ItemTemplate, assignment.target_item_template_id)
+        assignment.target_item_template = template
+    if template is None and assignment.target_item_template_id is None:
+        # Legacy active assignments are frozen deterministically on first use.
+        template = _material_template(db, assignment.resource_family, guild.level)
+        if template is not None:
+            assignment.target_item_template = template
+            assignment.target_item_template_id = template.id
+            db.add(assignment)
     produced = 0
     stored = 0
     discarded = 0

@@ -285,6 +285,11 @@ def save_admin_item(db: Session, form: dict[str, str], item_template: ItemTempla
         raise AdminItemError("Campos numericos de equipamento invalidos.") from exc
 
     equipment_slot = normalize_equipment_slot(form.get("equipment_slot", "").strip()) or None
+    # These stored columns remain for save/admin compatibility. New instance RNG is
+    # controlled by rarity; editing an item must not silently rewrite legacy values.
+    if item_template is not None:
+        rng_bonus_min = item_template.rng_bonus_min
+        rng_bonus_max = item_template.rng_bonus_max
     if item_type == "equipment":
         if equipment_slot not in EQUIPMENT_SLOTS:
             raise AdminItemError("Slot de equipamento invalido ou obrigatorio.")

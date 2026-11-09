@@ -24,6 +24,7 @@ from app.repositories.salvage_repository import (
 )
 from app.services.inventory_capacity_service import add_inventory_quantity_capped
 from app.services.building_service import get_building_level
+from app.services.equipment_service import annotate_item_bonus_view
 from app.services.display_service import clean_generated_name
 
 
@@ -120,6 +121,14 @@ def get_salvage_context(db: Session, guild: Guild, blacksmith_level: int) -> dic
             "unit_duration_seconds": salvage_duration_seconds(
                 item.item_template.rarity, item.item_template.tier, 1
             ),
+            "instances": [],
+        })
+        annotate_item_bonus_view(item)
+        group["instances"].append({
+            "id": item.id,
+            "strong_summary": ", ".join(
+                f"FORTE {roll['label']} +{roll['value']}" for roll in item.strong_bonuses_view
+            ) or "sem bônus FORTE",
         })
         group["quantity"] = int(group["quantity"]) + 1
     slots = []

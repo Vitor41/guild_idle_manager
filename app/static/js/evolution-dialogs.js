@@ -15,9 +15,13 @@ document.querySelectorAll(".evolution-dialog").forEach((dialog) => {
   });
 });
 
-document.querySelectorAll("dialog[data-regional-rebellion-auto-open]").forEach((dialog) => {
-  if (dialog instanceof HTMLDialogElement) window.GIMStartupModalQueue?.enqueue(dialog, 2);
-});
+window.GIMEnqueueRegionalNotice = (dialog) => {
+  if (!(dialog instanceof HTMLDialogElement)) return;
+  const rawDeadline = dialog.dataset.eventDeadline || "";
+  const deadline = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(rawDeadline) ? rawDeadline : `${rawDeadline}Z`);
+  window.GIMStartupModalQueue?.enqueue(dialog, 2, deadline);
+};
+document.querySelectorAll("dialog[data-regional-event-notice]").forEach(window.GIMEnqueueRegionalNotice);
 
 document.querySelectorAll(".evolution-page img").forEach((image) => {
   const fallback = () => {

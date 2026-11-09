@@ -1,0 +1,10 @@
+# ML-029 E2 — checkpoint pré-edição
+
+- **Base confirmada:** `2144fe302d3835e8594650e65486a1f36caec923`.
+- **Branch:** `feature/lot-e2-mission-power-balance`, criada na base exata acima.
+- **Escopo:** somente ML-029; sem UI, build, instalação, push, PR, merge ou publicação.
+- **Estado prévio preservado:** `AGENTS.md`, alterações preexistentes em `ML-BUGS.md` e todos os arquivos não rastreados foram mantidos. Os bancos da suíte ficam em pasta temporária isolada no checkout.
+- **Baseline de teste:** `.venv-desktop/Scripts/python.exe -m unittest tests.test_regional_cycle_service` — 8 testes passaram em 160,419 s após redirecionar `%TEMP%` e `%TMP%` para `.lot-e2-test-tmp` e aplicar o workaround de plataforma por `sitecustomize.py` fora do projeto. A primeira tentativa no `%TEMP%` padrão falhou em 5 casos com `sqlite3.OperationalError: unable to open database file`; a repetição isolada passou.
+- **Código de referência localizado:** `tavern_service.py` limita Aprendiz Comum a 1–7 em cada um dos cinco atributos e ao poder 1–18; `calculate_power_score()` define o poder. `progression_service.py` dá ao Aprendiz +2 FOR/+2 VIT/+1 AGI/+1 INT/+1 SOR por nível, e o bônus de progressão Comum é 0%. Evolução de classe depende da classe-alvo/transição e adiciona deltas positivos dos atributos-base; não existe uma única trilha canônica de evolução para usar como a curva-base.
+- **Snapshot e chance:** novos `RegionalOffer` são materializados em `_add_offer()`; poder, chance, rank e requisitos ficam persistidos em colunas snapshot. As resoluções consultam esses snapshots. Para missões normais, `mission_service` combina poder de grupo, ajuste por poder, classe, raridade e skills; equipamento entra no poder efetivo, e suprimento aplica até +5 p.p. respeitando teto 95%. Missões `gathering` e `long_idle` não usam o contrato regional de combate alvo.
+- **Próxima análise:** gerar por serviço/curva real os 350 níveis, comparar baseline contra pelo menos duas tabelas de multiplicadores em E–S, avaliar solo e grupo (incluindo C18, grupo 1–2), chance/suprimento/cap, e decidir parâmetro somente após a tabela demonstrar acesso early game.

@@ -1,0 +1,6 @@
+test_gameplay_pages_and_mutations_work_through_loopback_without_http_sessions (tests.test_desktop_http_smoke.DesktopHttpSmokeTests.test_gameplay_pages_and_mutations_work_through_loopback_without_http_sessions) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 62.477s
+
+OK

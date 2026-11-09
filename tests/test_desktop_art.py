@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +16,93 @@ ART_ROOT = STATIC / "assets" / "desktop"
 
 
 class DesktopArtIntegrationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the JavaScript identity regression.")
+    def test_regional_notice_replaces_a_different_event_of_the_same_type(self):
+        script = r"""
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const match = source.match(/function regionalNoticeMatches\(current, replacement\) \{[\s\S]*?\n\}/);
+if (!match) throw new Error('regionalNoticeMatches helper is missing');
+const matches = new Function(`${match[0]}; return regionalNoticeMatches;`)();
+const first = {dataset: {eventId: 'event-a', eventDeadline: '2030-01-01T01:00:00Z'}};
+const sameEvent = {dataset: {eventId: 'event-a', eventDeadline: '2030-01-01T01:00:00Z'}};
+const nextEvent = {dataset: {eventId: 'event-b', eventDeadline: '2030-01-01T02:00:00Z'}};
+const changedDeadline = {dataset: {eventId: 'event-a', eventDeadline: '2030-01-01T03:00:00Z'}};
+if (!matches(first, sameEvent) || matches(first, nextEvent) || matches(first, changedDeadline)) process.exit(1);
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(STATIC / "js" / "main.js")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the market estimate regression.")
+    def test_market_estimates_initialize_for_replaced_game_content(self):
+        main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
+        replacement = main.split("function replaceGameContent(", 1)[1].split("function regionalNoticeMatches(", 1)[0]
+        self.assertLess(replacement.index("currentMain.innerHTML = incomingMain.innerHTML"), replacement.index("initializeMarketEstimates(currentMain)"))
+
+        script = r"""
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const format = source.match(/const formatMarketEstimate = \(seconds\) => \{[\s\S]*?\n\};/);
+const update = source.match(/function updateMarketEstimate\(node\) \{[\s\S]*?\n\}/);
+const initialize = source.match(/function initializeMarketEstimates\(root = document\) \{[\s\S]*?\n\}/);
+if (!format || !update || !initialize) throw new Error('Market estimate helpers are missing');
+const initializeMarketEstimates = new Function(`${format[0]}; ${update[0]}; ${initialize[0]}; return initializeMarketEstimates;`)();
+const node = {dataset: {durationBase: '10', timeReduction: '20'}, textContent: '', closest: () => form};
+const quantity = {value: '3'};
+const form = {dataset: {}, querySelector: () => quantity, querySelectorAll: () => [node]};
+const replacementRoot = {querySelectorAll: (selector) => selector === '[data-market-estimate]' ? [node] : []};
+initializeMarketEstimates(replacementRoot);
+if (!node.textContent.includes('prazo estimado: 24 s.')) throw new Error(node.textContent);
+""";
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(STATIC / "js" / "main.js")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_desktop_art_reapplies_to_replaced_game_content_without_duplicate_decorations(self):
+        script = (STATIC / "js" / "desktop-art.js").read_text(encoding="utf-8")
+        main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
+
+        self.assertIn("window.GIMApplyDesktopArt = applyDesktopArt", script)
+        self.assertIn("async function applyDesktopArt(root = document)", script)
+        self.assertIn('element.querySelector(".desktop-entity-art")', script)
+        self.assertIn('element.querySelector(".desktop-resource-art")', script)
+        self.assertIn('window.GIMApplyDesktopArt?.(currentMain)', main)
+
+    def test_regional_event_notices_use_persisted_pending_states_and_reenter_vigil(self):
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        main = (STATIC / "js" / "main.js").read_text(encoding="utf-8")
+        dialogs = (STATIC / "js" / "evolution-dialogs.js").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+
+        self.assertIn("request.url.path == '/regional' and pending_rebellion_invite", base)
+        self.assertIn("request.url.path == '/regional' and pending_portal_notice", base)
+        for asset in ("regional-rebellion.webp", "rebellion-shield.png", "dimensional-portal.webp", "portal-gate.png"):
+            self.assertIn(asset, base)
+        self.assertIn("Aceitar convite", base)
+        self.assertIn("Delegar à CPU", base)
+        portal_dialog = base.split('id="regional-portal-notice"', 1)[1].split("</dialog>", 1)[0]
+        self.assertNotIn('name="decision"', portal_dialog)
+        self.assertIn("uma entrada", portal_dialog)
+        self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument)", main)
+        self.assertIn("window.GIMEnqueueRegionalNotice?.(dialog)", main)
+        self.assertIn("regionalNoticeMatches(current, replacement)", main)
+        self.assertIn("GIMStartupModalQueue?.remove(current)", main)
+        self.assertIn("deadline - right.deadline", main)
+        self.assertIn('setInterval(() => {\n    if (!tableBody.isConnected) return;', main)
+        self.assertIn('document.visibilityState === "hidden"', main)
+        self.assertIn("dialog.dataset.eventDeadline", dialogs)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", theme)
+        self.assertIn(".regional-event-notice *", theme)
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
