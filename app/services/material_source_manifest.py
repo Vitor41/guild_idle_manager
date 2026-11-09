@@ -2,6 +2,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.game_balance import GUILD_MAX_LEVEL
+from app.models.building import BuildingTemplate
 from app.models.crafting import CraftingRecipe, CraftingRecipeMaterial
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.dungeon import DungeonTemplate
@@ -9,10 +11,25 @@ from app.models.item import DungeonTemplateItemDrop, ItemTemplate, MissionTempla
 from app.models.mission import MissionTemplate
 from app.services.display_service import clean_generated_name
 from app.services.economy_pricing_service import effective_dock_unit_price
+from app.services.building_balance_service import BUILDING_MAX_LEVEL, docks_values, required_guild_level_for_upgrade
 from app.services.gathering_service import preview_material_for_family
 from app.services.salvage_service import _select_salvage_material, salvage_material_family
 
 MAX_GATHERING_GUILD_LEVEL = 350
+
+
+def max_reachable_docks_catalog_level(db: Session) -> int:
+    """Compute the highest live offer level the runtime can expose through Dock upgrades."""
+    template = db.scalar(select(BuildingTemplate).where(
+        BuildingTemplate.effect_type == "docks", BuildingTemplate.is_active.is_(True)
+    ))
+    if template is None or int(template.required_guild_level or 1) > GUILD_MAX_LEVEL:
+        return 0
+    max_building_level = min(BUILDING_MAX_LEVEL, max(0, int(template.max_level or 0)))
+    while (max_building_level > 0 and required_guild_level_for_upgrade(
+            max_building_level, int(template.required_guild_level or 1)) > GUILD_MAX_LEVEL):
+        max_building_level -= 1
+    return int(docks_values(max_building_level)["catalog_level"])
 
 
 def build_material_source_manifest(db: Session, guild_level: int | None = None, guild_id: int | None = None) -> dict:
@@ -84,17 +101,20 @@ def build_material_source_manifest(db: Session, guild_level: int | None = None, 
                 "min_mercenary_level": dungeon.required_min_mercenary_level,
                 "condition": "atividade concluída com sucesso; chance pode receber modificadores",
                 "provenance": "live DungeonTemplateItemDrop + DungeonTemplate"})
+    max_dock_catalog_level = max_reachable_docks_catalog_level(db)
     for offer, merchant, item_template in db.execute(select(MerchantOfferTemplate, MerchantTemplate, ItemTemplate)
         .join(MerchantTemplate, MerchantTemplate.id == MerchantOfferTemplate.merchant_template_id)
         .join(ItemTemplate, ItemTemplate.id == MerchantOfferTemplate.item_template_id)
         .where(MerchantOfferTemplate.is_active.is_(True), MerchantTemplate.is_active.is_(True))):
-        if (offer.item_template_id in rows and offer.min_stock >= 1
+        required_dock_catalog_level = max(offer.min_dock_level, merchant.min_dock_level)
+        if (offer.item_template_id in rows and required_dock_catalog_level <= max_dock_catalog_level
+                and offer.min_stock >= 1
                 and offer.max_stock >= offer.min_stock and offer.base_price > 0):
             rows[offer.item_template_id]["sources"].append({"type": "docks_possible_offer",
                 "merchant": clean_generated_name(merchant.name), "base_price": offer.base_price,
                 "effective_unit_price": effective_dock_unit_price(offer.base_price, item_template.base_sell_value),
                 "stock_range": [offer.min_stock, offer.max_stock],
-                "weight": offer.weight, "min_dock_level": max(offer.min_dock_level, merchant.min_dock_level),
+                "weight": offer.weight, "min_dock_level": required_dock_catalog_level,
                 "condition": "oferta possível conforme rotação e nível do cais; peso não é probabilidade",
                 "provenance": "live MerchantOfferTemplate + MerchantTemplate"})
     if guild_id is not None:

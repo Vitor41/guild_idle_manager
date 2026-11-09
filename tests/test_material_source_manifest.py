@@ -1,15 +1,18 @@
 import unittest
 
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.models.crafting import CraftingRecipe, CraftingRecipeMaterial
+from app.core.game_balance import GUILD_MAX_LEVEL
 from app.database.connection import Base, create_database_engine
+from app.models.building import BuildingTemplate
+from app.models.crafting import CraftingRecipe, CraftingRecipeMaterial
+from app.models.dock import MerchantOfferTemplate, MerchantTemplate
 from app.models.item import ItemTemplate
 from app.seeds.massive_content import run_massive_content_seed
-from app.services.crafting_service import seed_crafting_recipes
-from app.services.material_source_manifest import build_material_source_manifest
-from app.services.crafting_service import _obtainable_material_template_ids
+from app.services.crafting_service import _obtainable_material_template_ids, seed_crafting_recipes
+from app.services.guide_catalog_service import build_guide_catalog
+from app.services.material_source_manifest import build_material_source_manifest, max_reachable_docks_catalog_level
 
 
 class MaterialSourceManifestTests(unittest.TestCase):
@@ -85,6 +88,82 @@ class MaterialSourceManifestTests(unittest.TestCase):
                 self.assertEqual(row["sources"], [])
                 self.assertTrue(any(dep["type"] == "workshop_input" for dep in row["dependencies"]))
                 self.assertEqual([item["id"] for item in manifest["gaps"]], [input_only.id])
+        finally:
+            engine.dispose()
+
+    def test_dock_offer_above_runtime_catalog_limit_is_gap_and_not_crafting_source(self):
+        engine = create_database_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        try:
+            with Session(engine) as db:
+                docks = BuildingTemplate(name="Docas", description="", effect_type="docks",
+                    max_level=100, required_guild_level=1, is_active=True)
+                material = ItemTemplate(name="Catalisador restrito", description="", item_type="material",
+                    rarity="common", material_family="catalyst", item_level=1, required_level=1,
+                    level_band="1-20", tier=1, is_active=True)
+                output = ItemTemplate(name="Equipamento de teste", description="", item_type="equipment",
+                    rarity="common", item_level=1, required_level=1, level_band="1-20", tier=1,
+                    equipment_slot="main_hand", is_active=True)
+                merchant = MerchantTemplate(slug="mercante-restrito", name="Mercante restrito",
+                    merchant_type="rare", min_dock_level=1, is_active=True)
+                db.add_all([docks, material, output, merchant])
+                db.flush()
+                db.add(MerchantOfferTemplate(merchant_template_id=merchant.id, item_template_id=material.id,
+                    base_price=100, min_stock=1, max_stock=2, min_dock_level=21, is_active=True))
+                db.commit()
+
+                self.assertEqual(max_reachable_docks_catalog_level(db), 20)
+                manifest = build_material_source_manifest(db)
+                row = next(row for row in manifest["materials"] if row["item"]["id"] == material.id)
+                self.assertEqual(row["sources"], [])
+                self.assertIn(material.id, {item["id"] for item in manifest["gaps"]})
+                self.assertNotIn(material.id, _obtainable_material_template_ids(db))
+                catalog_item = next(item for item in build_guide_catalog(db)["items"] if item["id"] == material.id)
+                self.assertEqual(catalog_item["sources"], [])
+                seed_crafting_recipes(db)
+                self.assertEqual(db.scalar(select(CraftingRecipe.id).where(CraftingRecipe.is_active.is_(True))), None)
+
+                merchant_locked = MerchantTemplate(slug="mercante-fora-do-limite", name="Mercante fora do limite",
+                    merchant_type="rare", min_dock_level=21, is_active=True)
+                merchant_material = ItemTemplate(name="Material de mercante restrito", description="",
+                    item_type="material", rarity="common", material_family="catalyst", item_level=1,
+                    required_level=1, level_band="1-20", tier=1, is_active=True)
+                db.add_all([merchant_locked, merchant_material])
+                db.flush()
+                db.add(MerchantOfferTemplate(merchant_template_id=merchant_locked.id,
+                    item_template_id=merchant_material.id, base_price=100, min_stock=1, max_stock=2,
+                    min_dock_level=1, is_active=True))
+                db.flush()
+                merchant_manifest = build_material_source_manifest(db)
+                merchant_row = next(row for row in merchant_manifest["materials"] if row["item"]["id"] == merchant_material.id)
+                self.assertEqual(merchant_row["sources"], [])
+                self.assertNotIn(merchant_material.id, _obtainable_material_template_ids(db))
+
+                docks.max_level = 50
+                configured_material = ItemTemplate(name="Material além do cais configurado", description="",
+                    item_type="material", rarity="common", material_family="catalyst", item_level=2,
+                    required_level=2, level_band="1-20", tier=1, is_active=True)
+                db.add(configured_material)
+                db.flush()
+                db.add(MerchantOfferTemplate(merchant_template_id=merchant.id, item_template_id=configured_material.id,
+                    base_price=100, min_stock=1, max_stock=2, min_dock_level=11, is_active=True))
+                db.flush()
+                self.assertEqual(max_reachable_docks_catalog_level(db), 10)
+                configured_manifest = build_material_source_manifest(db)
+                configured_row = next(row for row in configured_manifest["materials"] if row["item"]["id"] == configured_material.id)
+                self.assertEqual(configured_row["sources"], [])
+                self.assertIn(configured_material.id, {item["id"] for item in configured_manifest["gaps"]})
+                self.assertNotIn(configured_material.id, _obtainable_material_template_ids(db))
+                seed_crafting_recipes(db)
+                self.assertEqual(db.scalar(select(CraftingRecipe.id).where(CraftingRecipe.is_active.is_(True))), None)
+
+                docks.required_guild_level = GUILD_MAX_LEVEL + 1
+                self.assertEqual(max_reachable_docks_catalog_level(db), 0)
+                guild_locked_manifest = build_material_source_manifest(db)
+                guild_locked_row = next(row for row in guild_locked_manifest["materials"]
+                    if row["item"]["id"] == material.id)
+                self.assertEqual(guild_locked_row["sources"], [])
+                self.assertNotIn(material.id, _obtainable_material_template_ids(db))
         finally:
             engine.dispose()
 

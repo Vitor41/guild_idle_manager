@@ -12,7 +12,7 @@ Consumidor: Lote D, Wiki/Guia. O serviço `app.services.material_source_manifest
 ## Semântica das fontes
 
 - `mission` e `dungeon_or_boss`: chance base e faixa de quantidade da tabela de drop ativa; só após sucesso, sujeita aos modificadores do gameplay. Os templates registram nível mínimo, requisito de edifício e nível mínimo do mercenário para contextualizar disponibilidade. A chance configurada não é chance total incondicional.
-- `docks_possible_offer`: oferta-template ativa, preço-base, faixa de estoque, nível mínimo e peso de seleção. Peso não é convertido em probabilidade.
+- `docks_possible_offer`: oferta-template ativa e alcançável pelo maior nível de catálogo das Docas (`docks_values` aplicado ao limite real da construção e da guilda), preço-base, faixa de estoque, nível mínimo e peso de seleção. Ofertas acima desse teto — por exemplo, nível 21 quando o runtime limita o catálogo a 20 — não contam como fonte. Peso não é convertido em probabilidade.
 - `docks_current_snapshot`: só aparece quando um `guild_id` foi pedido; representa estoque restante, preço e término da rotação atual daquela guilda. É estado de campanha, não configuração global.
 - `gathering`: material realmente selecionado pelo algoritmo por família e faixa de nível da guilda (`guild_level_range`). É determinístico, sem chance; a varredura cobre 1–350.
 - `salvage`: saída efetiva da regra de desmontagem para cada equipamento ativo elegível; a quantidade usa inteiro uniforme de 1 a 3 por equipamento.
