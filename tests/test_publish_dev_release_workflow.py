@@ -71,6 +71,27 @@ class PublishDevReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("--setup \"$output/GuildIdleManager-DEV-Setup.exe\"", signer_step)
         self.assertIn("--app-version-file $appVersionFile", signer_step)
 
+    def test_release_smokes_use_an_isolated_profile_and_check_campaigns_and_launcher(self):
+        smoke_step = self.workflow_text.split("- name: Verificar pacote em perfil temporario isolado", 1)[1].split(
+            "- name: Assinar manifesto do Setup", 1
+        )[0]
+        for required in (
+            "$env:RUNNER_TEMP",
+            "$env:LOCALAPPDATA",
+            "$env:APPDATA",
+            "$env:GIM_SMOKE_TEMP_DIR",
+            "$env:TEMP",
+            "$env:TMP",
+            "--smoke",
+            "--launcher-smoke",
+            "WaitForExit(120000)",
+            "WaitForExit(30000)",
+            "seleção de campanhas",
+            "PASS: packaged launcher entry",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, smoke_step)
+
     def test_signer_sidecar_resolution_matches_the_built_package_layout(self):
         signer_step = self.workflow_text.split("- name: Assinar manifesto do Setup", 1)[1]
         signer_step = signer_step.split("- name: Publicar release", 1)[0]
