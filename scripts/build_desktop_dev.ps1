@@ -99,6 +99,67 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Use uma distribuicao oficial do CPython sem patch externo em ssl.py.' }
     & $python -m PyInstaller --noconfirm --clean --distpath $buildRoot --workpath (Join-Path $buildRoot 'pyinstaller-work') (Join-Path $repo 'packaging\desktop\GuildIdleManager.spec')
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminou com codigo $LASTEXITCODE" }
+
+    $smokeToken = [Guid]::NewGuid().ToString('N')
+    $smokeRoot = Assert-ContainedNoReparsePoint $buildRoot (Join-Path $buildRoot "build-smoke-$smokeToken")
+    $smokeRoot = Assert-ContainedNoReparsePoint $buildRoot $smokeRoot
+    New-Item -ItemType Directory -Path (Join-Path $smokeRoot 'LocalAppData'),(Join-Path $smokeRoot 'Roaming'),(Join-Path $smokeRoot 'Temp') | Out-Null
+    $smokeExe = Join-Path $buildRoot 'GuildIdleManager\GuildIdleManager.exe'
+    $previousSmokeLocalAppData = $env:LOCALAPPDATA
+    $previousSmokeAppData = $env:APPDATA
+    $previousSmokeTempRoot = $env:GIM_SMOKE_TEMP_DIR
+    $previousSmokeResult = $env:GIM_SMOKE_RESULT
+    $previousLauncherSmokeResult = $env:GIM_LAUNCHER_SMOKE_RESULT
+    $previousSmokeTemp = $env:TEMP
+    $previousSmokeTmp = $env:TMP
+    $env:LOCALAPPDATA = Join-Path $smokeRoot 'LocalAppData'
+    $env:APPDATA = Join-Path $smokeRoot 'Roaming'
+    $env:GIM_SMOKE_TEMP_DIR = Join-Path $smokeRoot 'Temp'
+    $env:TEMP = $env:GIM_SMOKE_TEMP_DIR
+    $env:TMP = $env:GIM_SMOKE_TEMP_DIR
+    try {
+        $campaignResult = Join-Path $smokeRoot 'campaign-result.txt'
+        $env:GIM_SMOKE_RESULT = $campaignResult
+        $campaignSmoke = Start-Process -FilePath $smokeExe -ArgumentList '--smoke' -PassThru -WindowStyle Hidden
+        if (-not $campaignSmoke.WaitForExit(120000)) {
+            $smokeProcess = Get-Process -Id $campaignSmoke.Id -ErrorAction SilentlyContinue
+            if ($smokeProcess -and $smokeProcess.Path -and [IO.Path]::GetFullPath($smokeProcess.Path).Equals([IO.Path]::GetFullPath($smokeExe), [StringComparison]::OrdinalIgnoreCase)) {
+                Stop-Process -Id $smokeProcess.Id -Force
+            }
+            throw 'Smoke empacotado da selecao de campanhas excedeu 120 segundos.'
+        }
+        if ($campaignSmoke.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $campaignResult -PathType Leaf) -or
+            (Get-Content -LiteralPath $campaignResult -Raw) -notmatch '^PASS:.*seleção de campanhas') {
+            $detail = if (Test-Path -LiteralPath $campaignResult) { Get-Content -LiteralPath $campaignResult -Raw } else { 'sem arquivo de resultado' }
+            throw "Smoke empacotado de SQLite/selecao de campanhas falhou: $detail"
+        }
+
+        $launcherResult = Join-Path $smokeRoot 'launcher-result.txt'
+        $env:GIM_LAUNCHER_SMOKE_RESULT = $launcherResult
+        $launcherSmoke = Start-Process -FilePath $smokeExe -ArgumentList '--launcher-smoke' -PassThru -WindowStyle Hidden
+        if (-not $launcherSmoke.WaitForExit(30000)) {
+            $smokeProcess = Get-Process -Id $launcherSmoke.Id -ErrorAction SilentlyContinue
+            if ($smokeProcess -and $smokeProcess.Path -and [IO.Path]::GetFullPath($smokeProcess.Path).Equals([IO.Path]::GetFullPath($smokeExe), [StringComparison]::OrdinalIgnoreCase)) {
+                Stop-Process -Id $smokeProcess.Id -Force
+            }
+            throw 'Smoke empacotado da janela launcher excedeu 30 segundos.'
+        }
+        if ($launcherSmoke.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $launcherResult -PathType Leaf) -or
+            (Get-Content -LiteralPath $launcherResult -Raw) -notmatch '^PASS: packaged launcher entry') {
+            $detail = if (Test-Path -LiteralPath $launcherResult) { Get-Content -LiteralPath $launcherResult -Raw } else { 'sem arquivo de resultado' }
+            throw "Smoke empacotado da janela launcher falhou: $detail"
+        }
+        Write-Output "Smokes CLI do pacote passaram. Evidencia temporaria: $smokeRoot"
+    }
+    finally {
+        if ($null -eq $previousSmokeLocalAppData) { Remove-Item Env:LOCALAPPDATA -ErrorAction SilentlyContinue } else { $env:LOCALAPPDATA = $previousSmokeLocalAppData }
+        if ($null -eq $previousSmokeAppData) { Remove-Item Env:APPDATA -ErrorAction SilentlyContinue } else { $env:APPDATA = $previousSmokeAppData }
+        if ($null -eq $previousSmokeTempRoot) { Remove-Item Env:GIM_SMOKE_TEMP_DIR -ErrorAction SilentlyContinue } else { $env:GIM_SMOKE_TEMP_DIR = $previousSmokeTempRoot }
+        if ($null -eq $previousSmokeResult) { Remove-Item Env:GIM_SMOKE_RESULT -ErrorAction SilentlyContinue } else { $env:GIM_SMOKE_RESULT = $previousSmokeResult }
+        if ($null -eq $previousLauncherSmokeResult) { Remove-Item Env:GIM_LAUNCHER_SMOKE_RESULT -ErrorAction SilentlyContinue } else { $env:GIM_LAUNCHER_SMOKE_RESULT = $previousLauncherSmokeResult }
+        if ($null -eq $previousSmokeTemp) { Remove-Item Env:TEMP -ErrorAction SilentlyContinue } else { $env:TEMP = $previousSmokeTemp }
+        if ($null -eq $previousSmokeTmp) { Remove-Item Env:TMP -ErrorAction SilentlyContinue } else { $env:TMP = $previousSmokeTmp }
+    }
 }
 finally {
     if ($null -eq $previousDistributionConfigFile) { Remove-Item Env:GIM_BUILD_RELEASE_CONFIG_FILE -ErrorAction SilentlyContinue }

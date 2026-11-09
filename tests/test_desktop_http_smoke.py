@@ -111,11 +111,30 @@ with tempfile.TemporaryDirectory() as data_dir:
         item_template = db.query(ItemTemplate).filter(
             ItemTemplate.icon_group.is_not(None), ItemTemplate.item_type == "material",
         ).order_by(ItemTemplate.id).first()
-        assert guild and mercenary_class and item_template, "campaign must seed display entities for the desktop art smoke"
+        equipment_template = db.query(ItemTemplate).filter(
+            ItemTemplate.item_type == "equipment",
+            ItemTemplate.equipment_slot.in_("helmet chest gloves boots main_hand off_hand necklace earring belt ring".split()),
+        ).order_by(ItemTemplate.id).first()
+        assert guild and mercenary_class and item_template and equipment_template, "campaign must seed display entities for the desktop art smoke"
         guild_id = guild.id
         smoke_market_item_template_id = item_template.id
         mercenary_class_id = mercenary_class.id
         mercenary = create_mercenary(db, guild.id, mercenary_class, "Teste visual")
+        db.flush()
+        equipped_detail_item = GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_template.id,
+            equipped_to_mercenary_id=mercenary.id,
+            equipment_slot=equipment_template.equipment_slot,
+            required_level=1,
+            bonus_power=3,
+            bonus_rolls=[
+                {"kind": "normal", "attribute": "power", "value": 2},
+                {"kind": "strong", "attribute": "power", "value": 12},
+            ],
+            upgrade_level=2,
+        )
+        db.add(equipped_detail_item)
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
         meat_gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador de Carne")
         live_gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador ao vivo")
@@ -358,6 +377,12 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
+        equipment_detail_page = rendered_pages[f"/mercenaries/{mercenary_id}"]
+        assert b"data-equipment-details-trigger" in equipment_detail_page
+        assert b"role=\"region\" aria-label=\"Detalhes de" in equipment_detail_page
+        assert b"FORTE +12" in equipment_detail_page
+        assert b"Total aplicado: +17" in equipment_detail_page
+        assert b"/static/js/equipment-details.js" in equipment_detail_page
         assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
         assert b'class="rarity-badge rarity-rare">Raro</span>' in rendered_pages["/tavern"]
         outcome_row = next((row for row in re.findall(rb"<tr[^>]*>.*?</tr>", rendered_pages[regional_outcome_path], re.S)
@@ -400,12 +425,16 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"alvo fica fixo at\xc3\xa9 liberar o trabalhador" in rendered_pages["/guide"]
         assert b"cancelar antes do prazo" in rendered_pages["/guide"]
         assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
-        assert b">Tempo base por raridade<" in rendered_pages["/market"]
+        assert b"Tempo base por raridade" not in rendered_pages["/market"]
         assert b"data-market-estimate" in rendered_pages["/market"]
         assert b"/market/" + str(smoke_market_sale_id).encode("ascii") + b"/cancel" in rendered_pages["/market"]
         assert b"T1\xe2\x80\x93T8" not in rendered_pages["/market"] and b"T1-T8" not in rendered_pages["/market"]
-        for duration in (b"10 s por unidade", b"25 s por unidade", b"60 s por unidade", b"180 s por unidade", b"600 s por unidade", b"1200 s por unidade"):
-            assert duration in rendered_pages["/market"], duration
+        for duration in (b"10 s", b"25 s", b"60 s", b"180 s", b"600 s", b"1.200 s"):
+            assert duration in rendered_pages["/guide"], duration
+        guide_export_status, _guide_export_location, guide_export_body = request("/guide/export.md")
+        assert guide_export_status == 200 and b"| Raridade | Tempo-base por unidade |" in guide_export_body
+        for duration in (b"10 s", b"25 s", b"60 s", b"180 s", b"600 s", b"1.200 s"):
+            assert duration in guide_export_body, duration
         assert b"Pr\xc3\xb3ximo alvo dispon\xc3\xadvel" in rendered_pages["/gathering"]
 
         cancel_status, cancel_location, cancel_body = request(

@@ -209,9 +209,30 @@ def annotate_item_bonus_view(item: GuildItemInstance) -> None:
     ]
     item.bonus_roll_count = len(item.bonus_rolls_view)
     totals = {key: getattr(item, f"bonus_{key}") for key in EQUIPMENT_ATTRIBUTE_KEYS}
+    normal_totals = {key: int(getattr(item, f"bonus_{key}")) for key in EQUIPMENT_ATTRIBUTE_KEYS}
+    strong_totals = {key: 0 for key in EQUIPMENT_ATTRIBUTE_KEYS}
     for roll in item.bonus_rolls_view:
         totals[roll["attribute"]] += roll["value"]
+        if roll["kind"] == "strong":
+            strong_totals[roll["attribute"]] += roll["value"]
+        else:
+            normal_totals[roll["attribute"]] += roll["value"]
     item.bonus_attribute_totals = totals
+    short_labels = {
+        "power": "FOR", "vitality": "VIT", "agility": "AGI",
+        "intelligence": "INT", "luck": "SOR", "armor": "ARM",
+    }
+    item.equipment_bonus_groups_view = [
+        {
+            "attribute": key,
+            "label": short_labels[key],
+            "normal_value": normal_totals[key],
+            "strong_value": strong_totals[key],
+            "total_value": totals[key],
+        }
+        for key in EQUIPMENT_ATTRIBUTE_KEYS
+        if normal_totals[key] or strong_totals[key]
+    ]
 
 CLASS_FAMILIES = {
     "warrior": {"warrior", "knight", "templar", "blade", "reaper"},

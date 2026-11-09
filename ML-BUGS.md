@@ -294,6 +294,35 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Compatibilidade e integridade:** preservar bônus e RNG já gravados nas instâncias existentes; não recalcular equipamentos de campanhas/saves existentes. Mudanças em templates devem afetar apenas novas instâncias, salvo plano explícito e reversível aprovado. Preservar edições administrativas e não sobrescrevê-las por seeds. Atualizar o Guia do Jogo na mesma entrega para explicar FORTE.
 - **Critérios de implementação/aceite:** 1) inventário completo dos caminhos de bônus e resultados da auditoria registrados; 2) testes provam quantidade de tipos distintos, garantias FORTE e faixas de pontos por raridade; 3) simulações cobrem slots/tipos, níveis e raridades Comum a Mítico, sem inversão de faixa entre itens comparáveis; 4) bônus FORTE são persistidos, exibidos, somados ao atributo correspondente e considerados no poder exatamente uma vez; 5) Guia do Jogo documenta FORTE e está sincronizado com a interface; 6) RNG da instância é gerado uma vez e permanece estável em renderização/equipar/desequipar; 7) equipamentos já existentes, saves e ajustes de admin permanecem intactos; 8) testes cobrem drops, fabricação/refino e demais fontes aplicáveis; 9) revisão de balanceamento documenta distribuição, extremos, exceções e limitações antes da publicação.
 
+### ML-031 — Mover a tabela de prazos de venda para o Guia do Jogo
+
+- **Origem:** ajuste fino solicitado em 2026-11-09, captura da tela do Mercado.
+- **Status:** Implementado; aceite pendente de revisão CR e validação visual.
+- **Pedido:** retirar do Mercado a tabela completa de tempo-base por raridade. Manter na ação somente o prazo estimado da venda escolhida, já considerando quantidade e redução vigente; explicar os prazos Comum 10 s, Incomum 25 s, Raro 60 s, Épico 180 s, Lendário 600 s e Mítico 1.200 s por unidade na seção pertinente do Guia do Jogo. Não alterar a fórmula de venda.
+- **Aceite:** Mercado sem tabela nem vazio residual; Guia visível e Markdown exportado usam a mesma fonte e exibem os valores vigentes; prazo individual continua correto após mudar quantidade, raridade e nível do Mercado; teste de paridade Guia/exportação.
+
+### ML-032 — Dar retorno visível ao download do Guia do Jogo
+
+- **Origem:** ajuste fino solicitado em 2026-11-09; a interface diz apenas “Download iniciado”.
+- **Status:** Implementado; aceite pendente de revisão CR e validação visual.
+- **Pedido:** ao exportar, mostrar estado de preparação com indicador de progresso indeterminado, depois confirmar que o arquivo foi gerado e informar o nome do `.md`/onde o navegador normalmente o entrega, sem prometer um caminho absoluto que a aplicação não controla. Erros de rede/servidor devem aparecer no próprio componente, com opção de tentar novamente. Evitar modal bloqueante para arquivo pequeno.
+- **Aceite:** botão evita acionamento duplicado durante a geração; estados aguardando, sucesso e falha são acessíveis e coerentes; download contém a versão atual e permanece sincronizado com o Guia; testes cobrem resposta lenta, falha e sucesso, sem expor dados privados da campanha.
+
+### ML-033 — Exibir detalhes do equipamento equipado sob demanda
+
+- **Origem:** ajuste fino solicitado em 2026-11-09, captura dos detalhes de mercenário.
+- **Status:** Implementado; aceite pendente de revisão CR e validação visual.
+- **Pedido:** remover a faixa extensa de atributos dos itens abaixo dos espaços de equipamento. Cada item equipado deve oferecer um painel contextual organizado com nome, raridade, nível mínimo, refino, bônus normais e FORTE, usando badges e a identidade visual do item. No desktop, abrir ao passar o mouse ou focar o item; permitir também clique/toque para telas sem hover. Não esconder atributos da tecnologia assistiva.
+- **Aceite:** painel não é cortado pelas bordas do grid/modal, não sobrepõe ações essenciais, funciona em mouse/teclado/toque, fecha ao sair/pressionar Escape quando aplicável; item vazio não mostra atributos; nenhum bônus é recalculado ou alterado; testes cobrem dados exibidos e acessibilidade básica.
+
+### ML-034 — Criar launcher independente para atualizar antes de abrir o jogo
+
+- **Origem:** decisão explícita do usuário em 2026-11-09 após repetidas falhas do fluxo “fechar e abrir Setup”.
+- **Status:** Implementado; aceite pendente de revisão CR, validação visual e E2E em perfil temporário.
+- **Pedido:** o atalho deve abrir um launcher pequeno, temático e independente da campanha. Antes de abrir o jogo, ele consulta o GitHub Releases do canal configurado, compara versões, baixa o pacote assinado para área temporária, valida assinatura do manifesto e SHA-256 do Setup, mostra progresso e executa a atualização. Depois abre a seleção de campanhas. O usuário pode optar por jogar a versão instalada se a rede estiver indisponível ou adiar a atualização, salvo incompatibilidade explícita de formato de save. Durante a partida, a tela Atualizações deve mostrar versão atual e permitir somente **Verificar**; se houver nova versão, orientar a fechar a campanha e atualizar pelo launcher, sem botão/rota de instalação ativa dentro do jogo.
+- **Segurança e integridade:** não executar arquivo antes de verificar autenticidade e hash; não embutir chave privada; preservar saves e preferências fora do diretório do programa; evitar dois launchers/instaladores concorrentes; tratar cancelamento, falha, falta de permissão, antivírus/SmartScreen e rollback sem deixar a instalação inutilizável. Não contornar avisos do Windows. Deixar a atualização do próprio launcher coberta pelo instalador e o atalho apontando para a versão nova após atualização. Canal DEV e release assinada devem continuar compatíveis.
+- **Aceite:** testes isolados cobrindo sem atualização, atualização disponível, rede ausente, assinatura/hash inválidos, download interrompido, Setup não aberto, instalação bem-sucedida e reinício; E2E de versão anterior para nova em perfil temporário confirma atalho, versão exibida, seleção de campanhas e save preservado. Registrar caminhos de log e erro legível no launcher. Revisão CR obrigatória antes de PR, merge e release assinada. A validação real no PC do usuário continua sendo aceite manual, não deve ser alegada só por testes automatizados.
+
 ### BUG-001 — Requisitos da oferta regional não são aplicados a partir do snapshot
 
 - **Origem:** evidência encontrada ao investigar as anotações 10 e 11.
@@ -377,6 +406,13 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 - **Estabilidade da coleta:** ao designar um trabalhador, o material-alvo deve permanecer estável durante aquela designação; subir o nível da guilda não deve trocar silenciosamente o item que será produzido. Uma mudança de alvo deve ocorrer apenas ao liberar e designar novamente, ou por uma regra explícita equivalente, compatível com campanhas existentes.
 - **Compatibilidade e preservação:** corrigir o mapeamento sem apagar inventário, histórico, templates editados pelo Admin ou materiais de campanhas existentes. Se for necessário persistir o template-alvo da designação, planejar migration aditiva e preservar atribuições ativas; não reescrever quantidades nem converter itens já armazenados.
 - **Critérios de conclusão:** 1) documentar uma matriz de desbloqueio por nível/faixa para madeira, minério e demais famílias coletáveis, com nome, raridade e item level coerentes; 2) guilda nível 7 e outros marcos de progressão selecionam o material esperado, sem saltar para uma variante avançada por causa do índice do seed; 3) raridade segue a curva aprovada e não depende da posição global incidental; 4) coleta em andamento mantém o material-alvo ao evoluir a guilda; 5) coletar e vender materiais não muda seu valor ou duração fora das regras explicitamente aprovadas em ML-027; 6) seeds/migrações são idempotentes e preservam customizações administrativas, inventário, históricos e campanhas existentes; 7) testes cobrem catálogo novo, catálogo legado, limites de desbloqueio, mudança de nível durante coleta, raridade e compatibilidade de dados.
+
+### BUG-009 — Cards de venda do Mercado perdem a composição e as ações
+
+- **Origem:** ajuste fino solicitado em 2026-11-09; captura mostra nomes espremidos, campos atravessando texto e ações sem alinhamento.
+- **Status:** Implementado; aceite pendente de revisão CR e validação visual.
+- **Pedido:** recompor os cards de materiais/acumuláveis e equipamentos em todas as larguras de janela. Em materiais, informações e quantidade ficam legíveis, MAX junto ao campo e **Vender** ancorado no canto inferior direito; em equipamentos livres, **Vender** fica centralizado verticalmente na extrema direita. A estimativa útil de prazo pode continuar no card, sem repetir a tabela ou transformar cada item em bloco de texto técnico.
+- **Aceite:** textos não se sobrepõem nem ficam comprimidos; controles mantêm tamanho e posição coerentes com nomes longos, raridades, quantidades e estados desabilitados; teste visual/DOM em janela desktop e estreita, com itens reais e teclado; cálculo e submissão de venda permanecem iguais.
 
 ## Validação desta rodada
 

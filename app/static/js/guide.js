@@ -236,30 +236,45 @@
 
   const exportButton = root.querySelector("[data-guide-export]");
   const exportStatus = root.querySelector("[data-guide-export-status]");
+  const exportFeedback = root.querySelector("[data-guide-export-feedback]");
+  const exportProgress = root.querySelector("[data-guide-export-progress]");
   exportButton?.addEventListener("click", async () => {
+    if (exportButton.disabled) return;
     exportButton.disabled = true;
-    exportButton.textContent = "Preparando arquivo…";
-    exportStatus.textContent = "";
+    exportButton.setAttribute("aria-busy", "true");
+    exportButton.textContent = "Preparando Guia…";
+    exportFeedback.hidden = false;
+    exportProgress.hidden = false;
+    exportStatus.setAttribute("role", "status");
+    exportStatus.textContent = "Preparando o arquivo Markdown do Guia…";
     try {
       const response = await fetch("/guide/export.md", { credentials: "same-origin", cache: "no-store" });
       if (!response.ok || !(response.headers.get("content-type") || "").includes("text/markdown")) {
         throw new Error(response.ok ? "O servidor não retornou um arquivo Markdown." : `Falha ${response.status} ao preparar o arquivo.`);
       }
       const blob = await response.blob();
+      if (!blob.size) throw new Error("O servidor retornou um arquivo vazio.");
+      const disposition = response.headers.get("content-disposition") || "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const quotedName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      const suggestedName = encodedName ? decodeURIComponent(encodedName) : (quotedName || "guia-guild-idle-manager.md");
+      const fileName = suggestedName.split(/[\\/]/).pop() || "guia-guild-idle-manager.md";
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "guia-guild-idle-manager.md";
+      link.download = fileName;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      exportStatus.textContent = "Download iniciado.";
+      exportStatus.textContent = `Guia gerado e enviado ao navegador: ${fileName}. Confira a pasta de downloads definida no navegador.`;
+      exportButton.textContent = "Baixar Guia em Markdown";
     } catch (error) {
       exportStatus.setAttribute("role", "alert");
-      exportStatus.textContent = `${error.message} Tente novamente.`;
+      exportStatus.textContent = `${error.message || "Não foi possível preparar o Guia."} Tente novamente.`;
+      exportButton.textContent = "Tentar novamente";
     } finally {
-      if (exportStatus.textContent === "Download iniciado.") exportStatus.setAttribute("role", "status");
+      exportProgress.hidden = true;
+      exportButton.removeAttribute("aria-busy");
       exportButton.disabled = false;
-      exportButton.textContent = "Baixar Guia em Markdown";
     }
   });
 })();
