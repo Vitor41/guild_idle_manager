@@ -72,26 +72,77 @@ jobs:
         run: |
           $output = "dist/staging/release-$env:RELEASE_TAG"
           ./scripts/build_desktop_dev.ps1 -Channel DEV -GitHubPublicKeyBase64 $env:RELEASE_PUBLIC_KEY_B64 -OutputRoot $output
-      - name: Verificar inicializacao do pacote
+      - name: Verificar pacote em perfil temporario isolado
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           $output = "dist/staging/release-$env:RELEASE_TAG"
           $executable = Join-Path $output 'GuildIdleManager-DEV/GuildIdleManager/GuildIdleManager.exe'
-          $result = Join-Path $env:RUNNER_TEMP 'gim-release-smoke.txt'
-          $env:GIM_SMOKE_RESULT = $result
+          $smokeRoot = Join-Path $env:RUNNER_TEMP ("gim-release-smoke-" + [Guid]::NewGuid().ToString('N'))
+          $tempRoot = Join-Path $smokeRoot 'Temp'
+          New-Item -ItemType Directory -Path $tempRoot,(Join-Path $smokeRoot 'LocalAppData'),(Join-Path $smokeRoot 'Roaming') -Force | Out-Null
+          $previousLocalAppData = $env:LOCALAPPDATA
+          $previousAppData = $env:APPDATA
+          $previousSmokeTempRoot = $env:GIM_SMOKE_TEMP_DIR
+          $previousSmokeResult = $env:GIM_SMOKE_RESULT
+          $previousLauncherSmokeResult = $env:GIM_LAUNCHER_SMOKE_RESULT
+          $previousTemp = $env:TEMP
+          $previousTmp = $env:TMP
+          $env:LOCALAPPDATA = Join-Path $smokeRoot 'LocalAppData'
+          $env:APPDATA = Join-Path $smokeRoot 'Roaming'
+          $env:GIM_SMOKE_TEMP_DIR = $tempRoot
+          $env:TEMP = $tempRoot
+          $env:TMP = $tempRoot
           try {
-            $process = Start-Process -FilePath $executable -ArgumentList '--smoke' -PassThru -Wait -WindowStyle Hidden
-            if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $result -PathType Leaf)) {
-              throw 'O aplicativo empacotado falhou no smoke de inicializacao.'
+            $campaignResult = Join-Path $smokeRoot 'campaign-result.txt'
+            $env:GIM_SMOKE_RESULT = $campaignResult
+            $campaign = Start-Process -FilePath $executable -ArgumentList '--smoke' -PassThru -WindowStyle Hidden
+            if (-not $campaign.WaitForExit(120000)) {
+              $campaignProcess = Get-Process -Id $campaign.Id -ErrorAction SilentlyContinue
+              if ($campaignProcess -and $campaignProcess.Path -and [IO.Path]::GetFullPath($campaignProcess.Path).Equals([IO.Path]::GetFullPath($executable), [StringComparison]::OrdinalIgnoreCase)) {
+                Stop-Process -Id $campaignProcess.Id -Force
+              }
+              throw 'Smoke de campanha do pacote excedeu 120 segundos.'
             }
-            if ((Get-Content -LiteralPath $result -Raw) -notmatch '^PASS:') {
-              throw 'O smoke de inicializacao nao confirmou o pacote.'
+            if ($campaign.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $campaignResult -PathType Leaf)) {
+              $detail = if (Test-Path -LiteralPath $campaignResult) { Get-Content -LiteralPath $campaignResult -Raw } else { 'sem arquivo de resultado' }
+              throw "Smoke de campanha do pacote falhou: $detail"
             }
+            $campaignEvidence = Get-Content -LiteralPath $campaignResult -Raw
+            if ($campaignEvidence -notmatch '^PASS: SQLite, campanhas temporárias, seleção de campanhas') {
+              throw "Smoke não confirmou banco e seleção de campanhas: $campaignEvidence"
+            }
+
+            $launcherResult = Join-Path $smokeRoot 'launcher-result.txt'
+            $env:GIM_LAUNCHER_SMOKE_RESULT = $launcherResult
+            $launcher = Start-Process -FilePath $executable -ArgumentList '--launcher-smoke' -PassThru -WindowStyle Hidden
+            if (-not $launcher.WaitForExit(30000)) {
+              $launcherProcess = Get-Process -Id $launcher.Id -ErrorAction SilentlyContinue
+              if ($launcherProcess -and $launcherProcess.Path -and [IO.Path]::GetFullPath($launcherProcess.Path).Equals([IO.Path]::GetFullPath($executable), [StringComparison]::OrdinalIgnoreCase)) {
+                Stop-Process -Id $launcherProcess.Id -Force
+              }
+              throw 'Smoke da janela launcher excedeu 30 segundos.'
+            }
+            if ($launcher.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $launcherResult -PathType Leaf)) {
+              $detail = if (Test-Path -LiteralPath $launcherResult) { Get-Content -LiteralPath $launcherResult -Raw } else { 'sem arquivo de resultado' }
+              throw "Smoke da janela launcher falhou: $detail"
+            }
+            $launcherEvidence = Get-Content -LiteralPath $launcherResult -Raw
+            if ($launcherEvidence -notmatch '^PASS: packaged launcher entry') {
+              throw "Smoke não confirmou a abertura e estado do launcher: $launcherEvidence"
+            }
+            Write-Host $campaignEvidence.Trim()
+            Write-Host $launcherEvidence.Trim()
           }
           finally {
-            Remove-Item Env:GIM_SMOKE_RESULT -ErrorAction SilentlyContinue
+            if ($null -eq $previousLocalAppData) { Remove-Item Env:LOCALAPPDATA -ErrorAction SilentlyContinue } else { $env:LOCALAPPDATA = $previousLocalAppData }
+            if ($null -eq $previousAppData) { Remove-Item Env:APPDATA -ErrorAction SilentlyContinue } else { $env:APPDATA = $previousAppData }
+            if ($null -eq $previousSmokeTempRoot) { Remove-Item Env:GIM_SMOKE_TEMP_DIR -ErrorAction SilentlyContinue } else { $env:GIM_SMOKE_TEMP_DIR = $previousSmokeTempRoot }
+            if ($null -eq $previousSmokeResult) { Remove-Item Env:GIM_SMOKE_RESULT -ErrorAction SilentlyContinue } else { $env:GIM_SMOKE_RESULT = $previousSmokeResult }
+            if ($null -eq $previousLauncherSmokeResult) { Remove-Item Env:GIM_LAUNCHER_SMOKE_RESULT -ErrorAction SilentlyContinue } else { $env:GIM_LAUNCHER_SMOKE_RESULT = $previousLauncherSmokeResult }
+            if ($null -eq $previousTemp) { Remove-Item Env:TEMP -ErrorAction SilentlyContinue } else { $env:TEMP = $previousTemp }
+            if ($null -eq $previousTmp) { Remove-Item Env:TMP -ErrorAction SilentlyContinue } else { $env:TMP = $previousTmp }
           }
       - name: Assinar manifesto do Setup
         shell: pwsh
@@ -124,6 +175,23 @@ jobs:
           finally {
             Remove-Item -LiteralPath $keyFile -Force -ErrorAction SilentlyContinue
           }
+      - name: Verificar assinatura do manifesto localmente
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PUBLIC_KEY_B64: ${{ vars.GIM_RELEASE_PUBLIC_KEY_B64 }}
+        run: |
+          $version = $env:RELEASE_TAG.Substring(5)
+          $output = "dist/staging/release-$env:RELEASE_TAG"
+          .\.venv-desktop\Scripts\python.exe scripts/verify_signed_release.py `
+            --setup "$output/GuildIdleManager-DEV-Setup.exe" `
+            --manifest "$output/gim-release.json" `
+            --signature "$output/gim-release.json.sig" `
+            --public-key-base64 $env:RELEASE_PUBLIC_KEY_B64 `
+            --version $version `
+            --channel DEV `
+            --minimum-supported-version 0.3.1
+          if ($LASTEXITCODE -ne 0) { throw 'A assinatura, os campos do manifesto ou o hash do Setup não conferem.' }
       - name: Publicar release
         shell: pwsh
         env:
