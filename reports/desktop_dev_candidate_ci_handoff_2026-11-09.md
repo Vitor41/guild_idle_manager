@@ -19,7 +19,7 @@ Os arquivos de workflow precisam estar na branch padrão para que o GitHub permi
 ## Validação local desta entrega
 
 - A análise sintática do PowerShell em `scripts/validate_desktop_setup_candidate.ps1` não encontrou erros.
-- `git diff --check` será registrado no commit final.
+- `git diff --check` passou antes do commit.
 - Os testes focados de assinatura e contratos dos workflows não puderam importar `cryptography.hazmat.primitives`: o runtime Python local falha ao carregar `_rust` (`ImportError: DLL load failed`). O Python embeddable também não encontra os pacotes bloqueados em `.validation-site-packages-080` (acesso negado). O ambiente local não fornece `actionlint` nem o launcher `py`.
 - O Setup 0.8.0 do SHA candidato ainda não foi construído nem instalado: este checkout não consegue reproduzir o runner Windows suportado e os workflows novos precisam primeiro estar disponíveis na branch padrão. O fluxo build-only acima fará essa validação no runner; não houve uso de perfil ou save real, push, dispatch, publicação ou instalação nesta entrega.
 
