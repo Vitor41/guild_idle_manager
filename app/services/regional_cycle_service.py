@@ -43,6 +43,7 @@ from app.services.balance_service import (
 )
 from app.services.equipment_service import get_mercenary_attribute_summary
 from app.models.content import ProfessionTemplate
+from app.services.mission_power_service import recommended_regional_contract_power
 from app.services.tavern_service import get_discounted_hire_cost, get_tavern_apprentice_chances, next_apprentice_cost
 
 
@@ -813,7 +814,16 @@ def _add_offer(
 ) -> RegionalOffer:
     if isinstance(template, MissionTemplate):
         mission_id, dungeon_id = template.id, None
-        recommended_power = max(1, int(template.recommended_power or 0))
+        fallback_power = max(1, int(template.recommended_power or 0))
+        if offer_type == "contract" and template.mission_type not in {"gathering", "long_idle"}:
+            recommended_power = recommended_regional_contract_power(
+                template.recommended_level,
+                rank,
+                template.max_party_size,
+                fallback_power=fallback_power,
+            )
+        else:
+            recommended_power = fallback_power
         level_band = template.level_band
         requirements = {
             "required_min_mercenary_level_snapshot": max(1, int(template.required_min_mercenary_level or 1)),

@@ -587,6 +587,9 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     with patch(
                         "app.services.regional_cycle_service.regional_cpu_action_probability",
                         return_value=0,
+                    ), patch(
+                        "app.services.regional_cycle_service._cpu_offer_party",
+                        return_value=None,
                     ):
                         next_board = get_regional_board(
                             db, metadata, guild,
