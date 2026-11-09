@@ -140,7 +140,9 @@ def _template_base_power(template: ItemTemplate) -> int:
 def _same_slot_templates(db: Session, template: ItemTemplate) -> list[ItemTemplate]:
     aliases = {"main_hand": "weapon", "chest": "armor", "ring": "accessory"}
     slot = normalize_equipment_slot(template.equipment_slot)
-    stored_slots = {slot, *(key for key, value in aliases.items() if value == slot)}
+    stored_slots = {slot}
+    if slot in aliases:
+        stored_slots.add(aliases[slot])
     return list(db.scalars(select(ItemTemplate).where(
         ItemTemplate.item_type == "equipment",
         ItemTemplate.is_active.is_(True),

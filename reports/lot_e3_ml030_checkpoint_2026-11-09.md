@@ -38,11 +38,15 @@ No baseline, `GuildItemInstance` guarda apenas um par `rng_bonus_attribute`/`rng
 
 ## Testes e evidências E3
 
-- `test_ml030_equipment_bonus_rules.py`: 6 passaram — geração/garantias/uniquidade e faixas, extremos de poder por raridade, snapshot não mutável, migration preservando o par antigo, round-trip JSON e piso baseado em atributos-base sem reescrever templates. A verificação de extremos enumera combinações possíveis de contagem/atributos e demonstra as bandas acima.
+- `test_ml030_equipment_bonus_rules.py`: 6 passaram — geração/garantias/uniquidade e faixas, extremos de poder por raridade, snapshot não mutável, migration preservando o par antigo, round-trip JSON e piso baseado em atributos-base sem reescrever templates. O piso também é exercitado com os três pares de slot legado/canônico: `weapon/main_hand`, `armor/chest` e `accessory/ring`. A verificação de extremos enumera combinações possíveis de contagem/atributos e demonstra as bandas acima.
 - Fluxos focados: 3 passaram — fabricação/refino/mercado/desmontagem, drop de masmorra, drop de missão equipado afetando a masmorra. Recompensa de conquista lendária: 1 passou e verifica 5–7 tipos, faixa normal Lendária, presença de FORTE, espelho legado e retenção dos campos RNG do template.
 - `test_guide_routes.py`: 2 passaram; guia HTML e exportação Markdown/itens continuam sincronizados. `AdminFormCoverageTests.test_gameplay_forms_expose_all_editable_fields`: 1 passou.
 - Suíte de integração `test_stage5_runtime_validation.py` foi tentada inteira, mas o primeiro teste concorrente reportou `ERROR` e a execução ficou sem progresso no seguinte. Os processos Python iniciados por essa tentativa foram encerrados. Após isso, os três testes focados acima passaram isoladamente. A suíte integral já havia parado no baseline pré-edição descrito acima; não foi repetida para evitar gastar mais tempo nos mesmos testes alheios.
 - Não houve build, instalação, push, PR, merge, release ou acesso a saves reais.
+
+## Reteste independente
+
+O CR identificou um P2 na consulta de templates equivalentes: os aliases legados (`weapon`, `armor`, `accessory`) não eram incluídos ao comparar nos slots canônicos. A consulta foi corrigida para buscar ambos os nomes armazenados. Os seis testes ML-030 passaram novamente e a simulação completa do catálogo (1.706 templates, mesmos 195 pares comparáveis) repetiu zero inversões após correção; os três pares de aliases também passaram no teste integrado.
 
 ## Handoff
 

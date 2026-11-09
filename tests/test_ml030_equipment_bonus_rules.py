@@ -171,7 +171,7 @@ class ML030BonusRulesTests(unittest.TestCase):
                 guild = Guild(campaign_id=campaign.campaign_id, name="ML030")
                 common = ItemTemplate(
                     name="ML030 Common Base", description="", item_type="equipment", rarity="common",
-                    item_level=1, tier=1, base_sell_value=10, equipment_slot="main_hand", required_level=1,
+                    item_level=1, tier=1, base_sell_value=10, equipment_slot="weapon", required_level=1,
                     bonus_power=100,
                     rng_bonus_min=4, rng_bonus_max=8,
                 )
@@ -180,7 +180,27 @@ class ML030BonusRulesTests(unittest.TestCase):
                     item_level=1, tier=1, base_sell_value=10, equipment_slot="main_hand", required_level=1,
                     bonus_power=0,
                 )
-                db.add_all((campaign, guild, common, uncommon))
+                legacy_armor = ItemTemplate(
+                    name="ML030 Legacy Armor Base", description="", item_type="equipment", rarity="common",
+                    item_level=1, tier=1, base_sell_value=10, equipment_slot="armor", required_level=1,
+                    bonus_power=100,
+                )
+                modern_chest = ItemTemplate(
+                    name="ML030 Modern Chest Base", description="", item_type="equipment", rarity="uncommon",
+                    item_level=1, tier=1, base_sell_value=10, equipment_slot="chest", required_level=1,
+                    bonus_power=0,
+                )
+                legacy_accessory = ItemTemplate(
+                    name="ML030 Legacy Accessory Base", description="", item_type="equipment", rarity="common",
+                    item_level=1, tier=1, base_sell_value=10, equipment_slot="accessory", required_level=1,
+                    bonus_power=100,
+                )
+                modern_ring = ItemTemplate(
+                    name="ML030 Modern Ring Base", description="", item_type="equipment", rarity="uncommon",
+                    item_level=1, tier=1, base_sell_value=10, equipment_slot="ring", required_level=1,
+                    bonus_power=0,
+                )
+                db.add_all((campaign, guild, common, uncommon, legacy_armor, modern_chest, legacy_accessory, modern_ring))
                 db.flush()
                 expected_floor = equipment_service._template_base_power(common) + equipment_service.get_bonus_roll_power_bounds("common")[1]
                 instance = equipment_service.create_equipment_instance_from_template(db, guild.id, uncommon)
@@ -197,6 +217,14 @@ class ML030BonusRulesTests(unittest.TestCase):
                 }, common)
                 self.assertEqual((common.rng_bonus_min, common.rng_bonus_max), (4, 8))
                 self.assertGreaterEqual(equipment_service.get_item_power_score(instance), expected_floor)
+                for lower_template, higher_template, expected_slot in (
+                    (legacy_armor, modern_chest, "chest"),
+                    (legacy_accessory, modern_ring, "ring"),
+                ):
+                    floor_power = equipment_service._template_base_power(lower_template) + equipment_service.get_bonus_roll_power_bounds("common")[1]
+                    higher_instance = equipment_service.create_equipment_instance_from_template(db, guild.id, higher_template)
+                    self.assertEqual(higher_instance.equipment_slot, expected_slot)
+                    self.assertGreaterEqual(equipment_service.get_item_power_score(higher_instance), floor_power)
                 saved_rolls = [dict(roll) for roll in instance.bonus_rolls]
                 instance_id = instance.id
                 db.expire_all()
