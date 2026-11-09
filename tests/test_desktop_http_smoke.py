@@ -1186,7 +1186,8 @@ with tempfile.TemporaryDirectory() as data_dir:
             min_types, max_types, min_points, max_points = RARITY_BONUS_RULES[portal_item_snapshot["rarity"]]
             portal_bonus_rolls = get_item_bonus_rolls(portal_instance)
             assert min_types <= len(portal_bonus_rolls) <= max_types
-            assert len({roll["attribute"] for roll in portal_bonus_rolls}) == len(portal_bonus_rolls)
+            bonus_keys = {(roll["kind"], roll["attribute"]) for roll in portal_bonus_rolls}
+            assert len(bonus_keys) == len(portal_bonus_rolls)
             for bonus_roll in portal_bonus_rolls:
                 if bonus_roll["kind"] == "normal":
                     assert min_points <= bonus_roll["value"] <= max_points
@@ -1194,12 +1195,12 @@ with tempfile.TemporaryDirectory() as data_dir:
                     assert bonus_roll["kind"] == "strong"
                     assert 10 <= bonus_roll["value"] <= 20
             strong_rolls = [roll for roll in portal_bonus_rolls if roll["kind"] == "strong"]
-            assert len(strong_rolls) == (
-                1 if portal_item_snapshot["rarity"] == "legendary"
-                else (2 if portal_item_snapshot["rarity"] == "mythic" else 0)
-            ) or (
-                portal_item_snapshot["rarity"] == "mythic" and len(strong_rolls) >= 2
-            )
+            if portal_item_snapshot["rarity"] == "legendary":
+                assert len(strong_rolls) == 1
+            elif portal_item_snapshot["rarity"] == "mythic":
+                assert 2 <= len(strong_rolls) <= 4
+            else:
+                assert strong_rolls == []
             expire_due_events(db, campaign.campaign_id, portal_event.expires_at_utc)
             db.refresh(portal_event)
             portal_summary = json.loads(portal_event.summary_json)

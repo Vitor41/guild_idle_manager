@@ -12,7 +12,7 @@
 
 | Item | Estado na integração | Critério/evidência e limitação |
 |---|---|---|
-| ML-021 | Validada no gate integrado E5 | 15/20 campanhas tiveram rebelião (19 aberturas); chance permanece 2% por Vigília elegível. XP líquido CPU +4,42% e sucesso −7,73 p.p. vs baseline, ambos dentro dos gates. Evidência: `reports/lot_e5_cpu_strategy_event_2026-11-09.md`; E5 aprovado pelo CR em `fd37dc8`. |
+| ML-021 | Validada no gate integrado E5 | 15/20 campanhas tiveram rebelião (19 aberturas); chance permanece 2% por Vigília elegível. `vigilia-v7` usa cooldown regional zero; `vigilia-v6` retém cinco Vigílias por compatibilidade. XP líquido CPU +4,42% e sucesso −7,73 p.p. vs baseline, ambos dentro dos gates. Evidência: `reports/lot_e5_cpu_strategy_event_2026-11-09.md`; E5 aprovado pelo CR em `fd37dc8`. |
 | ML-022 | Implementada no Lote C | Migração aditiva, produção em lote `5 s × quantidade`, débito único, idempotência, reserva de capacidade e regressões de reinício/prazo. Testes em serviço e manifesto; review final da integração pendente. |
 | ML-023 | Validada na `main` | `9c89f95` remove contadores dos cabeçalhos preservando ações contextuais; regressão `test_legacy_header_counters_are_removed_and_contextual_actions_remain`. Nenhuma alteração duplicada. |
 | ML-025 | Implementada no Lote D | Catálogo usa fontes ativas, com chances/faixas/requisitos e lacunas; teste de paridade e exclusão de fontes inalcançáveis. Aceite visual manual permanece pendente. |
@@ -36,8 +36,9 @@
 - `tests.test_desktop_http_smoke`: **1/1 passou** com campanha descartável. O runner usa `PYTHONPATH` apontando ao pacote `cryptography` já existente em `.venv-desktop`; nenhum pacote foi instalado. A asserção de bônus foi atualizada para conferir snapshots multibônus pela regra E3 por raridade.
 - `node --test tests/guide_frontend_utils.test.js`: **4/4 passaram**; `node --check` para `guide.js` e `guide-utils.js`, `compileall` em `app tests scripts`, `git diff --check` e `python -m alembic heads`: passaram; uma cabeça, `0a1b2c3d4e5f`.
 - Suíte ampla `python -m unittest discover -s tests -p 'test*.py'`, com limite de 300 s: continuava executando testes/migrações SQLite isolados ao atingir o limite e foi interrompida sem resultado final conclusivo. O teste `desktop_art` isolado passou 26/26; não foi a causa do limite.
+- Reteste dos dois P2 do CR no candidato anterior `1195125c`: corrigido o status do cooldown regional (zero em `vigilia-v7`, cinco em `vigilia-v6`) e a verificação de bônus para validar unicidade por `(tipo, atributo)` com limites FORTE corretos. `tests.test_ml030_equipment_bonus_rules`, `tests.test_regional_cycle_service` e `tests.test_stage5_ui_contracts`: **39/39 passaram**; testes diretos do cooldown atual/legado: **2/2 passaram**; smoke HTTP desktop, novamente com campanha descartável e ambiente do venv desktop: **1/1 passou**. Logs: `integration_cr_p2_retest_2026-11-09.txt`, `integration_cr_p2_event_rules_2026-11-09.txt` e `integration_cr_p2_http_retest_2026-11-09.txt`.
 
-Logs reproduzíveis: `integration_core_tests_2026-11-09.txt`, `integration_stage5_ui_retest_2026-11-09.txt`, `integration_focused_followup_2026-11-09.txt`, `integration_http_smoke_desktop_venv_2026-11-09.txt`, `integration_static_checks_2026-11-09.txt` e `integration_full_suite_2026-11-09.txt`.
+Logs reproduzíveis: `integration_core_tests_2026-11-09.txt`, `integration_stage5_ui_retest_2026-11-09.txt`, `integration_focused_followup_2026-11-09.txt`, `integration_http_smoke_desktop_venv_2026-11-09.txt`, `integration_cr_p2_retest_2026-11-09.txt`, `integration_cr_p2_event_rules_2026-11-09.txt`, `integration_cr_p2_http_retest_2026-11-09.txt`, `integration_static_checks_2026-11-09.txt` e `integration_full_suite_2026-11-09.txt`.
 
 ## Limites da rodada
 
