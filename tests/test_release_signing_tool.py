@@ -14,9 +14,57 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 from app.services import github_releases
 from scripts.generate_release_key import generate_key
 from scripts.sign_github_release import create_signed_manifest
+from scripts.verify_signed_release import verify_signed_release
 
 
 class ReleaseSigningToolTests(unittest.TestCase):
+    def test_local_verifier_checks_signature_manifest_fields_and_setup_hash(self):
+        with tempfile.TemporaryDirectory(prefix="gim-verify-release-") as directory:
+            root = Path(directory)
+            setup = root / "GuildIdleManager-DEV-Setup.exe"
+            setup.write_bytes(b"isolated candidate Setup bytes")
+            key = Ed25519PrivateKey.generate()
+            public_key = key.public_key().public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+            public_key_b64 = base64.b64encode(public_key).decode("ascii")
+            manifest = {
+                "schema_version": 1,
+                "app_id": "guild-idle-manager",
+                "version": "0.8.0",
+                "channel": "DEV",
+                "minimum_supported_version": "0.3.1",
+                "asset_name": setup.name,
+                "asset_sha256": hashlib.sha256(setup.read_bytes()).hexdigest(),
+            }
+            manifest_bytes = json.dumps(
+                manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            ).encode("utf-8")
+            manifest_path = root / "gim-release.json"
+            manifest_path.write_bytes(manifest_bytes)
+            signature_path = root / "gim-release.json.sig"
+            signature_path.write_bytes(base64.b64encode(key.sign(manifest_bytes)))
+
+            verified = verify_signed_release(
+                setup,
+                manifest_path,
+                signature_path,
+                public_key_b64,
+                "0.8.0",
+            )
+            self.assertEqual(verified, manifest)
+
+            setup.write_bytes(b"tampered candidate Setup bytes")
+            with self.assertRaisesRegex(ValueError, "SHA-256 do Setup difere"):
+                verify_signed_release(
+                    setup,
+                    manifest_path,
+                    signature_path,
+                    public_key_b64,
+                    "0.8.0",
+                )
+
     def test_key_generation_returns_public_key_matching_private_key_saved_outside_repository(self):
         with tempfile.TemporaryDirectory() as directory:
             private_key_file = Path(directory) / "release-private-key.base64"

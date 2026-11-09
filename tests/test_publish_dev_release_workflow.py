@@ -15,6 +15,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-dev-release.yml"
+BUILD_ONLY_WORKFLOW = ROOT / ".github" / "workflows" / "build-dev-candidate.yml"
+SIGN_CANDIDATE_WORKFLOW = ROOT / ".github" / "workflows" / "sign-dev-candidate.yml"
 BUILD_SCRIPT = ROOT / "scripts" / "build_desktop_dev.ps1"
 SIGNER = ROOT / "scripts" / "sign_github_release.py"
 
@@ -91,6 +93,33 @@ class PublishDevReleaseWorkflowTests(unittest.TestCase):
         ):
             with self.subTest(required=required):
                 self.assertIn(required, smoke_step)
+
+    def test_build_only_candidate_workflow_is_sha_pinned_secret_free_and_non_publishing(self):
+        workflow = BUILD_ONLY_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("candidate_commit_sha", workflow)
+        self.assertIn("runs-on: windows-2025", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertIn("${{ inputs.candidate_commit_sha }}", workflow)
+        self.assertIn("validate_desktop_setup_candidate.ps1", workflow)
+        self.assertIn("GIM_RELEASE_PUBLIC_KEY_B64", workflow)
+        self.assertIn("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", workflow)
+        self.assertNotIn("GIM_RELEASE_PRIVATE_KEY_B64", workflow)
+        self.assertNotIn("gh release create", workflow)
+
+    def test_candidate_signing_workflow_signs_and_verifies_without_release_permissions(self):
+        workflow = SIGN_CANDIDATE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_run:", workflow)
+        self.assertIn("head_repository.full_name == github.repository", workflow)
+        self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("permissions:\n  actions: read\n  contents: read", workflow)
+        self.assertIn("environment: release-signing", workflow)
+        self.assertIn("scripts/sign_github_release.py", workflow)
+        self.assertIn("scripts/verify_signed_release.py", workflow)
+        self.assertIn("actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333", workflow)
+        self.assertIn("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", workflow)
+        self.assertNotIn("permissions:\n  contents: write", workflow)
+        self.assertNotIn("gh release create", workflow)
 
     def test_signer_sidecar_resolution_matches_the_built_package_layout(self):
         signer_step = self.workflow_text.split("- name: Assinar manifesto do Setup", 1)[1]
