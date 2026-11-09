@@ -27,8 +27,8 @@ O requisito de ocorrência é **mais de 10 campanhas em 20**. O integrado alcan�
 
 | Resultado CPU | Baseline E1+E3 | Integrado E1+E2+E3 | Variação |
 |---|---:|---:|---:|
-| Ações resolvidas | 20.218 | 20.204 | −14 (−0,1%) |
-| Sucessos / falhas | 15.392 / 4.826 | 11.240 / 8.964 | −4.152 / +4.138 |
+| Ações resolvidas (100 Vigílias) | 101.247 | 101.234 | −13 (−0,01%) |
+| Sucessos / falhas (100 Vigílias) | 73.770 / 27.477 | 53.291 / 47.943 | −20.479 / +20.466 |
 | Taxa média de sucesso por campanha | 72,9% | 52,6% | −20,2 p.p. |
 | Ouro líquido de planos CPU | 429.940 | 430.178 | +238 |
 | XP líquido de planos CPU | 30.313.874 | 24.555.686 | −5.758.188 (−19,0%) |
