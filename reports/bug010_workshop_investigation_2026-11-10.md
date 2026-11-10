@@ -1,7 +1,7 @@
 # BUG-010 — investigação de abertura de Oficinas
 
-**Data:** 2026-11-10  
-**Branch:** `feature/bug-010-workshop-error`  
+**Data:** 2026-11-10
+**Branch:** `feature/bug-010-workshop-error`
 **Base:** `1f31a9436cfd06640e50325277117e70e5870a3a`
 
 ## Resultado
