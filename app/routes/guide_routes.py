@@ -177,7 +177,7 @@ def _markdown_escape(value: object) -> str:
 
 def _catalog_markdown(catalog: dict[str, object]) -> str:
     rows = catalog["items"]
-    lines = ["## Equipamentos e Materiais", "", "Catálogo da campanha atual. As fontes abaixo são configuração ativa; requisitos e rotação podem limitar quando aparecem no jogo.", ""]
+    lines = ["## Equipamentos e Materiais", "", "Catálogo da campanha atual. As fontes abaixo vêm da configuração ativa; recomendações de nível ficam separadas dos requisitos e a rotação pode limitar quando aparecem no jogo.", ""]
     if not rows:
         return "\n".join(lines + ["Nenhum equipamento ou material ativo neste catálogo.", ""])
     item_groups: dict[tuple[object, ...], list[dict[str, object]]] = {}
@@ -194,7 +194,7 @@ def _catalog_markdown(catalog: dict[str, object]) -> str:
         sources: dict[tuple[object, ...], dict[str, object]] = {}
         for item in item_rows:
             for source in item["sources"]:
-                source_key = tuple(source.get(field) for field in ("type", "label", "name", "requirement", "chance", "quantity", "price", "condition"))
+                source_key = tuple(source.get(field) for field in ("type", "label", "name", "recommendation", "requirement", "chance", "quantity", "price", "condition"))
                 grouped_source = sources.setdefault(source_key, {"source": source, "rarities": set()})
                 grouped_source["rarities"].add(str(item["rarity"]))
         if not sources:
@@ -205,7 +205,8 @@ def _catalog_markdown(catalog: dict[str, object]) -> str:
             source_rarities = sorted(grouped_source["rarities"], key=lambda rarity: rarity_order.get(rarity, 99))
             rarity_text = _markdown_escape(", ".join(source_rarities))
             price_text = f" Preço unitário registrado: {_markdown_escape(source['price'])} ouro." if source["price"] else ""
-            lines.append(f"- **Raridade(s): {rarity_text} · {_markdown_escape(source['label'])}** — {_markdown_escape(source['name'])}. {_markdown_escape(source['chance'])}. Quantidade: {_markdown_escape(source['quantity'])}. Requisito: {_markdown_escape(source['requirement'])}.{price_text}")
+            recommendation = _markdown_escape(source.get("recommendation") or "—")
+            lines.append(f"- **Raridade(s): {rarity_text} · {_markdown_escape(source['label'])}** — {_markdown_escape(source['name'])}. {_markdown_escape(source['chance'])}. Quantidade: {_markdown_escape(source['quantity'])}. Recomendação: {recommendation}. Requisito: {_markdown_escape(source['requirement'])}.{price_text}")
         lines.append("")
     return "\n".join(lines)
 

@@ -198,9 +198,11 @@
         itemCell.append(rarityList);
         const reqCell = document.createElement("td"); reqCell.dataset.label = "Requisito";
         reqCell.textContent = source.price ? `${source.requirement}; preço unitário registrado: ${source.price} ouro` : source.requirement;
+        const recommendationCell = document.createElement("td"); recommendationCell.dataset.label = "Recomendação";
+        recommendationCell.textContent = source.recommendation || "—";
         const chanceCell = document.createElement("td"); chanceCell.dataset.label = "Chance"; chanceCell.textContent = source.chance;
         const quantityCell = document.createElement("td"); quantityCell.dataset.label = "Quantidade"; quantityCell.textContent = source.quantity;
-        row.append(sourceCell, itemCell, reqCell, chanceCell, quantityCell);
+        row.append(sourceCell, itemCell, recommendationCell, reqCell, chanceCell, quantityCell);
         rowsNode.append(row);
       }
     }
