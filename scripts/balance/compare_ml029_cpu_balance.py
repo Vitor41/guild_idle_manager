@@ -68,8 +68,10 @@ def _capture_run(seed: int, saves_root: Path, template_database: Path, *, candid
     eligible_contracts: set[tuple[int, int]] = set()
     original_party = regional_cycle_service._cpu_offer_party
 
-    def capture_party(offer, state, roster, available_at, deadline, class_roles):
-        choice = original_party(offer, state, roster, available_at, deadline, class_roles)
+    def capture_party(offer, state, roster, available_at, deadline, class_roles, **kwargs):
+        choice = original_party(
+            offer, state, roster, available_at, deadline, class_roles, **kwargs,
+        )
         if choice is not None and offer.offer_type == "contract":
             start_at, party = choice
             if start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot)) <= deadline:
