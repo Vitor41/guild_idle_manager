@@ -650,7 +650,15 @@ def equip_item(
             if replacement_item is None:
                 raise EquipmentError("O equipamento escolhido para substituicao nao pertence a este slot.")
         else:
-            replacement_item = current_in_slot[0]
+            if replacement_item_instance_id is not None:
+                replacement_item = next(
+                    (equipped for equipped in current_in_slot if equipped.id == replacement_item_instance_id),
+                    None,
+                )
+                if replacement_item is None:
+                    raise EquipmentError("O equipamento escolhido para substituicao nao pertence a este slot.")
+            else:
+                replacement_item = current_in_slot[0]
     elif replacement_item_instance_id is not None:
         raise EquipmentError("Nao ha equipamento ocupado neste slot para substituir.")
 

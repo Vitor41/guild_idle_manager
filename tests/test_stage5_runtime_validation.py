@@ -208,12 +208,21 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
         self.db.flush()
         with self.assertRaisesRegex(EquipmentError, "Equipamento nao encontrado"):
             equip_item(self.db, self.guild.id, mercenary.id, foreign_item.id)
+        valid_replacement = self._make_equipment_instance("main_hand", 2, bonus_power=75)
+        with self.assertRaisesRegex(EquipmentError, "nao pertence a este slot"):
+            equip_item(
+                self.db, self.guild.id, mercenary.id, valid_replacement.id,
+                replacement_item_instance_id=foreign_item.id,
+            )
 
         self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
             GuildItemInstance.id == equipped.id,
         )), mercenary.id)
         self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
             GuildItemInstance.id == too_high_level.id,
+        )))
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == valid_replacement.id,
         )))
         self.assertIsNone(foreign_item.equipped_to_mercenary_id)
 
