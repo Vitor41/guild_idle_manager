@@ -13,7 +13,7 @@
       <div class="supply-preparation-progress" role="status" aria-live="off">
         <strong>Produzindo {{ job.kit_quantity }} Kit(s) de Suprimentos</strong>
         {% if completion_blocked %}
-          <p class="note">Produção pronta, aguardando espaço no Armazém. Os materiais e a reserva permanecem intactos. Libere espaço ou aumente a capacidade; a Oficina tentará entregar os Kits ao abrir novamente.</p>
+          <p class="note">Produção pronta, aguardando espaço no Armazém. O débito dos materiais já realizado e a reserva dos Kits foram preservados. Libere espaço ou aumente a capacidade; a Oficina tentará entregar os Kits ao abrir novamente.</p>
         {% else %}
           <progress max="100" value="0" data-workshop-progress data-starts-at="{{ utc_iso(job.started_at) }}" data-ends-at="{{ utc_iso(job.ends_at) }}" aria-label="Progresso da produção">0%</progress>
           <p>Tempo restante: <time data-workshop-remaining data-ends-at="{{ utc_iso(job.ends_at) }}">calculando...</time></p>

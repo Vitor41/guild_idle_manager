@@ -177,7 +177,7 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
         response_text = body.decode("utf-8")
         self.assertEqual(status, 200, response_text)
         self.assertIn("Produção pronta, aguardando espaço no Armazém", response_text)
-        self.assertIn("a reserva permanecem intactos", response_text)
+        self.assertIn("O débito dos materiais já realizado e a reserva dos Kits foram preservados", response_text)
         with Session(self.engine, autoflush=False, expire_on_commit=False) as db:
             job = db.get(SupplyWorkshopJob, job_id)
             guild = db.get(Guild, self.guild_id)
