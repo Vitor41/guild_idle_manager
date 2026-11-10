@@ -11,11 +11,11 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import CampaignPlayer, get_db
+from app.core.dependencies import CampaignPlayer, get_current_player, get_db
 from app.database.connection import Base, create_database_engine
 from app.desktop.gameplay_diagnostics import close_gameplay_logger
 from app.main import protect_desktop_loopback
-from app.models import Guild, GuildInventoryItem, ItemTemplate
+from app.models import CampaignMetadata, Guild, GuildInventoryItem, ItemTemplate
 from app.models.workshop import SupplyWorkshopJob
 from app.repositories.item_repository import add_inventory_quantity
 from app.routes import workshop_routes
@@ -48,6 +48,10 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
 
         with Session(self.engine, autoflush=False, expire_on_commit=False) as db:
             guild = Guild(name="Oficina de diagnóstico", level=1)
+            guild.campaign_id = "temporary-campaign"
+            campaign = CampaignMetadata(
+                campaign_id="temporary-campaign", campaign_name="Oficina de diagnóstico",
+            )
             meat = ItemTemplate(
                 name="Carne", description="", item_type="material", rarity="common",
                 material_family="meat", item_level=1, level_band="1-20", tier=1,
@@ -60,7 +64,7 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
                 name="Madeira", description="", item_type="material", rarity="common",
                 material_family="wood", item_level=1, level_band="1-20", tier=1,
             )
-            db.add_all([guild, meat, herb, filler])
+            db.add_all([campaign, guild, meat, herb, filler])
             db.flush()
             ensure_supply_kit(db)
             db.commit()
@@ -73,6 +77,11 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
         self.app.state.app_mode = "desktop"
         self.app.state.desktop_allowed_host = "testserver"
         self.app.state.desktop_allowed_origin = "http://testserver"
+        self.app.state.active_campaign = type("ActiveCampaign", (), {
+            "campaign_id": "temporary-campaign",
+            "stamina_seconds": 8 * 60 * 60,
+            "stamina_recharge_remainder_seconds": 0,
+        })()
         self.app.middleware("http")(protect_desktop_loopback)
         self.app.mount(
             "/static",
@@ -155,6 +164,29 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
         self.assertEqual(status, 200, response_text)
         self.assertIn("Oficina de Suprimentos", response_text)
         self.assertNotIn("Não foi possível abrir esta tela", response_text)
+
+    def test_regional_advance_exception_before_workshop_route_is_persisted(self):
+        from app.services import regional_cycle_service
+
+        self.app.dependency_overrides[workshop_routes.get_current_player] = get_current_player
+        with patch.object(
+            regional_cycle_service,
+            "advance_regional_world",
+            side_effect=RuntimeError("forced-regional-advance-diagnostic"),
+        ):
+            status, _headers, body = self._request("/workshops")
+
+        response_text = body.decode("utf-8")
+        self.assertEqual(status, 500, response_text)
+        diagnostic_match = re.search(r"Referência: <code>([a-f0-9]{32})</code>", response_text)
+        self.assertIsNotNone(diagnostic_match, response_text)
+        trace = self.gameplay_log.read_text(encoding="utf-8")
+        self.assertIn(
+            f"event=exception action=workshops.page route=/workshops ref={diagnostic_match.group(1)} "
+            "status=500 outcome=unexpected_exception",
+            trace,
+        )
+        self.assertIn("RuntimeError: forced-regional-advance-diagnostic", trace)
 
     def test_due_batch_with_overcommitted_reservation_renders_and_preserves_job(self):
         with Session(self.engine, autoflush=False, expire_on_commit=False) as db:
