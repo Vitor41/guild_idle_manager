@@ -113,7 +113,7 @@
           ('ring', 'Anel', 'slot-ring-b', 1)
         ] %}
           {% set equipped = slots[slot_key][index] if slots.get(slot_key) and slots[slot_key]|length > index else none %}
-          <div class="equipment-slot {{ slot_class }} {{ 'filled' if equipped else '' }}">
+          <div class="equipment-slot {{ slot_class }} {{ 'filled' if equipped else '' }} {{ 'rarity-' ~ equipped.item_template.rarity if equipped else '' }}">
             {% if equipped %}
               {% set details_id = 'equipment-details-' ~ slot_key ~ '-' ~ index %}
               <button class="equipment-slot__trigger" type="button" data-equipment-details-trigger aria-expanded="false" aria-controls="{{ details_id }}" aria-label="Detalhes de {{ equipped.display_name }}">
@@ -141,10 +141,15 @@
                   <ul class="equipment-details__bonuses">
                     {% for bonus in equipped.equipment_bonus_groups_view %}
                       <li>
-                        <strong>{{ bonus.label }}</strong>
-                        <span>{% if bonus.normal_value %}+{{ bonus.normal_value }} normal{% endif %}</span>
-                        {% if bonus.strong_value %}<span class="bonus-pill strong-bonus"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16"> FORTE +{{ bonus.strong_value }}</span>{% endif %}
-                        <span class="equipment-details__total">Total aplicado: +{{ bonus.total_value }}</span>
+                        {% if bonus.normal_value and bonus.strong_value %}
+                          <span>{{ bonus.label }} +{{ bonus.normal_value }} normal ·</span>
+                          <span class="bonus-pill strong-bonus"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16"> FORTE {{ bonus.label }} +{{ bonus.strong_value }}</span>
+                          <span>= +{{ bonus.total_value }} aplicado</span>
+                        {% elif bonus.strong_value %}
+                          <span class="bonus-pill strong-bonus"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16"> FORTE {{ bonus.label }} +{{ bonus.strong_value }}</span>
+                        {% else %}
+                          <span>{{ bonus.label }} +{{ bonus.normal_value }}</span>
+                        {% endif %}
                       </li>
                     {% endfor %}
                   </ul>

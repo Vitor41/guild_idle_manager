@@ -1954,7 +1954,6 @@ textarea {
 .equipment-details__bonuses { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .equipment-details__bonuses li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; padding: 8px; border: 1px solid rgba(233, 198, 116, .15); border-radius: 8px; background: rgba(0, 0, 0, .12); }
 .equipment-details__bonuses li > strong { min-width: 3ch; color: var(--parchment); }
-.equipment-details__total { margin-left: auto; color: var(--gold-2); font-size: .78rem; }
 .equipment-details .bonus-pill { display: inline-flex; align-items: center; gap: 4px; }
 .equipment-details .bonus-pill img { flex: 0 0 auto; }
 
@@ -2139,29 +2138,20 @@ textarea {
 .benefit-grid article { display: grid; gap: 5px; }
 .benefit-grid span { color: var(--muted); }
 .requirement-box { display: grid; gap: 5px; margin-top: 12px; padding: 12px; border-left: 3px solid var(--gold); background: rgba(210,168,74,.06); color: var(--muted); }
-.class-requirement-summary { display: grid; gap: 10px; margin-top: 14px; }
-.class-requirement-line {
-  display: grid;
-  grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr);
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid rgba(233, 198, 116, .16);
-  border-left: 3px solid rgba(210, 168, 74, .82);
-  border-radius: 8px;
-  background: linear-gradient(90deg, rgba(210, 168, 74, .08), rgba(0, 0, 0, .12));
-}
-.class-requirement-line strong { display: block; color: var(--gold-2); font-size: .98rem; }
-.class-requirement-line span { color: var(--muted); font-size: .86rem; }
-.class-requirement-steps { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.class-requirement-steps span {
-  padding: 5px 10px;
-  border: 1px solid rgba(233, 198, 116, .24);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, .18);
-  color: var(--parchment);
-  font-weight: 900;
-}
+.class-requirement-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.class-requirement-card { min-width: 0; padding: 12px; border: 1px solid rgba(233, 198, 116, .2); border-radius: 9px; background: #1b292d; }
+.class-requirement-card__header { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 8px; }
+.class-requirement-card__header h3 { margin: 0; color: var(--parchment); font-size: 1rem; }
+.class-requirement-card__header p, .class-requirement-eligible { margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
+.class-requirement-state { flex: 0 0 auto; padding: 4px 8px; border-radius: 999px; font-size: .76rem; font-weight: 800; }
+.class-requirement-state--ready { border: 1px solid #568859; color: #9bd498; background: #20392e; }
+.class-requirement-state--pending { border: 1px solid #9c7b36; color: #e6b965; background: #393321; }
+.class-requirement-state--empty { border: 1px solid #59686a; color: var(--parchment); background: #263539; }
+.class-requirement-checks { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.class-requirement-checks li { display: grid; grid-template-columns: minmax(90px, .55fr) minmax(0, 1fr) auto; align-items: baseline; gap: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.07); font-size: .8rem; }
+.class-requirement-checks li > span { color: var(--muted); overflow-wrap: anywhere; }
+.class-requirement-checks li > b { color: #e6b965; text-align: right; }
+.class-requirement-checks li.is-met > b { color: #9bd498; }
 .dungeon-purpose-strip { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; }
 .dungeon-purpose-strip > span { display: grid; gap: 3px; min-width: 0; padding: 9px 10px; border: 1px solid rgba(233, 198, 116, .18); border-radius: 6px; background: rgba(0, 0, 0, .16); }
 .dungeon-purpose-strip small { color: var(--muted); font-size: .72rem; }
@@ -2321,8 +2311,7 @@ tr:hover td {
   }
 
   .market-columns { grid-template-columns: 1fr; }
-  .class-requirement-line { grid-template-columns: 1fr; align-items: start; }
-  .class-requirement-steps { justify-content: flex-start; }
+  .class-requirement-cards { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 620px) {
@@ -2504,6 +2493,9 @@ tr:hover td {
 .equipment-slot .slot-icon { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 6px; }
 .equipment-slot .slot-item-icon { width: 42px; height: 42px; object-fit: contain; object-position: center; }
 .equipment-slot strong { margin-top: 5px; }
+.equipment-slot.filled { border: 1px solid #375057; border-left: 3px solid var(--rarity-color, #375057); background: #203035; }
+.class-requirement-checks li { grid-template-columns: minmax(76px, .45fr) minmax(0, 1fr); }
+.class-requirement-checks li > b { grid-column: 2; text-align: left; }
 
 .inventory-card { border: 2px solid var(--rarity-color, var(--border)); border-left-width: 2px; }
 .craft-card,
@@ -2599,7 +2591,6 @@ html { scroll-behavior: smooth; }
     box-shadow: none;
   }
   .equipment-details__meta { grid-template-columns: 1fr; }
-  .equipment-details__total { margin-left: 0; }
   .market-columns { grid-template-columns: minmax(0, 1fr); }
   .dungeon-purpose-strip { grid-template-columns: 1fr; }
   .dashboard-grid-four, .dashboard-grid-three, .dashboard-grid-two { grid-template-columns: 1fr; }

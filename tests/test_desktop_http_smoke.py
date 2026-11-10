@@ -380,9 +380,13 @@ with tempfile.TemporaryDirectory() as data_dir:
         equipment_detail_page = rendered_pages[f"/mercenaries/{mercenary_id}"]
         assert b"data-equipment-details-trigger" in equipment_detail_page
         assert b"role=\"region\" aria-label=\"Detalhes de" in equipment_detail_page
-        assert b"FORTE +12" in equipment_detail_page
-        assert b"Total aplicado: +17" in equipment_detail_page
+        assert b"FORTE FOR +12" in equipment_detail_page
+        assert b"FOR +5 normal" in equipment_detail_page
+        assert b"FORTE FOR +12" in equipment_detail_page
+        assert b"= +17 aplicado" in equipment_detail_page
         assert b"/static/js/equipment-details.js" in equipment_detail_page
+        assert b"class-requirement-card" in rendered_pages["/class-change"]
+        assert b"Requisitos por etapa" in rendered_pages["/class-change"]
         assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
         assert b'class="rarity-badge rarity-rare">Raro</span>' in rendered_pages["/tavern"]
         outcome_row = next((row for row in re.findall(rb"<tr[^>]*>.*?</tr>", rendered_pages[regional_outcome_path], re.S)

@@ -18,6 +18,7 @@ from app.repositories.class_change_repository import (
 from app.repositories.mercenary_repository import get_mercenary_by_guild
 from app.repositories.mercenary_repository import list_mercenaries_by_guild
 from app.services.building_service import get_building_level
+from app.services.class_change_presentation import build_transition_stage_cards
 from app.services.guild_progression_service import add_guild_xp
 from app.services.achievement_service import record_guild_stat, unlock_codex_reference
 from app.services.mission_service import format_duration_seconds
@@ -34,43 +35,50 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _transition_requirement_steps(db: Session) -> list[dict[str, object]]:
+def _transition_requirement_steps(
+    db: Session,
+    guild: Guild,
+    gold: int,
+    training_ground_level: int,
+    mercenaries: list[object],
+) -> list[dict[str, object]]:
     transitions = list(
         db.query(ClassTransitionOption)
         .join(ClassTransitionOption.to_class)
         .filter(ClassTransitionOption.is_active.is_(True))
-        .order_by(ClassTransitionOption.required_mercenary_level, ClassTransitionOption.required_guild_level)
+        .order_by(ClassTransitionOption.to_class_id, ClassTransitionOption.from_class_id)
         .all()
     )
-    steps: dict[tuple[int, int, int, int], dict[str, object]] = {}
-    for transition in transitions:
-        key = (
-            transition.required_mercenary_level,
-            transition.required_guild_level,
-            transition.required_training_ground_level,
-            transition.gold_cost,
-        )
-        if key in steps:
-            steps[key]["target_count"] = int(steps[key]["target_count"]) + 1
-            continue
-        tier_label = {
-            1: "Primeira classe",
-            2: "Especialização",
-            3: "Classe final",
-        }.get(transition.to_class.tier, f"Evolução tier {transition.to_class.tier}")
-        steps[key] = {
-            "label": tier_label,
-            "required_mercenary_level": transition.required_mercenary_level,
-            "required_guild_level": transition.required_guild_level,
-            "required_training_ground_level": transition.required_training_ground_level,
-            "gold_cost": transition.gold_cost,
-            "duration_seconds": transition.duration_seconds,
-            "target_count": 1,
+    transition_rows = [
+        {
+            "tier": int(transition.to_class.tier),
+            "from_class_id": int(transition.from_class_id),
+            "target_label": class_label(transition.to_class),
+            "required_mercenary_level": int(transition.required_mercenary_level),
+            "required_guild_level": int(transition.required_guild_level),
+            "required_training_ground_level": int(transition.required_training_ground_level),
+            "gold_cost": int(transition.gold_cost),
         }
-    return list(steps.values())
+        for transition in transitions
+    ]
+    worker_rows = [
+        {"id": int(worker.id), "class_id": int(worker.class_id), "level": int(worker.level), "status": worker.status}
+        for worker in mercenaries
+    ]
+    return build_transition_stage_cards(
+        transition_rows,
+        worker_rows,
+        gold=gold,
+        guild_level=int(guild.level),
+        training_ground_level=training_ground_level,
+    )
 
 
-def get_class_change_page_context(db: Session, guild: Guild) -> dict[str, object]:
+def get_class_change_page_context(
+    db: Session,
+    guild: Guild,
+    resources: GuildResources | None = None,
+) -> dict[str, object]:
     runs = list_class_change_runs_by_guild(db, guild.id)
     training_ground_level = get_building_level(db, guild.id, "training_ground")
     all_mercenaries = list_mercenaries_by_guild(db, guild.id)
@@ -105,7 +113,10 @@ def get_class_change_page_context(db: Session, guild: Guild) -> dict[str, object
         "in_progress_runs": in_progress_runs,
         "finished_runs": [run for run in runs if run.status == "completed"][:10],
         "training_ground_level": training_ground_level,
-        "requirement_steps": _transition_requirement_steps(db),
+        "requirement_steps": _transition_requirement_steps(
+            db, guild, int(resources.gold if resources is not None else 0),
+            training_ground_level, all_mercenaries,
+        ),
         "now": now,
         "format_duration": format_duration_seconds,
     }
