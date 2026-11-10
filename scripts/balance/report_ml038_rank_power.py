@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from math import ceil
 from pathlib import Path
 
@@ -19,6 +20,69 @@ OUTPUT = ROOT / "reports"
 LEVELS = (1, 5, 15, 17, 18, 50, 75, 200, 350)
 OLD = {"E": 0.700, "D": 0.735, "C": 0.770, "B": 0.840, "A": 0.945, "S": 1.085}
 BASE_CHANCE = 78
+CPU_PAIRED_JSON = ROOT / "reports" / "lot_e2_ml029_cpu_paired_ml038-rank-table-clean-2026-11-10.json"
+
+
+def _cpu_evidence_markdown() -> list[str]:
+    if not CPU_PAIRED_JSON.is_file():
+        return [
+            "A comparação pareada CPU de cinco seeds ainda está pendente. Nenhum save/perfil instalado foi consultado.",
+        ]
+    payload = json.loads(CPU_PAIRED_JSON.read_text(encoding="utf-8"))
+    pairs = payload["paired_results"]
+    if len(pairs) != 5 or payload["calibration"]["cycles_per_seed"] != 100:
+        return [
+            f"A simulação pareada parcial contém {len(pairs)} de 5 seeds; o gate econômico continua aberto. Veja `{CPU_PAIRED_JSON.name}`.",
+        ]
+
+    def average(scenario: str, key: str) -> float:
+        return sum(float(pair[scenario]["summary"][key]) for pair in pairs) / len(pairs)
+
+    def total(scenario: str, key: str) -> int:
+        return sum(int(pair[scenario]["summary"][key]) for pair in pairs)
+
+    before_success = average("baseline", "cpu_success_rate") * 100
+    after_success = average("ml029_e2", "cpu_success_rate") * 100
+    before_xp = total("baseline", "cpu_xp_net")
+    after_xp = total("ml029_e2", "cpu_xp_net")
+    xp_delta = (after_xp / max(1, before_xp) - 1) * 100
+    before_gold = total("baseline", "cpu_gold_net")
+    after_gold = total("ml029_e2", "cpu_gold_net")
+    before_actions = average("baseline", "cpu_actions_per_cycle_global")
+    after_actions = average("ml029_e2", "cpu_actions_per_cycle_global")
+    rows = [
+        "A medição pareada foi concluída com 5 seeds determinísticas e 100 Vigílias por tratamento, usando um template descartável sem estado/ciclo regional prévio e clones SQLite temporários com journaling desativado. Nenhum save/perfil real foi consultado.",
+        "",
+        f"No agregado: sucesso CPU médio {before_success:.2f}% → {after_success:.2f}% ({after_success-before_success:+.2f} p.p.); XP global {before_xp:,} → {after_xp:,} ({xp_delta:+.1f}%); ouro líquido {before_gold:,} → {after_gold:,}; ações/ciclo {before_actions:.2f} → {after_actions:.2f}; portais {total('baseline','opened_portals')} → {total('ml029_e2','opened_portals')}; rebeliões abertas {total('baseline','opened_rebellions')} → {total('ml029_e2','opened_rebellions')}.".replace(",", "."),
+        "",
+        "| Fase | Sucessos de contrato / iniciados | Chance média | XP líquido | ciclos ameaça ≥85 / segurança ≤25 |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for phase in ("early", "mid", "late"):
+        base = payload["totals"]["baseline"].get(f"global|{phase}", {})
+        candidate = payload["totals"]["ml029_e2"].get(f"global|{phase}", {})
+        def rate(bucket: dict, key: str, count_key: str) -> float:
+            return float(bucket.get(key, 0)) / max(1, float(bucket.get(count_key, 0)))
+        rows.append(
+            f"| {phase} | {int(base.get('contract_successes',0))}/{int(base.get('contract_started',0))} → "
+            f"{int(candidate.get('contract_successes',0))}/{int(candidate.get('contract_started',0))} "
+            f"| {rate(base,'contract_chance_sum','contract_chance_samples'):.1f}% → "
+            f"{rate(candidate,'contract_chance_sum','contract_chance_samples'):.1f}% "
+            f"| {int(base.get('resource_net_xp',0)):,} → {int(candidate.get('resource_net_xp',0)):,} "
+            f"| {int(base.get('threat_85_cycles',0))}/{int(base.get('security_25_cycles',0))} → "
+            f"{int(candidate.get('threat_85_cycles',0))}/{int(candidate.get('security_25_cycles',0))} |".replace(",", ".")
+        )
+    rows += [
+        "",
+        "O runner valida que o banco molde não tenha `regional_guild_state` nem `regional_world_state` antes de criar os clones. As tentativas anteriores com um molde já regionalizado foram excluídas porque algumas seeds falharam ao trocar a região natal por colisão de slot; a amostra válida usa o molde limpo e concluiu as cinco seeds solicitadas sem esse erro.",
+        "",
+        "Comando reproduzível: `python scripts/balance/run_ml038_cpu_paired.py --template-db .lot-e2-test-tmp/ml029-level-inspect/saves/fc28e905-8e2e-4a15-9f14-2edb9e61f057.db --limit 5 --label ml038-rank-table-clean-2026-11-10`.",
+        "",
+        f"Detalhe por seed/fase: [Markdown](lot_e2_ml029_cpu_paired_{CPU_PAIRED_JSON.stem.split('paired_',1)[1]}.md), [CSV](lot_e2_ml029_cpu_paired_{CPU_PAIRED_JSON.stem.split('paired_',1)[1]}.csv), [JSON]({CPU_PAIRED_JSON.name}).",
+        "",
+        "O impacto em sucesso e XP da CPU é relevante e persiste nas cinco seeds; ações mantêm-se estáveis, enquanto as pressões regionais e eventos mudam. O CR aprovou tecnicamente o código, mas manteve o gate econômico aberto até que haja decisão explícita sobre mitigação/critério de aceite. Não reduzir ou alterar os multiplicadores definidos pelo usuário sem nova decisão.",
+    ]
+    return rows
 
 
 def main() -> None:
@@ -150,7 +214,7 @@ def main() -> None:
         "",
         "O snapshot existente permanece imutável; gathering, long idle, masmorras, chefes e poder configurado no template seguem fora da mudança. Os cinco testes direcionados de `tests/test_ml029_mission_power.py` passaram.",
         "",
-        "A comparação completa de cinco seeds não terminou. A criação de campanha descartável pelo caminho normal falhou em `CampaignService.create_campaign` → `run_massive_content_seed` → `_insert_missing(ItemTemplate, ...)`, com `sqlite3.OperationalError: unable to open database file`; um SQLite mínimo sob `%TEMP%` também falhou. A alternativa usou uma campanha de teste existente como molde somente-leitura e desligou journaling apenas nos bancos clonados descartáveis. Uma seed pareada de 100 Vigílias concluiu: sucesso CPU 87,36% → 62,72% (−24,64 p.p.), XP global 1.962.551 → 1.549.955 (−21,0%), ouro líquido 21.600 → 21.600, ações/ciclo 50,79 → 50,80, portais 5 → 6 e rebeliões 0 → 0. Detalhes: [relatório da seed pareada](lot_e2_ml029_cpu_paired_ml038-rank-table-2026-11-09.md), com dados [CSV](lot_e2_ml029_cpu_paired_ml038-rank-table-2026-11-09.csv) e [JSON](lot_e2_ml029_cpu_paired_ml038-rank-table-2026-11-09.json). A tentativa de cinco seeds terminou após ~2 min 50 s, depois da primeira seed completa e durante o baseline da segunda; interrompi somente o processo descartável, sem erro/stacktrace nessa execução. Comando para reproduzir: `python scripts/balance/run_ml038_cpu_paired.py --template-db .lot-e2-test-tmp/ml029-seed-inspect/saves/259d3642-cb89-4932-b4fb-5fd7f2383276.db --limit 5 --label ml038-rank-table-followup-2026-11-10`. A evidência parcial sugere impacto forte no sucesso/XP da CPU, mas uma seed não é validação econômica robusta; falta uma simulação determinística menor do efeito CPU ou uma execução longa posterior. Não foram consultados saves/perfis reais.",
+        *_cpu_evidence_markdown(),
         "",
         f"CSV reproduzível: `{csv_path.name}`. Gerador: `scripts/balance/report_ml038_rank_power.py`.",
     ]
