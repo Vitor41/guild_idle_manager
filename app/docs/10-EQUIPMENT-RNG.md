@@ -284,13 +284,16 @@ Regra:
 * item instance precisa pertencer à guilda do usuário;
 * item precisa ser do tipo `equipment`;
 * mercenário precisa atender o `required_level`;
-* mercenário só pode ter um item por slot;
-* se já houver item no mesmo slot, bloquear ou substituir de forma controlada.
+* mercenário respeita a capacidade de cada slot (anel e brinco têm duas posições);
+* ao equipar em slot único ocupado, substituir o item atual na mesma ação e devolvê-lo ao inventário;
+* ao equipar em anel ou brinco com as duas posições ocupadas, solicitar qual item do mesmo tipo será substituído.
 
-Para o MVP, preferir bloquear:
+As trocas são atômicas: se a validação ou gravação falhar, o item atual permanece equipado e o novo permanece livre. A seleção de substituição não aceita equipamento de outro slot, mercenário ou guilda.
+
+Mensagem de validação para escolha ausente em slot duplicado:
 
 ```text
-Este slot já possui um equipamento. Desequipe o item atual antes de equipar outro.
+Escolha qual equipamento deste slot deseja substituir.
 ```
 
 ## Desequipar item

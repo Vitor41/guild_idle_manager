@@ -10,7 +10,6 @@ from app.models.item import GuildItemInstance, ItemTemplate
 from app.models.mercenary import Mercenary
 from app.models.mission import MissionTemplate
 from app.repositories.item_repository import (
-    count_equipped_items_in_slot,
     create_item_instance,
     get_equipped_item_in_slot,
     get_item_instance_by_guild,
@@ -596,6 +595,8 @@ def get_available_equipment_for_mercenary(
         current_score = get_item_power_score(current_item) if current_item else 0
         item.comparison_delta = item.equipment_power_score - current_score
         item.comparison_current_name = clean_generated_name(current_item.item_template.name) if current_item else None
+        item.replacement_required = get_slot_capacity(slot) > 1 and len(current) >= get_slot_capacity(slot)
+        item.replacement_candidate_ids = [int(equipped.id) for equipped in current] if item.replacement_required else []
         available.append(item)
     return available
 
@@ -605,6 +606,7 @@ def equip_item(
     guild_id: int,
     mercenary_id: int,
     item_instance_id: int,
+    replacement_item_instance_id: int | None = None,
 ) -> GuildItemInstance:
     mercenary = get_mercenary_by_guild(db, guild_id, mercenary_id)
     if mercenary is None:
@@ -619,32 +621,50 @@ def equip_item(
         raise EquipmentError("Item nao e equipamento.")
     if item_instance.equipped_to_mercenary_id is not None:
         raise EquipmentError("Equipamento ja esta em uso.")
-    item_instance.equipment_slot = normalize_equipment_slot(item_instance.equipment_slot)
+    slot = normalize_equipment_slot(item_instance.equipment_slot)
     if mercenary.level < item_instance.required_level:
         raise EquipmentError("Mercenario nao possui nivel suficiente para equipar este item.")
     compatible, _ = can_class_equip_item(mercenary, item_instance.item_template)
     if not compatible:
         raise EquipmentError("A classe deste mercenario nao pode usar este equipamento.")
-    if item_instance.equipment_slot == "off_hand" and not can_use_off_hand_weapon(mercenary):
+    if slot == "off_hand" and not can_use_off_hand_weapon(mercenary):
         raise EquipmentError("Esta classe nao pode usar arma secundaria.")
-    if item_instance.equipment_slot == "shield" and not can_use_shield(mercenary):
+    if slot == "shield" and not can_use_shield(mercenary):
         raise EquipmentError("Esta classe nao pode usar escudo.")
-    if item_instance.equipment_slot in {"off_hand", "shield"}:
-        occupied_off_hand = count_equipped_items_in_slot(
-            db,
-            guild_id,
-            mercenary.id,
-            "off_hand",
-        ) + count_equipped_items_in_slot(db, guild_id, mercenary.id, "shield")
-        if occupied_off_hand >= 1:
-            raise EquipmentError("A mao secundaria ja possui um equipamento.")
-    elif count_equipped_items_in_slot(db, guild_id, mercenary.id, item_instance.equipment_slot) >= get_slot_capacity(item_instance.equipment_slot):
-        raise EquipmentError("Este slot ja possui um equipamento. Desequipe o item atual antes de equipar outro.")
+    comparable_slots = {"off_hand", "shield"} if slot in {"off_hand", "shield"} else {slot}
+    equipped_items = list_equipment_for_mercenary(db, guild_id, mercenary.id)
+    current_in_slot = [
+        equipped for equipped in equipped_items
+        if normalize_equipment_slot(equipped.equipment_slot) in comparable_slots
+    ]
+    capacity = get_slot_capacity(slot)
+    replacement_item = None
+    if len(current_in_slot) >= capacity:
+        if capacity > 1:
+            if replacement_item_instance_id is None:
+                raise EquipmentError("Escolha qual equipamento deste slot deseja substituir.")
+            replacement_item = next(
+                (equipped for equipped in current_in_slot if equipped.id == replacement_item_instance_id),
+                None,
+            )
+            if replacement_item is None:
+                raise EquipmentError("O equipamento escolhido para substituicao nao pertence a este slot.")
+        else:
+            replacement_item = current_in_slot[0]
+    elif replacement_item_instance_id is not None:
+        raise EquipmentError("Nao ha equipamento ocupado neste slot para substituir.")
 
-    item_instance.equipped_to_mercenary_id = mercenary.id
-    db.add(item_instance)
-    db.commit()
-    db.refresh(item_instance)
+    try:
+        if replacement_item is not None:
+            replacement_item.equipped_to_mercenary_id = None
+            db.add(replacement_item)
+        item_instance.equipment_slot = slot
+        item_instance.equipped_to_mercenary_id = mercenary.id
+        db.add(item_instance)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return item_instance
 
 

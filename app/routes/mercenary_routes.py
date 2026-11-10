@@ -126,7 +126,13 @@ async def equip(
 
     form = await read_form_fields(request)
     try:
-        equip_mercenary_item(db, guild, mercenary_id, form.get("item_instance_id", ""))
+        equip_mercenary_item(
+            db,
+            guild,
+            mercenary_id,
+            form.get("item_instance_id", ""),
+            form.get("replacement_item_instance_id") or None,
+        )
     except MercenaryEquipmentError as error:
         context = get_mercenary_detail_context(db, guild, mercenary_id)
         if context is None:

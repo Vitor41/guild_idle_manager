@@ -25,6 +25,7 @@ from app.services.equipment_service import (
     get_available_equipment_for_mercenary,
     get_mercenary_attribute_summary,
     get_equipment_slot_label,
+    normalize_equipment_slot,
     unequip_item,
 )
 from app.services.icon_service import get_item_icon, get_item_icon_path, get_slot_icon
@@ -182,6 +183,12 @@ def get_mercenary_detail_context(
         item.slot_label = get_equipment_slot_label(item.equipment_slot)
         annotate_item_bonus_view(item)
     available_equipment = get_available_equipment_for_mercenary(db, guild.id, mercenary)
+    replacement_candidates = [
+        item for item in summary.get("equipment_items", [])
+        if normalize_equipment_slot(item.equipment_slot) in {"ring", "earring"}
+    ]
+    for item in replacement_candidates:
+        item.replacement_slot = normalize_equipment_slot(item.equipment_slot)
     skills = ensure_mercenary_skills(db, mercenary)
     for item in available_equipment:
         item.display_name = clean_generated_name(item.item_template.name)
@@ -194,6 +201,7 @@ def get_mercenary_detail_context(
         "mercenary": mercenary,
         "attribute_summary": summary,
         "available_equipment": available_equipment,
+        "equipment_replacement_candidates": replacement_candidates,
         "skills": skills,
         "skill_effect_label": effect_label,
         "skill_effect_suffix": effect_suffix,
@@ -212,13 +220,20 @@ def equip_mercenary_item(
     guild: Guild,
     mercenary_id: int,
     item_instance_id: str,
+    replacement_item_instance_id: str | None = None,
 ) -> None:
     try:
         parsed_item_id = int(item_instance_id)
     except ValueError as exc:
         raise MercenaryEquipmentError("Equipamento invalido.") from exc
+    parsed_replacement_id = None
+    if replacement_item_instance_id:
+        try:
+            parsed_replacement_id = int(replacement_item_instance_id)
+        except ValueError as exc:
+            raise MercenaryEquipmentError("Equipamento para substituicao invalido.") from exc
     try:
-        equip_item(db, guild.id, mercenary_id, parsed_item_id)
+        equip_item(db, guild.id, mercenary_id, parsed_item_id, parsed_replacement_id)
     except EquipmentError as exc:
         raise MercenaryEquipmentError(str(exc)) from exc
 

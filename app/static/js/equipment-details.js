@@ -112,6 +112,42 @@
     }
   }
 
+  const initializeEquipmentSwap = (root = document) => {
+    root.querySelectorAll("[data-equipment-swap]").forEach((form) => {
+      const itemSelect = form.querySelector("[data-equipment-swap-item]");
+      const replacementField = form.querySelector("[data-equipment-replacement-field]");
+      const replacementSelect = form.querySelector("[data-equipment-swap-replacement]");
+      if (!itemSelect || !replacementField || !replacementSelect) return;
+
+      const updateReplacementOptions = () => {
+        const selectedItem = itemSelect.selectedOptions[0];
+        let candidateIds = [];
+        try {
+          candidateIds = JSON.parse(selectedItem?.dataset.replacementCandidateIds || "[]");
+        } catch (_error) {
+          candidateIds = [];
+        }
+        const required = selectedItem?.dataset.replacementRequired === "true";
+        replacementField.hidden = !required;
+        replacementSelect.required = required;
+
+        Array.from(replacementSelect.options).slice(1).forEach((option) => {
+          const allowed = required && candidateIds.includes(Number(option.value));
+          option.hidden = !allowed;
+          option.disabled = !allowed;
+        });
+        if (!candidateIds.includes(Number(replacementSelect.value))) {
+          replacementSelect.value = "";
+        }
+      };
+
+      itemSelect.addEventListener("change", updateReplacementOptions);
+      updateReplacementOptions();
+    });
+  };
+
   window.initializeEquipmentDetails = initializeEquipmentDetails;
   initializeEquipmentDetails(document);
+  window.initializeEquipmentSwap = initializeEquipmentSwap;
+  initializeEquipmentSwap(document);
 })();
