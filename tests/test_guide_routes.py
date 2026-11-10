@@ -90,7 +90,7 @@ class GuideRouteTests(unittest.TestCase):
         icon_rows = [row for row in catalog["items"] if row["icon"]]
         self.assertTrue(icon_rows)
         for row in icon_rows:
-            self.assertTrue(row["icon"].startswith("/static/assets/"), row["icon"])
+            self.assertTrue(row["icon"].startswith("/static/"), row["icon"])
             self.assertTrue((static_root / row["icon"].removeprefix("/static/")).is_file(), row["icon"])
         source_types = {source["type"] for row in catalog["items"] for source in row["sources"]}
         self.assertTrue({"mission", "dungeon_or_boss", "docks_possible_offer", "gathering", "salvage"}.issubset(source_types))

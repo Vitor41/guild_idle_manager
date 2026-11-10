@@ -75,7 +75,9 @@ def _complete_due_job(db: Session, guild_id: int, now: datetime) -> SupplyWorksh
             changed = db.execute(update(SupplyWorkshopJob).where(
                 SupplyWorkshopJob.id == job.id, SupplyWorkshopJob.status == "in_progress",
                 SupplyWorkshopJob.ends_at <= now,
-            ).values(status="completed", completed_at=now, updated_at=now))
+            ).values(status="completed", completed_at=now, updated_at=now).execution_options(
+                synchronize_session=False,
+            ))
             if changed.rowcount != 1:
                 return db.get(SupplyWorkshopJob, job.id)
             accepted, overflow = add_inventory_quantity_capped(

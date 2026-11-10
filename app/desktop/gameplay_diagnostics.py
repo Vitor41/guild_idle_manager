@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -40,7 +41,8 @@ def _logger_for(path: Path) -> logging.Logger:
         logger = _LOGGERS.get(key)
         if logger is None:
             path.parent.mkdir(parents=True, exist_ok=True)
-            logger = logging.getLogger(f"gim.gameplay.{len(_LOGGERS)}")
+            logger_name = sha256(key.encode("utf-8")).hexdigest()
+            logger = logging.getLogger(f"gim.gameplay.{logger_name}")
             logger.setLevel(logging.INFO)
             logger.propagate = False
             logger.addHandler(RotatingFileHandler(

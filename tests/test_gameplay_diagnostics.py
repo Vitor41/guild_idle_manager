@@ -69,3 +69,33 @@ class GameplayDiagnosticsTests(unittest.TestCase):
                 self.assertEqual((handler.maxBytes, handler.backupCount), (1_000_000, 2))
             finally:
                 close_gameplay_logger(path)
+
+    def test_closing_one_temp_logger_does_not_disconnect_another_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first_path, second_path, third_path = (root / f"{name}.log" for name in ("first", "second", "third"))
+
+            def write(path, action):
+                log_gameplay_action(
+                    action=action, route="/diagnostic-test", diagnostic_id=action,
+                    status_code=500, outcome="test", log_path=path,
+                )
+
+            try:
+                write(first_path, "temp.first")
+                write(second_path, "temp.second.before")
+                close_gameplay_logger(first_path)
+                write(third_path, "temp.third")
+                close_gameplay_logger(third_path)
+                write(second_path, "temp.second.after")
+
+                second_log = second_path.read_text(encoding="utf-8")
+                third_log = third_path.read_text(encoding="utf-8")
+                self.assertIn("action=temp.second.before", second_log)
+                self.assertIn("action=temp.second.after", second_log)
+                self.assertNotIn("action=temp.third", second_log)
+                self.assertIn("action=temp.third", third_log)
+                self.assertNotIn("action=temp.second.after", third_log)
+            finally:
+                close_gameplay_logger(second_path)
+                close_gameplay_logger(third_path)
