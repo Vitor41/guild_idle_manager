@@ -50,6 +50,14 @@ def _chance_text(source: dict) -> str:
     return "produção por receita; sem chance de drop"
 
 
+def _guide_icon_path(item_model: ItemTemplate) -> str | None:
+    """Return a URL served by the app's only static mount."""
+    icon_path = get_item_icon_path(item_model)
+    if icon_path and icon_path.startswith("/assets/"):
+        return f"/static{icon_path}"
+    return icon_path
+
+
 def build_guide_catalog(db) -> dict[str, object]:
     manifest = build_material_source_manifest(db)
     item_by_id = {item.id: item for item in db.query(ItemTemplate).filter(
@@ -107,7 +115,7 @@ def build_guide_catalog(db) -> dict[str, object]:
                 "family": item.get("family") or "", "tier": item["tier"],
                 "equipment_slot": (model.equipment_slot or "") if item["item_type"] == "equipment" else "",
                 "level_band": item["level_band"], "item_level": item["item_level"],
-                "rarity": rarity_label(item["rarity"]), "icon": get_item_icon_path(model),
+                "rarity": rarity_label(item["rarity"]), "icon": _guide_icon_path(model),
                 "sources": sources,
             })
     entries.sort(key=lambda row: (row["item_type"], row["family"], row["tier"], row["item_level"], row["name"].casefold()))

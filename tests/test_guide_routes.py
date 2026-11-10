@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from app.database.connection import Base, create_database_engine
 from app.models.guild import Guild, GuildResources
 from app.models.item import MissionTemplateItemDrop
 from app.models.user import User
-from app.routes.guide_routes import export_guide_markdown, game_guide, guide_catalog_api, router
+from app.routes.guide_routes import _catalog_markdown, export_guide_markdown, game_guide, guide_catalog_api, router
 from app.seeds.massive_content import run_massive_content_seed
 from app.services.crafting_service import seed_crafting_recipes
 
@@ -63,7 +64,10 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn('data-filter-name', html)
         self.assertIn('data-filter-family', html)
         self.assertIn('data-filter-band', html)
-        self.assertIn('data-filter-tier', html)
+        self.assertNotIn('data-filter-tier', html)
+        self.assertNotIn("Tier ${item.tier}", (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8"))
+        self.assertNotIn("Tier", html)
+        self.assertIn("guide-catalog-icon-fallback", (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8"))
         self.assertIn('data-filter-source', html)
         self.assertIn('data-guide-catalog-retry', html)
         self.assertLess(html.index("/static/js/guide-utils.js"), html.index("/static/js/guide.js"))
@@ -82,6 +86,12 @@ class GuideRouteTests(unittest.TestCase):
         import json
         catalog = json.loads(catalog_response.body)
         self.assertTrue(catalog["items"])
+        static_root = Path(__file__).resolve().parents[1] / "app/static"
+        icon_rows = [row for row in catalog["items"] if row["icon"]]
+        self.assertTrue(icon_rows)
+        for row in icon_rows:
+            self.assertTrue(row["icon"].startswith("/static/assets/"), row["icon"])
+            self.assertTrue((static_root / row["icon"].removeprefix("/static/")).is_file(), row["icon"])
         source_types = {source["type"] for row in catalog["items"] for source in row["sources"]}
         self.assertTrue({"mission", "dungeon_or_boss", "docks_possible_offer", "gathering", "salvage"}.issubset(source_types))
         equipment = next(row for row in catalog["items"] if row["item_type"] == "equipment" and row["sources"])
@@ -122,6 +132,63 @@ class GuideRouteTests(unittest.TestCase):
         self.assertNotIn("Carregando catálogo", markdown)
         self.assertNotIn("Nenhum item corresponde aos filtros", markdown)
         self.assertNotIn("Fonte/atividade", markdown)
+        self.assertNotIn("Tier ", markdown)
+
+    def test_markdown_consolidates_equivalent_rarities_but_keeps_distinct_sources(self):
+        base = {
+            "name": "Espada Solar", "item_type": "equipment", "item_type_label": "Equipamento",
+            "family": "", "equipment_slot": "sword", "level_band": "1-10", "item_level": 5,
+            "tier": 2, "sources": [{
+                "type": "dungeon_or_boss", "label": "Chefes", "name": "Dragão",
+                "requirement": "guilda nível 5+", "chance": "10% base", "quantity": "1 unidade",
+                "price": None, "condition": "",
+            }],
+        }
+        catalog = {"items": [
+            {**base, "id": 1, "rarity": "Raro"},
+            {**base, "id": 2, "rarity": "Épico", "sources": [{**base["sources"][0], "chance": "4% base", "requirement": "guilda nível 12+"}]},
+        ]}
+        markdown = _catalog_markdown(catalog)
+        self.assertEqual(markdown.count("### Espada Solar"), 1)
+        self.assertIn("raridade: Raro, Épico", markdown)
+        self.assertIn("10% base", markdown)
+        self.assertIn("4% base", markdown)
+        self.assertIn(r"guilda nível 5\+", markdown)
+        self.assertIn(r"guilda nível 12\+", markdown)
+        self.assertNotIn("Tier 2", markdown)
+
+    def test_catalog_icon_urls_are_served_by_the_static_mount(self):
+        import json
+        catalog = json.loads(guide_catalog_api(self.db, self.user).body)
+        icon_urls = {row["icon"] for row in catalog["items"] if row["icon"]}
+        self.assertTrue(icon_urls)
+        async def get_static(path):
+            messages = []
+            request_sent = False
+            async def receive():
+                nonlocal request_sent
+                if request_sent:
+                    await asyncio.Event().wait()
+                request_sent = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            async def send(message):
+                messages.append(message)
+            scope = {
+                "type": "http", "http_version": "1.1", "method": "GET", "scheme": "http",
+                "path": path, "raw_path": path.encode(), "root_path": "", "query_string": b"",
+                "headers": [], "client": ("testclient", 123), "server": ("testserver", 80), "app": self.app,
+            }
+            await self.app(scope, receive, send)
+            response = next(message for message in messages if message["type"] == "http.response.start")
+            body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
+            return response["status"], dict(response["headers"]), body
+        for icon_url in icon_urls:
+            with self.subTest(icon_url=icon_url):
+                status, headers, body = asyncio.run(get_static(icon_url))
+                content_type = dict((key.decode().lower(), value.decode()) for key, value in headers.items()).get("content-type", "")
+                self.assertEqual(status, 200, icon_url)
+                self.assertTrue(content_type.startswith("image/"), icon_url)
+                self.assertTrue(body, icon_url)
 
 
 if __name__ == "__main__":

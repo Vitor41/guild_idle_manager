@@ -57,7 +57,7 @@
         <div>
           <p class="eyebrow">Equipamentos</p>
           <h2>Equipamentos: raridade, nível e refino</h2>
-          <p class="note">Equipamentos usam as mesmas seis raridades. O nível mínimo de uso e o refino +N são exibidos em campos separados; faixas internas de balanceamento não são tiers de raridade.</p>
+          <p class="note">Equipamentos usam as mesmas seis raridades. O nível mínimo de uso e o refino +N aparecem em campos próprios.</p>
         </div>
       </div>
       <div class="tier-guide-grid">{% for rarity in rarity_cards %}<article class="tier-guide-card rarity-card rarity-{{ rarity.code }}"><span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span><p>{{ rarity.description }}</p><p class="note">O item também informa nível mínimo e refino de forma independente.</p></article>{% endfor %}</div>

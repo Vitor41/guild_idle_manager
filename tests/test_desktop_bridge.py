@@ -57,7 +57,7 @@ class DesktopBridgeTests(unittest.TestCase):
         }
         self.assertEqual(
             exposed | methods,
-            {"export_campaign", "confirm_export", "import_campaign", "restore_backup"},
+            {"export_campaign", "export_guide_markdown", "confirm_export", "import_campaign", "restore_backup"},
         )
 
     def test_existing_export_requires_token_confirmation_without_exposing_path(self):
@@ -86,6 +86,25 @@ class DesktopBridgeTests(unittest.TestCase):
         bridge, _campaigns, _patched = self._bridge(None)
         result = bridge.confirm_export("expired-token", True)
         self.assertEqual(result, {"error": "A confirmação da exportação expirou. Tente novamente."})
+
+    def test_guide_export_writes_and_verifies_markdown_at_selected_destination(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            selected = Path(temp_dir) / "guia.txt"
+            bridge, _campaigns, patched = self._bridge((str(selected),))
+            markdown = "# Guia\n\nCatálogo PT-BR: Épico."
+            with patch("app.desktop.bridge.user_data_directory", return_value=Path(temp_dir)), patched:
+                result = bridge.export_guide_markdown(markdown)
+            destination = Path(temp_dir) / "guia.md"
+            self.assertEqual(result, {"ok": True, "file_name": "guia.md", "path": str(destination)})
+            self.assertEqual(destination.read_bytes(), markdown.encode("utf-8"))
+
+    def test_guide_export_cancel_and_empty_content_never_report_success(self):
+        bridge, _campaigns, patched = self._bridge(None)
+        with tempfile.TemporaryDirectory() as temp_dir, patch(
+            "app.desktop.bridge.user_data_directory", return_value=Path(temp_dir)
+        ), patched:
+            self.assertEqual(bridge.export_guide_markdown("# Guia"), {"cancelled": True})
+        self.assertIn("vazio ou inválido", bridge.export_guide_markdown(" ")["error"])
 
 
 if __name__ == "__main__":

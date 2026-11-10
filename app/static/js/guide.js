@@ -66,7 +66,6 @@
     type: catalogRoot?.querySelector("[data-filter-type]"),
     family: catalogRoot?.querySelector("[data-filter-family]"),
     band: catalogRoot?.querySelector("[data-filter-band]"),
-    tier: catalogRoot?.querySelector("[data-filter-tier]"),
     source: catalogRoot?.querySelector("[data-filter-source]"),
   };
   const filterLabels = {
@@ -123,20 +122,10 @@
     rowsNode.replaceChildren();
     const visibleItems = new Set();
     const anchorAdded = new Set();
-    const groupedRows = new Map();
     const selectedFilters = Object.fromEntries(Object.entries(filters).map(([key, control]) => [key, control?.value || "all"]));
     const visibleRows = utils.filterCatalog(catalogItems, selectedFilters);
-    for (const { item, sources: matchingSources } of visibleRows) {
-      visibleItems.add(item.id);
-      const slot = item.equipment_slot ? ` · ${item.equipment_slot}` : "";
-      const itemLabel = `${item.name} · ${item.item_type_label}${slot} · ${item.rarity} · Tier ${item.tier} · ${item.level_band}`;
-      for (const source of matchingSources) {
-        const groupKey = `${source.filter_key || "none"}\u0000${source.label}\u0000${source.name || ""}`;
-        if (!groupedRows.has(groupKey)) groupedRows.set(groupKey, { source, entries: [] });
-        groupedRows.get(groupKey).entries.push({ item, itemLabel, source });
-      }
-    }
-    const groups = Array.from(groupedRows.values()).sort((left, right) =>
+    visibleRows.forEach(({ item }) => visibleItems.add(item.id));
+    const groups = utils.groupCatalogSources(visibleRows).sort((left, right) =>
       left.source.label.localeCompare(right.source.label, "pt-BR") ||
       (left.source.name || "").localeCompare(right.source.name || "", "pt-BR"));
     for (const group of groups) {
@@ -150,14 +139,13 @@
       heading.textContent = group.source.name ? `${group.source.label} · ${group.source.name}` : group.source.label;
       headingRow.append(heading);
       rowsNode.append(headingRow);
-      for (const { item, itemLabel, source } of group.entries) {
+      for (const { item, itemLabel, source, rarities } of group.entries) {
         const row = document.createElement("tr");
         row.dataset.guideCatalogRow = "";
         row.dataset.guideItemId = String(item.id);
         row.dataset.guideItemName = item.name.toLocaleLowerCase("pt-BR");
         row.dataset.guideItemType = item.item_type;
         row.dataset.guideFamily = item.family;
-        row.dataset.guideTier = String(item.tier);
         row.dataset.guideBand = item.level_band;
         row.dataset.guideSource = source.filter_key || "none";
         const sourceCell = document.createElement("td");
@@ -179,11 +167,35 @@
           icon.width = 44;
           icon.height = 44;
           icon.loading = "lazy";
+          icon.addEventListener("error", () => {
+            const fallback = document.createElement("span");
+            fallback.className = "guide-catalog-icon-fallback";
+            fallback.setAttribute("aria-hidden", "true");
+            fallback.textContent = "◇";
+            icon.replaceWith(fallback);
+          }, { once: true });
           itemCell.append(icon);
+        } else {
+          const fallback = document.createElement("span");
+          fallback.className = "guide-catalog-icon-fallback";
+          fallback.setAttribute("aria-hidden", "true");
+          fallback.textContent = "◇";
+          itemCell.append(fallback);
         }
         const itemName = document.createElement("strong");
         itemName.textContent = itemLabel;
         itemCell.append(itemName);
+        const rarityList = document.createElement("span");
+        rarityList.className = "guide-catalog-rarities";
+        rarityList.setAttribute("aria-label", "Raridades disponíveis");
+        for (const rarity of rarities) {
+          const badge = document.createElement("span");
+          const rarityClass = utils.normalize(rarity).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-");
+          badge.className = `guide-catalog-rarity guide-catalog-rarity--${rarityClass}`;
+          badge.textContent = rarity;
+          rarityList.append(badge);
+        }
+        itemCell.append(rarityList);
         const reqCell = document.createElement("td"); reqCell.dataset.label = "Requisito";
         reqCell.textContent = source.price ? `${source.requirement}; preço unitário registrado: ${source.price} ouro` : source.requirement;
         const chanceCell = document.createElement("td"); chanceCell.dataset.label = "Chance"; chanceCell.textContent = source.chance;
@@ -214,7 +226,6 @@
       apiSources = data.filters?.sources || [];
       setOptions(filters.family, data.filters?.families || [], familyLabels);
       setOptions(filters.band, (data.filters?.level_bands || []).sort((a, b) => Number(a.split("-")[0]) - Number(b.split("-")[0])));
-      setOptions(filters.tier, data.filters?.tiers || []);
       setOptions(filters.source, apiSources, filterLabels);
       if (emptyNode) emptyNode.hidden = true;
       renderCatalog();
@@ -248,6 +259,15 @@
     exportStatus.setAttribute("role", "status");
     exportStatus.textContent = "Preparando o arquivo Markdown do Guia…";
     try {
+      const nativeApi = window.pywebview?.api;
+      const browserSavePromise = typeof nativeApi?.export_guide_markdown === "function"
+        ? null
+        : (typeof window.showSaveFilePicker === "function"
+          ? window.showSaveFilePicker({
+            suggestedName: "guia-guild-idle-manager.md",
+            types: [{ description: "Arquivo Markdown", accept: { "text/markdown": [".md"] } }],
+          }).then((fileHandle) => ({ fileHandle }), (error) => ({ error }))
+          : null);
       const response = await fetch("/guide/export.md", { credentials: "same-origin", cache: "no-store" });
       if (!response.ok || !(response.headers.get("content-type") || "").includes("text/markdown")) {
         throw new Error(response.ok ? "O servidor não retornou um arquivo Markdown." : `Falha ${response.status} ao preparar o arquivo.`);
@@ -259,15 +279,37 @@
       const quotedName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
       const suggestedName = encodedName ? decodeURIComponent(encodedName) : (quotedName || "guia-guild-idle-manager.md");
       const fileName = suggestedName.split(/[\\/]/).pop() || "guia-guild-idle-manager.md";
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      exportStatus.textContent = `Guia gerado e enviado ao navegador: ${fileName}. Confira a pasta de downloads definida no navegador.`;
+      if (typeof nativeApi?.export_guide_markdown === "function") {
+        const result = await nativeApi.export_guide_markdown(await blob.text());
+        if (result?.cancelled) {
+          exportStatus.textContent = "Salvamento cancelado. O arquivo não foi gravado.";
+          exportButton.textContent = "Baixar Guia em Markdown";
+          return;
+        }
+        if (!result?.ok) throw new Error(result?.error || "O aplicativo não confirmou a gravação do arquivo.");
+        exportStatus.textContent = `Guia salvo em: ${result.path || result.file_name}.`;
+      } else {
+        if (!browserSavePromise) {
+          throw new Error("Este navegador não oferece confirmação de salvamento. Abra o Guia no aplicativo desktop ou use um navegador compatível.");
+        }
+        const saveResult = await browserSavePromise;
+        if (saveResult.error) throw saveResult.error;
+        const fileHandle = saveResult.fileHandle;
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        const savedFile = await fileHandle.getFile();
+        if (savedFile.size !== blob.size) throw new Error("O navegador não confirmou o tamanho do arquivo salvo.");
+        exportStatus.textContent = `Guia salvo como ${fileHandle.name} (${savedFile.size} bytes).`;
+      }
       exportButton.textContent = "Baixar Guia em Markdown";
     } catch (error) {
+      if (error?.name === "AbortError") {
+        exportStatus.textContent = "Salvamento cancelado. O arquivo não foi gravado.";
+        exportButton.textContent = "Baixar Guia em Markdown";
+        return;
+      }
+      console.error("Falha ao exportar o Guia em Markdown", error);
       exportStatus.setAttribute("role", "alert");
       exportStatus.textContent = `${error.message || "Não foi possível preparar o Guia."} Tente novamente.`;
       exportButton.textContent = "Tentar novamente";

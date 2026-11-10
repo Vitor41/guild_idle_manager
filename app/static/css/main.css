@@ -2663,6 +2663,15 @@ html { scroll-behavior: smooth; }
 .guide-catalog-table td:nth-child(2) { min-width: 190px; }
 .guide-catalog-table td:nth-child(2) img { width: 48px; height: 48px; margin: 0 8px 0 0; object-fit: contain; vertical-align: middle; }
 .guide-catalog-table td:nth-child(n+3) { min-width: 155px; }
+.guide-catalog-rarities { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 5px 0 0 6px; vertical-align: middle; }
+.guide-catalog-rarity { display: inline-flex; padding: 2px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--parchment-soft); font-size: .72rem; line-height: 1.25; white-space: nowrap; }
+.guide-catalog-rarity--comum { border-color: #8d8371; }
+.guide-catalog-rarity--incomum { border-color: #6ea85a; }
+.guide-catalog-rarity--raro { border-color: #5d9ed6; }
+.guide-catalog-rarity--epico { border-color: #9b75d9; }
+.guide-catalog-rarity--lendario { border-color: #d2a84a; }
+.guide-catalog-rarity--mitico { border-color: #e0709b; }
+.guide-catalog-icon-fallback { display: inline-grid; width: 44px; height: 44px; margin: 0 8px 0 0; place-items: center; border: 1px solid var(--border); border-radius: 6px; color: var(--gold-2); font-size: 1.4rem; vertical-align: middle; }
 .guide-catalog-table tr:last-child td { border-bottom: 0; }
 .guide-catalog-table tr[id] { scroll-margin-top: 128px; }
 .guide-catalog-table [data-label]::before { display: none; }
