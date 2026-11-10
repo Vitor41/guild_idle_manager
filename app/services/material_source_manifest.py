@@ -10,7 +10,7 @@ from app.models.dungeon import DungeonTemplate
 from app.models.item import DungeonTemplateItemDrop, ItemTemplate, MissionTemplateItemDrop
 from app.models.mission import MissionTemplate
 from app.services.display_service import clean_generated_name
-from app.services.economy_pricing_service import effective_dock_unit_price
+from app.services.economy_pricing_service import effective_dock_unit_price, effective_equipment_dock_unit_price
 from app.services.building_balance_service import BUILDING_MAX_LEVEL, docks_values, required_guild_level_for_upgrade
 from app.services.gathering_service import preview_material_for_family
 from app.services.salvage_service import _select_salvage_material, salvage_material_family
@@ -110,9 +110,15 @@ def build_material_source_manifest(db: Session, guild_level: int | None = None, 
         if (offer.item_template_id in rows and required_dock_catalog_level <= max_dock_catalog_level
                 and offer.min_stock >= 1
                 and offer.max_stock >= offer.min_stock and offer.base_price > 0):
+            effective_price = effective_dock_unit_price(offer.base_price, item_template.base_sell_value)
+            if item_template.item_type == "equipment":
+                salvage_material = _select_salvage_material(db, item_template)
+                effective_price = effective_equipment_dock_unit_price(
+                    offer.base_price, item_template.base_sell_value, salvage_material.base_sell_value,
+                )
             rows[offer.item_template_id]["sources"].append({"type": "docks_possible_offer",
                 "merchant": clean_generated_name(merchant.name), "base_price": offer.base_price,
-                "effective_unit_price": effective_dock_unit_price(offer.base_price, item_template.base_sell_value),
+                "effective_unit_price": effective_price,
                 "stock_range": [offer.min_stock, offer.max_stock],
                 "weight": offer.weight, "min_dock_level": required_dock_catalog_level,
                 "condition": "oferta possível conforme rotação e nível do cais; peso não é probabilidade",

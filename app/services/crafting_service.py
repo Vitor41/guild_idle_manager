@@ -23,8 +23,11 @@ from app.repositories.item_repository import (
     sync_inventory_resource_totals,
 )
 from app.services.building_service import get_building_level
-from app.services.building_balance_service import docks_values
-from app.services.economy_pricing_service import effective_crafting_gold_cost, effective_dock_unit_price
+from app.services.building_balance_service import docks_values, market_values
+from app.services.economy_pricing_service import (
+    effective_crafting_gold_cost, effective_dock_unit_price, effective_equipment_dock_unit_price,
+    market_sale_unit_value,
+)
 from app.services.salvage_service import _select_salvage_material
 from app.services.equipment_service import annotate_item_bonus_view, create_equipment_instance_from_template, get_item_power_score
 from app.services.guild_progression_service import add_guild_xp
@@ -317,10 +320,16 @@ def craft_recipe(db: Session, guild: Guild, resources: GuildResources | None, re
 
 def _effective_recipe_gold_cost(db: Session, recipe, docks_level: int) -> int:
     """Prevent a crafting → Market loop from minting gold, including zero-input recipes."""
+    salvage_best_market_value = 0
+    if getattr(recipe.output_item_template, "item_type", "material") == "equipment":
+        salvage_material = _select_salvage_material(db, recipe.output_item_template)
+        salvage_best_market_value = market_sale_unit_value(
+            salvage_material.base_sell_value, market_values(100)["value_bonus_percent"],
+        ) * 3
     if not recipe.materials:
         return effective_crafting_gold_cost(
             recipe.gold_cost, recipe.output_item_template.base_sell_value,
-            recipe.output_quantity, 0,
+            recipe.output_quantity, 0, salvage_best_market_value,
         )
     if docks_level < 1:
         return int(recipe.gold_cost)
@@ -341,7 +350,10 @@ def _effective_recipe_gold_cost(db: Session, recipe, docks_level: int) -> int:
                 effective = effective_dock_unit_price(offer.base_price, template.base_sell_value)
                 lowest_price[template.id] = min(effective, lowest_price.get(template.id, effective))
             elif template.item_type == "equipment":
-                effective = effective_dock_unit_price(offer.base_price, template.base_sell_value)
+                salvage_material = _select_salvage_material(db, template)
+                effective = effective_equipment_dock_unit_price(
+                    offer.base_price, template.base_sell_value, salvage_material.base_sell_value,
+                )
                 previous = cheapest_equipment.get(template.id)
                 if previous is None or effective < previous[0]:
                     cheapest_equipment[template.id] = (effective, template)
@@ -362,7 +374,7 @@ def _effective_recipe_gold_cost(db: Session, recipe, docks_level: int) -> int:
                      for material in recipe.materials)
     return effective_crafting_gold_cost(
         recipe.gold_cost, recipe.output_item_template.base_sell_value,
-        recipe.output_quantity, input_cost,
+        recipe.output_quantity, input_cost, salvage_best_market_value,
     )
 
 

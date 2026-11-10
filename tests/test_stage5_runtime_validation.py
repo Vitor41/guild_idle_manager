@@ -679,6 +679,7 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
             job = start_salvage(
                 self.db, self.guild, self.resources, "1", str(recipe.output_item_template_id), "1",
             )
+        self.assertEqual(job.gold_cost, 50)
         salvage_end = job.ends_at.replace(tzinfo=timezone.utc) if job.ends_at.tzinfo is None else job.ends_at
         with patch.object(salvage_service, "utc_now", return_value=salvage_end + timedelta(seconds=1)), \
                 patch.object(salvage_service, "SystemRandom", return_value=random.Random(0)):

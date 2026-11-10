@@ -35,7 +35,7 @@ class EconomyArbitrageTests(unittest.TestCase):
                     result = audit(db)
                     protected_row = next(
                         row for row in result["docks_to_crafting_to_market"]["rows"]
-                        if row["configured_net_gold"] > 0
+                        if row["effective_craft_gold_cost"] > row["configured_craft_gold_cost"]
                         and not row["materials_unavailable_from_docks_or_salvage"]
                     )
                     recipe = db.scalar(select(CraftingRecipe).where(CraftingRecipe.id == protected_row["recipe_id"]))
@@ -54,6 +54,9 @@ class EconomyArbitrageTests(unittest.TestCase):
         self.assertGreater(salvage["equipment_templates_scanned"], 0)
         self.assertTrue(all(row["expected_net_gold"] <= 0 for row in salvage["rows"]))
         self.assertTrue(all(outcome["net_gold"] <= 0 for row in salvage["rows"] for outcome in row["rng_outcomes"]))
+        self.assertTrue(salvage["by_equipment_rarity"])
+        self.assertTrue(salvage["by_equipment_level_band"])
+        self.assertTrue(all(row["positive_best_rng"] == 0 for row in salvage["by_equipment_rarity"].values()))
         crafting = result["docks_to_crafting_to_market"]
         self.assertGreater(crafting["active_recipes_scanned"], 0)
         self.assertEqual(crafting["unmodeled_recipe_chain_edges"], 0)
@@ -63,6 +66,7 @@ class EconomyArbitrageTests(unittest.TestCase):
         self.assertGreater(crafted_salvage["closed_loops_scanned"], 0)
         self.assertTrue(all(row["expected_net_gold"] <= 0 for row in crafted_salvage["rows"]))
         self.assertEqual(crafted_salvage["positive_best_rng_outcome_loops"], 0)
+        self.assertTrue(all(row["best_rng_net_gold"] <= 0 for row in crafted_salvage["rows"]))
         self.assertIn("Crafting→desmontagem→Market", render_markdown(result))
         self.assertEqual(no_docks_cost, int(recipe.gold_cost))
         self.assertGreaterEqual(low_docks_cost, int(recipe.gold_cost))
