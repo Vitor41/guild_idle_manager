@@ -137,7 +137,7 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("text/markdown", markdown_response.headers["content-type"])
         self.assertIn("attachment; filename=\"guia-guild-idle-manager.md\"", markdown_response.headers["content-disposition"])
         markdown = markdown_response.body.decode("utf-8")
-        self.assertIn("Versão: 0.8.0", markdown)
+        self.assertIn("Versão: 0.9.0", markdown)
         self.assertIn("Gerado em:", markdown)
         self.assertIn("| Raridade | Tempo-base por unidade |", markdown)
         for rarity, duration in (("Comum", "10 s"), ("Incomum", "25 s"), ("Raro", "60 s"), ("Épico", "180 s"), ("Lendário", "600 s"), ("Mítico", "1.200 s")):

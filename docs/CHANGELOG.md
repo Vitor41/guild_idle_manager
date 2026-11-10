@@ -1,5 +1,14 @@
 # Histórico de alterações
 
+## 0.9.0 — Progressão, oficinas e economia
+
+- Consolida melhorias aprovadas para eventos regionais, busca/exportação do Guia, indicadores de trabalho, oficinas e fluxo de atualização.
+- Corrige a conclusão de trabalho das Oficinas em campanhas legadas sem fuso horário e mantém referências de diagnóstico correlacionadas.
+- Permite substituir equipamento no mesmo gesto e escolher explicitamente entre anéis ou brincos quando ambos os espaços estão ocupados.
+- Trata o nível de mercenário como recomendação em missões, masmorras e chefes, preservando os demais requisitos.
+- Fecha os ciclos lucrativos entre Docas, desmontagem, crafting e Market; mantém as taxas de desmontagem de 50/150/300 ouro.
+- Risco de balanceamento a avaliar em jogo: os pisos contra arbitragem podem elevar bastante os preços de equipamentos avançados e de algumas receitas.
+
 ## 0.8.0 — Launcher, Mercado e equipamentos
 
 - Abre um launcher independente antes da seleção de campanhas, com verificação de atualização assinada, progresso e opções para adiar ou usar a versão instalada quando compatível.
