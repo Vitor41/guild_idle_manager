@@ -61,7 +61,8 @@ class LauncherAndEquipmentUiContractTests(unittest.TestCase):
         self.assertIn("role=\"status\"", template)
         self.assertIn("exportButton.disabled = true", script)
         self.assertIn("aria-busy", script)
-        self.assertIn("Guia gerado e enviado ao navegador", script)
+        self.assertIn("Guia salvo em:", script)
+        self.assertIn("Guia salvo como", script)
         self.assertIn("Tente novamente", script)
 
     def test_market_keeps_sale_controls_and_estimates_without_the_rarity_table(self):

@@ -223,6 +223,37 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
             self.assertEqual(kit_quantity, 0)
             self.assertEqual(get_inventory_usage(db, self.guild_id), get_inventory_capacity(db, guild) + 1)
 
+    def test_due_batch_from_disk_backed_save_completes_without_datetime_evaluator_error(self):
+        with Session(self.engine, autoflush=False, expire_on_commit=False) as db:
+            guild = db.get(Guild, self.guild_id)
+            db.add_all([
+                GuildInventoryItem(guild_id=self.guild_id, item_template_id=self.meat_id, quantity=MEAT_PER_KIT),
+                GuildInventoryItem(guild_id=self.guild_id, item_template_id=self.herb_id, quantity=HERBS_PER_KIT),
+            ])
+            db.flush()
+            job = craft_supply_kit(db, guild, 1, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
+            job_id = job.id
+            db.commit()
+
+        with patch.object(workshop_routes, "get_current_guild_context", side_effect=self._guild_context):
+            status, _headers, body = self._request("/workshops")
+
+        response_text = body.decode("utf-8")
+        self.assertEqual(status, 200, response_text)
+        self.assertIn("Produção concluída: 1 Kit(s) adicionados", response_text)
+        with Session(self.engine, autoflush=False, expire_on_commit=False) as db:
+            job = db.get(SupplyWorkshopJob, job_id)
+            guild = db.get(Guild, self.guild_id)
+            kit = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == "supply_kit"))
+            kit_quantity = db.scalar(select(GuildInventoryItem.quantity).where(
+                GuildInventoryItem.guild_id == self.guild_id,
+                GuildInventoryItem.item_template_id == kit.id,
+            )) or 0
+            self.assertEqual(job.status, "completed")
+            self.assertIsNotNone(job.completed_at)
+            self.assertEqual(kit_quantity, 1)
+            self.assertLessEqual(get_inventory_usage(db, self.guild_id), get_inventory_capacity(db, guild))
+
 
 if __name__ == "__main__":
     unittest.main()
