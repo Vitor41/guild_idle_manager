@@ -11,6 +11,7 @@ import argparse
 import sys
 from collections import defaultdict
 from datetime import timedelta
+from math import ceil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -33,6 +34,7 @@ from app.models.regional import (  # noqa: E402
 )
 from app.services.campaign_service import CampaignService  # noqa: E402
 from app.services import regional_cycle_service  # noqa: E402
+from app.services.mission_power_service import common_apprentice_reference_power  # noqa: E402
 
 
 PHASES = (("early", 0, 20), ("mid", 20, 60), ("late", 60, simulator.HORIZON))
@@ -64,7 +66,14 @@ def _event_scope_phase_metrics(summary: dict, home_region: str) -> dict[str, dic
     return {key: dict(values) for key, values in metrics.items()}
 
 
-def _capture_run(seed: int, saves_root: Path, template_database: Path, *, candidate: bool) -> dict:
+def _capture_run(
+    seed: int,
+    saves_root: Path,
+    template_database: Path,
+    *,
+    candidate: bool,
+    baseline_policy: str = "template",
+) -> dict:
     eligible_contracts: set[tuple[int, int]] = set()
     original_party = regional_cycle_service._cpu_offer_party
 
@@ -78,7 +87,21 @@ def _capture_run(seed: int, saves_root: Path, template_database: Path, *, candid
                 eligible_contracts.add((state.id, offer.id))
         return choice
 
-    baseline_power = lambda _level, _rank, _party, *, fallback_power: fallback_power
+    previous_rank_multipliers = {
+        "E": 0.700, "D": 0.735, "C": 0.770, "B": 0.840, "A": 0.945, "S": 1.085,
+    }
+    if baseline_policy == "previous_rank_table":
+        def baseline_power(level, rank, max_party_size, *, fallback_power):
+            multiplier = previous_rank_multipliers.get(str(rank).upper())
+            if multiplier is None:
+                return max(1, int(fallback_power or 1))
+            return max(1, ceil(
+                common_apprentice_reference_power(level) * multiplier * max(1, int(max_party_size or 1))
+            ))
+    elif baseline_policy == "template":
+        baseline_power = lambda _level, _rank, _party, *, fallback_power: fallback_power
+    else:
+        raise ValueError(f"Unknown baseline policy: {baseline_policy}")
     with patch.object(regional_cycle_service, "_cpu_offer_party", side_effect=capture_party):
         if candidate:
             result = simulator.run_campaign(seed, saves_root, template_database)
@@ -284,7 +307,14 @@ def _run_sample(
     return paired
 
 
-def _write_outputs(paired: list[dict], output_dir: Path, label: str) -> None:
+def _write_outputs(
+    paired: list[dict],
+    output_dir: Path,
+    label: str,
+    *,
+    baseline_description: str = "template recommended_power",
+    title: str = "ML-029 E2 — simulação pareada de CPU",
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     stem = f"lot_e2_ml029_cpu_paired_{label}"
     json_path = output_dir / f"{stem}.json"
@@ -352,6 +382,7 @@ def _write_outputs(paired: list[dict], output_dir: Path, label: str) -> None:
             "cycles_per_seed": simulator.HORIZON,
             "phase_cycles": {name: [start, end] for name, start, end in PHASES},
             "formula_scope": "same rank and party-size multipliers apply to CPU and player contract snapshots",
+            "baseline_description": baseline_description,
         },
         "totals": {
             scenario: {key: dict(values) for key, values in by_scope_phase.items()}
@@ -360,16 +391,23 @@ def _write_outputs(paired: list[dict], output_dir: Path, label: str) -> None:
         "paired_results": serializable,
     }
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    _render_markdown(payload, md_path, csv_path.name, json_path.name)
+    _render_markdown(payload, md_path, csv_path.name, json_path.name, title=title)
     print(f"JSON: {json_path}\nMarkdown: {md_path}\nCSV: {csv_path}")
 
 
-def _render_markdown(payload: dict, md_path: Path, csv_name: str, json_name: str) -> None:
+def _render_markdown(
+    payload: dict,
+    md_path: Path,
+    csv_name: str,
+    json_name: str,
+    *,
+    title: str = "ML-029 E2 — simulação pareada de CPU",
+) -> None:
     totals = payload["totals"]
     lines = [
-        "# ML-029 E2 — simulação pareada de CPU",
+        f"# {title}",
         "",
-        f"Simulação dos serviços reais de campanha com {len(payload['paired_results'])} seeds determinísticas pareadas, 100 Vigílias de seis horas por tratamento e nenhuma ação do jogador. Cada seed clona o mesmo save descartável; o baseline mantém o `recommended_power` do template e E2 usa a fórmula candidate para os mesmos tipos de contratos de combate. Não há acesso a saves do usuário.",
+        f"Simulação dos serviços reais de campanha com {len(payload['paired_results'])} seeds determinísticas pareadas, 100 Vigílias de seis horas por tratamento e nenhuma ação do jogador. Cada seed clona o mesmo save descartável; baseline: {payload['calibration'].get('baseline_description', 'template recommended_power')}; candidato usa os mesmos tipos de contratos de combate. Não há acesso a saves do usuário.",
         "",
         "A fórmula nova reduz a chance de qualquer guilda CPU que aceite esses contratos; isso é intencionalmente medido sob regras iguais, sem exceção de dificuldade. Os contadores elegíveis contam pares guilda/oferta/seed-ciclo em que a escala real de grupo/nível/requisitos permite a execução dentro da Vigília; iniciados são decisões efetivamente registradas como `contract`.",
         "",

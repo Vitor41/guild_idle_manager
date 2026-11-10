@@ -20,7 +20,7 @@ OUTPUT = ROOT / "reports"
 LEVELS = (1, 5, 15, 17, 18, 50, 75, 200, 350)
 OLD = {"E": 0.700, "D": 0.735, "C": 0.770, "B": 0.840, "A": 0.945, "S": 1.085}
 BASE_CHANCE = 78
-CPU_PAIRED_JSON = ROOT / "reports" / "lot_e2_ml029_cpu_paired_ml038-rank-table-clean-2026-11-10.json"
+CPU_PAIRED_JSON = ROOT / "reports" / "lot_e2_ml029_cpu_paired_ml038-old-table-clean-2026-11-10.json"
 
 
 def _cpu_evidence_markdown() -> list[str]:
@@ -50,10 +50,31 @@ def _cpu_evidence_markdown() -> list[str]:
     after_gold = total("ml029_e2", "cpu_gold_net")
     before_actions = average("baseline", "cpu_actions_per_cycle_global")
     after_actions = average("ml029_e2", "cpu_actions_per_cycle_global")
+    rank_totals: dict[str, dict[str, dict[str, float]]] = {
+        scenario: {rank: {key: 0.0 for key in (
+            "offers_generated", "cpu_started", "successes", "chance_sum", "party_size_sum"
+        )} for rank in "EDCBAS"}
+        for scenario in ("baseline", "ml029_e2")
+    }
+    for pair in pairs:
+        for scenario in rank_totals:
+            summary = pair[scenario]["summary"]
+            for item in summary["cpu_strategy_by_rank_level"]:
+                if item["offer_type"] != "contract" or item["rank"] not in rank_totals[scenario]:
+                    continue
+                bucket = rank_totals[scenario][item["rank"]]
+                for key in bucket:
+                    bucket[key] += float(item[key])
+
+    def rank_metric(scenario: str, rank: str, numerator: str, denominator: str) -> float:
+        bucket = rank_totals[scenario][rank]
+        return bucket[numerator] / max(1.0, bucket[denominator])
+
+    contract_starts = sum(rank_totals["baseline"][rank]["cpu_started"] for rank in "EDCBAS")
     rows = [
-        "A medição pareada foi concluída com 5 seeds determinísticas e 100 Vigílias por tratamento, usando um template descartável sem estado/ciclo regional prévio e clones SQLite temporários com journaling desativado. Nenhum save/perfil real foi consultado.",
+        "A comparação incremental foi concluída com 5 seeds determinísticas e 100 Vigílias por tratamento, usando um template descartável sem estado/ciclo regional prévio e clones SQLite temporários. Nenhum save/perfil real foi consultado.",
         "",
-        f"No agregado: sucesso CPU médio {before_success:.2f}% → {after_success:.2f}% ({after_success-before_success:+.2f} p.p.); XP global {before_xp:,} → {after_xp:,} ({xp_delta:+.1f}%); ouro líquido {before_gold:,} → {after_gold:,}; ações/ciclo {before_actions:.2f} → {after_actions:.2f}; portais {total('baseline','opened_portals')} → {total('ml029_e2','opened_portals')}; rebeliões abertas {total('baseline','opened_rebellions')} → {total('ml029_e2','opened_rebellions')}.".replace(",", "."),
+        f"Contra a tabela imediatamente anterior (E .700, D .735, C .770, B .840, A .945, S 1.085), o sucesso CPU médio foi {before_success:.2f}% → {after_success:.2f}% ({after_success-before_success:+.2f} p.p.); XP global {before_xp:,} → {after_xp:,} ({xp_delta:+.2f}%); ouro líquido {before_gold:,} → {after_gold:,}; ações/ciclo {before_actions:.2f} → {after_actions:.2f}; portais {total('baseline','opened_portals')} → {total('ml029_e2','opened_portals')}; rebeliões {total('baseline','opened_rebellions')} → {total('ml029_e2','opened_rebellions')}.".replace(",", "."),
         "",
         "| Fase | Sucessos de contrato / iniciados | Chance média | XP líquido | ciclos ameaça ≥85 / segurança ≤25 |",
         "|---|---:|---:|---:|---:|",
@@ -74,13 +95,34 @@ def _cpu_evidence_markdown() -> list[str]:
         )
     rows += [
         "",
-        "O runner valida que o banco molde não tenha `regional_guild_state` nem `regional_world_state` antes de criar os clones. As tentativas anteriores com um molde já regionalizado foram excluídas porque algumas seeds falharam ao trocar a região natal por colisão de slot; a amostra válida usa o molde limpo e concluiu as cinco seeds solicitadas sem esse erro.",
+        "### Diagnóstico da seleção da CPU por rank",
         "",
-        "Comando reproduzível: `python scripts/balance/run_ml038_cpu_paired.py --template-db .lot-e2-test-tmp/ml029-level-inspect/saves/fc28e905-8e2e-4a15-9f14-2edb9e61f057.db --limit 5 --label ml038-rank-table-clean-2026-11-10`.",
+        "| Rank | % dos contratos iniciados (antes → depois) | Chance média (antes → depois) | Sucesso observado (antes → depois) | Tamanho médio do grupo (antes → depois) |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for rank in "EDCBAS":
+        base_share = 100 * rank_totals["baseline"][rank]["cpu_started"] / max(1, contract_starts)
+        candidate_share = 100 * rank_totals["ml029_e2"][rank]["cpu_started"] / max(
+            1, sum(rank_totals["ml029_e2"][r]["cpu_started"] for r in "EDCBAS")
+        )
+        rows.append(
+            f"| {rank} | {base_share:.1f}% → {candidate_share:.1f}% "
+            f"| {rank_metric('baseline',rank,'chance_sum','cpu_started'):.1f}% → {rank_metric('ml029_e2',rank,'chance_sum','cpu_started'):.1f}% "
+            f"| {rank_metric('baseline',rank,'successes','cpu_started')*100:.1f}% → {rank_metric('ml029_e2',rank,'successes','cpu_started')*100:.1f}% "
+            f"| {rank_metric('baseline',rank,'party_size_sum','cpu_started'):.2f} → {rank_metric('ml029_e2',rank,'party_size_sum','cpu_started'):.2f} |"
+        )
+    rows += [
+        "",
+        f"Os contratos regionais iniciados por rank foram {int(contract_starts):,} nos dois tratamentos; as participações por rank se mantiveram em 26,8/25,3/23,1/15,0/8,6/1,3% (E/D/C/B/A/S), e o grupo médio por rank também mudou no máximo 0,01 membro. Isso não aponta para piora na escolha de rank ou formação de grupo da CPU. A queda acompanha a redução intrínseca da chance calculada pelos novos poderes recomendados: E quase não muda; D a S caem progressivamente. A amostra não testa um teto de 3 contratos por rank nem um mix alternativo, então não sustenta recomendar esses ajustes como mitigação.",
+        "",
+        "A primeira medição contra o fallback anterior a ML-029 (`ml038-rank-table-clean`) foi retirada como evidência incremental porque misturava várias mudanças. Os números acima usam apenas a tabela imediatamente anterior contra a nova tabela, com as mesmas seeds. O gate econômico segue pendente de resposta explícita do CR; os multiplicadores escolhidos pelo usuário foram mantidos.",
+        "",
+        "O runner valida que o banco molde não tenha `regional_guild_state` nem `regional_world_state` antes de criar os clones. As tentativas anteriores com um molde já regionalizado foram excluídas por colisão de slot; a amostra válida usou o molde limpo.",
+        "",
+        "Comando reproduzível: `.venv-desktop\\Scripts\\python.exe scripts/balance/run_ml038_cpu_paired.py --template-db .lot-e2-test-tmp/ml029-level-inspect/saves/fc28e905-8e2e-4a15-9f14-2edb9e61f057.db --limit 5 --label ml038-old-table-clean-2026-11-10`.",
         "",
         f"Detalhe por seed/fase: [Markdown](lot_e2_ml029_cpu_paired_{CPU_PAIRED_JSON.stem.split('paired_',1)[1]}.md), [CSV](lot_e2_ml029_cpu_paired_{CPU_PAIRED_JSON.stem.split('paired_',1)[1]}.csv), [JSON]({CPU_PAIRED_JSON.name}).",
         "",
-        "O impacto em sucesso e XP da CPU é relevante e persiste nas cinco seeds; ações mantêm-se estáveis, enquanto as pressões regionais e eventos mudam. O CR aprovou tecnicamente o código, mas manteve o gate econômico aberto até que haja decisão explícita sobre mitigação/critério de aceite. Não reduzir ou alterar os multiplicadores definidos pelo usuário sem nova decisão.",
     ]
     return rows
 

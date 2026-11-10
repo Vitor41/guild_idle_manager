@@ -157,7 +157,11 @@ def main() -> int:
             for scenario, candidate in (("baseline", False), ("ml029_e2", True)):
                 print(f"[{index}/{args.limit}] seed={seed} scenario={scenario}", flush=True)
                 pair[scenario] = mod["_capture_run"](
-                    seed, working / scenario / "saves", template, candidate=candidate,
+                    seed,
+                    working / scenario / "saves",
+                    template,
+                    candidate=candidate,
+                    baseline_policy="previous_rank_table" if not candidate else "template",
                 )
             pairs.append(pair)
             baseline = pair["baseline"]["summary"]
@@ -170,7 +174,15 @@ def main() -> int:
                 f"rebellions {baseline['opened_rebellions']}->{candidate['opened_rebellions']}",
                 flush=True,
             )
-            mod["_write_outputs"](pairs, output, args.label)
+            mod["_write_outputs"](
+                pairs,
+                output,
+                args.label,
+                baseline_description=(
+                    "ML-038 previous multipliers E .700, D .735, C .770, B .840, A .945, S 1.085"
+                ),
+                title="ML-038 — simulação pareada de CPU",
+            )
     finally:
         mod["configure_database"]("sqlite:///:memory:")
         temporary.cleanup()
