@@ -53,7 +53,7 @@ def _chance_text(source: dict) -> str:
 def _guide_icon_path(item_model: ItemTemplate) -> str | None:
     """Return a URL served by the app's only static mount."""
     icon_path = get_item_icon_path(item_model)
-    if icon_path and icon_path.startswith("/assets/"):
+    if icon_path and icon_path.startswith(("/assets/", "/img/")):
         return f"/static{icon_path}"
     return icon_path
 
