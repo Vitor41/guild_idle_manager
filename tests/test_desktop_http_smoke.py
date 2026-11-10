@@ -502,6 +502,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 recommended_level_snapshot=1, recommended_power_snapshot=10,
                 min_party_size_snapshot=1, max_party_size_snapshot=1,
                 required_guild_level_snapshot=5, duration_seconds_snapshot=60,
+                required_min_mercenary_level_snapshot=99,
                 gold_reward_snapshot=100, xp_reward_snapshot=10, success_chance_snapshot=80,
             )
             party_snapshot_offer = RegionalOffer(
@@ -512,6 +513,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 recommended_level_snapshot=1, recommended_power_snapshot=10,
                 min_party_size_snapshot=2, max_party_size_snapshot=2,
                 required_guild_level_snapshot=1, duration_seconds_snapshot=60,
+                required_min_mercenary_level_snapshot=99,
                 gold_reward_snapshot=100, xp_reward_snapshot=10, success_chance_snapshot=80,
             )
             db.add_all([no_supply_offer, prepared_offer, ineligible_snapshot_offer, party_snapshot_offer])
@@ -523,6 +525,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.get(MissionTemplate, regional_mission_template_id).required_guild_level = 99
             db.get(MissionTemplate, regional_mission_template_id).min_party_size = 1
             db.get(MissionTemplate, regional_mission_template_id).max_party_size = 1
+            db.get(MissionTemplate, regional_mission_template_id).required_min_mercenary_level = 99
             db.commit()
 
         ineligible_start_status, ineligible_start_location, _ineligible_start_body = request(

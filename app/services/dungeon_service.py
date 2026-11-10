@@ -359,8 +359,6 @@ def get_dungeon_supply_quote(
         mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_ids)
         if len(mercenaries) != len(parsed_ids):
             raise DungeonError("Mercenário indisponível.")
-        if any(member.level < template.required_min_mercenary_level for member in mercenaries):
-            raise DungeonError("Um ou mais mercenários não possuem nível suficiente.")
         validate_advanced_party_requirements(db, guild, template, mercenaries)
     except DungeonError as error:
         return {"available": False, "reason": str(error)}
@@ -579,8 +577,6 @@ def start_dungeon(
     mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_ids)
     if len(mercenaries) != len(parsed_ids):
         raise DungeonError("Mercenário indisponível.")
-    if any(mercenary.level < dungeon_template.required_min_mercenary_level for mercenary in mercenaries):
-        raise DungeonError("Um ou mais mercenarios nao possuem nivel suficiente.")
     validate_advanced_party_requirements(db, guild, dungeon_template, mercenaries)
 
     started_at = utc_now()

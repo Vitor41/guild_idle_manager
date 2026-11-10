@@ -68,7 +68,7 @@
         <label>Grupo mínimo <input type="number" name="min_party_size" min="1" max="5" value="{{ form.min_party_size if form else mission.min_party_size if mission else 1 }}" required></label>
         <label>Grupo máximo <input type="number" name="max_party_size" min="1" max="5" value="{{ form.max_party_size if form else mission.max_party_size if mission else 1 }}" required></label>
         <label>Nível mínimo da guilda <input type="number" name="required_guild_level" min="1" value="{{ form.required_guild_level if form else mission.required_guild_level if mission else 1 }}" required></label>
-        <label>Nível mínimo do mercenário <input type="number" name="required_min_mercenary_level" min="1" value="{{ form.required_min_mercenary_level if form else mission.required_min_mercenary_level if mission else 1 }}" required></label>
+        <label>Nível recomendado do mercenário <input type="number" name="required_min_mercenary_level" min="1" value="{{ form.required_min_mercenary_level if form else mission.required_min_mercenary_level if mission else 1 }}" required></label>
         <label>Tipo de construção exigida <input type="text" name="required_building_type" value="{{ form.required_building_type if form else mission.required_building_type if mission and mission.required_building_type else '' }}"></label>
         <label>Nível da construção <input type="number" name="required_building_level" min="0" value="{{ form.required_building_level if form else mission.required_building_level if mission else 0 }}"></label>
       </div>

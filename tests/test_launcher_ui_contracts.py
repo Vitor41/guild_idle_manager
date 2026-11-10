@@ -80,6 +80,21 @@ class LauncherAndEquipmentUiContractTests(unittest.TestCase):
         self.assertIn("@media (max-width: 600px)", css)
         self.assertIn("_sale_duration_seconds", service)
 
+    def test_mercenary_level_is_presented_as_recommendation_across_activities(self):
+        missions = (ROOT / "app/templates/missions/index.html").read_text(encoding="utf-8")
+        dungeons = (ROOT / "app/templates/dungeons/index.html").read_text(encoding="utf-8")
+        regional = (ROOT / "app/templates/regional/index.html").read_text(encoding="utf-8")
+        admin_missions = (ROOT / "app/templates/admin/edit_mission.html").read_text(encoding="utf-8")
+        admin_dungeons = (ROOT / "app/templates/admin/dungeon_form.html").read_text(encoding="utf-8")
+        self.assertIn("Nível recomendado", missions)
+        self.assertIn("abaixo dele ainda podem iniciar", missions)
+        self.assertIn("Nível recomendado", dungeons)
+        self.assertIn("abaixo dele podem iniciar", dungeons)
+        self.assertIn("nível do mercenário é uma recomendação", regional)
+        self.assertIn("requisitos congelados da oferta, da guilda e do grupo", regional)
+        self.assertIn("Nível recomendado do mercenário", admin_missions)
+        self.assertIn("Nível recomendado do mercenário", admin_dungeons)
+
 
 
 if __name__ == "__main__":
