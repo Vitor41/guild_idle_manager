@@ -100,7 +100,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
             required_guild_level_snapshot=1,
             min_party_size_snapshot=2,
             max_party_size_snapshot=2,
-            required_min_mercenary_level_snapshot=1,
+            required_min_mercenary_level_snapshot=99,
             required_class_code_snapshot=None,
             required_total_power_snapshot=0,
             required_tank_count_snapshot=0,
@@ -1837,6 +1837,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     template.min_party_size = 2
                     template.max_party_size = 3
                     template.required_guild_level = 99
+                    template.required_min_mercenary_level = 99
+                    offer.required_min_mercenary_level_snapshot = 99
                     run = start_mission(
                         db, guild, str(template.id), [str(mercenary.id)], commit=False,
                         regional_duration_seconds=offer.duration_seconds_snapshot,

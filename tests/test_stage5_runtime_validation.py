@@ -26,7 +26,7 @@ from app.services.building_service import (
     BuildingError, ensure_guild_buildings, get_mercenary_limit, upgrade_guild_building,
 )
 from app.services.dungeon_service import (
-    claim_dungeon_loot, get_advanced_dungeon_chance, get_dungeon_supply_quote,
+    DungeonError, claim_dungeon_loot, get_advanced_dungeon_chance, get_dungeon_supply_quote,
     get_final_dungeon_chance, start_dungeon,
 )
 from app.services.crafting_service import craft_recipe, list_rotating_recipes
@@ -355,7 +355,7 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
             level_band="1-20", recommended_level=1, duration_seconds=60,
             base_gold_reward=1_000, base_xp_reward=100, base_success_chance=50,
             min_party_size=1, max_party_size=1, required_guild_level=1,
-            required_min_mercenary_level=1, required_building_type="scouts",
+            required_min_mercenary_level=50, required_building_type="scouts",
             required_building_level=1, is_active=True,
         )
         self.db.add(template)
@@ -474,6 +474,68 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
             resolved = claim_mission_loot(self.db, self.guild, self.resources, run.id, commit=False)
         self.assertEqual(resolved.status, "completed")
         self.assertTrue(resolved.success)
+
+    def test_mercenary_level_is_recommendation_while_guild_level_still_gates_missions(self):
+        template = MissionTemplate(
+            name="Mission level recommendation fixture", description="", display_order=-1,
+            difficulty="normal", level_band="1-20", mission_type="standard",
+            recommended_level=1, recommended_power=0, duration_seconds=60,
+            base_gold_reward=10, base_xp_reward=10, base_success_chance=50,
+            min_party_size=1, max_party_size=1, required_guild_level=1,
+            required_min_mercenary_level=50, required_building_level=0, is_active=True,
+        )
+        self.db.add(template)
+        self.db.flush()
+        member = self.members[0]
+        self.db.commit()
+
+        with patch.object(mission_service, "list_active_mission_templates_for_band", return_value=[template]):
+            context = mission_service.get_missions_page_context(
+                self.db, self.guild, selected_band="1-20",
+                selected_category="all", selected_mode="all",
+            )
+        self.assertIn(member, context["mission_mercenaries"][template.id])
+        run = start_mission(self.db, self.guild, str(template.id), [str(member.id)], commit=False)
+        self.assertEqual(run.mission_template_id, template.id)
+
+        template.required_guild_level = 2
+        self.db.flush()
+        with self.assertRaisesRegex(mission_service.MissionError, "Nível da guilda insuficiente"):
+            start_mission(self.db, self.guild, str(template.id), [str(self.members[1].id)], commit=False)
+
+    def test_under_recommended_mercenary_starts_dungeon_and_boss_but_guild_gate_remains(self):
+        templates = []
+        for content_type in ("dungeon", "boss"):
+            template = DungeonTemplate(
+                name=f"{content_type} level recommendation fixture", description="", content_type=content_type,
+                level_band="1-20", recommended_level=1, duration_seconds=60,
+                base_gold_reward=100, base_xp_reward=10, base_success_chance=50,
+                min_party_size=1, max_party_size=1, required_guild_level=1,
+                required_min_mercenary_level=50, is_active=True,
+            )
+            self.db.add(template)
+            templates.append(template)
+        self.db.flush()
+
+        for template, member in zip(templates, self.members[:2]):
+            run = start_dungeon(
+                self.db, self.guild, str(template.id), [str(member.id)], commit=False,
+            )
+            self.assertEqual(run.dungeon_template_id, template.id)
+
+        gated_template = DungeonTemplate(
+            name="guild gate fixture", description="", content_type="dungeon",
+            level_band="1-20", recommended_level=1, duration_seconds=60,
+            base_gold_reward=100, base_xp_reward=10, base_success_chance=50,
+            min_party_size=1, max_party_size=1, required_guild_level=2,
+            required_min_mercenary_level=1, is_active=True,
+        )
+        self.db.add(gated_template)
+        self.db.flush()
+        with self.assertRaisesRegex(DungeonError, "Nível da guilda insuficiente"):
+            start_dungeon(
+                self.db, self.guild, str(gated_template.id), [str(self.members[2].id)], commit=False,
+            )
 
     def test_material_market_and_salvage_use_live_capacity_and_prices(self):
         wood = self.db.scalar(select(ItemTemplate).where(

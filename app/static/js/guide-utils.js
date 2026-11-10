@@ -70,7 +70,8 @@
       const itemLabel = `${item.name} · ${item.item_type_label}${slot} · ${item.level_band}`;
       for (const source of sources || []) {
         const key = JSON.stringify([source.filter_key || "none", source.type, source.label,
-          source.name || "", source.requirement, source.chance, source.quantity, source.price ?? "", source.condition || ""]);
+          source.name || "", source.recommendation || "", source.requirement, source.chance,
+          source.quantity, source.price ?? "", source.condition || ""]);
         if (!grouped.has(key)) grouped.set(key, { source, entries: [] });
         const entries = grouped.get(key).entries;
         const equivalent = entries.find((entry) => entry.item.name === item.name &&

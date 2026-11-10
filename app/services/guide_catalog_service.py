@@ -80,10 +80,11 @@ def build_guide_catalog(db) -> dict[str, object]:
                 if raw["type"] == "dungeon_or_boss":
                     label = "Chefes" if raw.get("content_type") == "boss" else "Masmorras"
                 reqs = []
+                recommendation = ""
                 if raw.get("min_guild_level", 1) > 1:
                     reqs.append(f"guilda nível {raw['min_guild_level']}+")
-                if raw.get("min_mercenary_level", 1) > 1:
-                    reqs.append(f"mercenário nível {raw['min_mercenary_level']}+")
+                if raw["type"] in {"mission", "dungeon_or_boss"}:
+                    recommendation = f"mercenário nível {raw.get('min_mercenary_level', 1)}+"
                 building = raw.get("required_building")
                 if building and building[0] and building[1]:
                     reqs.append(f"{building[0]} nível {building[1]}+")
@@ -104,6 +105,7 @@ def build_guide_catalog(db) -> dict[str, object]:
                 sources.append({
                     "type": raw["type"], "filter_key": source_filter, "label": label,
                     "name": clean_generated_name(name),
+                    "recommendation": recommendation,
                     "requirement": "; ".join(reqs) if reqs else "sem requisito adicional registrado",
                     "chance": _chance_text(raw), "quantity": _quantity_text(raw, item["item_type"]),
                     "price": raw.get("effective_unit_price", raw.get("base_price")),

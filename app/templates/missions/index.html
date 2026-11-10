@@ -78,7 +78,7 @@
                   <div><dt>XP</dt><dd>{{ mission.base_xp_reward }}</dd></div>
                   <div><dt>Chance base</dt><dd>{{ mission.base_success_chance }}%</dd></div>
                   <div><dt>Grupo</dt><dd>{{ mission.min_party_size }}-{{ mission.max_party_size }}</dd></div>
-                  <div><dt>Nível merc.</dt><dd>{{ mission.required_min_mercenary_level }}+</dd></div>
+                  <div><dt>Nível recomendado</dt><dd>{{ mission.required_min_mercenary_level }}+</dd></div>
                 </dl>
                 <div class="badge-row">
                   {% if mission.is_long_idle %}<span class="tag long-idle-badge">Missão longa · {{ mission.long_idle_hours }}h · chance fixa {{ mission.base_success_chance }}%</span>{% endif %}
@@ -101,6 +101,7 @@
                 </div>
               </div>
               <form class="party-form" method="post" action="/missions/start">
+                <p class="note">O nível indicado é uma recomendação. Mercenários abaixo dele ainda podem iniciar; o poder atual influencia a chance.</p>
                 <input type="hidden" name="mission_template_id" value="{{ mission.id }}">
                 <label>
                   Multiplicador

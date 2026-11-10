@@ -1201,7 +1201,6 @@ def _cpu_offer_party(
         return None
     party_size = max(1, int(offer.min_party_size_snapshot))
     maximum_size = max(party_size, int(offer.max_party_size_snapshot))
-    minimum_level = max(1, int(offer.required_min_mercenary_level_snapshot or 1))
     required_class = (offer.required_class_code_snapshot or "").casefold()
     required_power = max(0, int(offer.required_total_power_snapshot or 0))
     required_tank = max(0, int(offer.required_tank_count_snapshot or 0))
@@ -1213,8 +1212,6 @@ def _cpu_offer_party(
                       list[RegionalCpuMercenary]] | None = None
     for size in range(party_size, min(maximum_size, len(roster)) + 1):
         for party in combinations(roster, size):
-            if any(member.level < minimum_level for member in party):
-                continue
             if required_class and not any(member.class_code.casefold() == required_class for member in party):
                 continue
             roles = {"tank": 0, "support": 0, "damage": 0}

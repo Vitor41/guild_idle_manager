@@ -71,7 +71,7 @@
                   <div><dt>XP</dt><dd>{{ dungeon.base_xp_reward }}</dd></div>
                   <div><dt>Chance base</dt><dd>{{ dungeon.base_success_chance }}%</dd></div>
                   <div><dt>Grupo</dt><dd>{{ dungeon.min_party_size }}-{{ dungeon.max_party_size }}</dd></div>
-                  <div><dt>Nível merc.</dt><dd>{{ dungeon.required_min_mercenary_level }}+</dd></div>
+                  <div><dt>Nível recomendado</dt><dd>{{ dungeon.required_min_mercenary_level }}+</dd></div>
                 </dl>
                 <div class="badge-row">
                   <span class="tag">{{ 'Chefe' if dungeon.content_type == 'boss' else 'Evento' if dungeon.content_type == 'event' else 'Masmorra' }}</span>
@@ -83,6 +83,7 @@
                   <span class="tag {% if dungeon.content_type == 'boss' %}risk-badge-boss{% else %}risk-badge{% endif %}">{{ dungeon.risk_label }}</span>
                 </div>
                 <p class="note">Recomendado: nível {{ dungeon.recommended_level }} · {{ biome_labels.get(dungeon.biome, dungeon.biome or 'Região geral') }}</p>
+                <p class="note">O nível é uma recomendação, não um bloqueio. Equipes abaixo dele podem iniciar e assumem o risco indicado pela chance.</p>
                 <div class="dungeon-purpose-strip">
                   <span><small>Função principal</small><strong>{{ dungeon.gameplay_role }}</strong></span>
                   <span><small>Retorno base esperado</small><strong>{{ dungeon.expected_xp_reward }} XP · {{ dungeon.expected_gold_reward }} ouro</strong></span>

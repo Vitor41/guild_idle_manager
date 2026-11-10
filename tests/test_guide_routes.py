@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import Base, create_database_engine
 from app.models.guild import Guild, GuildResources
-from app.models.item import MissionTemplateItemDrop
+from app.models.dungeon import DungeonTemplate
+from app.models.item import DungeonTemplateItemDrop, MissionTemplateItemDrop
+from app.models.mission import MissionTemplate
 from app.models.user import User
 from app.routes.guide_routes import _catalog_markdown, export_guide_markdown, game_guide, guide_catalog_api, router
 from app.seeds.massive_content import run_massive_content_seed
@@ -61,6 +63,9 @@ class GuideRouteTests(unittest.TestCase):
             self.assertIn(duration, html)
         self.assertNotIn("Tempo base por raridade", html)
         self.assertIn('id="equipamentos-materiais"', html)
+        self.assertIn('>Recomendação</th>', html)
+        self.assertIn('>Requisito</th>', html)
+        self.assertIn("O nível do mercenário aparece como recomendação", html)
         self.assertIn('data-filter-name', html)
         self.assertIn('data-filter-family', html)
         self.assertIn('data-filter-band', html)
@@ -78,6 +83,8 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("mark.scrollIntoView", script)
         self.assertIn("Nenhum resultado para", script)
         self.assertIn("catalogItems", script)
+        self.assertIn('recommendationCell.dataset.label = "Recomendação"', script)
+        self.assertIn('source.recommendation || "—"', script)
 
     def test_catalog_api_and_markdown_share_live_items_without_campaign_private_data(self):
         catalog_response = guide_catalog_api(self.db, self.user)
@@ -103,11 +110,28 @@ class GuideRouteTests(unittest.TestCase):
         mission_drop.drop_chance = 13
         mission_drop.min_quantity = 7
         mission_drop.max_quantity = 9
+        mission = self.db.get(MissionTemplate, mission_drop.mission_template_id)
+        mission.required_min_mercenary_level = 17
+        dungeon_drop = self.db.query(DungeonTemplateItemDrop).filter(
+            DungeonTemplateItemDrop.is_active.is_(True),
+            DungeonTemplateItemDrop.drop_chance > 0,
+        ).first()
+        self.assertIsNotNone(dungeon_drop)
+        dungeon = self.db.get(DungeonTemplate, dungeon_drop.dungeon_template_id)
+        dungeon.required_min_mercenary_level = 23
         self.db.flush()
         edited_catalog = json.loads(guide_catalog_api(self.db, self.user).body)
         edited_item = next(row for row in edited_catalog["items"] if row["id"] == mission_drop.item_template_id)
-        self.assertTrue(any(source["chance"].startswith("13% base") and "7–9" in source["quantity"]
-            for source in edited_item["sources"] if source["type"] == "mission"))
+        edited_mission_source = next(source for source in edited_item["sources"]
+            if source["type"] == "mission" and source["chance"].startswith("13% base")
+            and "7–9" in source["quantity"])
+        self.assertEqual(edited_mission_source["recommendation"], "mercenário nível 17+")
+        self.assertNotIn("mercenário nível", edited_mission_source["requirement"])
+        dungeon_item = next(row for row in edited_catalog["items"] if row["id"] == dungeon_drop.item_template_id)
+        edited_dungeon_source = next(source for source in dungeon_item["sources"]
+            if source["type"] == "dungeon_or_boss" and source["recommendation"] == "mercenário nível 23+")
+        self.assertEqual(edited_dungeon_source["recommendation"], "mercenário nível 23+")
+        self.assertNotIn("mercenário nível", edited_dungeon_source["requirement"])
         markdown_response = export_guide_markdown(self._request("/guide/export.md"), self.db, self.user)
         self.assertEqual(markdown_response.status_code, 200)
         self.assertIn("text/markdown", markdown_response.headers["content-type"])
@@ -122,6 +146,9 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn(material["name"], markdown)
         self.assertIn("base por entrada de drop", markdown)
         self.assertIn("13% base por entrada de drop", markdown)
+        self.assertIn("Recomendação: mercenário nível 17\\+", markdown)
+        self.assertIn("Recomendação: mercenário nível 23\\+", markdown)
+        self.assertNotIn("Requisito: mercenário nível", markdown)
         self.assertIn("Quantidade: 7–9 unidade\\(s\\)", markdown)
         self.assertIn("Preço unitário registrado:", markdown)
         self.assertIn(f"espaço {equipment['equipment_slot'].replace('_', chr(92) + '_')}", markdown)
@@ -140,13 +167,13 @@ class GuideRouteTests(unittest.TestCase):
             "family": "", "equipment_slot": "sword", "level_band": "1-10", "item_level": 5,
             "tier": 2, "sources": [{
                 "type": "dungeon_or_boss", "label": "Chefes", "name": "Dragão",
-                "requirement": "guilda nível 5+", "chance": "10% base", "quantity": "1 unidade",
+                "recommendation": "mercenário nível 5+", "requirement": "guilda nível 5+", "chance": "10% base", "quantity": "1 unidade",
                 "price": None, "condition": "",
             }],
         }
         catalog = {"items": [
             {**base, "id": 1, "rarity": "Raro"},
-            {**base, "id": 2, "rarity": "Épico", "sources": [{**base["sources"][0], "chance": "4% base", "requirement": "guilda nível 12+"}]},
+            {**base, "id": 2, "rarity": "Épico", "sources": [{**base["sources"][0], "chance": "4% base", "recommendation": "mercenário nível 12+", "requirement": "guilda nível 12+"}]},
         ]}
         markdown = _catalog_markdown(catalog)
         self.assertEqual(markdown.count("### Espada Solar"), 1)
@@ -155,6 +182,9 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("4% base", markdown)
         self.assertIn(r"guilda nível 5\+", markdown)
         self.assertIn(r"guilda nível 12\+", markdown)
+        self.assertIn(r"Recomendação: mercenário nível 5\+", markdown)
+        self.assertIn(r"Recomendação: mercenário nível 12\+", markdown)
+        self.assertNotIn("Requisito: mercenário nível", markdown)
         self.assertNotIn("Tier 2", markdown)
         lines = [line for line in markdown.splitlines() if "base" in line]
         self.assertEqual(len(lines), 2)
