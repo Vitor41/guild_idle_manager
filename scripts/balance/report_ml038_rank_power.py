@@ -77,7 +77,7 @@ def main() -> None:
         "",
         "O snapshot existente permanece imutável; gathering, long idle, masmorras, chefes e poder configurado no template seguem fora da mudança. Os cinco testes direcionados de `tests/test_ml029_mission_power.py` passaram.",
         "",
-        "A comparação pareada da CPU em cinco campanhas descartáveis não foi produzida: a campanha temporária falhou ao seedar `item_templates` com `sqlite3.OperationalError: unable to open database file`, inclusive ao criar o banco sob `.lot-e2-test-tmp`. Sem esse resultado, este lote ainda não mede efeitos em XP/ouro, ações/sucessos da CPU ou eventos regionais. Nenhum save/perfil instalado foi consultado.",
+        "A comparação pareada da CPU em cinco campanhas descartáveis não foi produzida. O comando usado foi `python -c \"import os,runpy,sys; os.environ['APP_MODE']='desktop'; sys.path.insert(0,os.getcwd()); sys.argv=['scripts/balance/compare_ml029_cpu_balance.py','--limit','1','--label','ml038-rank-table-debug']; runpy.run_path(sys.argv[0],run_name='__main__')\"`. Ele falhou em `CampaignService.create_campaign` → `run_massive_content_seed` → `_insert_missing(ItemTemplate, ...)`, com `sqlite3.OperationalError: unable to open database file` durante o insert de `item_templates`. Uma pasta recém-criada sob `%TEMP%` também foi verificada e um `sqlite3.connect(<pasta>\\probe-elevated.db)` mínimo falhou com o mesmo erro. Sem esse resultado, este lote ainda não mede efeitos em XP/ouro, ações/sucessos da CPU ou eventos regionais. Nenhum save/perfil instalado foi consultado.",
         "",
         f"CSV reproduzível: `{csv_path.name}`. Gerador: `scripts/balance/report_ml038_rank_power.py`.",
     ]
