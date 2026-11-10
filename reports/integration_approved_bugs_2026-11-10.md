@@ -79,7 +79,7 @@ $env:PYTHONPATH=(Resolve-Path .validation-site-packages-080).Path
   tests.test_stage5_runtime_validation.Stage5RuntimeValidationTests.test_crafted_equipment_can_flow_through_salvage_and_market_services
 ```
 
-Resultado: 39 testes executados; 37 passaram e 2 testes de `test_workshop_route_diagnostics` deram `FileNotFoundError` ao ler o log temporário. O Python de validação não conseguiu gravar nos diretórios temporários externos permitidos pelo runner e recuou para uma pasta sob o checkout; a aplicação bloqueia corretamente `LOCALAPPDATA` dentro da pasta do app. A repetição com `%TEMP%` externo encontrou a mesma limitação de gravação. Os outros 37 testes passaram, incluindo o teste do Guia com `APP_VERSION=0.9.0`, swaps de equipamento, nível recomendado, economia, preços, taxas e o fluxo de crafting/desmontagem/Market. Essa restrição do harness também já foi registrada na investigação anterior de BUG-010; não foi contornada alterando o código do produto ou o teste.
+Resultado final: **39/39 passaram**. O runner faz o Python recuar para um diretório temporário sob o checkout, enquanto `LOCALAPPDATA` dentro da pasta do app é bloqueado intencionalmente pela proteção. Para manter os testes isolados sem afrouxar a proteção do produto, `tests.test_workshop_route_diagnostics` agora aponta somente o helper de caminho de log para `self.gameplay_log`, dentro do `TemporaryDirectory` do teste. O middleware, a gravação do traceback, a referência e a leitura do log continuam sendo exercitados; o código de produção e o resolver real de dados do usuário não foram alterados. Os 39 testes incluem o Guia com `APP_VERSION=0.9.0`, swaps de equipamento, nível recomendado, economia, preços, taxas e o fluxo de crafting/desmontagem/Market.
 
 `git diff --check` foi executado depois das mudanças da integração. A suíte completa não foi executada. A revisão CR da integração e a aceitação visual permanecem pendentes.
 
@@ -87,5 +87,5 @@ Resultado: 39 testes executados; 37 passaram e 2 testes de `test_workshop_route_
 
 - BUG-012 fecha os ciclos modelados, mas aumenta preços de equipamentos avançados: o relatório `reports/economy_arbitrage_bug012_2026-11-10.md` registra aumento de até 4.784 ouro em oferta late e 2.270 ouro no custo de uma receita extrema. A viabilidade de progressão deve ser avaliada em jogo antes de aceite final.
 - Alguns itens têm aprovação técnica sem aceite visual do usuário. Não declarar aceite visual final nesta integração.
-- Duas regressões de log de BUG-010 não puderam completar sob a restrição de diretório temporário do runner; o smoke HTTP amplo também não foi declarado aprovado.
+- A suíte completa não foi executada. O smoke HTTP amplo de BUG-010/ML-042 não foi declarado aprovado; a revisão estática do CR também o mantém como limite separado dos 39 testes focados.
 - `0.9.0` é só a versão do candidato local. Não há tag, assinatura, build, instalação, push, PR, merge remoto ou release.

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import CampaignPlayer, get_current_player, get_db
 from app.database.connection import Base, create_database_engine
+from app.desktop import gameplay_diagnostics
 from app.desktop.gameplay_diagnostics import close_gameplay_logger
 from app.main import protect_desktop_loopback
 from app.models import CampaignMetadata, Guild, GuildInventoryItem, ItemTemplate
@@ -95,6 +96,14 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
         )
         self.gameplay_log = self.root / "local-app-data" / "GuildIdleManager" / "logs" / "gameplay-actions.log"
         self.addCleanup(lambda: close_gameplay_logger(self.gameplay_log))
+        # The CI sandbox may only allow writes inside the checkout. Give the
+        # logger an explicit per-test path so this fixture does not accidentally
+        # treat its temporary LOCALAPPDATA as the installed user's data folder.
+        self.gameplay_log_path_patch = patch.object(
+            gameplay_diagnostics, "gameplay_log_path", return_value=self.gameplay_log,
+        )
+        self.gameplay_log_path_patch.start()
+        self.addCleanup(self.gameplay_log_path_patch.stop)
 
     def _request_db(self):
         with Session(self.engine, autoflush=False, expire_on_commit=False) as db:
