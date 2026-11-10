@@ -276,7 +276,7 @@ function updateMarketEstimate(node) {
   const reduction = Number.parseInt(node.dataset.timeReduction || form?.dataset.timeReduction || "0", 10);
   const baseTotal = Math.max(1, baseSeconds) * quantity;
   const finalSeconds = Math.max(5, Math.floor(baseTotal * (100 - Math.min(100, Math.max(0, reduction))) / 100));
-  node.textContent = `Base antes da redução: ${formatMarketEstimate(baseTotal)} · redução do Mercado: ${reduction}% · prazo estimado: ${formatMarketEstimate(finalSeconds)}.`;
+  node.textContent = `Prazo estimado: ${formatMarketEstimate(finalSeconds)}.`;
 }
 
 function initializeMarketEstimates(root = document) {

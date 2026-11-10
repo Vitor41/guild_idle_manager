@@ -51,13 +51,19 @@ const format = source.match(/const formatMarketEstimate = \(seconds\) => \{[\s\S
 const update = source.match(/function updateMarketEstimate\(node\) \{[\s\S]*?\n\}/);
 const initialize = source.match(/function initializeMarketEstimates\(root = document\) \{[\s\S]*?\n\}/);
 if (!format || !update || !initialize) throw new Error('Market estimate helpers are missing');
-const initializeMarketEstimates = new Function(`${format[0]}; ${update[0]}; ${initialize[0]}; return initializeMarketEstimates;`)();
+const helpers = new Function(`${format[0]}; ${update[0]}; ${initialize[0]}; return {initializeMarketEstimates, updateMarketEstimate};`)();
 const node = {dataset: {durationBase: '10', timeReduction: '20'}, textContent: '', closest: () => form};
 const quantity = {value: '3'};
 const form = {dataset: {}, querySelector: () => quantity, querySelectorAll: () => [node]};
 const replacementRoot = {querySelectorAll: (selector) => selector === '[data-market-estimate]' ? [node] : []};
-initializeMarketEstimates(replacementRoot);
-if (!node.textContent.includes('prazo estimado: 24 s.')) throw new Error(node.textContent);
+helpers.initializeMarketEstimates(replacementRoot);
+if (node.textContent !== 'Prazo estimado: 24 s.') throw new Error(node.textContent);
+if (/Base antes da redução|redução do Mercado/.test(node.textContent)) throw new Error(node.textContent);
+const equipmentNode = {dataset: {durationBase: '600', timeReduction: '25'}, textContent: '', closest: () => equipmentForm};
+const equipmentForm = {dataset: {}, querySelector: () => null, querySelectorAll: () => [equipmentNode]};
+helpers.updateMarketEstimate(equipmentNode);
+if (equipmentNode.textContent !== 'Prazo estimado: 7 min 30 s.') throw new Error(equipmentNode.textContent);
+if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textContent)) throw new Error(equipmentNode.textContent);
 """;
         result = subprocess.run(
             [shutil.which("node"), "-e", script, str(STATIC / "js" / "main.js")],
