@@ -31,7 +31,8 @@ from app.services.dungeon_service import (
 )
 from app.services.crafting_service import craft_recipe, list_rotating_recipes
 from app.services.equipment_service import (
-    can_class_equip_item, create_equipment_instance_from_template, get_party_power_score,
+    EquipmentError, can_class_equip_item, create_equipment_instance_from_template, equip_item,
+    get_party_power_score,
 )
 from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
@@ -89,6 +90,158 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
     def tearDown(self):
         self.db.close()
         self.engine.dispose()
+
+    def _make_equipment_instance(self, slot: str, template_index: int, bonus_power: int):
+        templates = list(self.db.scalars(select(ItemTemplate).where(
+            ItemTemplate.item_type == "equipment",
+            ItemTemplate.equipment_slot == slot,
+            ItemTemplate.required_level <= 1,
+        ).order_by(ItemTemplate.id)))
+        self.assertGreater(len(templates), template_index, f"seed needs equipment templates for {slot}")
+        item = create_equipment_instance_from_template(self.db, self.guild.id, templates[template_index])
+        item.bonus_rolls = []
+        item.rng_bonus_attribute = None
+        item.rng_bonus_value = 0
+        item.bonus_power = bonus_power
+        self.db.flush()
+        return item
+
+    def test_equipping_over_single_slot_returns_previous_item_and_recalculates_power(self):
+        mercenary = self.members[0]
+        first = self._make_equipment_instance("main_hand", 0, bonus_power=5)
+        replacement = self._make_equipment_instance("main_hand", 1, bonus_power=50)
+
+        before = get_party_power_score(self.db, self.guild.id, [mercenary])
+        equip_item(self.db, self.guild.id, mercenary.id, first.id)
+        after_first = get_party_power_score(self.db, self.guild.id, [mercenary])
+        equipped = equip_item(self.db, self.guild.id, mercenary.id, replacement.id)
+        after_replacement = get_party_power_score(self.db, self.guild.id, [mercenary])
+
+        self.assertEqual(equipped.equipped_to_mercenary_id, mercenary.id)
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == first.id,
+        )))
+        self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == replacement.id,
+        )), mercenary.id)
+        self.assertGreater(after_first, before)
+        self.assertGreater(after_replacement, after_first)
+
+    def test_two_ring_and_earring_slots_require_explicit_replacement_target_when_full(self):
+        mercenary = self.members[0]
+        for slot in ("ring", "earring"):
+            with self.subTest(slot=slot):
+                first, second, third = [
+                    self._make_equipment_instance(slot, index, bonus_power=10 + index)
+                    for index in range(3)
+                ]
+                equip_item(self.db, self.guild.id, mercenary.id, first.id)
+                equip_item(self.db, self.guild.id, mercenary.id, second.id)
+                replacement_option = next(
+                    item for item in equipment_service.get_available_equipment_for_mercenary(
+                        self.db, self.guild.id, mercenary,
+                    ) if item.id == third.id
+                )
+                self.assertTrue(replacement_option.replacement_required)
+                self.assertEqual(set(replacement_option.replacement_candidate_ids), {first.id, second.id})
+
+                wrong_slot = "earring" if slot == "ring" else "ring"
+                wrong_item = self._make_equipment_instance(wrong_slot, 0, bonus_power=20)
+                equip_item(self.db, self.guild.id, mercenary.id, wrong_item.id)
+                with self.assertRaisesRegex(EquipmentError, "nao pertence a este slot"):
+                    equip_item(
+                        self.db, self.guild.id, mercenary.id, third.id,
+                        replacement_item_instance_id=wrong_item.id,
+                    )
+                equipment_service.unequip_item(self.db, self.guild.id, mercenary.id, wrong_item.id)
+                with self.assertRaisesRegex(EquipmentError, "Escolha qual equipamento"):
+                    equip_item(self.db, self.guild.id, mercenary.id, third.id)
+                self.assertEqual(first.equipped_to_mercenary_id, mercenary.id)
+                self.assertEqual(second.equipped_to_mercenary_id, mercenary.id)
+                self.assertIsNone(third.equipped_to_mercenary_id)
+
+                equip_item(self.db, self.guild.id, mercenary.id, third.id,
+                           replacement_item_instance_id=first.id)
+                self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+                    GuildItemInstance.id == first.id,
+                )))
+                self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+                    GuildItemInstance.id == second.id,
+                )), mercenary.id)
+                self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+                    GuildItemInstance.id == third.id,
+                )), mercenary.id)
+                equipment_service.unequip_item(self.db, self.guild.id, mercenary.id, second.id)
+                equipment_service.unequip_item(self.db, self.guild.id, mercenary.id, third.id)
+
+    def test_ineligible_or_foreign_item_cannot_change_current_equipment(self):
+        mercenary = self.members[0]
+        equipped = self._make_equipment_instance("main_hand", 0, bonus_power=15)
+        too_high_level = self._make_equipment_instance("main_hand", 1, bonus_power=60)
+        too_high_level.required_level = mercenary.level + 1
+        self.db.flush()
+        equip_item(self.db, self.guild.id, mercenary.id, equipped.id)
+
+        with self.assertRaisesRegex(EquipmentError, "nivel suficiente"):
+            equip_item(self.db, self.guild.id, mercenary.id, too_high_level.id)
+
+        foreign_campaign = CampaignMetadata(
+            campaign_id="00000000-0000-0000-0000-000000000002",
+            campaign_name="Other runtime campaign",
+            created_at_utc=self.now,
+            updated_at_utc=self.now,
+            schema_version=5,
+            content_version=PACK_VERSION,
+            home_region="Vale da Fronteira",
+        )
+        foreign_guild = Guild(
+            campaign_id=foreign_campaign.campaign_id, name="Other runtime guild", level=1,
+        )
+        self.db.add_all((foreign_campaign, foreign_guild))
+        self.db.flush()
+        template = self.db.get(ItemTemplate, too_high_level.item_template_id)
+        foreign_item = GuildItemInstance(
+            guild_id=foreign_guild.id, item_template_id=template.id,
+            equipment_slot="main_hand", required_level=1, bonus_power=100,
+        )
+        self.db.add(foreign_item)
+        self.db.flush()
+        with self.assertRaisesRegex(EquipmentError, "Equipamento nao encontrado"):
+            equip_item(self.db, self.guild.id, mercenary.id, foreign_item.id)
+        valid_replacement = self._make_equipment_instance("main_hand", 2, bonus_power=75)
+        with self.assertRaisesRegex(EquipmentError, "nao pertence a este slot"):
+            equip_item(
+                self.db, self.guild.id, mercenary.id, valid_replacement.id,
+                replacement_item_instance_id=foreign_item.id,
+            )
+
+        self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == equipped.id,
+        )), mercenary.id)
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == too_high_level.id,
+        )))
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == valid_replacement.id,
+        )))
+        self.assertIsNone(foreign_item.equipped_to_mercenary_id)
+
+    def test_failed_equipment_commit_rolls_back_both_items(self):
+        mercenary = self.members[0]
+        equipped = self._make_equipment_instance("main_hand", 0, bonus_power=15)
+        replacement = self._make_equipment_instance("main_hand", 1, bonus_power=40)
+        equip_item(self.db, self.guild.id, mercenary.id, equipped.id)
+
+        with patch.object(self.db, "commit", side_effect=RuntimeError("forced equipment commit failure")):
+            with self.assertRaisesRegex(RuntimeError, "forced equipment commit failure"):
+                equip_item(self.db, self.guild.id, mercenary.id, replacement.id)
+
+        self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == equipped.id,
+        )), mercenary.id)
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == replacement.id,
+        )))
 
     def test_housing_capacity_recalculates_without_removing_existing_mercenaries(self):
         housing = next(row for row in self.db.scalars(

@@ -8,6 +8,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LauncherAndEquipmentUiContractTests(unittest.TestCase):
+    def test_equipment_swap_ui_requires_a_specific_double_slot_item(self):
+        template = (ROOT / "app/templates/mercenaries/detail.html").read_text(encoding="utf-8")
+        script = (ROOT / "app/static/js/equipment-details.js").read_text(encoding="utf-8")
+        route = (ROOT / "app/routes/mercenary_routes.py").read_text(encoding="utf-8")
+
+        self.assertIn("data-replacement-required", template)
+        self.assertIn("data-replacement-candidate-ids", template)
+        self.assertIn("name=\"replacement_item_instance_id\"", template)
+        self.assertIn("candidateIds.includes(Number(option.value))", script)
+        self.assertIn('form.get("replacement_item_instance_id") or None', route)
+
     def test_campaign_update_page_only_checks_and_guides_to_launcher(self):
         template = (ROOT / "app/templates/updates.html").read_text(encoding="utf-8")
         route = (ROOT / "app/routes/update_routes.py").read_text(encoding="utf-8")
