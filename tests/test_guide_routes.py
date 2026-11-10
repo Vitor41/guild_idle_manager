@@ -156,6 +156,12 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn(r"guilda nível 5\+", markdown)
         self.assertIn(r"guilda nível 12\+", markdown)
         self.assertNotIn("Tier 2", markdown)
+        lines = [line for line in markdown.splitlines() if "base" in line]
+        self.assertEqual(len(lines), 2)
+        self.assertIn("Raridade(s): Raro", lines[0])
+        self.assertIn("10% base", lines[0])
+        self.assertIn("Raridade(s): Épico", lines[1])
+        self.assertIn("4% base", lines[1])
 
     def test_catalog_icon_urls_are_served_by_the_static_mount(self):
         import json
