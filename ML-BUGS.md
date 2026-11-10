@@ -6,10 +6,10 @@ Registro das anotações de gameplay e acompanhamento das correções, iniciado 
 
 - **Publicação corrente:** `DEV-v0.9.0` foi publicada pelo PR #20, já mesclado. O workflow `42892585858` concluiu verde; instalador, manifesto e assinatura estão presentes.
 - **Validação técnica da integração publicada:** CR aprovou a revisão; a suíte ampla executou 364 testes e passou, com 4 skips. A validação visual no aplicativo instalado continua pendente onde aplicável.
-- 11 anotações investigadas.
-- 11 melhorias registradas: `ML-001` a `ML-011`.
-- 1 inconsistência de implementação registrada: `BUG-001`.
-- 12 correções implementadas no ramo `fix/ml-bugs-followup`; validação automatizada aprovada nos testes direcionados e simulação descritos abaixo.
+- O registro começou com 11 anotações em 2026-11-01 e foi ampliado desde então.
+- 42 melhorias registradas: `ML-001` a `ML-042`.
+- 12 bugs registrados: `BUG-001` a `BUG-012`.
+- O lote inicial de 12 correções foi implementado no ramo `fix/ml-bugs-followup`; a validação automatizada daquele lote consta nas respectivas evidências abaixo.
 - A existência de instalador e assinatura confirma a publicação; não equivale ao aceite visual do usuário no aplicativo instalado.
 
 ## Incremento solicitado antes da publicação DEV 0.5.0
