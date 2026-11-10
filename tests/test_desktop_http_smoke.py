@@ -646,8 +646,12 @@ with tempfile.TemporaryDirectory() as data_dir:
             body=f"mercenary_ids={regional_supply_worker_id}",
             extra_headers={"X-GIM-Diagnostic-ID": "7777777777777777"},
         )
-        assert prepared_start_status == 303 and prepared_start_location.startswith("/missions?message="), (
+        assert prepared_start_status == 303 and prepared_start_location.startswith("/regional?message="), (
             prepared_start_status, prepared_start_location, prepared_start_body[:300],
+        )
+        regional_after_start_status, _regional_after_start_location, regional_after_start_body = request("/regional")
+        assert regional_after_start_status == 200 and b"Ofertas" in regional_after_start_body, (
+            regional_after_start_status, regional_after_start_body[:500],
         )
         with SessionLocal() as db:
             prepared_offer = db.get(RegionalOffer, prepared_offer_id)

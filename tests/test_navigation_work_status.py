@@ -168,6 +168,43 @@ class NavigationWorkStatusTests(unittest.TestCase):
         isolated = get_navigation_work_status(self.db, self.guild.id, now=self.now)
         self.assertEqual(isolated["missions"]["state"], "none")
 
+    def test_gathering_counts_continuous_and_finite_work_but_excludes_capacity_paused(self):
+        finite_worker = Mercenary(
+            guild_id=self.guild.id, class_id=self.mercenary_class.id, name="Coletor finito QA",
+            power=1, vitality=1, agility=1, intelligence=1, luck=1,
+        )
+        paused_worker = Mercenary(
+            guild_id=self.guild.id, class_id=self.mercenary_class.id, name="Coletor pausado QA",
+            power=1, vitality=1, agility=1, intelligence=1, luck=1,
+        )
+        self.db.add_all([finite_worker, paused_worker])
+        self.db.flush()
+        self.db.add_all([
+            GatheringAssignment(
+                guild_id=self.guild.id, mercenary_id=self.worker.id, resource_family="wood",
+                node_code="qa", started_at_utc=self.now, checkpoint_at_utc=self.now,
+                target_quantity=None, capacity_paused=False,
+            ),
+            GatheringAssignment(
+                guild_id=self.guild.id, mercenary_id=finite_worker.id, resource_family="ore",
+                node_code="qa", started_at_utc=self.now, checkpoint_at_utc=self.now,
+                target_quantity=10, quantity_collected=4, capacity_paused=False,
+            ),
+            GatheringAssignment(
+                guild_id=self.guild.id, mercenary_id=paused_worker.id, resource_family="herb",
+                node_code="qa", started_at_utc=self.now, checkpoint_at_utc=self.now,
+                target_quantity=None, capacity_paused=True,
+            ),
+        ])
+        self.db.flush()
+
+        result = get_navigation_work_status(self.db, self.guild.id, now=self.now)
+
+        self.assertEqual(result["gathering"]["active"], 2)
+        self.assertEqual(result["gathering"]["ready"], 0)
+        self.assertEqual(result["gathering"]["state"], "active")
+        self.assertEqual(result["gathering"]["label"], "Coleta: 2 em andamento")
+
     def test_regional_preparation_is_scoped_to_the_active_campaign_and_guild(self):
         cycles = [
             RegionalCycle(

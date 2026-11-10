@@ -50,11 +50,16 @@ def _count_row(menu: str, model, guild_id: int, now: datetime, *, ready_action: 
     else:
         is_ready = literal(False)
     ready = ((model.status == "in_progress") & is_ready) if ready_action else literal(False)
-    return select(
+    query = select(
         literal(menu).label("menu"),
         func.coalesce(func.sum(case((active, 1), else_=0)), 0).label("active"),
         func.coalesce(func.sum(case((ready, 1), else_=0)), 0).label("ready"),
     ).where(model.guild_id == guild_id)
+    if model is GatheringAssignment:
+        # Capacity-paused collectors have no production in progress. Their
+        # assignment remains persisted and resumes after inventory space frees.
+        query = query.where(GatheringAssignment.capacity_paused.is_(False))
+    return query
 
 
 def _regional_preparation_row(campaign_id: str, guild_id: int, now: datetime):
