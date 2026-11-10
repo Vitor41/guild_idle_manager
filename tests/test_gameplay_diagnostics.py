@@ -6,10 +6,49 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from app.desktop.gameplay_diagnostics import close_gameplay_logger, gameplay_log_path, log_gameplay_action
+from app.desktop.gameplay_diagnostics import (
+    close_gameplay_logger,
+    gameplay_log_path,
+    log_gameplay_action,
+    log_gathering_advancement,
+)
+from app.services.campaign_service import CampaignService
 
 
 class GameplayDiagnosticsTests(unittest.TestCase):
+    def test_gameplay_log_survives_campaign_migration_and_regional_production(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            local_app_data = root / "LocalAppData"
+            gameplay_log = local_app_data / "GuildIdleManager" / "logs" / "gameplay-actions.log"
+            try:
+                with patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}):
+                    log_gameplay_action(
+                        action="campaign.open", route="/desktop/campaigns",
+                        diagnostic_id="0123456789abcdef", status_code=200, outcome="success",
+                    )
+                    campaigns = CampaignService(root / "saves")
+                    campaigns.create_campaign("Migração temporária")
+                    log_gathering_advancement(
+                        route="/regional", diagnostic_id="fedcba9876543210",
+                        advancement={"wood": {
+                            "cycles": 1, "produced": 1, "stored": 1, "discarded": 0,
+                            "capacity": 100, "used": 1,
+                        }},
+                    )
+
+                contents = gameplay_log.read_text(encoding="utf-8")
+                self.assertIn("action=campaign.open route=/desktop/campaigns", contents)
+                self.assertIn(
+                    "event=production action=gathering.production route=/regional "
+                    "ref=fedcba9876543210 status=200 "
+                    "outcome=family=wood cycles=1 produced=1 stored=1 discarded=0 "
+                    "capacity=100 used=1 state=active",
+                    contents,
+                )
+            finally:
+                close_gameplay_logger(gameplay_log)
+
     def test_invalid_user_data_path_does_not_block_gameplay_logging(self):
         install_directory = Path(__file__).resolve().parents[1]
         with patch.dict(os.environ, {"LOCALAPPDATA": str(install_directory)}):
