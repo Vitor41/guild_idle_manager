@@ -24,6 +24,8 @@ O `desktop.log` termina em 2026-11-01. O `gameplay-actions.log` mais recente é 
 - `tests.test_workshop_service`: **7/7 passaram**, usando SQLite em memória.
 - `tests.test_desktop_http_smoke`: **1/1 passou**; o caso cria uma campanha temporária, solicita `/workshops`, exige status 200 e verifica ausência de resposta de erro interno.
 - Smoke adicional em cópias temporárias de duas campanhas de teste: ambas migraram da revisão `f3b4c5d6e7f8` à revisão atual `0a1b2c3d4e5f`; `/workshops` respondeu 200 e incluiu o título esperado. Uma cópia não tinha mundo regional prévio e a outra já continha estado regional.
+- **Reteste automatizado em 2026-11-10:** comando `python -m unittest tests.test_workshop_service tests.test_desktop_http_smoke`; resultado **8/8 aprovados** em 69,746 s. O smoke HTTP cria e usa dados de campanha temporários.
+- **Nova busca correlacionada:** a referência `90e79039f32444b5b2d307f8ac25ae42` continua ausente dos arquivos em `%LOCALAPPDATA%\GuildIdleManager\logs`.
 
 Os arquivos fonte dos dois fixtures em `.lot-e2-test-tmp` foram somente lidos. A migração, o avanço do mundo e as requisições ocorreram em clones em diretórios temporários, apagados ao final dos testes. Nenhum perfil instalado ou save real foi aberto ou alterado.
 
