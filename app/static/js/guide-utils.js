@@ -49,7 +49,6 @@
       if (filters.type && filters.type !== "all" && item.item_type !== filters.type) continue;
       if (filters.family && filters.family !== "all" && item.family !== filters.family) continue;
       if (filters.band && filters.band !== "all" && item.level_band !== filters.band) continue;
-      if (filters.tier && filters.tier !== "all" && Number(item.tier) !== Number(filters.tier)) continue;
       const matchingSources = (item.sources || []).filter((source) => selectedSource === "all" || source.filter_key === selectedSource);
       if (item.sources?.length) {
         if (!matchingSources.length) continue;
@@ -64,7 +63,32 @@
     return results;
   }
 
-  const api = Object.freeze({ findNormalizedMatch, filterCatalog, normalize });
+  function groupCatalogSources(visibleRows) {
+    const grouped = new Map();
+    for (const { item, sources } of visibleRows || []) {
+      const slot = item.equipment_slot ? ` · ${item.equipment_slot}` : "";
+      const itemLabel = `${item.name} · ${item.item_type_label}${slot} · ${item.level_band}`;
+      for (const source of sources || []) {
+        const key = JSON.stringify([source.filter_key || "none", source.type, source.label,
+          source.name || "", source.recommendation || "", source.requirement, source.chance,
+          source.quantity, source.price ?? "", source.condition || ""]);
+        if (!grouped.has(key)) grouped.set(key, { source, entries: [] });
+        const entries = grouped.get(key).entries;
+        const equivalent = entries.find((entry) => entry.item.name === item.name &&
+          entry.item.item_type === item.item_type && entry.item.family === item.family &&
+          entry.item.equipment_slot === item.equipment_slot && entry.item.level_band === item.level_band &&
+          entry.item.item_level === item.item_level);
+        if (equivalent) {
+          if (!equivalent.rarities.includes(item.rarity)) equivalent.rarities.push(item.rarity);
+        } else {
+          entries.push({ item, itemLabel, source, rarities: [item.rarity] });
+        }
+      }
+    }
+    return Array.from(grouped.values());
+  }
+
+  const api = Object.freeze({ findNormalizedMatch, filterCatalog, groupCatalogSources, normalize });
   global.GuideUtils = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

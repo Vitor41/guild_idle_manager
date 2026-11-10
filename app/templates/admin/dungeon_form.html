@@ -33,7 +33,7 @@
         <label>Grupo mínimo <input type="number" name="min_party_size" min="1" value="{{ dungeon.min_party_size if dungeon else form.min_party_size if form else 2 }}" required></label>
         <label>Grupo máximo <input type="number" name="max_party_size" min="1" value="{{ dungeon.max_party_size if dungeon else form.max_party_size if form else 3 }}" required></label>
         <label>Nível da guilda <input type="number" name="required_guild_level" min="1" value="{{ dungeon.required_guild_level if dungeon else form.required_guild_level if form else 1 }}" required></label>
-        <label>Nível do mercenário <input type="number" name="required_min_mercenary_level" min="1" value="{{ dungeon.required_min_mercenary_level if dungeon else form.required_min_mercenary_level if form else 1 }}" required></label>
+        <label>Nível recomendado do mercenário <input type="number" name="required_min_mercenary_level" min="1" value="{{ dungeon.required_min_mercenary_level if dungeon else form.required_min_mercenary_level if form else 1 }}" required></label>
         <label>Construção exigida <input type="text" name="required_building_type" value="{{ dungeon.required_building_type if dungeon and dungeon.required_building_type else form.required_building_type if form else '' }}"></label>
         <label>Nível da construção <input type="number" name="required_building_level" min="0" value="{{ dungeon.required_building_level if dungeon else form.required_building_level if form else 0 }}"></label>
         <label>Poder total mínimo <input type="number" name="required_total_power" min="0" value="{{ dungeon.required_total_power if dungeon else form.required_total_power if form else 0 }}"></label>

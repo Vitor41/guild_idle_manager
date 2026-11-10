@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261109-1">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261109-2">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261027-1">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-sidebar-layout.css') }}?v=20261103-1">{% endif %}
@@ -31,20 +31,20 @@
             <a href="/dashboard"><span class="nav-icon">⌂</span><span>Visão geral</span></a>
             <a href="/tavern"><span class="nav-icon">♜</span><span>Taverna</span></a>
             <a href="/mercenaries"><span class="nav-icon">⚔</span><span>Mercenários</span></a>
-            <a href="/missions"><span class="nav-icon">✦</span><span>Missões</span></a>
-            <a href="/gathering"><span class="nav-icon">⚒</span><span>Coleta</span></a>
-            <a href="/workshops"><span class="nav-icon">⚗</span><span>Oficinas</span></a>
-            <a href="/dungeons"><span class="nav-icon">◆</span><span>Masmorras</span></a>
+            <a href="/missions" data-nav-work-menu="missions" data-nav-work-label="Missões"><span class="nav-icon">✦</span><span>Missões</span></a>
+            <a href="/gathering" data-nav-work-menu="gathering" data-nav-work-label="Coleta"><span class="nav-icon">⚒</span><span>Coleta</span></a>
+            <a href="/workshops" data-nav-work-menu="workshops" data-nav-work-label="Oficinas"><span class="nav-icon">⚗</span><span>Oficinas</span></a>
+            <a href="/dungeons" data-nav-work-menu="dungeons" data-nav-work-label="Masmorras"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
-            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-async-navigation data-scroll-top><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-async-navigation data-scroll-top data-nav-work-menu="regional" data-nav-work-label="Vigília Regional"><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
-            <a href="/blacksmith"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
-            <a href="/market"><span class="nav-icon">$</span><span>Mercado</span></a>
+            <a href="/blacksmith" data-nav-work-menu="blacksmith" data-nav-work-label="Ferreiro"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
+            <a href="/market" data-nav-work-menu="market" data-nav-work-label="Mercado"><span class="nav-icon">$</span><span>Mercado</span></a>
             <a href="/docks"><span class="nav-icon">&#9875;</span><span>Docas</span></a>
             <a href="/buildings"><span class="nav-icon">▣</span><span>Construções</span></a>
-            <a href="/class-change"><span class="nav-icon">✧</span><span>Troca de Classe</span></a>
+            <a href="/class-change" data-nav-work-menu="class_change" data-nav-work-label="Troca de Classe"><span class="nav-icon">✧</span><span>Troca de Classe</span></a>
             <a href="/guild/progress"><span class="nav-icon">&#9733;</span><span>Progresso da Guilda</span></a>
-            <a href="/professions"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
+            <a href="/professions" data-nav-work-menu="professions" data-nav-work-label="Profissões"><span class="nav-icon">&#9874;</span><span>Profissões</span></a>
             <span class="nav-section-label">Guias e registros</span>
             <a href="/classes"><span class="nav-icon">✧</span><span>Guia de Classes</span></a>
             <a href="/tiers"><span class="nav-icon">◇</span><span>Guia de Raridades</span></a>
@@ -214,14 +214,14 @@
         <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
-    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261109-1"></script>
-    <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261109-2" defer></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261110-1"></script>
+    <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261110-1" defer></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261103-2" defer></script>
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261031-1" defer></script>
     {% if request.url.path == '/market' %}<script src="{{ url_for('static', path='/js/market-max.js') }}?v=20261102-1" defer></script>{% endif %}
     <script src="{{ url_for('static', path='/js/offline-stamina.js') }}?v=20261030-1" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261030-2" defer></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261110-1" defer></script>{% endif %}
   </body>
 </html>

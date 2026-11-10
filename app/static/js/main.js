@@ -2,8 +2,9 @@ const startupModalQueue = (() => {
   const pending = [];
   let active = null;
   let sequence = 0;
+  let batchDepth = 0;
   const advance = () => {
-    if (active?.open) return;
+    if (batchDepth > 0 || active?.open) return;
     active = null;
     while (pending.length) {
       const next = pending.shift().dialog;
@@ -18,11 +19,26 @@ const startupModalQueue = (() => {
     }
   };
   return {
+    beginBatch() {
+      batchDepth += 1;
+    },
+    endBatch() {
+      if (batchDepth > 0) batchDepth -= 1;
+      if (batchDepth === 0) advance();
+    },
     enqueue(dialog, priority, deadline = Number.POSITIVE_INFINITY) {
       if (!(dialog instanceof HTMLDialogElement) || dialog.open || pending.some((row) => row.dialog === dialog)) return;
       pending.push({ dialog, priority, deadline: Number.isFinite(deadline) ? deadline : Number.POSITIVE_INFINITY, sequence: sequence++ });
       pending.sort((left, right) => left.priority - right.priority || left.deadline - right.deadline || left.sequence - right.sequence);
       advance();
+    },
+    enqueueMany(entries) {
+      this.beginBatch();
+      try {
+        for (const { dialog, priority, deadline } of entries) this.enqueue(dialog, priority, deadline);
+      } finally {
+        this.endBatch();
+      }
     },
     remove(dialog) {
       const index = pending.findIndex((row) => row.dialog === dialog);
@@ -32,6 +48,64 @@ const startupModalQueue = (() => {
   };
 })();
 window.GIMStartupModalQueue = startupModalQueue;
+
+let navigationWorkStatusRequest = null;
+let navigationWorkStatusController = null;
+async function refreshNavigationWorkIndicators(force = false) {
+  if (navigationWorkStatusRequest && !force) return navigationWorkStatusRequest;
+  if (force) navigationWorkStatusController?.abort();
+  const links = [...document.querySelectorAll("[data-nav-work-menu]")];
+  if (!links.length) return;
+  const controller = new AbortController();
+  navigationWorkStatusController = controller;
+  const pendingRequest = fetch("/api/navigation/work-status", {
+    credentials: "same-origin",
+    cache: "no-store",
+    signal: controller.signal,
+    headers: { "Accept": "application/json", "X-Requested-With": "fetch" },
+  }).then(async (response) => {
+    if (!response.ok) return;
+    const payload = await response.json();
+    for (const link of links) {
+      const status = payload.menus?.[link.dataset.navWorkMenu];
+      const active = Number(status?.active || 0);
+      const ready = Number(status?.ready || 0);
+      link.querySelector(".nav-work-indicator")?.remove();
+      if (!active && !ready) {
+        link.removeAttribute("data-work-state");
+        link.removeAttribute("aria-label");
+        link.removeAttribute("title");
+        continue;
+      }
+      const state = ready ? "ready" : "active";
+      const inviteNote = link.querySelector(".regional-invite-badge") ? "; convite de rebelião pendente" : "";
+      const indicator = document.createElement("span");
+      indicator.className = "nav-work-indicator";
+      indicator.dataset.state = state;
+      indicator.setAttribute("aria-hidden", "true");
+      link.append(indicator);
+      link.dataset.workState = state;
+      const accessibleLabel = `${status.label || link.dataset.navWorkLabel || "Atividade pendente"}${inviteNote}`;
+      link.setAttribute("aria-label", accessibleLabel);
+      link.title = accessibleLabel;
+    }
+  }).catch(() => {}).finally(() => {
+    if (navigationWorkStatusRequest === pendingRequest) {
+      navigationWorkStatusRequest = null;
+      navigationWorkStatusController = null;
+    }
+  });
+  navigationWorkStatusRequest = pendingRequest;
+  return navigationWorkStatusRequest;
+}
+window.refreshNavigationWorkIndicators = refreshNavigationWorkIndicators;
+refreshNavigationWorkIndicators();
+window.setInterval(() => {
+  if (!document.hidden) refreshNavigationWorkIndicators();
+}, 20000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshNavigationWorkIndicators();
+});
 
 document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-bonus-dialog-open]");
@@ -218,7 +292,7 @@ function updateMarketEstimate(node) {
   const reduction = Number.parseInt(node.dataset.timeReduction || form?.dataset.timeReduction || "0", 10);
   const baseTotal = Math.max(1, baseSeconds) * quantity;
   const finalSeconds = Math.max(5, Math.floor(baseTotal * (100 - Math.min(100, Math.max(0, reduction))) / 100));
-  node.textContent = `Base antes da redução: ${formatMarketEstimate(baseTotal)} · redução do Mercado: ${reduction}% · prazo estimado: ${formatMarketEstimate(finalSeconds)}.`;
+  node.textContent = `Prazo estimado: ${formatMarketEstimate(finalSeconds)}.`;
 }
 
 function initializeMarketEstimates(root = document) {
@@ -566,6 +640,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   window.initializeRegionalSupply?.(currentMain);
   window.initializeRegionalComparison?.(currentMain);
   showActionToast(currentMain);
+  refreshNavigationWorkIndicators(true);
 
   const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
   window.requestAnimationFrame(() => {
@@ -581,23 +656,29 @@ function regionalNoticeMatches(current, replacement) {
 window.GIMRegionalNoticeMatches = regionalNoticeMatches;
 
 function syncRegionalEventNoticeDialogs(parsedDocument) {
-  const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
-  const incomingById = new Map(incoming.filter((dialog) => dialog.id).map((dialog) => [dialog.id, dialog]));
-  for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
-    const replacement = incomingById.get(current.id);
-    if (replacement && regionalNoticeMatches(current, replacement)) continue;
-    window.GIMStartupModalQueue?.remove(current);
-    if (current.open) current.close();
-    current.remove();
-  }
-  for (const source of incoming) {
-    if (source.id && document.getElementById(source.id)) continue;
-    const dialog = document.importNode(source, true);
-    document.body.append(dialog);
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) dialog.close();
-    });
-    window.GIMEnqueueRegionalNotice?.(dialog);
+  const modalQueue = window.GIMStartupModalQueue;
+  modalQueue?.beginBatch?.();
+  try {
+    const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
+    const incomingById = new Map(incoming.filter((dialog) => dialog.id).map((dialog) => [dialog.id, dialog]));
+    for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
+      const replacement = incomingById.get(current.id);
+      if (replacement && regionalNoticeMatches(current, replacement)) continue;
+      modalQueue?.remove(current);
+      if (current.open) current.close();
+      current.remove();
+    }
+    for (const source of incoming) {
+      if (source.id && document.getElementById(source.id)) continue;
+      const dialog = document.importNode(source, true);
+      document.body.append(dialog);
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+      window.GIMEnqueueRegionalNotice?.(dialog);
+    }
+  } finally {
+    modalQueue?.endBatch?.();
   }
 }
 

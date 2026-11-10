@@ -10,16 +10,20 @@ class Stage5UiContractTests(unittest.TestCase):
     def read(self, path: str) -> str:
         return (ROOT / path).read_text(encoding="utf-8-sig")
 
-    def test_startup_modals_are_queued_in_offline_tutorial_rebellion_order(self):
+    def test_startup_modals_queue_regional_notices_by_priority_and_deadline(self):
         main = self.read("app/static/js/main.js")
         evolution = self.read("app/static/js/evolution-dialogs.js")
         self.assertIn("window.GIMStartupModalQueue = startupModalQueue", main)
         self.assertIn("startupModalQueue.enqueue(offlineDialog, 0)", main)
         self.assertIn("startupModalQueue.enqueue(tutorialInvite, 1)", main)
         self.assertIn("window.GIMStartupModalQueue?.enqueue(dialog, 2, deadline)", evolution)
+        self.assertIn("window.GIMStartupModalQueue?.enqueueMany(entries)", evolution)
+        self.assertIn("modalQueue?.beginBatch?.()", main)
+        self.assertIn("modalQueue?.endBatch?.()", main)
         self.assertIn('next.addEventListener("close"', main)
         self.assertIn("pending.sort((left, right) => left.priority - right.priority", main)
-        self.assertNotIn("dialog.showModal()", evolution.split('document.querySelectorAll("dialog[data-regional-event-notice]")', 1)[1].split("document.querySelectorAll(\".evolution-page img\")", 1)[0])
+        regional_enqueuing = evolution.split("window.GIMEnqueueRegionalNotice =", 1)[1]
+        self.assertNotIn("dialog.showModal()", regional_enqueuing)
 
     def test_offline_dialog_scrolls_body_and_keeps_acknowledgement_reachable(self):
         css = self.read("app/static/css/main.css")
@@ -228,6 +232,7 @@ class Stage5UiContractTests(unittest.TestCase):
         submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
         self.assertNotIn('form.submit()', submit_catch)
         self.assertRegex(base, r"main\.css.*?\?v=20\d{6}-\d+")
+        self.assertIn("?v=20261110-1", base)
 
     def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
         gathering = self.read("app/templates/gathering/index.html")

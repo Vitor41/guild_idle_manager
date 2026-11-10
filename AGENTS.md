@@ -44,6 +44,14 @@ Cada entrega do DEV deve conter:
 
 Sem branch/hash imutáveis e evidência dos testes, a tarefa não está pronta para revisão do CR.
 
+## Guia do Jogo e documentação exportável
+
+- O Guia do Jogo é documentação de gameplay mantida junto ao produto. Sempre que uma entrega alterar uma regra, conteúdo, requisito, recompensa, chance ou fluxo explicado ao jogador, o DEV deve revisar o Guia e atualizá-lo na mesma entrega quando necessário; se não houver impacto, deve registrar isso na evidência da tarefa.
+- O Guia exibido no jogo e o arquivo Markdown exportável devem ter uma única fonte de conteúdo. Ao implementar a exportação, preferir gerar o `.md` a partir da mesma fonte usada para renderizar o Guia, incluindo conteúdo dinâmico aplicável (por exemplo, catálogo e taxas ativos) quando isso fizer parte da documentação. Não manter uma cópia manual independente que possa ficar defasada.
+- Se a arquitetura exigir um Markdown canônico em vez de geração dinâmica, a tela do Guia e o arquivo exportado devem consumir esse mesmo arquivo, e toda alteração do Guia deve atualizá-lo no mesmo commit.
+- O arquivo exportado deve ser PT-BR, legível fora do jogo, conter versão/data de geração e somente informações destinadas ao jogador; nunca incluir dados privados de campanha, saves, credenciais ou conteúdo administrativo interno.
+- O handoff ao CR deve comprovar que o conteúdo visível no Guia e o `.md` exportado estão sincronizados, que a exportação representa a versão/conteúdo atual e que alterações de gameplay relevantes foram avaliadas quanto à necessidade de atualizar a documentação.
+
 ## Catálogo e busca do Guia
 
 - O catálogo de Equipamentos e Materiais deve continuar derivado das fontes ativas da campanha e compartilhar a mesma estrutura com a tela e a exportação Markdown. Não trate ingredientes consumidos como fontes de obtenção, não invente chances e preserve os requisitos que limitam cada atividade.

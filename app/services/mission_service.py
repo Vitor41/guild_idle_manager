@@ -338,10 +338,7 @@ def get_missions_page_context(
                 ),
             )
     mission_mercenaries = {
-        mission.id: [
-            mercenary for mercenary in available_mercenaries
-            if mercenary.level >= mission.required_min_mercenary_level
-        ]
+        mission.id: available_mercenaries
         for mission in mission_templates
     }
     mission_chances = {
@@ -520,9 +517,6 @@ def start_mission(
     mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_mercenary_ids)
     if len(mercenaries) != len(parsed_mercenary_ids):
         raise MissionError("Mercenário indisponível.")
-    if any(mercenary.level < mission_template.required_min_mercenary_level for mercenary in mercenaries):
-        raise MissionError("Um ou mais mercenarios nao possuem nivel suficiente.")
-
     started_at = utc_now()
     skill_effects = get_party_skill_effects(db, mercenaries)
     office = mission_office_values(get_building_level(db, guild.id, "contract_office"))

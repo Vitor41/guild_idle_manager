@@ -23,6 +23,10 @@ class WorkshopError(ValueError):
     pass
 
 
+class _WorkshopCapacityNotAvailable(Exception):
+    """Roll back a delivery attempt while keeping its reservation active."""
+
+
 def _utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
@@ -61,18 +65,31 @@ def _complete_due_job(db: Session, guild_id: int, now: datetime) -> SupplyWorksh
     ).with_for_update())
     if job is None or _utc(job.ends_at) > now:
         return job
-    changed = db.execute(update(SupplyWorkshopJob).where(
-        SupplyWorkshopJob.id == job.id, SupplyWorkshopJob.status == "in_progress",
-        SupplyWorkshopJob.ends_at <= now,
-    ).values(status="completed", completed_at=now, updated_at=now))
-    if changed.rowcount != 1:
+    guild = db.get(Guild, guild_id)
+    if guild is None or get_inventory_usage(db, guild_id) > get_inventory_capacity(db, guild):
+        return job
+    try:
+        # Keep the reservation until delivery can replace it with stored kits.
+        # A savepoint also protects the job if capacity changes after this check.
+        with db.begin_nested():
+            changed = db.execute(update(SupplyWorkshopJob).where(
+                SupplyWorkshopJob.id == job.id, SupplyWorkshopJob.status == "in_progress",
+                SupplyWorkshopJob.ends_at <= now,
+            ).values(status="completed", completed_at=now, updated_at=now).execution_options(
+                synchronize_session=False,
+            ))
+            if changed.rowcount != 1:
+                return db.get(SupplyWorkshopJob, job.id)
+            accepted, overflow = add_inventory_quantity_capped(
+                db, guild, job.output_item_template_id, job.kit_quantity,
+            )
+            if overflow or accepted != job.kit_quantity:
+                raise _WorkshopCapacityNotAvailable
+            job.status, job.completed_at = "completed", now
+            db.flush()
+    except _WorkshopCapacityNotAvailable:
+        db.expire_all()
         return db.get(SupplyWorkshopJob, job.id)
-    accepted, overflow = add_inventory_quantity_capped(db, db.get(Guild, guild_id),
-        job.output_item_template_id, job.kit_quantity)
-    if overflow or accepted != job.kit_quantity:
-        raise WorkshopError("O espaço reservado no Armazém não está disponível para concluir a produção.")
-    db.flush()
-    job.status, job.completed_at = "completed", now
     return job
 
 
@@ -91,6 +108,9 @@ def get_supply_workshop_context(db: Session, guild: Guild, *, now: datetime | No
         SupplyWorkshopJob.guild_id == guild.id, SupplyWorkshopJob.status == "in_progress")) or due_job
     capacity = get_inventory_capacity(db, guild)
     usage = get_inventory_usage(db, guild.id)
+    completion_blocked = bool(
+        due_job and due_job.status == "in_progress" and _utc(due_job.ends_at) <= now
+    )
     input_max = min(stock["meat"] // MEAT_PER_KIT, stock["herb"] // HERBS_PER_KIT)
     # A batch consumes five slots and reserves one output slot per kit.
     if usage > capacity:
@@ -99,7 +119,8 @@ def get_supply_workshop_context(db: Session, guild: Guild, *, now: datetime | No
     return {"meat_item": meats[0] if meats else None, "herb_item": herbs[0] if herbs else None,
             "kit_item": kit, "stock": stock, "max_batch": input_max,
             "can_craft": can_start, "job": job, "seconds_per_kit": SECONDS_PER_KIT,
-            "completed_job": due_job if due_job and due_job.status == "completed" else None}
+            "completed_job": due_job if due_job and due_job.status == "completed" else None,
+            "completion_blocked": completion_blocked}
 
 
 def craft_supply_kit(db: Session, guild: Guild, quantity: int = 1, *, now: datetime | None = None) -> SupplyWorkshopJob:

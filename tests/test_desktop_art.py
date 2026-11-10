@@ -16,6 +16,63 @@ ART_ROOT = STATIC / "assets" / "desktop"
 
 
 class DesktopArtIntegrationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the JavaScript queue regression.")
+    def test_initial_and_partial_regional_notices_are_sorted_before_opening(self):
+        script = r"""
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const match = source.match(/const startupModalQueue = \(\(\) => \{[\s\S]*?\n\}\)\(\);/);
+if (!match) throw new Error('startupModalQueue is missing');
+const opened = [];
+class FakeDialog {
+  constructor(id) { this.id = id; this.open = false; this.listeners = {}; }
+  addEventListener(name, callback) { this.listeners[name] = callback; }
+  showModal() { this.open = true; opened.push(this.id); }
+  close() { this.open = false; this.listeners.close?.(); }
+}
+const queue = new Function('HTMLDialogElement', `${match[0]}; return startupModalQueue;`)(FakeDialog);
+const rebellion = new FakeDialog('rebellion');
+const portal = new FakeDialog('portal');
+queue.enqueueMany([
+  {dialog: rebellion, priority: 2, deadline: 200},
+  {dialog: portal, priority: 2, deadline: 100},
+]);
+if (opened.join(',') !== 'portal') throw new Error(`initial order: ${opened}`);
+portal.close();
+if (opened.join(',') !== 'portal,rebellion') throw new Error(`queued order: ${opened}`);
+rebellion.close();
+const earlierRebellion = new FakeDialog('earlier-rebellion');
+const laterPortal = new FakeDialog('later-portal');
+queue.enqueueMany([
+  {dialog: earlierRebellion, priority: 2, deadline: 100},
+  {dialog: laterPortal, priority: 2, deadline: 200},
+]);
+if (opened.at(-1) !== 'earlier-rebellion') throw new Error(`earlier-rebellion order: ${opened}`);
+earlierRebellion.close();
+if (opened.at(-1) !== 'later-portal') throw new Error(`later-portal order: ${opened}`);
+laterPortal.close();
+
+const oldPortal = new FakeDialog('old-portal');
+const laterRebellion = new FakeDialog('later-rebellion');
+queue.enqueueMany([
+  {dialog: oldPortal, priority: 2, deadline: 50},
+  {dialog: laterRebellion, priority: 2, deadline: 300},
+]);
+queue.beginBatch();
+queue.remove(oldPortal);
+const replacementPortal = new FakeDialog('replacement-portal');
+queue.enqueue(replacementPortal, 2, 25);
+queue.endBatch();
+if (opened.at(-1) !== 'replacement-portal') throw new Error(`partial-navigation order: ${opened}`);
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(STATIC / "js" / "main.js")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     @unittest.skipUnless(shutil.which("node"), "Node.js is required for the JavaScript identity regression.")
     def test_regional_notice_replaces_a_different_event_of_the_same_type(self):
         script = r"""
@@ -51,13 +108,19 @@ const format = source.match(/const formatMarketEstimate = \(seconds\) => \{[\s\S
 const update = source.match(/function updateMarketEstimate\(node\) \{[\s\S]*?\n\}/);
 const initialize = source.match(/function initializeMarketEstimates\(root = document\) \{[\s\S]*?\n\}/);
 if (!format || !update || !initialize) throw new Error('Market estimate helpers are missing');
-const initializeMarketEstimates = new Function(`${format[0]}; ${update[0]}; ${initialize[0]}; return initializeMarketEstimates;`)();
+const helpers = new Function(`${format[0]}; ${update[0]}; ${initialize[0]}; return {initializeMarketEstimates, updateMarketEstimate};`)();
 const node = {dataset: {durationBase: '10', timeReduction: '20'}, textContent: '', closest: () => form};
 const quantity = {value: '3'};
 const form = {dataset: {}, querySelector: () => quantity, querySelectorAll: () => [node]};
 const replacementRoot = {querySelectorAll: (selector) => selector === '[data-market-estimate]' ? [node] : []};
-initializeMarketEstimates(replacementRoot);
-if (!node.textContent.includes('prazo estimado: 24 s.')) throw new Error(node.textContent);
+helpers.initializeMarketEstimates(replacementRoot);
+if (node.textContent !== 'Prazo estimado: 24 s.') throw new Error(node.textContent);
+if (/Base antes da redução|redução do Mercado/.test(node.textContent)) throw new Error(node.textContent);
+const equipmentNode = {dataset: {durationBase: '600', timeReduction: '25'}, textContent: '', closest: () => equipmentForm};
+const equipmentForm = {dataset: {}, querySelector: () => null, querySelectorAll: () => [equipmentNode]};
+helpers.updateMarketEstimate(equipmentNode);
+if (equipmentNode.textContent !== 'Prazo estimado: 7 min 30 s.') throw new Error(equipmentNode.textContent);
+if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textContent)) throw new Error(equipmentNode.textContent);
 """;
         result = subprocess.run(
             [shutil.which("node"), "-e", script, str(STATIC / "js" / "main.js")],
@@ -94,8 +157,11 @@ if (!node.textContent.includes('prazo estimado: 24 s.')) throw new Error(node.te
         self.assertIn("uma entrada", portal_dialog)
         self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument)", main)
         self.assertIn("window.GIMEnqueueRegionalNotice?.(dialog)", main)
+        self.assertIn("modalQueue?.beginBatch?.()", main)
+        self.assertIn("modalQueue?.endBatch?.()", main)
+        self.assertIn("window.GIMEnqueueRegionalNotices(document.querySelectorAll", dialogs)
         self.assertIn("regionalNoticeMatches(current, replacement)", main)
-        self.assertIn("GIMStartupModalQueue?.remove(current)", main)
+        self.assertIn("modalQueue?.remove(current)", main)
         self.assertIn("deadline - right.deadline", main)
         self.assertIn('setInterval(() => {\n    if (!tableBody.isConnected) return;', main)
         self.assertIn('document.visibilityState === "hidden"', main)

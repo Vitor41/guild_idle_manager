@@ -26,12 +26,13 @@ from app.services.building_service import (
     BuildingError, ensure_guild_buildings, get_mercenary_limit, upgrade_guild_building,
 )
 from app.services.dungeon_service import (
-    claim_dungeon_loot, get_advanced_dungeon_chance, get_dungeon_supply_quote,
+    DungeonError, claim_dungeon_loot, get_advanced_dungeon_chance, get_dungeon_supply_quote,
     get_final_dungeon_chance, start_dungeon,
 )
 from app.services.crafting_service import craft_recipe, list_rotating_recipes
 from app.services.equipment_service import (
-    can_class_equip_item, create_equipment_instance_from_template, get_party_power_score,
+    EquipmentError, can_class_equip_item, create_equipment_instance_from_template, equip_item,
+    get_party_power_score,
 )
 from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
@@ -89,6 +90,158 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
     def tearDown(self):
         self.db.close()
         self.engine.dispose()
+
+    def _make_equipment_instance(self, slot: str, template_index: int, bonus_power: int):
+        templates = list(self.db.scalars(select(ItemTemplate).where(
+            ItemTemplate.item_type == "equipment",
+            ItemTemplate.equipment_slot == slot,
+            ItemTemplate.required_level <= 1,
+        ).order_by(ItemTemplate.id)))
+        self.assertGreater(len(templates), template_index, f"seed needs equipment templates for {slot}")
+        item = create_equipment_instance_from_template(self.db, self.guild.id, templates[template_index])
+        item.bonus_rolls = []
+        item.rng_bonus_attribute = None
+        item.rng_bonus_value = 0
+        item.bonus_power = bonus_power
+        self.db.flush()
+        return item
+
+    def test_equipping_over_single_slot_returns_previous_item_and_recalculates_power(self):
+        mercenary = self.members[0]
+        first = self._make_equipment_instance("main_hand", 0, bonus_power=5)
+        replacement = self._make_equipment_instance("main_hand", 1, bonus_power=50)
+
+        before = get_party_power_score(self.db, self.guild.id, [mercenary])
+        equip_item(self.db, self.guild.id, mercenary.id, first.id)
+        after_first = get_party_power_score(self.db, self.guild.id, [mercenary])
+        equipped = equip_item(self.db, self.guild.id, mercenary.id, replacement.id)
+        after_replacement = get_party_power_score(self.db, self.guild.id, [mercenary])
+
+        self.assertEqual(equipped.equipped_to_mercenary_id, mercenary.id)
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == first.id,
+        )))
+        self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == replacement.id,
+        )), mercenary.id)
+        self.assertGreater(after_first, before)
+        self.assertGreater(after_replacement, after_first)
+
+    def test_two_ring_and_earring_slots_require_explicit_replacement_target_when_full(self):
+        mercenary = self.members[0]
+        for slot in ("ring", "earring"):
+            with self.subTest(slot=slot):
+                first, second, third = [
+                    self._make_equipment_instance(slot, index, bonus_power=10 + index)
+                    for index in range(3)
+                ]
+                equip_item(self.db, self.guild.id, mercenary.id, first.id)
+                equip_item(self.db, self.guild.id, mercenary.id, second.id)
+                replacement_option = next(
+                    item for item in equipment_service.get_available_equipment_for_mercenary(
+                        self.db, self.guild.id, mercenary,
+                    ) if item.id == third.id
+                )
+                self.assertTrue(replacement_option.replacement_required)
+                self.assertEqual(set(replacement_option.replacement_candidate_ids), {first.id, second.id})
+
+                wrong_slot = "earring" if slot == "ring" else "ring"
+                wrong_item = self._make_equipment_instance(wrong_slot, 0, bonus_power=20)
+                equip_item(self.db, self.guild.id, mercenary.id, wrong_item.id)
+                with self.assertRaisesRegex(EquipmentError, "nao pertence a este slot"):
+                    equip_item(
+                        self.db, self.guild.id, mercenary.id, third.id,
+                        replacement_item_instance_id=wrong_item.id,
+                    )
+                equipment_service.unequip_item(self.db, self.guild.id, mercenary.id, wrong_item.id)
+                with self.assertRaisesRegex(EquipmentError, "Escolha qual equipamento"):
+                    equip_item(self.db, self.guild.id, mercenary.id, third.id)
+                self.assertEqual(first.equipped_to_mercenary_id, mercenary.id)
+                self.assertEqual(second.equipped_to_mercenary_id, mercenary.id)
+                self.assertIsNone(third.equipped_to_mercenary_id)
+
+                equip_item(self.db, self.guild.id, mercenary.id, third.id,
+                           replacement_item_instance_id=first.id)
+                self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+                    GuildItemInstance.id == first.id,
+                )))
+                self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+                    GuildItemInstance.id == second.id,
+                )), mercenary.id)
+                self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+                    GuildItemInstance.id == third.id,
+                )), mercenary.id)
+                equipment_service.unequip_item(self.db, self.guild.id, mercenary.id, second.id)
+                equipment_service.unequip_item(self.db, self.guild.id, mercenary.id, third.id)
+
+    def test_ineligible_or_foreign_item_cannot_change_current_equipment(self):
+        mercenary = self.members[0]
+        equipped = self._make_equipment_instance("main_hand", 0, bonus_power=15)
+        too_high_level = self._make_equipment_instance("main_hand", 1, bonus_power=60)
+        too_high_level.required_level = mercenary.level + 1
+        self.db.flush()
+        equip_item(self.db, self.guild.id, mercenary.id, equipped.id)
+
+        with self.assertRaisesRegex(EquipmentError, "nivel suficiente"):
+            equip_item(self.db, self.guild.id, mercenary.id, too_high_level.id)
+
+        foreign_campaign = CampaignMetadata(
+            campaign_id="00000000-0000-0000-0000-000000000002",
+            campaign_name="Other runtime campaign",
+            created_at_utc=self.now,
+            updated_at_utc=self.now,
+            schema_version=5,
+            content_version=PACK_VERSION,
+            home_region="Vale da Fronteira",
+        )
+        foreign_guild = Guild(
+            campaign_id=foreign_campaign.campaign_id, name="Other runtime guild", level=1,
+        )
+        self.db.add_all((foreign_campaign, foreign_guild))
+        self.db.flush()
+        template = self.db.get(ItemTemplate, too_high_level.item_template_id)
+        foreign_item = GuildItemInstance(
+            guild_id=foreign_guild.id, item_template_id=template.id,
+            equipment_slot="main_hand", required_level=1, bonus_power=100,
+        )
+        self.db.add(foreign_item)
+        self.db.flush()
+        with self.assertRaisesRegex(EquipmentError, "Equipamento nao encontrado"):
+            equip_item(self.db, self.guild.id, mercenary.id, foreign_item.id)
+        valid_replacement = self._make_equipment_instance("main_hand", 2, bonus_power=75)
+        with self.assertRaisesRegex(EquipmentError, "nao pertence a este slot"):
+            equip_item(
+                self.db, self.guild.id, mercenary.id, valid_replacement.id,
+                replacement_item_instance_id=foreign_item.id,
+            )
+
+        self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == equipped.id,
+        )), mercenary.id)
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == too_high_level.id,
+        )))
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == valid_replacement.id,
+        )))
+        self.assertIsNone(foreign_item.equipped_to_mercenary_id)
+
+    def test_failed_equipment_commit_rolls_back_both_items(self):
+        mercenary = self.members[0]
+        equipped = self._make_equipment_instance("main_hand", 0, bonus_power=15)
+        replacement = self._make_equipment_instance("main_hand", 1, bonus_power=40)
+        equip_item(self.db, self.guild.id, mercenary.id, equipped.id)
+
+        with patch.object(self.db, "commit", side_effect=RuntimeError("forced equipment commit failure")):
+            with self.assertRaisesRegex(RuntimeError, "forced equipment commit failure"):
+                equip_item(self.db, self.guild.id, mercenary.id, replacement.id)
+
+        self.assertEqual(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == equipped.id,
+        )), mercenary.id)
+        self.assertIsNone(self.db.scalar(select(GuildItemInstance.equipped_to_mercenary_id).where(
+            GuildItemInstance.id == replacement.id,
+        )))
 
     def test_housing_capacity_recalculates_without_removing_existing_mercenaries(self):
         housing = next(row for row in self.db.scalars(
@@ -202,7 +355,7 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
             level_band="1-20", recommended_level=1, duration_seconds=60,
             base_gold_reward=1_000, base_xp_reward=100, base_success_chance=50,
             min_party_size=1, max_party_size=1, required_guild_level=1,
-            required_min_mercenary_level=1, required_building_type="scouts",
+            required_min_mercenary_level=50, required_building_type="scouts",
             required_building_level=1, is_active=True,
         )
         self.db.add(template)
@@ -321,6 +474,68 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
             resolved = claim_mission_loot(self.db, self.guild, self.resources, run.id, commit=False)
         self.assertEqual(resolved.status, "completed")
         self.assertTrue(resolved.success)
+
+    def test_mercenary_level_is_recommendation_while_guild_level_still_gates_missions(self):
+        template = MissionTemplate(
+            name="Mission level recommendation fixture", description="", display_order=-1,
+            difficulty="normal", level_band="1-20", mission_type="standard",
+            recommended_level=1, recommended_power=0, duration_seconds=60,
+            base_gold_reward=10, base_xp_reward=10, base_success_chance=50,
+            min_party_size=1, max_party_size=1, required_guild_level=1,
+            required_min_mercenary_level=50, required_building_level=0, is_active=True,
+        )
+        self.db.add(template)
+        self.db.flush()
+        member = self.members[0]
+        self.db.commit()
+
+        with patch.object(mission_service, "list_active_mission_templates_for_band", return_value=[template]):
+            context = mission_service.get_missions_page_context(
+                self.db, self.guild, selected_band="1-20",
+                selected_category="all", selected_mode="all",
+            )
+        self.assertIn(member, context["mission_mercenaries"][template.id])
+        run = start_mission(self.db, self.guild, str(template.id), [str(member.id)], commit=False)
+        self.assertEqual(run.mission_template_id, template.id)
+
+        template.required_guild_level = 2
+        self.db.flush()
+        with self.assertRaisesRegex(mission_service.MissionError, "Nível da guilda insuficiente"):
+            start_mission(self.db, self.guild, str(template.id), [str(self.members[1].id)], commit=False)
+
+    def test_under_recommended_mercenary_starts_dungeon_and_boss_but_guild_gate_remains(self):
+        templates = []
+        for content_type in ("dungeon", "boss"):
+            template = DungeonTemplate(
+                name=f"{content_type} level recommendation fixture", description="", content_type=content_type,
+                level_band="1-20", recommended_level=1, duration_seconds=60,
+                base_gold_reward=100, base_xp_reward=10, base_success_chance=50,
+                min_party_size=1, max_party_size=1, required_guild_level=1,
+                required_min_mercenary_level=50, is_active=True,
+            )
+            self.db.add(template)
+            templates.append(template)
+        self.db.flush()
+
+        for template, member in zip(templates, self.members[:2]):
+            run = start_dungeon(
+                self.db, self.guild, str(template.id), [str(member.id)], commit=False,
+            )
+            self.assertEqual(run.dungeon_template_id, template.id)
+
+        gated_template = DungeonTemplate(
+            name="guild gate fixture", description="", content_type="dungeon",
+            level_band="1-20", recommended_level=1, duration_seconds=60,
+            base_gold_reward=100, base_xp_reward=10, base_success_chance=50,
+            min_party_size=1, max_party_size=1, required_guild_level=2,
+            required_min_mercenary_level=1, is_active=True,
+        )
+        self.db.add(gated_template)
+        self.db.flush()
+        with self.assertRaisesRegex(DungeonError, "Nível da guilda insuficiente"):
+            start_dungeon(
+                self.db, self.guild, str(gated_template.id), [str(self.members[2].id)], commit=False,
+            )
 
     def test_material_market_and_salvage_use_live_capacity_and_prices(self):
         wood = self.db.scalar(select(ItemTemplate).where(
@@ -464,6 +679,7 @@ class Stage5RuntimeValidationTests(unittest.TestCase):
             job = start_salvage(
                 self.db, self.guild, self.resources, "1", str(recipe.output_item_template_id), "1",
             )
+        self.assertEqual(job.gold_cost, 50)
         salvage_end = job.ends_at.replace(tzinfo=timezone.utc) if job.ends_at.tzinfo is None else job.ends_at
         with patch.object(salvage_service, "utc_now", return_value=salvage_end + timedelta(seconds=1)), \
                 patch.object(salvage_service, "SystemRandom", return_value=random.Random(0)):

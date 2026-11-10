@@ -380,9 +380,13 @@ with tempfile.TemporaryDirectory() as data_dir:
         equipment_detail_page = rendered_pages[f"/mercenaries/{mercenary_id}"]
         assert b"data-equipment-details-trigger" in equipment_detail_page
         assert b"role=\"region\" aria-label=\"Detalhes de" in equipment_detail_page
-        assert b"FORTE +12" in equipment_detail_page
-        assert b"Total aplicado: +17" in equipment_detail_page
+        assert b"FORTE FOR +12" in equipment_detail_page
+        assert b"FOR +5 normal" in equipment_detail_page
+        assert b"FORTE FOR +12" in equipment_detail_page
+        assert b"= +17 aplicado" in equipment_detail_page
         assert b"/static/js/equipment-details.js" in equipment_detail_page
+        assert b"class-requirement-card" in rendered_pages["/class-change"]
+        assert b"Requisitos por etapa" in rendered_pages["/class-change"]
         assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
         assert b'class="rarity-badge rarity-rare">Raro</span>' in rendered_pages["/tavern"]
         outcome_row = next((row for row in re.findall(rb"<tr[^>]*>.*?</tr>", rendered_pages[regional_outcome_path], re.S)
@@ -498,6 +502,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 recommended_level_snapshot=1, recommended_power_snapshot=10,
                 min_party_size_snapshot=1, max_party_size_snapshot=1,
                 required_guild_level_snapshot=5, duration_seconds_snapshot=60,
+                required_min_mercenary_level_snapshot=99,
                 gold_reward_snapshot=100, xp_reward_snapshot=10, success_chance_snapshot=80,
             )
             party_snapshot_offer = RegionalOffer(
@@ -508,6 +513,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 recommended_level_snapshot=1, recommended_power_snapshot=10,
                 min_party_size_snapshot=2, max_party_size_snapshot=2,
                 required_guild_level_snapshot=1, duration_seconds_snapshot=60,
+                required_min_mercenary_level_snapshot=99,
                 gold_reward_snapshot=100, xp_reward_snapshot=10, success_chance_snapshot=80,
             )
             db.add_all([no_supply_offer, prepared_offer, ineligible_snapshot_offer, party_snapshot_offer])
@@ -519,6 +525,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.get(MissionTemplate, regional_mission_template_id).required_guild_level = 99
             db.get(MissionTemplate, regional_mission_template_id).min_party_size = 1
             db.get(MissionTemplate, regional_mission_template_id).max_party_size = 1
+            db.get(MissionTemplate, regional_mission_template_id).required_min_mercenary_level = 99
             db.commit()
 
         ineligible_start_status, ineligible_start_location, _ineligible_start_body = request(
@@ -553,7 +560,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             f"/regional/offers/{party_snapshot_offer_id}/start", method="POST",
             body=f"mercenary_ids={regional_snapshot_worker_a_id}&mercenary_ids={regional_snapshot_worker_b_id}",
         )
-        assert party_started_status == 303 and party_started_location.startswith("/missions?message="), (
+        assert party_started_status == 303 and party_started_location.startswith("/regional?message="), (
             party_started_status, party_started_location, party_started_body[:300],
         )
         with SessionLocal() as db:
@@ -582,7 +589,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             body=f"mercenary_ids={regional_no_supply_worker_id}",
             extra_headers={"X-GIM-Diagnostic-ID": "4444444444444444"},
         )
-        assert no_supply_status == 303 and no_supply_location.startswith("/missions?message="), (
+        assert no_supply_status == 303 and no_supply_location.startswith("/regional?message="), (
             no_supply_status, no_supply_location, no_supply_body[:300],
         )
         with SessionLocal() as db:
@@ -646,8 +653,12 @@ with tempfile.TemporaryDirectory() as data_dir:
             body=f"mercenary_ids={regional_supply_worker_id}",
             extra_headers={"X-GIM-Diagnostic-ID": "7777777777777777"},
         )
-        assert prepared_start_status == 303 and prepared_start_location.startswith("/missions?message="), (
+        assert prepared_start_status == 303 and prepared_start_location.startswith("/regional?message="), (
             prepared_start_status, prepared_start_location, prepared_start_body[:300],
+        )
+        regional_after_start_status, _regional_after_start_location, regional_after_start_body = request("/regional")
+        assert regional_after_start_status == 200 and b"Ofertas" in regional_after_start_body, (
+            regional_after_start_status, regional_after_start_body[:500],
         )
         with SessionLocal() as db:
             prepared_offer = db.get(RegionalOffer, prepared_offer_id)
@@ -935,7 +946,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in rendered_pages["/regional"]
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
-        assert b'/static/js/evolution-dialogs.js?v=20261030-2' in dashboard_with_invite
+        assert b'/static/js/evolution-dialogs.js?v=20261110-1' in dashboard_with_invite
         assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
         regional_notice_status, _notice_location, regional_notice_body = request("/regional")
         assert regional_notice_status == 200

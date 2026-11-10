@@ -12,8 +12,12 @@
     {% if job and job.status == 'in_progress' %}
       <div class="supply-preparation-progress" role="status" aria-live="off">
         <strong>Produzindo {{ job.kit_quantity }} Kit(s) de Suprimentos</strong>
-        <progress max="100" value="0" data-workshop-progress data-starts-at="{{ utc_iso(job.started_at) }}" data-ends-at="{{ utc_iso(job.ends_at) }}" aria-label="Progresso da produção">0%</progress>
-        <p>Tempo restante: <time data-workshop-remaining data-ends-at="{{ utc_iso(job.ends_at) }}">calculando...</time></p>
+        {% if completion_blocked %}
+          <p class="note">Produção pronta, aguardando espaço no Armazém. O débito dos materiais já realizado e a reserva dos Kits foram preservados. Libere espaço ou aumente a capacidade; a Oficina tentará entregar os Kits ao abrir novamente.</p>
+        {% else %}
+          <progress max="100" value="0" data-workshop-progress data-starts-at="{{ utc_iso(job.started_at) }}" data-ends-at="{{ utc_iso(job.ends_at) }}" aria-label="Progresso da produção">0%</progress>
+          <p>Tempo restante: <time data-workshop-remaining data-ends-at="{{ utc_iso(job.ends_at) }}">calculando...</time></p>
+        {% endif %}
         <small>Materiais debitados: {{ job.meat_per_kit * job.kit_quantity }} Carnes + {{ job.herb_per_kit * job.kit_quantity }} Ervas. Os Kits serão entregues automaticamente ao concluir.</small>
       </div>
     {% elif completed_job %}<p class="success-message" role="status">Produção concluída: {{ completed_job.kit_quantity }} Kit(s) adicionados ao Armazém.</p>

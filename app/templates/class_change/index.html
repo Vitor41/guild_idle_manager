@@ -28,44 +28,27 @@
 
     <div class="dashboard-grid">
       <article class="panel tavern-hero">
-        <h2>Requisitos globais</h2>
-        <div class="class-requirement-summary">
-          <article class="class-requirement-line">
-            <div>
-              <strong>Ouro</strong>
-              <span>Você possui {{ resources.gold if resources else 0 }}</span>
-            </div>
-            <div class="class-requirement-steps">
-              {% for step in requirement_steps %}<span>{{ loop.index }}ª: {{ step.gold_cost }}</span>{% endfor %}
-            </div>
-          </article>
-          <article class="class-requirement-line">
-            <div>
-              <strong>Guilda</strong>
-              <span>Atual: nível {{ guild.level }}</span>
-            </div>
-            <div class="class-requirement-steps">
-              {% for step in requirement_steps %}<span>{{ loop.index }}ª: nível {{ step.required_guild_level }}</span>{% endfor %}
-            </div>
-          </article>
-          <article class="class-requirement-line">
-            <div>
-              <strong>Campo de Treino</strong>
-              <span>Atual: nível {{ training_ground_level }}</span>
-            </div>
-            <div class="class-requirement-steps">
-              {% for step in requirement_steps %}<span>{{ loop.index }}ª: nível {{ step.required_training_ground_level }}</span>{% endfor %}
-            </div>
-          </article>
-          <article class="class-requirement-line">
-            <div>
-              <strong>Mercenário</strong>
-              <span>Nível exigido por etapa</span>
-            </div>
-            <div class="class-requirement-steps">
-              {% for step in requirement_steps %}<span>{{ loop.index }}ª: nível {{ step.required_mercenary_level }}+</span>{% endfor %}
-            </div>
-          </article>
+        <h2>Requisitos por etapa</h2>
+        <div class="class-requirement-cards">
+          {% for step in requirement_steps %}
+            <article class="class-requirement-card" aria-labelledby="class-requirement-{{ loop.index }}">
+              <header class="class-requirement-card__header">
+                <div><h3 id="class-requirement-{{ loop.index }}">{{ step.label }}</h3>
+                  {% if step.path_count > 1 %}<p>{{ step.path_count }} caminhos · {{ step.targets|join(', ') }}</p>{% elif step.targets %}<p>Destino: {{ step.targets[0] }}</p>{% endif %}</div>
+                <span class="class-requirement-state class-requirement-state--{{ 'ready' if step.state == 'Liberada' else 'pending' if step.state == 'Faltam requisitos' else 'empty' }}">{{ step.state }}</span>
+              </header>
+              <p class="class-requirement-eligible">{% if step.eligible_count %}{{ step.eligible_count }} mercenário(s) elegível(is){% else %}Nenhum mercenário elegível{% endif %}</p>
+              <ul class="class-requirement-checks">
+                {% for check in step.checks %}
+                  <li class="{{ 'is-met' if check.met else 'is-pending' }}">
+                    <strong>{{ check.label }}</strong>
+                    <span>Necessário {{ check.required }} · atual {{ check.current }}</span>
+                    <b>{% if check.met %}✓ Atendido{% else %}Faltam {{ check.shortfall }}{% endif %}</b>
+                  </li>
+                {% endfor %}
+              </ul>
+            </article>
+          {% else %}<p class="note">Nenhuma etapa de troca está configurada no momento.</p>{% endfor %}
         </div>
       </article>
     </div>

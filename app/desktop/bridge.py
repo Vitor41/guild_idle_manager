@@ -1,7 +1,8 @@
 """Narrow native-dialog bridge; filesystem paths never come from HTTP requests."""
 
-from pathlib import Path
+import logging
 import secrets
+from pathlib import Path
 from time import monotonic
 
 from app.desktop.paths import user_data_directory
@@ -48,6 +49,35 @@ class DesktopBridge:
             return {"ok": True, "message": "Campanha exportada com sucesso."}
         except Exception as exc:
             return {"error": str(exc)}
+
+    def export_guide_markdown(self, markdown: str):
+        try:
+            if not isinstance(markdown, str) or not markdown.strip():
+                return {"error": "O Guia retornou um arquivo vazio ou inválido."}
+            if len(markdown.encode("utf-8")) > 5_000_000:
+                return {"error": "O arquivo do Guia excedeu o tamanho permitido."}
+            webview = self._webview()
+            export_dir = user_data_directory() / "exports"
+            export_dir.mkdir(parents=True, exist_ok=True)
+            result = self._window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                directory=str(export_dir),
+                save_filename="guia-guild-idle-manager.md",
+                file_types=("Markdown (*.md)",),
+            )
+            if not result:
+                return {"cancelled": True}
+            destination = Path(result[0])
+            if destination.suffix.lower() != ".md":
+                destination = destination.with_suffix(".md")
+            content = markdown.encode("utf-8")
+            destination.write_bytes(content)
+            if not destination.is_file() or destination.read_bytes() != content:
+                raise OSError("A gravação não pôde ser confirmada.")
+            return {"ok": True, "file_name": destination.name, "path": str(destination)}
+        except Exception as exc:
+            logging.getLogger("gim.guide_export").exception("Falha ao salvar exportação Markdown do Guia")
+            return {"error": f"Não foi possível salvar o Guia: {exc}"}
 
     def confirm_export(self, confirmation_token: str, overwrite: bool):
         pending = self._pending_exports.pop(confirmation_token, None)

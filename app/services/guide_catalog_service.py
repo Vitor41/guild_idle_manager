@@ -50,6 +50,14 @@ def _chance_text(source: dict) -> str:
     return "produção por receita; sem chance de drop"
 
 
+def _guide_icon_path(item_model: ItemTemplate) -> str | None:
+    """Return a URL served by the app's only static mount."""
+    icon_path = get_item_icon_path(item_model)
+    if icon_path and icon_path.startswith(("/assets/", "/img/")):
+        return f"/static{icon_path}"
+    return icon_path
+
+
 def build_guide_catalog(db) -> dict[str, object]:
     manifest = build_material_source_manifest(db)
     item_by_id = {item.id: item for item in db.query(ItemTemplate).filter(
@@ -72,10 +80,11 @@ def build_guide_catalog(db) -> dict[str, object]:
                 if raw["type"] == "dungeon_or_boss":
                     label = "Chefes" if raw.get("content_type") == "boss" else "Masmorras"
                 reqs = []
+                recommendation = ""
                 if raw.get("min_guild_level", 1) > 1:
                     reqs.append(f"guilda nível {raw['min_guild_level']}+")
-                if raw.get("min_mercenary_level", 1) > 1:
-                    reqs.append(f"mercenário nível {raw['min_mercenary_level']}+")
+                if raw["type"] in {"mission", "dungeon_or_boss"}:
+                    recommendation = f"mercenário nível {raw.get('min_mercenary_level', 1)}+"
                 building = raw.get("required_building")
                 if building and building[0] and building[1]:
                     reqs.append(f"{building[0]} nível {building[1]}+")
@@ -96,6 +105,7 @@ def build_guide_catalog(db) -> dict[str, object]:
                 sources.append({
                     "type": raw["type"], "filter_key": source_filter, "label": label,
                     "name": clean_generated_name(name),
+                    "recommendation": recommendation,
                     "requirement": "; ".join(reqs) if reqs else "sem requisito adicional registrado",
                     "chance": _chance_text(raw), "quantity": _quantity_text(raw, item["item_type"]),
                     "price": raw.get("effective_unit_price", raw.get("base_price")),
@@ -107,7 +117,7 @@ def build_guide_catalog(db) -> dict[str, object]:
                 "family": item.get("family") or "", "tier": item["tier"],
                 "equipment_slot": (model.equipment_slot or "") if item["item_type"] == "equipment" else "",
                 "level_band": item["level_band"], "item_level": item["item_level"],
-                "rarity": rarity_label(item["rarity"]), "icon": get_item_icon_path(model),
+                "rarity": rarity_label(item["rarity"]), "icon": _guide_icon_path(model),
                 "sources": sources,
             })
     entries.sort(key=lambda row: (row["item_type"], row["family"], row["tier"], row["item_level"], row["name"].casefold()))

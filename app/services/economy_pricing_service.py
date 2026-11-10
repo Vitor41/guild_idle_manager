@@ -35,15 +35,42 @@ def effective_dock_unit_price(configured_price: int, base_sell_value: int) -> in
     return max(max(1, int(configured_price)), dock_no_arbitrage_price_floor(base_sell_value))
 
 
+def effective_equipment_dock_unit_price(
+    configured_price: int,
+    equipment_base_sell_value: int,
+    salvage_material_base_sell_value: int,
+    *,
+    minimum_salvage_fee: int = 50,
+) -> int:
+    """Price dock equipment above direct resale and its best salvage payout."""
+    best_salvage_payout = market_sale_unit_value(
+        salvage_material_base_sell_value, market_values(100)["value_bonus_percent"],
+    ) * 3
+    salvage_floor = best_salvage_payout - max(0, int(minimum_salvage_fee)) + 1
+    return max(
+        effective_dock_unit_price(configured_price, equipment_base_sell_value),
+        salvage_floor,
+        1,
+    )
+
+
 def effective_crafting_gold_cost(
     configured_gold_cost: int,
     output_base_sell_value: int,
     output_quantity: int,
     dock_material_cost: int | float,
+    output_salvage_best_market_value: int = 0,
+    salvage_fee_per_output: int = 50,
 ) -> int:
     """Keep the crafting-to-Market conversion from returning positive gold."""
     market_value = market_sale_unit_value(
         output_base_sell_value, market_values(100)["value_bonus_percent"]
     ) * max(1, int(output_quantity))
     break_even_guard = ceil(market_value - max(0, float(dock_material_cost)) + 1)
-    return max(max(0, int(configured_gold_cost)), break_even_guard)
+    salvage_guard = ceil(
+        max(0, int(output_salvage_best_market_value)) * max(1, int(output_quantity))
+        - max(0, float(dock_material_cost))
+        - max(0, int(salvage_fee_per_output)) * max(1, int(output_quantity))
+        + 1
+    ) if output_salvage_best_market_value > 0 else 0
+    return max(max(0, int(configured_gold_cost)), break_even_guard, salvage_guard)

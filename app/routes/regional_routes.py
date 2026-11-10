@@ -666,7 +666,7 @@ async def start_offer(
     except (IntegrityError, OperationalError):
         db.rollback()
         return RedirectResponse("/regional?error=Oferta%20j%C3%A1%20reservada", status_code=303)
-    return RedirectResponse(f"/{source}?message=Contrato%20regional%20iniciado", status_code=303)
+    return RedirectResponse("/regional?message=Contrato%20regional%20iniciado", status_code=303)
 
 
 @router.post("/offers/{offer_id}/prepare")

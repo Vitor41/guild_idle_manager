@@ -8,6 +8,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LauncherAndEquipmentUiContractTests(unittest.TestCase):
+    def test_equipment_swap_ui_requires_a_specific_double_slot_item(self):
+        template = (ROOT / "app/templates/mercenaries/detail.html").read_text(encoding="utf-8")
+        script = (ROOT / "app/static/js/equipment-details.js").read_text(encoding="utf-8")
+        route = (ROOT / "app/routes/mercenary_routes.py").read_text(encoding="utf-8")
+
+        self.assertIn("data-replacement-required", template)
+        self.assertIn("data-replacement-candidate-ids", template)
+        self.assertIn("name=\"replacement_item_instance_id\"", template)
+        self.assertIn("candidateIds.includes(Number(option.value))", script)
+        self.assertIn('form.get("replacement_item_instance_id") or None', route)
+
     def test_campaign_update_page_only_checks_and_guides_to_launcher(self):
         template = (ROOT / "app/templates/updates.html").read_text(encoding="utf-8")
         route = (ROOT / "app/routes/update_routes.py").read_text(encoding="utf-8")
@@ -61,7 +72,8 @@ class LauncherAndEquipmentUiContractTests(unittest.TestCase):
         self.assertIn("role=\"status\"", template)
         self.assertIn("exportButton.disabled = true", script)
         self.assertIn("aria-busy", script)
-        self.assertIn("Guia gerado e enviado ao navegador", script)
+        self.assertIn("Guia salvo em:", script)
+        self.assertIn("Guia salvo como", script)
         self.assertIn("Tente novamente", script)
 
     def test_market_keeps_sale_controls_and_estimates_without_the_rarity_table(self):
@@ -78,6 +90,21 @@ class LauncherAndEquipmentUiContractTests(unittest.TestCase):
         self.assertNotIn("-webkit-line-clamp: 2", css)
         self.assertIn("@media (max-width: 600px)", css)
         self.assertIn("_sale_duration_seconds", service)
+
+    def test_mercenary_level_is_presented_as_recommendation_across_activities(self):
+        missions = (ROOT / "app/templates/missions/index.html").read_text(encoding="utf-8")
+        dungeons = (ROOT / "app/templates/dungeons/index.html").read_text(encoding="utf-8")
+        regional = (ROOT / "app/templates/regional/index.html").read_text(encoding="utf-8")
+        admin_missions = (ROOT / "app/templates/admin/edit_mission.html").read_text(encoding="utf-8")
+        admin_dungeons = (ROOT / "app/templates/admin/dungeon_form.html").read_text(encoding="utf-8")
+        self.assertIn("Nível recomendado", missions)
+        self.assertIn("abaixo dele ainda podem iniciar", missions)
+        self.assertIn("Nível recomendado", dungeons)
+        self.assertIn("abaixo dele podem iniciar", dungeons)
+        self.assertIn("nível do mercenário é uma recomendação", regional)
+        self.assertIn("requisitos congelados da oferta, da guilda e do grupo", regional)
+        self.assertIn("Nível recomendado do mercenário", admin_missions)
+        self.assertIn("Nível recomendado do mercenário", admin_dungeons)
 
 
 

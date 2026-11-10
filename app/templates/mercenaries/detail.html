@@ -113,7 +113,7 @@
           ('ring', 'Anel', 'slot-ring-b', 1)
         ] %}
           {% set equipped = slots[slot_key][index] if slots.get(slot_key) and slots[slot_key]|length > index else none %}
-          <div class="equipment-slot {{ slot_class }} {{ 'filled' if equipped else '' }}">
+          <div class="equipment-slot {{ slot_class }} {{ 'filled' if equipped else '' }} {{ 'rarity-' ~ equipped.item_template.rarity if equipped else '' }}">
             {% if equipped %}
               {% set details_id = 'equipment-details-' ~ slot_key ~ '-' ~ index %}
               <button class="equipment-slot__trigger" type="button" data-equipment-details-trigger aria-expanded="false" aria-controls="{{ details_id }}" aria-label="Detalhes de {{ equipped.display_name }}">
@@ -141,10 +141,15 @@
                   <ul class="equipment-details__bonuses">
                     {% for bonus in equipped.equipment_bonus_groups_view %}
                       <li>
-                        <strong>{{ bonus.label }}</strong>
-                        <span>{% if bonus.normal_value %}+{{ bonus.normal_value }} normal{% endif %}</span>
-                        {% if bonus.strong_value %}<span class="bonus-pill strong-bonus"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16"> FORTE +{{ bonus.strong_value }}</span>{% endif %}
-                        <span class="equipment-details__total">Total aplicado: +{{ bonus.total_value }}</span>
+                        {% if bonus.normal_value and bonus.strong_value %}
+                          <span>{{ bonus.label }} +{{ bonus.normal_value }} normal ·</span>
+                          <span class="bonus-pill strong-bonus"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16"> FORTE {{ bonus.label }} +{{ bonus.strong_value }}</span>
+                          <span>= +{{ bonus.total_value }} aplicado</span>
+                        {% elif bonus.strong_value %}
+                          <span class="bonus-pill strong-bonus"><img src="{{ url_for('static', path='assets/desktop/sprites/64/bonus-strong-star.png') }}" alt="" width="16" height="16"> FORTE {{ bonus.label }} +{{ bonus.strong_value }}</span>
+                        {% else %}
+                          <span>{{ bonus.label }} +{{ bonus.normal_value }}</span>
+                        {% endif %}
                       </li>
                     {% endfor %}
                   </ul>
@@ -174,18 +179,27 @@
     <section class="panel table-panel" aria-labelledby="available-equipment-title">
       <h2 id="available-equipment-title">Equipar item</h2>
       {% if available_equipment %}
-        <form class="inline-form" method="post" action="/mercenaries/{{ mercenary.id }}/equip">
-          <select name="item_instance_id" required>
+        <form class="inline-form" method="post" action="/mercenaries/{{ mercenary.id }}/equip" data-equipment-swap>
+          <select name="item_instance_id" required data-equipment-swap-item>
             <option value="">Escolha um equipamento</option>
             {% for item in available_equipment %}
-              <option value="{{ item.id }}">
+              <option value="{{ item.id }}" data-replacement-required="{{ 'true' if item.replacement_required else 'false' }}" data-replacement-candidate-ids="{{ item.replacement_candidate_ids | tojson }}">
                 {{ item.view_icon if item.view_icon is defined else '◇' }} {{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %} | {{ item.slot_label }} | {{ item.rarity_label }} | nível mínimo {{ item.required_level }}
                 {% for roll in item.bonus_rolls_view %}| {% if roll.kind == 'strong' %}FORTE {{ roll.label }} +{{ roll.value }}{% else %}{{ roll.label }}{% endif %}{% endfor %}
-                | Poder {{ item.equipment_power_score }} | {{ '+' if item.comparison_delta >= 0 else '' }}{{ item.comparison_delta }}{% if item.comparison_current_name %} vs. {{ item.comparison_current_name }}{% endif %}
+                | Poder {{ item.equipment_power_score }} | {{ '+' if item.comparison_delta >= 0 else '' }}{{ item.comparison_delta }}{% if item.replacement_required %} · escolha abaixo qual item deste slot substituir{% elif item.comparison_current_name %} vs. {{ item.comparison_current_name }}{% endif %}
                 | {{ item.class_restriction_label }}
               </option>
             {% endfor %}
           </select>
+          <label data-equipment-replacement-field hidden>
+            <span>Escolha qual dos dois equipamentos do slot será substituído</span>
+            <select name="replacement_item_instance_id" data-equipment-swap-replacement>
+              <option value="">Escolha o equipamento a substituir</option>
+              {% for item in equipment_replacement_candidates %}
+                <option value="{{ item.id }}" data-slot="{{ item.replacement_slot }}">{{ item.slot_label }} · {{ item.display_name }}{% if item.upgrade_level > 0 %} +{{ item.upgrade_level }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </label>
           <button type="submit">Equipar</button>
         </form>
       {% else %}

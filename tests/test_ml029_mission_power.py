@@ -1,3 +1,4 @@
+from math import ceil
 from types import SimpleNamespace
 import unittest
 
@@ -55,8 +56,14 @@ class MissionPowerTests(unittest.TestCase):
 
     def test_recommended_power_is_monotonic_and_rounds_up(self):
         self.assertEqual(common_apprentice_reference_power(18), 93)
+        self.assertEqual(REGIONAL_CONTRACT_RANK_POWER_MULTIPLIERS, {
+            "E": 0.700, "D": 0.800, "C": 0.950, "B": 1.150, "A": 1.450, "S": 1.800,
+        })
         self.assertEqual(recommended_regional_contract_power(1, "E", 2, fallback_power=10), 26)
-        self.assertEqual(recommended_regional_contract_power(18, "C", 2, fallback_power=49), 144)
+        self.assertEqual(recommended_regional_contract_power(18, "C", 2, fallback_power=49), 177)
+        self.assertEqual(common_apprentice_reference_power(17), 87)
+        self.assertEqual(recommended_regional_contract_power(17, "S", 2, fallback_power=189), 314)
+        self.assertEqual(ceil(87 * 1.085 * 2), 189)
         levels = [recommended_regional_contract_power(level, "C", 2, fallback_power=1)
                   for level in (1, 5, 18, 50, 75, 200, 350)]
         self.assertEqual(levels, sorted(levels))
@@ -101,14 +108,14 @@ class MissionPowerTests(unittest.TestCase):
             template,
             "C",
         )
-        self.assertEqual(offer.recommended_power_snapshot, 144)
+        self.assertEqual(offer.recommended_power_snapshot, 177)
         self.assertEqual((offer.min_party_size_snapshot, offer.max_party_size_snapshot), (1, 2))
         self.assertEqual(template.recommended_power, 49)
         self.assertEqual(db.added, [offer])
 
         template.recommended_power = 700
         template.max_party_size = 5
-        self.assertEqual(offer.recommended_power_snapshot, 144)
+        self.assertEqual(offer.recommended_power_snapshot, 177)
         self.assertEqual(offer.max_party_size_snapshot, 2)
 
     def test_gathering_and_long_idle_contracts_keep_configured_power(self):

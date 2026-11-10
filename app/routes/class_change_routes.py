@@ -40,7 +40,7 @@ def class_change_index(
             "resources": resources,
             "error": request.query_params.get("error"),
             "message": request.query_params.get("message"),
-            **get_class_change_page_context(db, guild),
+            **get_class_change_page_context(db, guild, resources),
         },
     )
 
@@ -60,7 +60,7 @@ async def start_submit(
     try:
         start_class_change(db, guild, resources, form.get("mercenary_id", ""), form.get("to_class_id", ""))
     except ClassChangeError as error:
-        context = get_class_change_page_context(db, guild)
+        context = get_class_change_page_context(db, guild, resources)
         return templates.TemplateResponse(
             request=request,
             name="class_change/index.html",
@@ -92,7 +92,7 @@ def claim_submit(
     try:
         claim_class_change(db, guild, run_id)
     except ClassChangeError as error:
-        context = get_class_change_page_context(db, guild)
+        context = get_class_change_page_context(db, guild, resources)
         return templates.TemplateResponse(
             request=request,
             name="class_change/index.html",
