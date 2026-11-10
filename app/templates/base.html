@@ -214,7 +214,7 @@
         <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
-    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261109-2"></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261110-1"></script>
     <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261109-2" defer></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261103-2" defer></script>
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261031-1" defer></script>
@@ -222,6 +222,6 @@
     <script src="{{ url_for('static', path='/js/offline-stamina.js') }}?v=20261030-1" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261030-2" defer></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261110-1" defer></script>{% endif %}
   </body>
 </html>

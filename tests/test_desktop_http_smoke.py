@@ -943,7 +943,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in rendered_pages["/regional"]
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
-        assert b'/static/js/evolution-dialogs.js?v=20261030-2' in dashboard_with_invite
+        assert b'/static/js/evolution-dialogs.js?v=20261110-1' in dashboard_with_invite
         assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
         regional_notice_status, _notice_location, regional_notice_body = request("/regional")
         assert regional_notice_status == 200

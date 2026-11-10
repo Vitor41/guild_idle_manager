@@ -2,8 +2,9 @@ const startupModalQueue = (() => {
   const pending = [];
   let active = null;
   let sequence = 0;
+  let batchDepth = 0;
   const advance = () => {
-    if (active?.open) return;
+    if (batchDepth > 0 || active?.open) return;
     active = null;
     while (pending.length) {
       const next = pending.shift().dialog;
@@ -18,11 +19,26 @@ const startupModalQueue = (() => {
     }
   };
   return {
+    beginBatch() {
+      batchDepth += 1;
+    },
+    endBatch() {
+      if (batchDepth > 0) batchDepth -= 1;
+      if (batchDepth === 0) advance();
+    },
     enqueue(dialog, priority, deadline = Number.POSITIVE_INFINITY) {
       if (!(dialog instanceof HTMLDialogElement) || dialog.open || pending.some((row) => row.dialog === dialog)) return;
       pending.push({ dialog, priority, deadline: Number.isFinite(deadline) ? deadline : Number.POSITIVE_INFINITY, sequence: sequence++ });
       pending.sort((left, right) => left.priority - right.priority || left.deadline - right.deadline || left.sequence - right.sequence);
       advance();
+    },
+    enqueueMany(entries) {
+      this.beginBatch();
+      try {
+        for (const { dialog, priority, deadline } of entries) this.enqueue(dialog, priority, deadline);
+      } finally {
+        this.endBatch();
+      }
     },
     remove(dialog) {
       const index = pending.findIndex((row) => row.dialog === dialog);
@@ -640,23 +656,29 @@ function regionalNoticeMatches(current, replacement) {
 window.GIMRegionalNoticeMatches = regionalNoticeMatches;
 
 function syncRegionalEventNoticeDialogs(parsedDocument) {
-  const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
-  const incomingById = new Map(incoming.filter((dialog) => dialog.id).map((dialog) => [dialog.id, dialog]));
-  for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
-    const replacement = incomingById.get(current.id);
-    if (replacement && regionalNoticeMatches(current, replacement)) continue;
-    window.GIMStartupModalQueue?.remove(current);
-    if (current.open) current.close();
-    current.remove();
-  }
-  for (const source of incoming) {
-    if (source.id && document.getElementById(source.id)) continue;
-    const dialog = document.importNode(source, true);
-    document.body.append(dialog);
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) dialog.close();
-    });
-    window.GIMEnqueueRegionalNotice?.(dialog);
+  const modalQueue = window.GIMStartupModalQueue;
+  modalQueue?.beginBatch?.();
+  try {
+    const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
+    const incomingById = new Map(incoming.filter((dialog) => dialog.id).map((dialog) => [dialog.id, dialog]));
+    for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
+      const replacement = incomingById.get(current.id);
+      if (replacement && regionalNoticeMatches(current, replacement)) continue;
+      modalQueue?.remove(current);
+      if (current.open) current.close();
+      current.remove();
+    }
+    for (const source of incoming) {
+      if (source.id && document.getElementById(source.id)) continue;
+      const dialog = document.importNode(source, true);
+      document.body.append(dialog);
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+      window.GIMEnqueueRegionalNotice?.(dialog);
+    }
+  } finally {
+    modalQueue?.endBatch?.();
   }
 }
 
