@@ -1,5 +1,6 @@
 from pathlib import Path
 import asyncio
+from html import escape
 import logging
 import re
 import uuid
@@ -137,19 +138,26 @@ async def protect_desktop_loopback(request: Request, call_next):
     else:
         try:
             response = await call_next(request)
-        except Exception:
+        except Exception as error:
             if request.app.state.app_mode != "desktop":
                 raise
             logging.getLogger("gim.requests").exception(
                 "Unhandled desktop request method=%s route=%s ref=%s",
                 request.method.upper(), request.url.path, diagnostic_id,
             )
+            log_gameplay_action(
+                action=f"{action or 'desktop'}.page", route=request.url.path,
+                diagnostic_id=diagnostic_id or "unknown", status_code=500,
+                outcome="unexpected_exception", event="exception", exception=error,
+            )
             safe_path = request.url.path.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+            diagnostic_log = escape(r"%LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log", quote=True)
             response = HTMLResponse(
                 "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Falha ao abrir a tela</title>"
                 "<main style=\"font:16px system-ui;max-width:42rem;margin:12vh auto;padding:2rem\">"
                 "<h1>Não foi possível abrir esta tela</h1><p>Tente novamente. Se o erro continuar, informe a referência de diagnóstico.</p>"
-                f"<p>Referência: <code>{diagnostic_id}</code></p><p><a href=\"{safe_path}\">Tentar novamente</a> · "
+                f"<p>Referência: <code>{diagnostic_id}</code></p><p>Registro: <code>{diagnostic_log}</code></p>"
+                f"<p><a href=\"{safe_path}\">Tentar novamente</a> · "
                 "<a href=\"/dashboard\">Voltar à visão geral</a></p></main></html>",
                 status_code=500,
                 headers={"X-GIM-Diagnostic-ID": diagnostic_id},

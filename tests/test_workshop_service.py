@@ -172,3 +172,25 @@ class WorkshopServiceTests(unittest.TestCase):
         self.assertLessEqual(get_inventory_usage(self.db, self.guild.id), capacity)
         get_supply_workshop_context(self.db, self.guild, now=job.ends_at)
         self.assertEqual(get_inventory_usage(self.db, self.guild.id), capacity - 4)
+
+    def test_due_job_waits_for_capacity_without_losing_reserved_kits(self):
+        filler = ItemTemplate(
+            name="Material recebido após a reserva", description="", item_type="material",
+            rarity="common", material_family="wood", item_level=1, level_band="1-20", tier=1,
+        )
+        self.db.add(filler)
+        self.db.flush()
+        self._stock(self.meat, MEAT_PER_KIT)
+        self._stock(self.herb, HERBS_PER_KIT)
+        started_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        job = craft_supply_kit(self.db, self.guild, 1, now=started_at)
+        self._stock(filler, get_inventory_capacity(self.db, self.guild))
+
+        context = get_supply_workshop_context(self.db, self.guild, now=job.ends_at)
+
+        self.assertTrue(context["completion_blocked"])
+        self.assertEqual(context["job"].id, job.id)
+        self.assertEqual(context["job"].status, "in_progress")
+        self.assertIsNone(context["completed_job"])
+        self.assertEqual(context["stock"]["kit"], 0)
+        self.assertEqual(get_inventory_usage(self.db, self.guild.id), get_inventory_capacity(self.db, self.guild) + 1)
