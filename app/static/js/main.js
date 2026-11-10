@@ -33,6 +33,64 @@ const startupModalQueue = (() => {
 })();
 window.GIMStartupModalQueue = startupModalQueue;
 
+let navigationWorkStatusRequest = null;
+let navigationWorkStatusController = null;
+async function refreshNavigationWorkIndicators(force = false) {
+  if (navigationWorkStatusRequest && !force) return navigationWorkStatusRequest;
+  if (force) navigationWorkStatusController?.abort();
+  const links = [...document.querySelectorAll("[data-nav-work-menu]")];
+  if (!links.length) return;
+  const controller = new AbortController();
+  navigationWorkStatusController = controller;
+  const pendingRequest = fetch("/api/navigation/work-status", {
+    credentials: "same-origin",
+    cache: "no-store",
+    signal: controller.signal,
+    headers: { "Accept": "application/json", "X-Requested-With": "fetch" },
+  }).then(async (response) => {
+    if (!response.ok) return;
+    const payload = await response.json();
+    for (const link of links) {
+      const status = payload.menus?.[link.dataset.navWorkMenu];
+      const active = Number(status?.active || 0);
+      const ready = Number(status?.ready || 0);
+      link.querySelector(".nav-work-indicator")?.remove();
+      if (!active && !ready) {
+        link.removeAttribute("data-work-state");
+        link.removeAttribute("aria-label");
+        link.removeAttribute("title");
+        continue;
+      }
+      const state = ready ? "ready" : "active";
+      const inviteNote = link.querySelector(".regional-invite-badge") ? "; convite de rebelião pendente" : "";
+      const indicator = document.createElement("span");
+      indicator.className = "nav-work-indicator";
+      indicator.dataset.state = state;
+      indicator.setAttribute("aria-hidden", "true");
+      link.append(indicator);
+      link.dataset.workState = state;
+      const accessibleLabel = `${status.label || link.dataset.navWorkLabel || "Atividade pendente"}${inviteNote}`;
+      link.setAttribute("aria-label", accessibleLabel);
+      link.title = accessibleLabel;
+    }
+  }).catch(() => {}).finally(() => {
+    if (navigationWorkStatusRequest === pendingRequest) {
+      navigationWorkStatusRequest = null;
+      navigationWorkStatusController = null;
+    }
+  });
+  navigationWorkStatusRequest = pendingRequest;
+  return navigationWorkStatusRequest;
+}
+window.refreshNavigationWorkIndicators = refreshNavigationWorkIndicators;
+refreshNavigationWorkIndicators();
+window.setInterval(() => {
+  if (!document.hidden) refreshNavigationWorkIndicators();
+}, 20000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshNavigationWorkIndicators();
+});
+
 document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-bonus-dialog-open]");
   if (trigger) {
@@ -566,6 +624,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   window.initializeRegionalSupply?.(currentMain);
   window.initializeRegionalComparison?.(currentMain);
   showActionToast(currentMain);
+  refreshNavigationWorkIndicators(true);
 
   const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
   window.requestAnimationFrame(() => {

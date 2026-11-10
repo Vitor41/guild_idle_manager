@@ -553,7 +553,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             f"/regional/offers/{party_snapshot_offer_id}/start", method="POST",
             body=f"mercenary_ids={regional_snapshot_worker_a_id}&mercenary_ids={regional_snapshot_worker_b_id}",
         )
-        assert party_started_status == 303 and party_started_location.startswith("/missions?message="), (
+        assert party_started_status == 303 and party_started_location.startswith("/regional?message="), (
             party_started_status, party_started_location, party_started_body[:300],
         )
         with SessionLocal() as db:
@@ -582,7 +582,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             body=f"mercenary_ids={regional_no_supply_worker_id}",
             extra_headers={"X-GIM-Diagnostic-ID": "4444444444444444"},
         )
-        assert no_supply_status == 303 and no_supply_location.startswith("/missions?message="), (
+        assert no_supply_status == 303 and no_supply_location.startswith("/regional?message="), (
             no_supply_status, no_supply_location, no_supply_body[:300],
         )
         with SessionLocal() as db:

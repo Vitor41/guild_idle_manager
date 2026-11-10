@@ -451,6 +451,25 @@ a:hover {
   color: var(--parchment);
 }
 
+.sidebar-nav a[data-nav-work-menu] {
+  position: relative;
+  padding-right: 30px;
+}
+
+.nav-work-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--surface, #172327);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.nav-work-indicator[data-state="active"] { background: #E6B965; }
+.nav-work-indicator[data-state="ready"] { background: #9BD498; }
+
 .sidebar-nav a:hover,
 .logout-link:hover {
   border-color: var(--border);
