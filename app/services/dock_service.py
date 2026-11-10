@@ -8,11 +8,13 @@ from app.core.time import as_utc
 from app.core.time import prepare_timer_context
 from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.guild import Guild, GuildResources
+from app.models.item import ItemTemplate
 from app.services.inventory_capacity_service import add_inventory_quantity_capped, get_inventory_capacity, get_inventory_usage
 from app.services.building_service import ensure_guild_buildings, get_building_level
 from app.services.equipment_service import create_equipment_instance_from_template
 from app.services.building_balance_service import docks_values
-from app.services.economy_pricing_service import effective_dock_unit_price
+from app.services.economy_pricing_service import effective_dock_unit_price, effective_equipment_dock_unit_price
+from app.services.salvage_service import _select_salvage_material
 from app.services.achievement_service import record_guild_stat
 
 
@@ -26,6 +28,15 @@ def utc_now() -> datetime:
 
 def _rotation_duration(level: int) -> int:
     return docks_values(level)["rotation_seconds"]
+
+
+def _effective_offer_price(db: Session, template: ItemTemplate, configured_price: int) -> int:
+    if template.item_type != "equipment":
+        return effective_dock_unit_price(configured_price, template.base_sell_value)
+    material = _select_salvage_material(db, template)
+    return effective_equipment_dock_unit_price(
+        configured_price, template.base_sell_value, material.base_sell_value,
+    )
 
 
 def _merchant_count(level: int) -> int:
@@ -78,7 +89,7 @@ def create_dock_rotation(db: Session, guild: Guild, dock_level: int) -> DockRota
                 used_item_ids.add(offer.item_template_id)
                 stock = randint(offer.min_stock, offer.max_stock)
                 db.add(DockOffer(dock_rotation_merchant_id=rotation_merchant.id, item_template_id=offer.item_template_id,
-                    unit_price=effective_dock_unit_price(offer.base_price, offer.item_template.base_sell_value),
+                    unit_price=_effective_offer_price(db, offer.item_template, offer.base_price),
                     initial_stock=stock, remaining_stock=stock))
     db.commit()
     return _load_rotation(db, rotation.id)
@@ -97,7 +108,7 @@ def get_docks_context(db: Session, guild: Guild) -> dict[str, object]:
         repriced = False
         for rotation_merchant in rotation.merchants:
             for offer in rotation_merchant.offers:
-                safe_price = effective_dock_unit_price(offer.unit_price, offer.item_template.base_sell_value)
+                safe_price = _effective_offer_price(db, offer.item_template, offer.unit_price)
                 if safe_price != offer.unit_price:
                     offer.unit_price = safe_price
                     db.add(offer)
@@ -124,7 +135,7 @@ def buy_dock_offer(db: Session, guild: Guild, resources: GuildResources, offer_i
         raise DockError("Equipamentos são comprados uma unidade por vez.")
     if quantity > offer.remaining_stock:
         raise DockError("Estoque insuficiente.")
-    safe_unit_price = effective_dock_unit_price(offer.unit_price, offer.item_template.base_sell_value)
+    safe_unit_price = _effective_offer_price(db, offer.item_template, offer.unit_price)
     if safe_unit_price != offer.unit_price:
         offer.unit_price = safe_unit_price
     total = offer.unit_price * quantity

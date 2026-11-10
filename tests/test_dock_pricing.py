@@ -20,6 +20,7 @@ from app.services.dock_service import buy_dock_offer, create_dock_rotation, get_
 from app.services.economy_pricing_service import (
     dock_no_arbitrage_price_floor,
     effective_dock_unit_price,
+    effective_equipment_dock_unit_price,
     market_sale_unit_value,
 )
 
@@ -51,6 +52,16 @@ class DockPricingTests(unittest.TestCase):
         db.flush()
         return item
 
+    def _equipment(self, db, *, sell_value=20):
+        item = ItemTemplate(
+            name="Espada de teste", description="Equipamento para teste da desmontagem.",
+            item_type="equipment", rarity="common", item_level=40, level_band="21-50", tier=8,
+            base_sell_value=sell_value, equipment_slot="main_hand", icon_group="sword", is_active=True,
+        )
+        db.add(item)
+        db.flush()
+        return item
+
     def test_price_floor_covers_market_levels_and_admin_configured_low_price(self):
         item_value = 1238
         configured_price = 787  # Reproduces the underpriced seeded offer.
@@ -63,6 +74,18 @@ class DockPricingTests(unittest.TestCase):
         self.assertLess(market_sale_unit_value(item_value, market_values(1)["value_bonus_percent"]), safe_price)
         self.assertLess(market_sale_unit_value(item_value, market_values(100)["value_bonus_percent"]), safe_price)
         self.assertEqual(effective_dock_unit_price(2000, item_value), 2000)
+
+    def test_equipment_price_floor_covers_best_salvage_result_at_market_100(self):
+        material_value = 1238
+        per_material_sale = market_sale_unit_value(
+            material_value, market_values(100)["value_bonus_percent"],
+        )
+        price = effective_equipment_dock_unit_price(100, 20, material_value)
+
+        self.assertEqual(price, per_material_sale * 3 - 50 + 1)
+        self.assertLessEqual(per_material_sale * 3 - price - 50, -1)
+        self.assertLess(per_material_sale * 2 - price - 50, -1)
+        self.assertLess(per_material_sale - price - 50, -1)
 
     def test_new_rotation_applies_floor_to_seeded_or_future_admin_offer(self):
         with SessionLocal() as db:
@@ -86,6 +109,84 @@ class DockPricingTests(unittest.TestCase):
             self.assertEqual(len(offers), 1)
             self.assertEqual(offers[0].unit_price, 1610)
             self.assertEqual(offers[0].initial_stock, 3)
+
+    def test_equipment_rotation_prices_above_best_salvage_and_preserves_admin_premium(self):
+        with SessionLocal() as db:
+            guild, _resources = self._guild(db)
+            material = self._material(db)
+            equipment = self._equipment(db)
+            merchant = MerchantTemplate(
+                slug="merchant-salvage-test", name="Mercante de equipamento", description="Teste.",
+                merchant_type="ore", min_dock_level=1, rotation_weight=100, is_active=True,
+            )
+            db.add(merchant)
+            db.flush()
+            db.add_all([
+                MerchantOfferTemplate(
+                    merchant_template_id=merchant.id, item_template_id=equipment.id, base_price=100,
+                    min_stock=1, max_stock=1, min_dock_level=1, weight=100, is_active=True,
+                ),
+                MerchantOfferTemplate(
+                    merchant_template_id=merchant.id, item_template_id=material.id, base_price=5000,
+                    min_stock=1, max_stock=1, min_dock_level=1, weight=100, is_active=True,
+                ),
+            ])
+            db.commit()
+
+            rotation = create_dock_rotation(db, guild, dock_level=1)
+            prices = {offer.item_template_id: offer.unit_price
+                      for row in rotation.merchants for offer in row.offers}
+            per_unit_market = market_sale_unit_value(
+                material.base_sell_value, market_values(100)["value_bonus_percent"],
+            )
+
+            self.assertEqual(prices[equipment.id], per_unit_market * 3 - 50 + 1)
+            self.assertEqual(prices[material.id], 5000)
+            self.assertEqual(effective_equipment_dock_unit_price(9000, 20, material.base_sell_value), 9000)
+
+    def test_legacy_open_equipment_offer_is_repriced_before_purchase(self):
+        with SessionLocal() as db:
+            guild, resources = self._guild(db, gold=10000)
+            material = self._material(db)
+            equipment = self._equipment(db)
+            docks_template = BuildingTemplate(
+                name="Docas legado QA", description="Teste.", effect_type="docks",
+                base_upgrade_gold_cost=100, base_upgrade_wood_cost=0, base_upgrade_ore_cost=0,
+                base_upgrade_crystals_cost=0, max_level=100, required_guild_level=1, is_active=True,
+            )
+            merchant = MerchantTemplate(
+                slug="merchant-legacy-salvage-test", name="Mercante legado", description="Teste.",
+                merchant_type="ore", min_dock_level=1, rotation_weight=100, is_active=True,
+            )
+            db.add_all([merchant, docks_template])
+            db.flush()
+            db.add(GuildBuilding(guild_id=guild.id, building_template_id=docks_template.id, level=1))
+            rotation = DockRotation(
+                guild_id=guild.id, status="active", starts_at=datetime.now(timezone.utc),
+                ends_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+            db.add(rotation)
+            db.flush()
+            rotation_merchant = DockRotationMerchant(
+                dock_rotation_id=rotation.id, merchant_template_id=merchant.id, slot=1,
+            )
+            db.add(rotation_merchant)
+            db.flush()
+            offer = DockOffer(
+                dock_rotation_merchant_id=rotation_merchant.id, item_template_id=equipment.id,
+                unit_price=100, initial_stock=1, remaining_stock=1,
+            )
+            db.add(offer)
+            db.commit()
+            offer_id = offer.id
+
+            buy_dock_offer(db, guild, resources, offer_id, 1)
+            expected_minimum = market_sale_unit_value(
+                material.base_sell_value, market_values(100)["value_bonus_percent"],
+            ) * 3 - 50 + 1
+
+            self.assertEqual(offer.unit_price, expected_minimum)
+            self.assertEqual(resources.gold, 10000 - expected_minimum)
 
     def test_purchase_reprices_legacy_open_rotation_before_charging(self):
         with SessionLocal() as db:
