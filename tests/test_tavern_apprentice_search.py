@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlencode
+from unittest.mock import patch
 
 from sqlalchemy import event, select
 from starlette.requests import Request
@@ -237,6 +238,62 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             self.assertEqual(db.get(GuildResources, resources.id).gold, after_first_gold - current_hire_cost)
             self.assertIsNone(db.get(CampaignMetadata, self.campaign.campaign_id).apprentice_preview)
             self.assertEqual(count_mercenaries_by_guild(db, guild.id), old_mercenary_count + 1)
+
+    def test_hire_keeps_preview_created_by_desktop_reload_after_commit(self):
+        with SessionLocal() as db:
+            _guild, _resources, _state, _config, _metadata, preview, _level, hire_cost = self._current_data(db)
+            player = CampaignPlayer(self.campaign.campaign_id, "Guilda da Busca")
+            commits_on_hire_session = 0
+            commits_after_hire = None
+            reloaded_preview_id = None
+
+            def count_hire_commit(_session):
+                nonlocal commits_on_hire_session
+                commits_on_hire_session += 1
+
+            def hire_then_run_interleaved_get(*args, **kwargs):
+                nonlocal commits_after_hire, reloaded_preview_id
+                hire_apprentice(*args, **kwargs)
+                commits_after_hire = commits_on_hire_session
+                with SessionLocal() as reload_db:
+                    page = tavern_index(self._get_request(), reload_db, player)
+                    self.assertEqual(page.status_code, 200)
+                    reloaded = json.loads(
+                        reload_db.get(CampaignMetadata, self.campaign.campaign_id).apprentice_preview,
+                    )
+                    reloaded_preview_id = reloaded["preview_id"]
+                    self.assertNotEqual(reloaded_preview_id, preview["preview_id"])
+
+            event.listen(db, "before_commit", count_hire_commit)
+            try:
+                with patch(
+                    "app.routes.tavern_routes.hire_apprentice",
+                    side_effect=hire_then_run_interleaved_get,
+                ):
+                    response = asyncio.run(hire_apprentice_submit(
+                        self._post_request({
+                            "name": "Aprendiz intercalado",
+                            "preview_id": preview["preview_id"],
+                            "expected_hire_cost": str(hire_cost),
+                        }, path="/tavern/hire-apprentice"),
+                        db,
+                        player,
+                    ))
+            finally:
+                event.remove(db, "before_commit", count_hire_commit)
+
+            self.assertEqual(response.status_code, 303)
+            self.assertIn("message=", response.headers["location"])
+            self.assertEqual(
+                commits_on_hire_session,
+                commits_after_hire,
+                "the route must not issue a second desktop metadata commit",
+            )
+            with SessionLocal() as verify_db:
+                persisted = json.loads(
+                    verify_db.get(CampaignMetadata, self.campaign.campaign_id).apprentice_preview,
+                )
+            self.assertEqual(persisted["preview_id"], reloaded_preview_id)
 
     def test_search_commits_price_balance_and_preview_in_one_transaction(self):
         with SessionLocal() as db:

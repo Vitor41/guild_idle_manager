@@ -150,7 +150,10 @@ async def hire_apprentice_submit(
             },
             status_code=400,
         )
-    _set_apprentice_preview(request, db, current_user, None)
+    # Desktop preview clearing is part of the hire transaction; a second write
+    # here could erase a new candidate created by a concurrent page reload.
+    if request.app.state.app_mode != "desktop":
+        _set_apprentice_preview(request, db, current_user, None)
     return RedirectResponse("/tavern?message=Aprendiz contratado.", status_code=303)
 
 
