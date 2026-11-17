@@ -1360,12 +1360,34 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert detail_status == 200 and b"DETALHES DO REGISTRO" in codex_detail, (detail_status, codex_detail[:1000])
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
-        assert b'/static/js/main.js?v=20261117-4' in dashboard_with_invite
-        assert b'/static/js/evolution-dialogs.js?v=20261117-2' in dashboard_with_invite
+        base_template_for_ui_versions = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
+        main_script_version = re.search(
+            rb"main\.js.*?\?v=([^\"&\s]+)", base_template_for_ui_versions,
+        )
+        assert main_script_version, "base.html should declare the active main script version"
+        main_script_url = b"/static/js/main.js?v=" + main_script_version.group(1)
+        assert main_script_url in dashboard_with_invite
+        main_script_status, _location, main_script = request(main_script_url.decode("ascii"))
+        assert main_script_status == 200 and b"refreshRegionalEventAnchorOffset" in main_script
+        evolution_dialogs_version = re.search(
+            rb"evolution-dialogs\.js.*?\?v=([^\"&\s]+)", base_template_for_ui_versions,
+        )
+        assert evolution_dialogs_version, "base.html should declare the active evolution dialog script version"
+        evolution_dialogs_url = b"/static/js/evolution-dialogs.js?v=" + evolution_dialogs_version.group(1)
+        assert evolution_dialogs_url in dashboard_with_invite
+        dialogs_script_status, _location, dialogs_script = request(evolution_dialogs_url.decode("ascii"))
+        assert dialogs_script_status == 200 and b"GIMEnqueueRegionalNotices" in dialogs_script
         assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
         regional_notice_status, _notice_location, regional_notice_body = request("/regional")
         assert regional_notice_status == 200
-        assert b'desktop-evolution.css?v=20261117-2' in regional_notice_body
+        evolution_css_version = re.search(
+            rb"desktop-evolution\.css.*?\?v=([^\"&\s]+)", base_template_for_ui_versions,
+        )
+        assert evolution_css_version, "base.html should declare the active desktop evolution stylesheet version"
+        evolution_css_url = b"/static/css/desktop-evolution.css?v=" + evolution_css_version.group(1)
+        assert evolution_css_url in regional_notice_body
+        evolution_css_status, _location, evolution_css = request(evolution_css_url.decode("ascii"))
+        assert evolution_css_status == 200 and b"--regional-event-sticky-topbar-height" in evolution_css
         local_portal_card = re.search(
             rb'<article[^>]*id="regional-event-' + str(portal_notice_event_id).encode("ascii") + rb'".*?</article>',
             regional_notice_body, re.S,

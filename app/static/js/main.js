@@ -620,6 +620,37 @@ function preserveRequestedNavigationFragment(responseUrl, requestedUrl) {
   return response.href;
 }
 
+let regionalEventTopbarObserver = null;
+let regionalEventTopbarObserved = null;
+
+function refreshRegionalEventAnchorOffset() {
+  const topbar = document.querySelector(".game-topbar");
+  const root = document.documentElement;
+  let offset = 0;
+  if (topbar) {
+    const style = window.getComputedStyle(topbar);
+    if (style.position === "sticky" || style.position === "fixed") {
+      const top = Number.parseFloat(style.top);
+      offset = Math.ceil(topbar.getBoundingClientRect().height + (Number.isFinite(top) ? Math.max(0, top) : 0));
+    }
+  }
+  root.style.setProperty("--regional-event-sticky-topbar-height", `${offset}px`);
+
+  if (regionalEventTopbarObserved !== topbar && regionalEventTopbarObserver) {
+    if (regionalEventTopbarObserved) regionalEventTopbarObserver.unobserve(regionalEventTopbarObserved);
+    regionalEventTopbarObserved = null;
+  }
+  if (topbar && regionalEventTopbarObserved !== topbar && typeof ResizeObserver === "function") {
+    regionalEventTopbarObserver ||= new ResizeObserver(() => refreshRegionalEventAnchorOffset());
+    regionalEventTopbarObserved = topbar;
+    regionalEventTopbarObserver.observe(topbar);
+  }
+}
+
+window.refreshRegionalEventAnchorOffset = refreshRegionalEventAnchorOffset;
+window.addEventListener("resize", refreshRegionalEventAnchorOffset);
+refreshRegionalEventAnchorOffset();
+
 function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
   const incomingMain = parsedDocument.querySelector(".game-shell");
@@ -640,6 +671,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   if (updateTopbar && incomingTopbar && currentTopbar) {
     currentTopbar.innerHTML = incomingTopbar.innerHTML;
   }
+  window.refreshRegionalEventAnchorOffset?.();
 
   document.title = parsedDocument.title || document.title;
   const nextUrl = new URL(responseUrl, window.location.origin);
