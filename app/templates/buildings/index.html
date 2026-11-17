@@ -25,7 +25,7 @@
     </header>
 
     {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
-    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    {% if error and not reset_preview %}<p class="error-message">{{ error }}</p>{% endif %}
 
     {% if reset_result %}
       <section class="panel building-reset-result" aria-labelledby="building-reset-result-title" aria-live="polite">
@@ -56,6 +56,7 @@
       <dialog class="building-reset-dialog" data-building-reset-dialog open aria-labelledby="building-reset-title">
         <section class="panel building-reset-preview">
           <h2 id="building-reset-title">Prévia do reset</h2>
+          {% if error %}<p class="error-message" role="alert" aria-live="assertive" data-reset-preview-error>{{ error }}</p>{% endif %}
           <p>As construções da guilda voltarão ao nível 0. Mercenários, estoque, histórico e progresso já obtido serão preservados.</p>
           <div class="building-reset-columns">
             <div>

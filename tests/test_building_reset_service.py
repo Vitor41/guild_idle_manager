@@ -552,6 +552,20 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertIn("reset_preview=1", response.headers["location"])
         self.assertEqual(self.db.scalar(select(func.count(GuildBuildingReset.id))), 0)
 
+        scope["query_string"] = (
+            b"reset_preview=1&error=O%20estado%20da%20guilda%20mudou%20desde%20a%20pr%C3%A9via.%20"
+            b"Confira%20os%20valores%20atualizados%20antes%20de%20confirmar."
+        )
+        with patch("app.routes.building_routes.get_current_guild_context", return_value=(self.guild, self.resources)):
+            stale_preview_response = buildings_index(Request(scope), self.db, user)
+        stale_html = stale_preview_response.body.decode("utf-8")
+        stale_dialog = stale_html.split('<dialog class="building-reset-dialog"', 1)[1].split("</dialog>", 1)[0]
+        stale_message = "O estado da guilda mudou desde a prévia. Confira os valores atualizados antes de confirmar."
+        self.assertIn(stale_message, stale_dialog)
+        self.assertIn('role="alert" aria-live="assertive" data-reset-preview-error', stale_dialog)
+        self.assertEqual(stale_html.count(stale_message), 1)
+        self.assertNotIn(stale_message, stale_html.split('<dialog class="building-reset-dialog"', 1)[0])
+
         sale = self.db.scalar(select(MarketSale).where(MarketSale.guild_id == self.guild.id))
         sale.status = "completed"
         self.db.commit()
