@@ -1176,10 +1176,21 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert detail_status == 200 and b"DETALHES DO REGISTRO" in codex_detail, (detail_status, codex_detail[:1000])
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
-        assert b'/static/js/evolution-dialogs.js?v=20261110-1' in dashboard_with_invite
+        assert b'/static/js/main.js?v=20261117-1' in dashboard_with_invite
+        assert b'/static/js/evolution-dialogs.js?v=20261117-1' in dashboard_with_invite
         assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
         regional_notice_status, _notice_location, regional_notice_body = request("/regional")
         assert regional_notice_status == 200
+        assert b'desktop-evolution.css?v=20261117-1' in regional_notice_body
+        local_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(portal_notice_event_id).encode("ascii") + rb'".*?</article>',
+            regional_notice_body, re.S,
+        )
+        assert local_portal_card
+        assert b"Regi\xc3\xa3o:" in local_portal_card.group(0)
+        assert b"Entrada dispon\xc3\xadvel" in local_portal_card.group(0)
+        assert b"Portal aberto" not in local_portal_card.group(0)
+        assert b'tabindex="-1"' in local_portal_card.group(0)
         assert b'id="regional-rebellion-notice"' in regional_notice_body
         assert b"Aceitar convite" in regional_notice_body and b"Delegar \xc3\xa0 CPU" in regional_notice_body
         assert b"regional-rebellion.webp" in regional_notice_body and b"rebellion-shield.png" in regional_notice_body
@@ -1196,6 +1207,12 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.commit()
         used_portal_status, _used_portal_location, used_portal_body = request("/regional")
         assert used_portal_status == 200 and b'id="regional-portal-notice"' not in used_portal_body
+        used_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(portal_notice_event_id).encode("ascii") + rb'".*?</article>',
+            used_portal_body, re.S,
+        )
+        assert used_portal_card and b"Entrada j\xc3\xa1 utilizada" in used_portal_card.group(0)
+        assert b"Portal aberto" not in used_portal_card.group(0)
         used_quote_status, _used_quote_location, used_quote_body = request(
             f"/regional/events/{portal_notice_event_id}/portals/supply-quote", method="POST", body="",
         )
@@ -1238,7 +1255,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         )
         assert outside_portal_status == 200 and outside_portal_card
         assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in outside_portal_body
-        assert b"fora do alcance normal" in outside_portal_card.group(0)
+        assert b"Prazo aberto \xc2\xb7 fora do alcance da guilda" in outside_portal_card.group(0)
         assert b"Portais s\xc3\xb3 aceitam entrada na regi\xc3\xa3o natal" in outside_portal_card.group(0)
         assert b"/portals/start" not in outside_portal_card.group(0)
         outside_portal_quote_status, _outside_portal_quote_location, outside_portal_quote_body = request(
@@ -1251,6 +1268,36 @@ with tempfile.TemporaryDirectory() as data_dir:
         )
         assert outside_portal_start_status == 303
         assert "região natal" in unquote_plus(outside_portal_start_location)
+        with SessionLocal() as db:
+            home_portal = db.get(RegionalEvent, portal_notice_event_id)
+            expired_external_portal = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="portal", region_code=outside_region_code,
+                trigger_cycle_number=home_portal.trigger_cycle_number + 1, rules_version=home_portal.rules_version,
+                seed="expired-external-portal-smoke", status="in_progress",
+                dungeon_template_id=home_portal.dungeon_template_id,
+                created_at_utc=datetime.now(timezone.utc) - timedelta(minutes=20),
+                expires_at_utc=datetime.now(timezone.utc) - timedelta(minutes=5),
+                summary_json=home_portal.summary_json,
+            )
+            db.add(expired_external_portal)
+            db.flush()
+            expired_external_portal_id = expired_external_portal.id
+            db.add(RegionalEventActivity(
+                event_id=expired_external_portal.id, guild_state_id=portal_notice_state_id,
+                source_type="dungeon", source_run_id=987654321,
+                status="in_progress",
+            ))
+            db.commit()
+        expired_external_status, _expired_external_location, expired_external_body = request("/regional")
+        expired_external_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(expired_external_portal_id).encode("ascii") + rb'".*?</article>',
+            expired_external_body, re.S,
+        )
+        assert expired_external_status == 200 and expired_external_card
+        assert b"Prazo encerrado \xc2\xb7 fora do alcance da guilda" in expired_external_card.group(0)
+        assert b"Prazo aberto" not in expired_external_card.group(0)
+        with SessionLocal() as db:
+            assert db.get(RegionalEvent, expired_external_portal_id).status == "in_progress"
         with SessionLocal() as db:
             invite_event = db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion", status="active",
@@ -1325,6 +1372,10 @@ with tempfile.TemporaryDirectory() as data_dir:
         post_decision_regional_status, _location, post_decision_regional = request("/regional")
         assert post_decision_regional_status == 200 and b'id="regional-rebellion-notice"' not in post_decision_regional
         assert f'id="regional-event-{invite_event_id}"'.encode("ascii") in post_decision_regional
+        assert b"Convite aceito." in post_decision_regional
+        assert b"Sua prioridade segue at\xc3\xa9" in post_decision_regional
+        assert b"Prioridade encerrada." not in post_decision_regional
+        assert b"a CPU tamb\xc3\xa9m participa" not in post_decision_regional
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
         base_template = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
         desktop_theme_version = re.search(rb"desktop-theme\.css.*?\?v=([^\"&\s]+)", base_template)

@@ -138,6 +138,7 @@
 .evolution-dialog dt { color: #b5c7c4; }
 .evolution-dialog dd { margin: 0; font-weight: 800; text-align: right; }
 .evolution-dialog__close { position: absolute; right: 11px; top: 9px; width: 40px; height: 40px; color: var(--e-text); background: #253b3f; border: 1px solid #567174; border-radius: 6px; font-size: 1.35rem; cursor: pointer; }
+.regional-event-notice .evolution-dialog__close { z-index: 2; }
 .evolution-dialog__action { border-top: 1px solid #344c51; }
 .regional-rebellion-dialog { --e-text: #f1eadb; --e-gold: #e6b965; --e-gold-soft: #f5d798; }
 .regional-rebellion-dialog > form { padding: 0; }

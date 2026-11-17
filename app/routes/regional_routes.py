@@ -601,6 +601,15 @@ def regional_index(
             ),
         })
     rebellion = board.get("rebellion_event")
+    rebellion_priority_elapsed = False
+    if rebellion is not None and rebellion.priority_ends_at_utc is not None:
+        priority_deadline = rebellion.priority_ends_at_utc
+        priority_deadline = (
+            priority_deadline.replace(tzinfo=timezone.utc)
+            if priority_deadline.tzinfo is None
+            else priority_deadline.astimezone(timezone.utc)
+        )
+        rebellion_priority_elapsed = priority_deadline <= region_now
     rebellion_participant = None
     rebellion_offers = []
     rebellion_region_name = None
@@ -620,7 +629,7 @@ def regional_index(
             if isinstance(boss_snapshot, dict)
             else (db.get(DungeonTemplate, event.dungeon_template_id) if event.dungeon_template_id else None)
         )
-        entered = db.scalar(select(RegionalEventParticipant.id).where(
+        participant = db.scalar(select(RegionalEventParticipant).where(
             RegionalEventParticipant.event_id == event.id,
             RegionalEventParticipant.guild_state_id == player_state.id,
         )) if player_state is not None else None
@@ -631,12 +640,41 @@ def regional_index(
             if portal_deadline.tzinfo is None
             else portal_deadline.astimezone(timezone.utc)
         )
+        entry_state = (
+            "used" if participant is not None else
+            "unavailable_content" if template is None else
+            "expired" if portal_deadline <= region_now else
+            "unavailable" if blocker else
+            "available"
+        )
+        entry_state_labels = {
+            "used": "Entrada já utilizada",
+            "unavailable_content": "Conteúdo indisponível",
+            "expired": "Prazo de entrada encerrado",
+            "unavailable": "Entrada indisponível",
+            "available": "Entrada disponível",
+        }
+        entry_state_descriptions = {
+            "used": (
+                "O prazo de entrada também terminou." if portal_deadline <= region_now
+                else "Sua única entrada já foi usada; não é possível enviar outra equipe."
+            ),
+            "unavailable_content": "O chefe deste portal não está disponível para iniciar uma atividade.",
+            "expired": "Novas entradas não são aceitas; uma atividade iniciada no prazo ainda pode ser concluída.",
+            "unavailable": blocker or "A entrada não está disponível para esta guilda.",
+            "available": "Uma equipe enfrenta o chefe do bioma portal; a duração mínima é de 1 hora.",
+        }
         portal_cards.append({
             "event": event,
             "template": template,
-            "entered": entered is not None,
+            "region_name": event_region_name(event.region_code),
+            "participant": participant,
+            "entered": participant is not None,
             "action_blocker": blocker,
             "entry_window_closed": portal_deadline <= region_now,
+            "entry_state": entry_state,
+            "entry_state_label": entry_state_labels[entry_state],
+            "entry_state_description": entry_state_descriptions[entry_state],
             "expires_at_iso": _datetime_iso(event.expires_at_utc),
             **_portal_drop_preview(db, event_summary),
             "supply_quote": quote_supply(
@@ -727,11 +765,23 @@ def regional_index(
                 "accept": "Aceita", "decline": "Delegada à CPU", "delegated_cpu": "Delegada à CPU",
             }.get(summary.get("player_decision"), "Registrada"),
         })
-        if event.event_type == "portal" and event.status == "active" and event.region_code != home_code:
-            event_history_cards[-1]["status_label"] = "Aberto fora do alcance normal"
-            event_history_cards[-1]["reason_label"] = (
-                "Portais só aceitam entrada na região natal. Rebeliões oferecem atividades próprias na região quando o convite é aceito."
+        if event.event_type == "portal" and event.region_code != home_code:
+            event_deadline = event.expires_at_utc
+            event_deadline = (
+                event_deadline.replace(tzinfo=timezone.utc)
+                if event_deadline.tzinfo is None
+                else event_deadline.astimezone(timezone.utc)
             )
+            if event_deadline <= region_now:
+                event_history_cards[-1]["status_label"] = "Prazo encerrado · fora do alcance da guilda"
+                event_history_cards[-1]["reason_label"] = (
+                    "O prazo de entrada encerrou. Portais só aceitam entrada na região natal; a resolução continua consultável no histórico."
+                )
+            else:
+                event_history_cards[-1]["status_label"] = "Prazo aberto · fora do alcance da guilda"
+                event_history_cards[-1]["reason_label"] = (
+                    "Portais só aceitam entrada na região natal. Rebeliões oferecem atividades próprias na região quando o convite é aceito."
+                )
     return templates.TemplateResponse(
         request=request,
         name="regional/index.html",
@@ -749,6 +799,7 @@ def regional_index(
             "rebellion_participant": rebellion_participant,
             "home_region_code": home_code,
             "rebellion_priority_ends_at_iso": _datetime_iso(rebellion.priority_ends_at_utc) if rebellion else None,
+            "rebellion_priority_elapsed": rebellion_priority_elapsed,
             "rebellion_expires_at_iso": _datetime_iso(rebellion.expires_at_utc) if rebellion else None,
             "rebellion_offers": rebellion_offers,
             "rebellion_region_name": rebellion_region_name,

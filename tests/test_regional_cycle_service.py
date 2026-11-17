@@ -27,6 +27,7 @@ from app.models.regional import (
     RegionalCycleRegion,
     RegionalEventActivity,
     RegionalEvent,
+    RegionalEventParticipant,
     RegionalGuildState,
     RegionalOffer,
     RegionalRunOutcome,
@@ -210,6 +211,58 @@ class RegionalCycleSimulationTests(unittest.TestCase):
         )
 
         self.assertIsNone(choice)
+
+    def test_v7_cpu_portal_party_filters_start_deadline_before_ranking(self):
+        from app.services.regional_cycle_service import _cpu_offer_party
+
+        start = datetime(2026, 11, 9)
+        portal_deadline = start + timedelta(hours=3)
+        offer = SimpleNamespace(
+            required_guild_level_snapshot=1,
+            min_party_size_snapshot=1,
+            max_party_size_snapshot=1,
+            required_min_mercenary_level_snapshot=1,
+            required_class_code_snapshot=None,
+            required_total_power_snapshot=0,
+            required_tank_count_snapshot=0,
+            required_support_count_snapshot=0,
+            required_damage_count_snapshot=0,
+            required_equipment_tier_snapshot=0,
+            success_chance_snapshot=50,
+            cpu_failure_risk_snapshot=0,
+            recommended_power_snapshot=100,
+            xp_reward_snapshot=100,
+            duration_seconds_snapshot=3600,
+        )
+        roster = [
+            SimpleNamespace(
+                id=1, slot=1, level=1, class_code="warrior", power=20,
+                vitality=0, agility=0, intelligence=0, luck=0, armor=0,
+                equipment_bonus_json="{}",
+            ),
+            SimpleNamespace(
+                id=2, slot=2, level=1, class_code="mage", power=500,
+                vitality=0, agility=0, intelligence=0, luck=0, armor=0,
+                equipment_bonus_json="{}",
+            ),
+        ]
+        choice = _cpu_offer_party(
+            offer, SimpleNamespace(level=1), roster,
+            {1: start + timedelta(hours=1), 2: portal_deadline},
+            start + timedelta(hours=6), {}, optimize_cpu_value=True,
+            latest_start_before=portal_deadline,
+        )
+
+        self.assertIsNotNone(choice)
+        self.assertEqual(choice[0], start + timedelta(hours=1))
+        self.assertEqual([member.id for member in choice[1]], [1])
+
+        late_only = _cpu_offer_party(
+            offer, SimpleNamespace(level=1), [roster[1]],
+            {2: portal_deadline}, start + timedelta(hours=6), {},
+            optimize_cpu_value=True, latest_start_before=portal_deadline,
+        )
+        self.assertIsNone(late_only)
 
     def test_open_v6_cycle_keeps_targeted_pressure_and_cpu_rotation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -511,8 +564,11 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                 campaigns.activate_campaign(created.campaign_id)
                 with SessionLocal() as db:
                     from app.services.regional_event_service import (
+                        attach_event_activity,
                         build_portal_boss_snapshot,
                         expire_due_events,
+                        record_event_activity_result,
+                        resolve_portal_participant,
                     )
                     from app.routes.regional_routes import _portal_action_blocker
 
@@ -581,6 +637,15 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         }, sort_keys=True),
                     )
                     db.add(portal)
+                    db.flush()
+                    player_state = regional_cycle_service.get_current_player_regional_guild(
+                        db, created.campaign_id, guild.id,
+                    )
+                    player_source_run_id = 987654321
+                    player_activity = attach_event_activity(
+                        db, portal, player_state, "dungeon", player_source_run_id,
+                    )
+                    self.assertEqual(player_activity.status, "in_progress")
                     for offer in db.scalars(select(RegionalOffer).where(
                         RegionalOffer.cycle_id == cycle.id,
                         RegionalOffer.region_code == region_code,
@@ -596,11 +661,8 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         expire_due_events(db, created.campaign_id, deadline)
                         db.commit()
                         db.refresh(portal)
-                        self.assertEqual(portal.status, "active")
+                        self.assertEqual(portal.status, "in_progress")
                         self.assertEqual(regional_cycle_service._utc(portal.expires_at_utc), original_deadline)
-                        player_state = regional_cycle_service.get_current_player_regional_guild(
-                            db, created.campaign_id, guild.id,
-                        )
                         self.assertIn(
                             "prazo",
                             _portal_action_blocker(db, campaign, portal, player_state, original_deadline).lower(),
@@ -626,6 +688,12 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         regional_cycle_service._utc(datetime.fromisoformat(decision["resolved_at_utc"])),
                         regional_cycle_service._utc(datetime.fromisoformat(decision["started_at_utc"])),
                     )
+                    self.assertEqual(portal.status, "in_progress")
+                    player_activity = record_event_activity_result(
+                        db, "dungeon", player_source_run_id, True, close_time,
+                    )
+                    self.assertIsNotNone(player_activity)
+                    resolve_portal_participant(db, player_activity, True, close_time)
                     expire_due_events(db, created.campaign_id, close_time)
                     db.commit()
                     activity = db.scalar(select(RegionalEventActivity).where(
@@ -639,6 +707,31 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     ))
                     self.assertEqual(activity_count, 1)
                     self.assertEqual(portal.status, "resolved")
+                    player_participant = db.scalar(select(RegionalEventParticipant).where(
+                        RegionalEventParticipant.event_id == portal.id,
+                        RegionalEventParticipant.guild_state_id == player_state.id,
+                    ))
+                    cpu_participant = db.scalar(select(RegionalEventParticipant).where(
+                        RegionalEventParticipant.event_id == portal.id,
+                        RegionalEventParticipant.guild_state_id == cpu.id,
+                    ))
+                    self.assertEqual(player_participant.status, "resolved")
+                    self.assertEqual(cpu_participant.status, "resolved")
+                    player_activity = db.scalar(select(RegionalEventActivity).where(
+                        RegionalEventActivity.event_id == portal.id,
+                        RegionalEventActivity.source_run_id == player_source_run_id,
+                    ))
+                    self.assertEqual(player_activity.status, "resolved")
+                    final_summary = json.loads(portal.summary_json)
+                    self.assertEqual(final_summary["aggregate"]["entries"], 2)
+                    self.assertEqual(
+                        final_summary["aggregate"]["successes"],
+                        player_activity.successes + activity.successes,
+                    )
+                    self.assertEqual(
+                        final_summary["aggregate"]["failures"],
+                        player_activity.failures + activity.failures,
+                    )
                     cycle_start_utc = regional_cycle_service._utc(cycle.starts_at_utc)
                     decision_start = regional_cycle_service._utc(
                         datetime.fromisoformat(decision["started_at_utc"]),
@@ -651,6 +744,9 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         round((decision_end - cycle_start_utc).total_seconds(), 3),
                         activity.successes, activity.failures, activity.contribution,
                         activity_count, portal.status,
+                        final_summary["aggregate"]["entries"],
+                        final_summary["aggregate"]["successes"],
+                        final_summary["aggregate"]["failures"],
                         (regional_cycle_service._utc(portal.expires_at_utc) - cycle_start_utc).total_seconds(),
                     )
                 configure_database("sqlite:///:memory:")

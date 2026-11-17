@@ -45,6 +45,9 @@ const startupModalQueue = (() => {
       if (index >= 0) pending.splice(index, 1);
       if (active === dialog && dialog.open) dialog.close();
     },
+    isIdle() {
+      return pending.length === 0 && !active?.open;
+    },
   };
 })();
 window.GIMStartupModalQueue = startupModalQueue;
@@ -644,6 +647,19 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
 
   const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
   window.requestAnimationFrame(() => {
+    let hashTarget = null;
+    if (nextUrl.hash) {
+      try {
+        hashTarget = document.getElementById(decodeURIComponent(nextUrl.hash.slice(1)));
+      } catch {
+        hashTarget = null;
+      }
+    }
+    if (hashTarget) {
+      hashTarget.focus?.({ preventScroll: true });
+      hashTarget.scrollIntoView({ block: "start", behavior: "auto" });
+      return;
+    }
     const maximumScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(targetScroll, maximumScroll), behavior: "auto" });
   });
@@ -664,6 +680,7 @@ function syncRegionalEventNoticeDialogs(parsedDocument) {
     for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
       const replacement = incomingById.get(current.id);
       if (replacement && regionalNoticeMatches(current, replacement)) continue;
+      current.dataset.regionalNoticeProgrammaticClose = "true";
       modalQueue?.remove(current);
       if (current.open) current.close();
       current.remove();
@@ -729,7 +746,12 @@ initializeRegionalComparison();
 
 document.addEventListener("click", async (event) => {
   if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
-    event.target.closest("[data-regional-notice-close]")?.closest("dialog")?.close();
+    const noticeLink = event.target.closest("[data-regional-notice-close]");
+    if (noticeLink) {
+      const dialog = noticeLink.closest("dialog[data-regional-event-notice]");
+      if (dialog) dialog.dataset.regionalNoticeProgrammaticClose = "true";
+      noticeLink.closest("dialog")?.close();
+    }
   }
   const link = event.target.closest(".game-shell .filter-tabs a, .game-shell .pagination a, [data-async-navigation]");
   if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

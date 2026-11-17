@@ -281,7 +281,7 @@ def expire_due_events(db: Session, campaign_id: str, now: datetime) -> None:
         db.add(event)
     due = list(db.scalars(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign_id,
-        RegionalEvent.status == "active",
+        RegionalEvent.status.in_(("active", "in_progress")),
         RegionalEvent.expires_at_utc <= current,
     )))
     for event in due:
@@ -778,7 +778,7 @@ def record_cpu_event_activity(
         RegionalEvent.campaign_id == campaign_id,
         RegionalEvent.event_type == "portal",
         RegionalEvent.region_code == region_code,
-        RegionalEvent.status == "active",
+        RegionalEvent.status.in_(("active", "in_progress")),
         RegionalEvent.created_at_utc <= cycle_start,
         RegionalEvent.expires_at_utc > cycle_start,
     ).order_by(RegionalEvent.id.desc()).limit(1))

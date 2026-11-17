@@ -17,6 +17,17 @@ document.querySelectorAll(".evolution-dialog").forEach((dialog) => {
 
 window.GIMEnqueueRegionalNotice = (dialog) => {
   if (!(dialog instanceof HTMLDialogElement)) return;
+  if (!dialog.dataset.focusReturnBound) {
+    dialog.dataset.focusReturnBound = "true";
+    dialog.addEventListener("close", () => {
+      if (dialog.dataset.regionalNoticeProgrammaticClose === "true") return;
+      window.requestAnimationFrame(() => {
+        if (!window.GIMStartupModalQueue?.isIdle?.()) return;
+        const heading = document.getElementById("events-title");
+        if (heading) heading.focus({ preventScroll: true });
+      });
+    });
+  }
   const rawDeadline = dialog.dataset.eventDeadline || "";
   const deadline = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(rawDeadline) ? rawDeadline : `${rawDeadline}Z`);
   window.GIMStartupModalQueue?.enqueue(dialog, 2, deadline);

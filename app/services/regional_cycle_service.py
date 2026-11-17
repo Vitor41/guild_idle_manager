@@ -1196,6 +1196,7 @@ def _cpu_offer_party(
     include_synergy_power: bool = True,
     require_equipment_for_each_member: bool = True,
     optimize_cpu_value: bool = False,
+    latest_start_before: datetime | None = None,
 ) -> tuple[datetime, list[RegionalCpuMercenary]] | None:
     if state.level < offer.required_guild_level_snapshot:
         return None
@@ -1246,6 +1247,8 @@ def _cpu_offer_party(
                 continue
             start = max((available_at.get(member.id, cycle_end) for member in party))
             if start >= cycle_end:
+                continue
+            if latest_start_before is not None and _utc(start) >= _utc(latest_start_before):
                 continue
             if optimize_cpu_value:
                 duration = max(1, int(offer.duration_seconds_snapshot))
@@ -1389,7 +1392,7 @@ def _cpu_plan_for_guild_v6(
         RegionalEvent.campaign_id == campaign_id,
         RegionalEvent.event_type == "portal",
         RegionalEvent.region_code == region.region_code,
-        RegionalEvent.status == "active",
+        RegionalEvent.status.in_(("active", "in_progress")),
         RegionalEvent.created_at_utc <= cycle_start,
         RegionalEvent.expires_at_utc > cycle_start,
     ).order_by(RegionalEvent.id.desc()).limit(1))
@@ -1490,6 +1493,9 @@ def _cpu_plan_for_guild_v6(
                 include_synergy_power=v7_rules,
                 require_equipment_for_each_member=v7_rules,
                 optimize_cpu_value=v7_rules,
+                latest_start_before=(
+                    _utc(offer.expires_at_utc) if offer.offer_type == "portal" else None
+                ),
             )
             if party_choice is None:
                 continue
