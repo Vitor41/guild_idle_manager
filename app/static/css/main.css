@@ -1472,6 +1472,11 @@ textarea {
 .loot-preview-item { display: grid; grid-template-columns: 28px minmax(105px, 1fr); align-items: center; gap: 6px; flex: 0 0 auto; max-width: 210px; padding: 6px 8px; border: 1px solid var(--rarity-color, var(--border)); border-radius: 7px; background: rgba(0,0,0,.18); color: var(--parchment); font-size: .78rem; line-height: 1.2; }
 .loot-preview-item small { display: block; margin-top: 2px; color: var(--muted); font-size: .72rem; }
 .loot-preview-icon, .loot-preview-icon img { display: grid; place-items: center; width: 26px; height: 26px; object-fit: contain; }
+.loot-preview-more { margin-top: 6px; }
+.loot-preview-more summary { width: fit-content; min-height: 36px; padding: 8px 10px; border: 1px solid rgba(233, 198, 116, .2); border-radius: 6px; color: var(--gold-2); cursor: pointer; font-size: .78rem; }
+.loot-preview-more .loot-preview-list { margin-top: 7px; }
+.loot-preview-note { display: block; margin-top: 5px; color: var(--muted); font-size: .72rem; line-height: 1.35; }
+.loot-preview-state { margin: 0; color: var(--muted); font-size: .8rem; }
 .locked-content-card { opacity: .76; border-color: rgba(210,168,74,.48); }
 
 .bonus-box {

@@ -17,6 +17,7 @@ from app.desktop.gameplay_diagnostics import log_gathering_advancement
 from app.models.campaign import CampaignMetadata
 from app.models.guild import GuildResources
 from app.models.dungeon import DungeonTemplate
+from app.models.item import ItemTemplate
 from app.models.mission import MissionTemplate
 from app.models.mercenary import Mercenary
 from app.models.regional import (
@@ -42,6 +43,9 @@ from app.services.regional_event_service import (
 )
 from app.services.evolution_art_service import get_evolution_art_context
 from app.services.supply_preparation_service import estimate_drop_sale_value, guild_gold, quote_supply, regional_kit_quote
+from app.services.display_service import clean_generated_name, rarity_label
+from app.services.drop_preview_service import build_drop_preview
+from app.services.icon_service import get_item_icon_path
 from app.repositories.item_repository import list_active_drops_for_mission
 from app.repositories.dungeon_repository import list_active_drops_for_dungeon
 
@@ -231,6 +235,76 @@ def _annotate_supply_preparation(offer: RegionalOffer, now: datetime) -> None:
         offer.supply_prepared_at_utc = ends
 
 
+def _annotate_offer_drop_preview(db, offer: RegionalOffer) -> None:
+    if offer.offer_type == "contract":
+        template = db.get(MissionTemplate, offer.mission_template_id) if offer.mission_template_id else None
+        active_entries = getattr(template, "item_drops", None) if template is not None else None
+        drop_note = "Chance-base por item/entrada; rola somente após sucesso. Pode variar com habilidades da equipe"
+        if template is not None and template.mission_type == "gathering":
+            drop_note += ", profissão na coleta"
+        if active_entries and any(
+            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
+            for entry in active_entries
+        ):
+            drop_note += ", Ferreiro para equipamentos"
+    else:
+        template = db.get(DungeonTemplate, offer.dungeon_template_id) if offer.dungeon_template_id else None
+        active_entries = getattr(template, "item_drops", None) if template is not None else None
+        drop_note = "Chance-base por item/entrada; rola somente após sucesso. Pode variar com habilidades da equipe e Exploradores"
+        if active_entries and any(
+            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
+            for entry in active_entries
+        ):
+            drop_note += ", Ferreiro para equipamentos"
+    preview = build_drop_preview(active_entries)
+    offer.drop_preview_available = preview["available"]
+    offer.visible_drops = preview["drops"]
+    offer.drop_modifier_note = drop_note + "."
+
+
+def _portal_drop_preview(db, summary: dict[str, object]) -> dict[str, object]:
+    table = summary.get("portal_loot")
+    if not isinstance(table, dict) or not isinstance(table.get("entries"), list) or not table["entries"]:
+        return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+    drops = []
+    try:
+        for entry in table["entries"]:
+            if not isinstance(entry, dict):
+                return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+            item_id = int(entry.get("item_template_id", 0))
+            chance = int(entry.get("chance_percent", -1))
+            quantity = int(entry.get("quantity", 0))
+            item_data = entry.get("item_snapshot")
+            if isinstance(item_data, dict) and int(item_data.get("id", -1)) == item_id:
+                item = SimpleNamespace(**item_data)
+            else:
+                item = db.get(ItemTemplate, item_id)
+            if (
+                item is None or getattr(item, "item_type", None) != "equipment"
+                or not getattr(item, "name", None) or not getattr(item, "rarity", None)
+                or not 0 <= chance <= 100 or quantity < 1
+            ):
+                return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+            drops.append({
+                "display_name": clean_generated_name(item.name),
+                "rarity_class": str(item.rarity).lower(),
+                "rarity_label": rarity_label(item.rarity),
+                "icon_path": get_item_icon_path(item),
+                "chance_percent": chance,
+                "chance_label": "chance",
+                "min_quantity": quantity,
+                "max_quantity": quantity,
+                "quantity_unit": "instância(s)",
+            })
+    except (AttributeError, TypeError, ValueError):
+        return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+    return {
+        "drop_preview_available": True,
+        "visible_drops": drops,
+        "drop_modifier_note": "Chance da faixa exclusiva; rolagem somente após sucesso. O portal não garante equipamento.",
+    }
+
+
 def _start_error_redirect(error: object, form: dict[str, list[str]], anchor: str = "") -> RedirectResponse:
     query: list[tuple[str, str]] = [("error", str(error))]
     query.extend(("selected_mercenary_id", value) for value in form.get("mercenary_ids", []))
@@ -352,6 +426,7 @@ def regional_index(
     for offer_list in board.get("offers", {}).values():
         for offer in offer_list:
             _annotate_supply_preparation(offer, region_now)
+            _annotate_offer_drop_preview(db, offer)
             try:
                 saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
             except (TypeError, json.JSONDecodeError):
@@ -414,6 +489,7 @@ def regional_index(
             "template": template,
             "entered": entered is not None,
             "expires_at_iso": _datetime_iso(event.expires_at_utc),
+            **_portal_drop_preview(db, event_summary),
             "supply_quote": quote_supply(
                 rank=("E" if int(getattr(template, "recommended_level", 1)) <= 10 else "D" if int(getattr(template, "recommended_level", 1)) <= 20 else "C" if int(getattr(template, "recommended_level", 1)) <= 30 else "B" if int(getattr(template, "recommended_level", 1)) <= 40 else "A" if int(getattr(template, "recommended_level", 1)) <= 50 else "S"),
                 success_gold=int(getattr(template, "base_gold_reward", 0)),
@@ -438,6 +514,7 @@ def regional_index(
             ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
             for offer in rebellion_offers:
                 _annotate_supply_preparation(offer, region_now)
+                _annotate_offer_drop_preview(db, offer)
                 try:
                     saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
                 except (TypeError, json.JSONDecodeError):
@@ -542,39 +619,72 @@ async def start_offer(
     if offer is None:
         return RedirectResponse("/regional?error=Oferta%20indispon%C3%ADvel", status_code=303)
     form = await read_form_multi_fields(request)
+    requested_supply_mode = (form.get("supply_mode") or [""])[0]
+    mode_was_explicit = bool(requested_supply_mode)
+    has_preparation = (
+        offer.status == "supply_preparing"
+        or offer.supply_preparation_started_at_utc is not None
+        or offer.supply_preparation_ends_at_utc is not None
+        or bool(offer.supply_preparation_snapshot_json)
+    )
+    if requested_supply_mode not in {"", "none", "prepared"}:
+        return _start_error_redirect("Escolha uma opção válida de suprimento.", form)
+    if has_preparation and not mode_was_explicit:
+        return _start_error_redirect("Escolha explicitamente iniciar com o suprimento preparado ou sem suprimento.", form)
+    if not requested_supply_mode:
+        requested_supply_mode = "none"
+    current_time = datetime.now(timezone.utc)
     required_guild_level = int(offer.required_guild_level_snapshot or 1)
     if guild.level < required_guild_level:
         return _start_error_redirect(
             f"Nível da guilda insuficiente para esta oferta. Nível mínimo: {required_guild_level}.",
             form,
         )
-    if offer.supply_preparation_ends_at_utc is not None:
+    if has_preparation:
+        if offer.supply_preparation_started_at_utc is None or offer.supply_preparation_ends_at_utc is None:
+            return _start_error_redirect("A preparação não possui um prazo válido. Atualize a página.", form)
         prep_end = offer.supply_preparation_ends_at_utc
         prep_end = prep_end.replace(tzinfo=timezone.utc) if prep_end.tzinfo is None else prep_end.astimezone(timezone.utc)
-        if datetime.now(timezone.utc) < prep_end:
-            return _start_error_redirect("O suprimento ainda está sendo preparado.", form)
-        if not offer.supply_prepared_at_utc:
-            offer.supply_prepared_at_utc = prep_end
         try:
             supply_snapshot = json.loads(offer.supply_preparation_snapshot_json or "{}")
         except (TypeError, json.JSONDecodeError):
             supply_snapshot = {}
-        if not supply_snapshot:
-            return _start_error_redirect("A preparação não possui um snapshot válido. Inicie sem suprimento.", form)
-        prepared_team = sorted(str(value) for value in supply_snapshot.get("mercenary_ids", []))
+        if (
+            not isinstance(supply_snapshot, dict)
+            or supply_snapshot.get("schema") != 1
+            or supply_snapshot.get("supply") != "regional_group_supply"
+            or supply_snapshot.get("prepared_for_offer_id") != offer.id
+            or not isinstance(supply_snapshot.get("mercenary_ids"), list)
+        ):
+            return _start_error_redirect("A preparação não possui um snapshot válido.", form)
+        prepared_team = sorted(set(str(value) for value in supply_snapshot["mercenary_ids"]))
+        if not prepared_team:
+            return _start_error_redirect("A preparação não possui uma equipe válida.", form)
         submitted_team = sorted(set(str(value) for value in form.get("mercenary_ids", [])))
-        if not prepared_team or submitted_team != prepared_team:
-            return _start_error_redirect("Use a mesma equipe escolhida durante a preparação do suprimento.", form)
+        if requested_supply_mode == "prepared":
+            if current_time < prep_end:
+                return _start_error_redirect("O suprimento ainda está sendo preparado.", form)
+            if not offer.supply_prepared_at_utc:
+                offer.supply_prepared_at_utc = prep_end
+            if submitted_team != prepared_team:
+                return _start_error_redirect("O bônus preparado exige exatamente a equipe escolhida no preparo.", form)
+        else:
+            if not set(prepared_team).issubset(submitted_team):
+                return _start_error_redirect("Mantenha toda a equipe preparada para iniciar sem suprimento.", form)
+            if current_time >= prep_end and not offer.supply_prepared_at_utc:
+                offer.supply_prepared_at_utc = prep_end
+            supply_snapshot = None
     else:
         supply_snapshot = None
-        if (form.get("supply") or [""])[0] == "1":
+        if not mode_was_explicit and (form.get("supply") or [""])[0] == "1":
             return _start_error_redirect("Prepare o suprimento antes de iniciar ou desmarque a opção.", form)
+        if requested_supply_mode == "prepared":
+            return _start_error_redirect("Esta oferta não possui suprimento preparado.", form)
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
     if player_state is None:
         return RedirectResponse("/regional?error=Estado%20regional%20indispon%C3%ADvel", status_code=303)
     if offer.status == "supply_preparing" and offer.reserved_by_guild_state_id != player_state.id:
         return RedirectResponse("/regional?error=Oferta%20em%20prepara%C3%A7%C3%A3o%20por%20outra%20guilda", status_code=303)
-    current_time = datetime.now(timezone.utc)
     rebellion = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign.campaign_id,
         RegionalEvent.event_type == "rebellion",

@@ -51,9 +51,9 @@ from app.services.progression_service import add_xp_and_apply_levelups
 from app.services.result_detail_service import parse_result_details, serialize_result_details
 from app.services.skill_service import get_party_skill_effects
 from app.services.achievement_service import record_guild_stat, unlock_codex_reference
-from app.services.display_service import annotate_mercenary_display, clean_generated_name, rarity_label
+from app.services.display_service import annotate_mercenary_display, clean_generated_name
+from app.services.drop_preview_service import build_drop_preview
 from app.services.building_balance_service import scouts_values
-from app.services.icon_service import get_item_icon_path
 from app.services.equipment_service import get_party_power_score
 from app.repositories.item_repository import list_equipment_for_mercenary
 from app.services.prd3_dungeon_balance_service import dungeon_identity, maximum_drop_rarity
@@ -441,22 +441,23 @@ def get_dungeons_page_context(
         base_chance = max(5, min(95, template.base_success_chance)) / 100
         template.expected_xp_reward = round(template.base_xp_reward * (base_chance + (1 - base_chance) * 0.25))
         template.expected_gold_reward = round(template.base_gold_reward * base_chance)
-        template.visible_drops = [drop for drop in template.item_drops if drop.is_active]
+        drop_preview = build_drop_preview(getattr(template, "item_drops", None))
+        template.drop_preview_available = drop_preview["available"]
+        template.visible_drops = drop_preview["drops"]
+        modifiers = ["habilidades da equipe", "Exploradores"]
+        active_entries = getattr(template, "item_drops", None) or []
+        if any(
+            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
+            for entry in active_entries
+        ):
+            modifiers.append("Ferreiro para equipamentos")
+        template.drop_modifier_note = (
+            "Chance-base por item/entrada; rola somente após sucesso. Pode variar com "
+            + ", ".join(modifiers) + "."
+        )
         template.synergy_bonus_max = min(6, sum(2 for amount in (
             template.required_tank_count, template.required_support_count, template.required_damage_count
         ) if amount > 0))
-        for drop in template.visible_drops:
-            drop.display_name = clean_generated_name(drop.item_template.name)
-            drop.rarity_label = rarity_label(drop.item_template.rarity)
-            drop.icon_path = get_item_icon_path(drop.item_template)
-            drop.base_drop_chance = drop.drop_chance
-            drop.effective_drop_chance = min(
-                100,
-                drop.drop_chance + (
-                    get_equipment_drop_bonus_percent(db, guild.id)
-                    if drop.item_template.item_type == "equipment" else 0
-                ),
-            )
     dungeon_chances = {
         dungeon.id: {
             mercenary.id: get_mission_chance_details(db, guild.id, dungeon, mercenary)

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "components/result_card.html" import result_card %}
+{% from "components/drop_preview.html" import drop_preview with context %}
 
 {% block title %}Missões - Guild Idle Manager{% endblock %}
 
@@ -97,7 +98,7 @@
                     <strong>Bônus de construções</strong>
                     <span>Contrato: ouro e XP +{{ building_bonuses.contract_reward_bonus_percent }}%</span><span>Equip. +{{ building_bonuses.equipment_drop_bonus_percent }} p.p.</span><span>+{{ building_bonuses.material_quantity_bonus }} materiais principais</span><span>Máx. {{ building_bonuses.max_run_multiplier }}x</span>
                   </div>
-                  <div class="loot-preview"><strong>Loot possível</strong><div class="loot-preview-list">{% for drop in mission.visible_drops %}<span class="loot-preview-item rarity-{{ drop.item_template.rarity }}" title="{{ drop.rarity_label }}"><span class="loot-preview-icon">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span><span>{{ drop.display_name }}<small>{{ drop.effective_drop_chance }}%{% if drop.effective_drop_chance > drop.base_drop_chance %} ({{ drop.base_drop_chance }}% + Ferreiro){% endif %} · {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}-{{ drop.max_quantity }}{% endif %}x</small></span></span>{% else %}<span class="subtle-note">{% if mission.is_long_idle %}Sem loot · apenas ouro e XP{% else %}Sem loot cadastrado{% endif %}</span>{% endfor %}</div></div>
+                  {{ drop_preview(mission.visible_drops, mission.drop_preview_available, mission.drop_modifier_note) }}
                 </div>
               </div>
               <form class="party-form" method="post" action="/missions/start">
