@@ -14,6 +14,7 @@ import gc, http.client, json, logging, os, re, socket, sqlite3, tempfile, thread
 from contextlib import closing
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+from urllib.parse import unquote_plus
 from unittest.mock import patch
 os.environ["APP_MODE"] = "desktop"
 from app.main import app
@@ -496,6 +497,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             ).order_by(RegionalCycle.cycle_number.desc()).first()
             resources = db.query(GuildResources).filter_by(guild_id=guild_id).one()
             assert active_cycle is not None
+            active_cycle_id = active_cycle.id
             resources.gold = 1000
             supply_kit = db.query(ItemTemplate).filter_by(slug="supply_kit").one()
             inventory_kit = db.query(GuildInventoryItem).filter_by(
@@ -1111,7 +1113,13 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert "event=result action=gathering.assign" in gameplay_log_text
         assert "Traceback (most recent call last)" in gameplay_log_text
         assert "do-not-log" not in gameplay_log_text and "do-not-log-this" not in gameplay_log_text
-        assert b"/static/js/regional-supply.js?v=20261031-1" in rendered_pages["/dungeons"]
+        base_template_for_supply_version = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
+        regional_supply_version = re.search(
+            rb"regional-supply\.js.*?\?v=([^\"&\s]+)", base_template_for_supply_version,
+        )
+        assert regional_supply_version, "base.html should declare the active regional supply script version"
+        regional_supply_url = b"/static/js/regional-supply.js?v=" + regional_supply_version.group(1)
+        assert regional_supply_url in rendered_pages["/dungeons"]
         assert b"Modo Offline" in rendered_pages["/dashboard"]
         assert b"Estamina 8h 0min / 8h" in rendered_pages["/dashboard"]
         assert b"2h de estamina por 1h online" in rendered_pages["/dashboard"]
@@ -1166,7 +1174,6 @@ with tempfile.TemporaryDirectory() as data_dir:
             f"/codex?category=class&trail=events&entry={detail_link.group(1).decode('ascii')}"
         )
         assert detail_status == 200 and b"DETALHES DO REGISTRO" in codex_detail, (detail_status, codex_detail[:1000])
-        assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in rendered_pages["/regional"]
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
         assert b'/static/js/evolution-dialogs.js?v=20261110-1' in dashboard_with_invite
@@ -1177,6 +1184,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Aceitar convite" in regional_notice_body and b"Delegar \xc3\xa0 CPU" in regional_notice_body
         assert b"regional-rebellion.webp" in regional_notice_body and b"rebellion-shield.png" in regional_notice_body
         assert b'id="regional-portal-notice"' in regional_notice_body
+        assert f'id="regional-event-{portal_notice_event_id}"'.encode("ascii") in regional_notice_body
         assert b"dimensional-portal.webp" in regional_notice_body and b"portal-gate.png" in regional_notice_body
         portal_dialog = re.search(rb'<dialog[^>]*id="regional-portal-notice".*?</dialog>', regional_notice_body, re.S)
         assert portal_dialog and b"Enviar equipe" not in portal_dialog.group(0)
@@ -1188,12 +1196,61 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.commit()
         used_portal_status, _used_portal_location, used_portal_body = request("/regional")
         assert used_portal_status == 200 and b'id="regional-portal-notice"' not in used_portal_body
+        used_quote_status, _used_quote_location, used_quote_body = request(
+            f"/regional/events/{portal_notice_event_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert used_quote_status == 409, (
+            used_quote_status, _used_quote_location, used_quote_body[:800],
+        )
+        used_quote_reason = json.loads(used_quote_body).get("reason", "")
+        assert "já usou" in used_quote_reason, used_quote_reason
         with SessionLocal() as db:
             expired_portal = db.get(RegionalEvent, portal_notice_event_id)
             expired_portal.expires_at_utc = datetime.now(timezone.utc) - timedelta(seconds=5)
             db.commit()
         expired_portal_status, _expired_portal_location, expired_portal_body = request("/regional")
         assert expired_portal_status == 200 and b'id="regional-portal-notice"' not in expired_portal_body
+        expired_quote_status, _expired_quote_location, expired_quote_body = request(
+            f"/regional/events/{portal_notice_event_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert expired_quote_status == 409 and "prazo" in json.loads(expired_quote_body)["reason"]
+        with SessionLocal() as db:
+            home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
+            outside_region_code = next(code for code, _name in REGIONS if code != home_region_code)
+            home_portal = db.get(RegionalEvent, portal_notice_event_id)
+            outside_portal = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="portal", region_code=outside_region_code,
+                trigger_cycle_number=home_portal.trigger_cycle_number, rules_version=home_portal.rules_version,
+                seed="outside-home-portal-smoke", status="active",
+                dungeon_template_id=home_portal.dungeon_template_id,
+                created_at_utc=datetime.now(timezone.utc),
+                expires_at_utc=datetime.now(timezone.utc) + timedelta(hours=3),
+                summary_json=home_portal.summary_json,
+            )
+            db.add(outside_portal)
+            db.flush()
+            outside_portal_id = outside_portal.id
+            db.commit()
+        outside_portal_status, _outside_portal_location, outside_portal_body = request("/regional")
+        outside_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(outside_portal_id).encode("ascii") + rb'".*?</article>',
+            outside_portal_body, re.S,
+        )
+        assert outside_portal_status == 200 and outside_portal_card
+        assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in outside_portal_body
+        assert b"fora do alcance normal" in outside_portal_card.group(0)
+        assert b"Portais s\xc3\xb3 aceitam entrada na regi\xc3\xa3o natal" in outside_portal_card.group(0)
+        assert b"/portals/start" not in outside_portal_card.group(0)
+        outside_portal_quote_status, _outside_portal_quote_location, outside_portal_quote_body = request(
+            f"/regional/events/{outside_portal_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert outside_portal_quote_status == 409
+        assert "região natal" in json.loads(outside_portal_quote_body)["reason"]
+        outside_portal_start_status, outside_portal_start_location, _outside_portal_start_body = request(
+            f"/regional/events/{outside_portal_id}/portals/start", method="POST",
+        )
+        assert outside_portal_start_status == 303
+        assert "região natal" in unquote_plus(outside_portal_start_location)
         with SessionLocal() as db:
             invite_event = db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion", status="active",
@@ -1223,15 +1280,51 @@ with tempfile.TemporaryDirectory() as data_dir:
         decision_status, decision_location, _decision_body = request(
             f"/regional/events/{invite_event_id}/decision", method="POST", body="decision=accept",
         )
-        assert decision_status == 303 and decision_location.endswith("#events-title")
+        assert decision_status == 303 and decision_location.endswith(f"#regional-event-{invite_event_id}")
         with SessionLocal() as db:
             invite_event = db.get(RegionalEvent, invite_event_id)
             invited_participant = db.query(RegionalEventParticipant).filter_by(event_id=invite_event_id).one()
             assert invite_event.player_decision == "accept" and invited_participant.status == "accepted"
+        accepted_external_portal_status, _accepted_external_portal_location, accepted_external_portal_body = request(
+            f"/regional/events/{outside_portal_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert accepted_external_portal_status == 409
+        assert "região natal" in json.loads(accepted_external_portal_body)["reason"]
+        with SessionLocal() as db:
+            active_regions = set(db.scalars(select(RegionalEvent.region_code).where(
+                RegionalEvent.campaign_id == campaign.campaign_id,
+                RegionalEvent.event_type == "rebellion",
+                RegionalEvent.status.in_(("active", "in_progress")),
+            )))
+            blocked_external_offer = db.scalar(select(RegionalOffer).where(
+                RegionalOffer.campaign_id == campaign.campaign_id,
+                RegionalOffer.cycle_id == active_cycle_id,
+                RegionalOffer.region_code != home_region_code,
+                RegionalOffer.region_code.not_in(active_regions),
+                RegionalOffer.status == "available",
+            ).order_by(RegionalOffer.region_code, RegionalOffer.offer_type, RegionalOffer.slot).limit(1))
+            assert blocked_external_offer is not None
+            blocked_external_offer_id = blocked_external_offer.id
+        blocked_quote_status, _blocked_quote_location, blocked_quote_body = request(
+            f"/regional/offers/{blocked_external_offer_id}/supply-quote", method="POST",
+        )
+        assert blocked_quote_status == 409
+        assert "sem uma rebelião ativa" in json.loads(blocked_quote_body)["reason"]
+        blocked_prepare_status, blocked_prepare_location, _blocked_prepare_body = request(
+            f"/regional/offers/{blocked_external_offer_id}/prepare", method="POST", body="supply=1",
+        )
+        assert blocked_prepare_status == 303
+        assert "sem uma rebelião ativa" in unquote_plus(blocked_prepare_location)
+        blocked_start_status, blocked_start_location, _blocked_start_body = request(
+            f"/regional/offers/{blocked_external_offer_id}/start", method="POST", body="supply_mode=none",
+        )
+        assert blocked_start_status == 303
+        assert "sem uma rebelião ativa" in unquote_plus(blocked_start_location)
         post_decision_status, _location, post_decision_dashboard = request("/dashboard")
         assert post_decision_status == 200 and b'data-regional-event-notice' not in post_decision_dashboard
         post_decision_regional_status, _location, post_decision_regional = request("/regional")
         assert post_decision_regional_status == 200 and b'id="regional-rebellion-notice"' not in post_decision_regional
+        assert f'id="regional-event-{invite_event_id}"'.encode("ascii") in post_decision_regional
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
         base_template = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
         desktop_theme_version = re.search(rb"desktop-theme\.css.*?\?v=([^\"&\s]+)", base_template)
@@ -1401,7 +1494,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert portal_detail_status == 200
         displayed_portal_item_name = clean_generated_name(original_item_name).encode("utf-8")
         portal_preview_card = re.search(
-            rb'<article class="evolution-future-card">(?:(?!<article class="evolution-future-card").)*'
+            rb'<article class="evolution-future-card"[^>]*id="regional-event-'
+            + str(portal_event_id).encode("ascii")
+            + rb'"(?:(?!<article class="evolution-future-card"[^>]*>).)*'
             + re.escape(displayed_portal_item_name)
             + rb'.*?</article>',
             portal_detail_body,
@@ -1651,7 +1746,17 @@ with tempfile.TemporaryDirectory() as data_dir:
                 text=True,
                 check=False,
             )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        lines = (result.stdout + result.stderr).splitlines()
+        relevant = [
+            line[:600] for line in lines
+            if "desktop_http_smoke_child.py" in line
+            or line.lstrip().startswith((
+                "AssertionError:", "DetachedInstanceError:", "ValueError:",
+                "TypeError:", "RuntimeError:",
+            ))
+        ]
+        diagnostic = "\n".join(relevant[-12:] or lines[-30:])
+        self.assertEqual(result.returncode, 0, diagnostic)
 
 
 if __name__ == "__main__":

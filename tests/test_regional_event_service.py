@@ -942,6 +942,8 @@ class RegionalEventServiceTests(unittest.TestCase):
             self.assertEqual(repeated_delta, (0.0, 0.0))
             self.assertNotEqual((security_delta, threat_delta), (0.0, 0.0))
             self.assertEqual(_as_utc(activities[0].resolved_at_utc), cycle.starts_at_utc + timedelta(hours=2))
+            cycle.status = "completed"
+            db.flush()
             expire_due_events(db, self.campaign_id, event.expires_at_utc)
             self.assertEqual(event.status, "resolved")
             self.assertEqual(_as_utc(event.resolved_at_utc), self.now + timedelta(hours=3))

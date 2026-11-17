@@ -1485,9 +1485,8 @@ def _cpu_plan_for_guild_v6(
         feasible: list[tuple[tuple[int, int, datetime, int, int, int], RegionalOffer, list[RegionalCpuMercenary]]] = []
         any_eligible = False
         for offer in candidates:
-            offer_deadline = min(cycle_end, offer.expires_at_utc) if offer.offer_type == "portal" else cycle_end
             party_choice = _cpu_offer_party(
-                offer, state, roster, busy_until, offer_deadline, class_roles,
+                offer, state, roster, busy_until, cycle_end, class_roles,
                 include_synergy_power=v7_rules,
                 require_equipment_for_each_member=v7_rules,
                 optimize_cpu_value=v7_rules,
@@ -1497,7 +1496,9 @@ def _cpu_plan_for_guild_v6(
             any_eligible = True
             start_at, party = party_choice
             end_at = start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot))
-            if end_at > offer_deadline:
+            if end_at > cycle_end:
+                continue
+            if offer.offer_type == "portal" and start_at >= _utc(offer.expires_at_utc):
                 continue
             party_power = sum(_cpu_member_power(member) for member in party)
             class_bonus = min(8, sum(CLASS_SUCCESS_BONUS.get(member.class_code, 0) for member in party))

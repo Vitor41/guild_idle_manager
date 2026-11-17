@@ -153,7 +153,7 @@
             <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--primary" type="submit" name="decision" value="accept" autofocus>Aceitar convite</button></form>
             <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--secondary" type="submit" name="decision" value="decline">Delegar à CPU</button></form>
           </div>
-          <a class="regional-rebellion-dialog__details" href="/regional#events-title" data-regional-notice-close>Ver detalhes em Vigília Regional</a>
+          <a class="regional-rebellion-dialog__details" href="/regional#regional-event-{{ pending_rebellion_invite.event_id }}" data-regional-notice-close>Ver convite em Vigília Regional</a>
         </div>
       </dialog>
     {% endif %}
@@ -165,8 +165,8 @@
           <p class="evolution-eyebrow">DESAFIO DIMENSIONAL · ENTRADA LIMITADA</p>
           <h2 id="regional-portal-title">{{ pending_portal_notice.boss_name }}</h2>
           <p id="regional-portal-description">Portal aberto em {{ pending_portal_notice.region_name }}. A entrada termina em <time data-evolution-countdown="{{ pending_portal_notice.expires_at_iso }}" datetime="{{ pending_portal_notice.expires_at_iso }}">{{ pending_portal_notice.expires_at_iso }}</time>. Sua guilda tem uma entrada; fechar este aviso não a consome.</p>
-          <div class="regional-rebellion-dialog__actions"><a class="evolution-button evolution-button--primary" href="/regional#events-title" data-async-navigation data-scroll-top data-regional-notice-close>Ver equipe e portal na Vigília</a></div>
-          <a class="regional-rebellion-dialog__details" href="/regional#events-title" data-async-navigation data-regional-notice-close>Ver eventos na Vigília</a>
+          <div class="regional-rebellion-dialog__actions"><a class="evolution-button evolution-button--primary" href="/regional#regional-event-{{ pending_portal_notice.event_id }}" data-async-navigation data-regional-notice-close>Ver equipe e portal na Vigília</a></div>
+          <a class="regional-rebellion-dialog__details" href="/regional#regional-event-{{ pending_portal_notice.event_id }}" data-async-navigation data-regional-notice-close>Ver este portal na Vigília</a>
         </div>
       </dialog>
     {% endif %}

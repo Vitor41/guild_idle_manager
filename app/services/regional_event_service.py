@@ -289,6 +289,23 @@ def expire_due_events(db: Session, campaign_id: str, now: datetime) -> None:
             _mark_event_waiting_for_started_activities(db, event)
             continue
         if event.event_type == "portal":
+            # A portal created at the close of cycle N can still be used by
+            # the CPU plan for cycle N+1. That plan is materialized only when
+            # the open cycle is processed, so an intervening request at the
+            # portal deadline must not erase the event before the plan runs.
+            pending_cycle = db.scalar(select(RegionalCycle).where(
+                RegionalCycle.campaign_id == event.campaign_id,
+                RegionalCycle.cycle_number == event.trigger_cycle_number + 1,
+                RegionalCycle.status == "open",
+            ))
+            if pending_cycle is not None:
+                cycle_start = _utc(pending_cycle.starts_at_utc)
+                event_created = _utc(event.created_at_utc)
+                event_deadline = _utc(event.expires_at_utc)
+                if event_created <= cycle_start < event_deadline:
+                    # Keep the original deadline. Player entry is still
+                    # blocked by the timestamp check in the portal routes.
+                    continue
             _finalize_portal_event(db, event, _utc(event.expires_at_utc))
         elif event.event_type == "rebellion":
             _finalize_rebellion_event(db, event, _utc(event.expires_at_utc))
@@ -789,14 +806,15 @@ def record_cpu_event_activity(
                 )
                 eligible_portal_action = portal_run is not None and resolved_at is not None
                 success = bool(outcome_by_offer.get(portal_run["offer_id"], {}).get("success")) if eligible_portal_action else False
-                participate = eligible_portal_action and resolved_at <= _utc(portal.expires_at_utc)
+                # The entry window gates the start time. An eligible run may
+                # finish after the portal closes and still count in its result.
+                participate = eligible_portal_action
             else:
                 # Legacy CPU rules assigned a fixed two-hour, independent portal roll.
                 resolved_at = cycle_start + timedelta(hours=2)
                 participate = rng.random() < PORTAL_CPU_PARTICIPATION_CHANCE
                 if participate:
                     success = rng.random() < (plan.successes / max(1, plan.actions))
-                participate = participate and resolved_at <= _utc(portal.expires_at_utc)
             if participate:
                 db.add(RegionalEventParticipant(
                     event_id=portal.id,
@@ -828,7 +846,6 @@ def record_cpu_event_activity(
         RegionalEvent.region_code == region_code,
         RegionalEvent.status == "active",
         RegionalEvent.created_at_utc <= _utc(cycle.starts_at_utc),
-        RegionalEvent.cpu_started_at_utc <= _utc(cycle.starts_at_utc),
         RegionalEvent.expires_at_utc > cycle_start,
     ).order_by(RegionalEvent.id.desc()).limit(1))
     if event is None:
@@ -840,6 +857,52 @@ def record_cpu_event_activity(
         RegionalEventActivity.source_run_id == plan.id,
     ))
     if existing is not None:
+        return portal_security_delta, portal_threat_delta
+    try:
+        decisions = json.loads(getattr(plan, "decisions_json", "[]") or "[]")
+        outcomes = json.loads(getattr(plan, "outcomes_json", "[]") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        decisions, outcomes = [], []
+    cpu_start = event.cpu_started_at_utc or event.priority_ends_at_utc or event.created_at_utc
+    cpu_start = _utc(cpu_start)
+    event_deadline = _utc(event.expires_at_utc)
+    if decisions:
+        eligible_decisions = []
+        for decision in decisions:
+            started_value = decision.get("started_at_utc") if isinstance(decision, dict) else None
+            if not started_value:
+                continue
+            started_at = _utc(datetime.fromisoformat(started_value))
+            if cpu_start <= started_at < event_deadline:
+                eligible_decisions.append(decision)
+        if not eligible_decisions:
+            return portal_security_delta, portal_threat_delta
+        eligible_offer_ids = {str(row.get("offer_id")) for row in eligible_decisions}
+        eligible_outcomes = [
+            row for row in outcomes
+            if isinstance(row, dict) and str(row.get("offer_id")) in eligible_offer_ids
+        ]
+        successes = sum(bool(row.get("success")) for row in eligible_outcomes)
+        failures = len(eligible_outcomes) - successes
+        contribution = len(eligible_outcomes)
+        resolved_values = [
+            row.get("resolved_at_utc") for row in eligible_decisions
+            if row.get("resolved_at_utc")
+        ]
+        resolved_at = max(
+            (_utc(datetime.fromisoformat(value)) for value in resolved_values),
+            default=cycle_end,
+        )
+    elif cpu_start <= cycle_start:
+        # Legacy plans don't carry per-action timestamps; keep their original
+        # whole-cycle accounting when the CPU window had already opened.
+        successes = int(plan.successes or 0)
+        failures = int(plan.failures or 0)
+        contribution = int(plan.actions or 0)
+        resolved_at = cycle_end
+        if contribution <= 0:
+            return portal_security_delta, portal_threat_delta
+    else:
         return portal_security_delta, portal_threat_delta
     participant = db.scalar(select(RegionalEventParticipant).where(
         RegionalEventParticipant.event_id == event.id,
@@ -861,10 +924,10 @@ def record_cpu_event_activity(
         source_type="cpu_cycle",
         source_run_id=plan.id,
         status="resolved",
-        successes=plan.successes,
-        failures=plan.failures,
-        contribution=plan.actions,
-        resolved_at_utc=cycle_end,
+        successes=successes,
+        failures=failures,
+        contribution=contribution,
+        resolved_at_utc=resolved_at,
     ))
     db.flush()
     return portal_security_delta, portal_threat_delta

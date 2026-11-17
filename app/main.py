@@ -132,7 +132,12 @@ async def protect_desktop_loopback(request: Request, call_next):
                 action=action, route=request.url.path, diagnostic_id=diagnostic_id,
                 status_code=status_code, outcome=outcome,
             )
-            if status_code >= 400:
+            is_regional_supply_quote = (
+                request.url.path.startswith("/regional/")
+                and request.url.path.endswith("/supply-quote")
+                and response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "application/json"
+            )
+            if status_code >= 400 and not is_regional_supply_quote:
                 response = RedirectResponse(_diagnostic_error_redirect(request.url.path, diagnostic_id), status_code=303)
         response.headers["X-GIM-Diagnostic-ID"] = diagnostic_id
     else:
