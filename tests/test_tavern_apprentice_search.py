@@ -33,7 +33,12 @@ from app.services.tavern_service import (
     search_apprentice,
     utc_now,
 )
-from app.routes.tavern_routes import _get_apprentice_preview, search_apprentice_submit, tavern_index
+from app.routes.tavern_routes import (
+    _get_apprentice_preview,
+    hire_apprentice_submit,
+    search_apprentice_submit,
+    tavern_index,
+)
 
 
 class TavernApprenticeSearchTests(unittest.TestCase):
@@ -83,7 +88,7 @@ class TavernApprenticeSearchTests(unittest.TestCase):
         return guild, resources, state, config, metadata, preview, tavern_level, final_hire_cost
 
     @staticmethod
-    def _post_request(body: dict[str, str]) -> Request:
+    def _post_request(body: dict[str, str], path: str = "/tavern/search-apprentice") -> Request:
         encoded = urlencode(body).encode("utf-8")
         scope = {
             "type": "http",
@@ -91,8 +96,8 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             "http_version": "1.1",
             "method": "POST",
             "scheme": "http",
-            "path": "/tavern/search-apprentice",
-            "raw_path": b"/tavern/search-apprentice",
+            "path": path,
+            "raw_path": path.encode("ascii"),
             "query_string": b"",
             "root_path": "",
             "headers": [(b"content-type", b"application/x-www-form-urlencoded")],
@@ -138,9 +143,11 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             self.assertIn('action="/tavern/search-apprentice"', html)
             self.assertIn('data-confirm-title="Buscar outro Aprendiz?"', html)
             self.assertIn('data-confirm-action="Buscar outro"', html)
-            self.assertIn('data-pending-label="Buscando…"', html)
+            self.assertIn('type="submit" data-pending-label="Buscando…"', html)
+            self.assertIn('data-tavern-candidate-price-mutation', html)
             self.assertIn('name="preview_id"', html)
             self.assertIn('name="expected_search_cost"', html)
+            self.assertIn('name="expected_hire_cost"', html)
             self.assertIn("Buscar outro Aprendiz (", html)
             self.assertIn("Contratar Aprendiz", html)
 
@@ -157,6 +164,7 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             old_cost = state.current_apprentice_hire_cost
             old_hire_count = state.apprentice_hire_count
             old_xp = guild.xp
+            old_mercenary_count = count_mercenaries_by_guild(db, guild.id)
             expected_search_cost = calculate_apprentice_search_cost(hire_cost)
             request_body = {
                 "preview_id": preview["preview_id"],
@@ -180,8 +188,9 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             stale = asyncio.run(search_apprentice_submit(
                 self._post_request(request_body), db, player,
             ))
-            self.assertEqual(stale.status_code, 400)
-            self.assertIn("mudou", stale.body.decode("utf-8"))
+            self.assertEqual(stale.status_code, 303)
+            self.assertIn("error=", stale.headers["location"])
+            self.assertIn("mudou", stale.headers["location"])
             self.assertEqual(db.get(GuildResources, resources.id).gold, after_first_gold)
             self.assertEqual(
                 db.scalar(select(GuildTavernState).where(GuildTavernState.guild_id == self.guild_id)).current_apprentice_hire_cost,
@@ -191,6 +200,43 @@ class TavernApprenticeSearchTests(unittest.TestCase):
                 json.loads(db.get(CampaignMetadata, self.campaign.campaign_id).apprentice_preview)["preview_id"],
                 after_first_preview["preview_id"],
             )
+
+            stale_hire_response = asyncio.run(hire_apprentice_submit(
+                self._post_request({
+                    "name": "Contratação desatualizada",
+                    "preview_id": preview["preview_id"],
+                    "expected_hire_cost": str(hire_cost),
+                }, path="/tavern/hire-apprentice"),
+                db,
+                player,
+            ))
+            self.assertEqual(stale_hire_response.status_code, 303)
+            self.assertIn("candidato+mudou", stale_hire_response.headers["location"])
+            self.assertEqual(db.get(GuildResources, resources.id).gold, after_first_gold)
+            self.assertEqual(
+                json.loads(db.get(CampaignMetadata, self.campaign.campaign_id).apprentice_preview)["preview_id"],
+                after_first_preview["preview_id"],
+            )
+            self.assertEqual(count_mercenaries_by_guild(db, guild.id), old_mercenary_count)
+
+            current_hire_cost = get_discounted_hire_cost(
+                after_first_cost,
+                get_tavern_page_context(db, guild, resources, refresh_special=False)["apprentice_chances"]["hire_discount_percent"],
+            )
+            current_hire_response = asyncio.run(hire_apprentice_submit(
+                self._post_request({
+                    "name": "Aprendiz sincronizado",
+                    "preview_id": after_first_preview["preview_id"],
+                    "expected_hire_cost": str(current_hire_cost),
+                }, path="/tavern/hire-apprentice"),
+                db,
+                player,
+            ))
+            self.assertEqual(current_hire_response.status_code, 303)
+            self.assertIn("message=", current_hire_response.headers["location"])
+            self.assertEqual(db.get(GuildResources, resources.id).gold, after_first_gold - current_hire_cost)
+            self.assertIsNone(db.get(CampaignMetadata, self.campaign.campaign_id).apprentice_preview)
+            self.assertEqual(count_mercenaries_by_guild(db, guild.id), old_mercenary_count + 1)
 
     def test_search_commits_price_balance_and_preview_in_one_transaction(self):
         with SessionLocal() as db:

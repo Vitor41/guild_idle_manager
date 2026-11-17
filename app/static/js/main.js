@@ -791,6 +791,50 @@ window.addEventListener("pageshow", () => {
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
 });
 
+async function fetchTavernStateAfterUncertainAction(previousUrl) {
+  try {
+    const refreshed = await fetch(previousUrl, {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
+    });
+    if (!refreshed.ok) return null;
+    return {
+      html: await refreshed.text(),
+      url: refreshed.url || previousUrl,
+    };
+  } catch (_refreshError) {
+    return null;
+  }
+}
+
+function lockTavernActionsUntilReload(form, submitter, previousUrl) {
+  document.querySelectorAll("[data-tavern-candidate-price-mutation] button[type='submit']")
+    .forEach((button) => { button.disabled = true; });
+  if (submitter instanceof HTMLElement) {
+    submitter.disabled = true;
+    submitter.classList.remove("is-loading");
+    submitter.textContent = "Aguardando atualização";
+  }
+  let status = form.querySelector("[data-apprentice-search-status]");
+  if (!status) {
+    status = document.createElement("p");
+    status.dataset.apprenticeSearchStatus = "true";
+    form.append(status);
+  }
+  status.setAttribute("role", "alert");
+  status.setAttribute("aria-live", "assertive");
+  const reloadLink = document.createElement("a");
+  reloadLink.href = previousUrl;
+  reloadLink.textContent = "Recarregar estado";
+  reloadLink.className = "button-link secondary";
+  status.replaceChildren(
+    document.createTextNode("Não foi possível confirmar o resultado da busca. As ações de contratação e preço estão bloqueadas até sincronizar o candidato. "),
+    reloadLink,
+  );
+}
+
 document.addEventListener("submit", async (event) => {
   const form = event.target;
   const method = form instanceof HTMLFormElement ? form.method.toLowerCase() : "";
@@ -871,37 +915,32 @@ document.addEventListener("submit", async (event) => {
     replaceGameContent(html, responseUrl, previousPath, scrollPosition, response.ok, formState);
   } catch (error) {
     form.removeAttribute("aria-busy");
-    if (submitter) {
+    const needsTavernRevalidation = form.dataset.revalidateOnError === "true";
+    if (submitter && !needsTavernRevalidation) {
       submitter.disabled = false;
       submitter.classList.remove("is-loading");
       if (originalSubmitterText !== null) submitter.textContent = originalSubmitterText;
     }
-    if (form.dataset.revalidateOnError === "true") {
-      try {
-        const refreshed = await fetch(previousUrl, {
-          method: "GET",
-          credentials: "same-origin",
-          cache: "no-store",
-          headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
-        });
-        if (refreshed.ok) {
-          replaceGameContent(
-            await refreshed.text(),
-            refreshed.url,
-            previousPath,
-            scrollPosition,
-            true,
-            formState,
-          );
-          const refreshedStatus = document.querySelector("[data-apprentice-search-status]");
-          if (refreshedStatus) {
-            refreshedStatus.textContent = "A Taverna foi atualizada. Confira o candidato e o preço antes de tentar novamente.";
-          }
-          return;
+    if (needsTavernRevalidation) {
+      const refreshed = await fetchTavernStateAfterUncertainAction(previousUrl);
+      if (refreshed) {
+        replaceGameContent(
+          refreshed.html,
+          refreshed.url,
+          previousPath,
+          scrollPosition,
+          true,
+          formState,
+        );
+        const refreshedStatus = document.querySelector("[data-apprentice-search-status]");
+        if (refreshedStatus) {
+          refreshedStatus.textContent = "A Taverna foi sincronizada. Confira o candidato e o preço antes de agir novamente.";
         }
-      } catch (_refreshError) {
-        // Fall through to the diagnostic notice when the current state cannot be reloaded.
+      } else {
+        window.reportGameplayClientFailure?.(getFormSubmitAction(form, submitter), diagnosticId);
+        lockTavernActionsUntilReload(form, submitter, previousUrl);
       }
+      return;
     }
     form.querySelector("[data-client-action-error]")?.remove();
     window.reportGameplayClientFailure?.(getFormSubmitAction(form, submitter), diagnosticId);

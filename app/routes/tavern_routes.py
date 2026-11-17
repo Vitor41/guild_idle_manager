@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
@@ -57,6 +57,10 @@ def _set_apprentice_preview(request: Request, db: DbSession, current_user, previ
         request.session.pop("apprentice_preview", None)
     else:
         request.session["apprentice_preview"] = preview
+
+
+def _tavern_error_redirect(error: Exception) -> RedirectResponse:
+    return RedirectResponse(f"/tavern?{urlencode({'error': str(error)[:240]})}", status_code=303)
 
 
 def build_tavern_page_context(
@@ -118,14 +122,21 @@ async def hire_apprentice_submit(
         preview = _get_apprentice_preview(
             request, db, current_user, tavern_context["config"], tavern_context["tavern_level"]
         )
+        raw_expected_cost = form.get("expected_hire_cost", "")
+        if not raw_expected_cost.isdecimal():
+            raise TavernError("O preço da contratação mudou. Recarregue a Taverna antes de confirmar.")
         hire_apprentice(
             db,
             guild,
             resources,
             form.get("name", ""),
             preview,
+            expected_preview_id=form.get("preview_id", ""),
+            expected_final_cost=int(raw_expected_cost),
         )
     except TavernError as error:
+        if request.app.state.app_mode == "desktop":
+            return _tavern_error_redirect(error)
         context = build_tavern_page_context(request, db, guild, resources, current_user)
         return templates.TemplateResponse(
             request=request,
@@ -174,6 +185,8 @@ async def search_apprentice_submit(
             int(raw_expected_cost),
         )
     except TavernError as error:
+        if request.app.state.app_mode == "desktop":
+            return _tavern_error_redirect(error)
         context = build_tavern_page_context(
             request, db, guild, resources, current_user, refresh_special=False,
         )
