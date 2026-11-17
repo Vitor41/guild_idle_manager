@@ -505,11 +505,12 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
 
         with patch.dict(os.environ, {"APP_MODE": "desktop", "DATABASE_URL": "sqlite:///:memory:"}):
             from app.services import icon_service
+        from app.services.drop_preview_service import build_drop_preview
 
         for slug, group, family, sprite_key in cases:
             item = SimpleNamespace(
                 slug=slug, name=slug, item_type="material", icon_group=group,
-                material_family=family, equipment_slot=None,
+                material_family=family, equipment_slot=None, rarity="common", is_active=True,
             )
             with self.subTest(resolver=slug), patch(
                 "app.services.icon_service.settings", SimpleNamespace(app_mode="desktop"),
@@ -519,11 +520,16 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
                 self.assertEqual(icon_path, f"/assets/desktop/{expected_path}")
                 self.assertTrue((ART_ROOT / expected_path).is_file())
 
+                preview = build_drop_preview([SimpleNamespace(
+                    is_active=True, item_template=item, drop_chance=25,
+                    min_quantity=1, max_quantity=2,
+                )])
+                self.assertTrue(preview["available"])
+                self.assertEqual(preview["drops"][0]["icon_path"], icon_path)
+
         context_sources = {
             "inventory": ROOT / "app" / "routes" / "inventory_routes.py",
             "market": ROOT / "app" / "routes" / "market_routes.py",
-            "mission_loot": ROOT / "app" / "services" / "mission_service.py",
-            "dungeon_loot": ROOT / "app" / "services" / "dungeon_service.py",
         }
         for context, path in context_sources.items():
             with self.subTest(context=context):
@@ -534,6 +540,12 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
             source = (ROOT / "app" / "templates" / template).read_text(encoding="utf-8")
             with self.subTest(template=template):
                 self.assertIn("icon_path", source)
+        for template in ("missions/index.html", "dungeons/index.html"):
+            source = (ROOT / "app" / "templates" / template).read_text(encoding="utf-8")
+            with self.subTest(drop_preview_template=template):
+                self.assertIn('from "components/drop_preview.html" import drop_preview', source)
+        component = (ROOT / "app" / "templates" / "components" / "drop_preview.html").read_text(encoding="utf-8")
+        self.assertIn("drop.icon_path", component)
 
     def test_server_side_desktop_icons_use_new_manifest_and_web_icons_remain_legacy(self):
         with patch.dict(os.environ, {"APP_MODE": "desktop", "DATABASE_URL": "sqlite:///:memory:"}):
