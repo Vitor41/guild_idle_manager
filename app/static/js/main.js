@@ -818,12 +818,19 @@ document.addEventListener("submit", async (event) => {
   const previousPath = window.location.pathname;
   const scrollPosition = window.scrollY;
   const formState = captureGameFormState();
+  const originalSubmitterText = submitter instanceof HTMLElement ? submitter.textContent : null;
+  const pendingLabel = submitter instanceof HTMLElement ? submitter.dataset.pendingLabel : "";
   const diagnosticId = form.dataset.gimDiagnosticId || createGameplayDiagnosticId();
   delete form.dataset.gimDiagnosticId;
   form.setAttribute("aria-busy", "true");
   if (submitter) {
     submitter.disabled = true;
     submitter.classList.add("is-loading");
+    if (pendingLabel) submitter.textContent = pendingLabel;
+  }
+  const submitStatus = form.querySelector("[data-apprentice-search-status]");
+  if (submitStatus) {
+    submitStatus.textContent = "Buscando outro Aprendiz…";
   }
   try {
     if (method === "post") {
@@ -867,6 +874,34 @@ document.addEventListener("submit", async (event) => {
     if (submitter) {
       submitter.disabled = false;
       submitter.classList.remove("is-loading");
+      if (originalSubmitterText !== null) submitter.textContent = originalSubmitterText;
+    }
+    if (form.dataset.revalidateOnError === "true") {
+      try {
+        const refreshed = await fetch(previousUrl, {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
+        });
+        if (refreshed.ok) {
+          replaceGameContent(
+            await refreshed.text(),
+            refreshed.url,
+            previousPath,
+            scrollPosition,
+            true,
+            formState,
+          );
+          const refreshedStatus = document.querySelector("[data-apprentice-search-status]");
+          if (refreshedStatus) {
+            refreshedStatus.textContent = "A Taverna foi atualizada. Confira o candidato e o preço antes de tentar novamente.";
+          }
+          return;
+        }
+      } catch (_refreshError) {
+        // Fall through to the diagnostic notice when the current state cannot be reloaded.
+      }
     }
     form.querySelector("[data-client-action-error]")?.remove();
     window.reportGameplayClientFailure?.(getFormSubmitAction(form, submitter), diagnosticId);

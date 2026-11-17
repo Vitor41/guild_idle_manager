@@ -1176,7 +1176,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert detail_status == 200 and b"DETALHES DO REGISTRO" in codex_detail, (detail_status, codex_detail[:1000])
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
-        assert b'/static/js/main.js?v=20261117-1' in dashboard_with_invite
+        assert b'/static/js/main.js?v=20261117-2' in dashboard_with_invite
         assert b'/static/js/evolution-dialogs.js?v=20261117-1' in dashboard_with_invite
         assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
         regional_notice_status, _notice_location, regional_notice_body = request("/regional")

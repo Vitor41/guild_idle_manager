@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 from urllib.parse import quote
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -20,6 +21,7 @@ from app.services.tavern_service import (
     hire_special_offer,
     is_valid_apprentice_preview,
     manually_refresh_special_offer,
+    search_apprentice as search_apprentice_offer,
 )
 
 
@@ -39,6 +41,9 @@ def _get_apprentice_preview(request: Request, db: DbSession, current_user, confi
     if not is_valid_apprentice_preview(preview, config, tavern_level) or "progression_bonus_percent" not in preview:
         preview = generate_apprentice_preview(config, tavern_level)
         _set_apprentice_preview(request, db, current_user, preview)
+    elif not preview.get("preview_id"):
+        preview = {**preview, "preview_id": uuid4().hex}
+        _set_apprentice_preview(request, db, current_user, preview)
     return preview
 
 
@@ -54,8 +59,16 @@ def _set_apprentice_preview(request: Request, db: DbSession, current_user, previ
         request.session["apprentice_preview"] = preview
 
 
-def build_tavern_page_context(request: Request, db: DbSession, guild, resources, current_user) -> dict[str, object]:
-    context = get_tavern_page_context(db, guild, resources)
+def build_tavern_page_context(
+    request: Request,
+    db: DbSession,
+    guild,
+    resources,
+    current_user,
+    *,
+    refresh_special: bool = True,
+) -> dict[str, object]:
+    context = get_tavern_page_context(db, guild, resources, refresh_special=refresh_special)
     if context["tavern_level"] < 1:
         return context
     preview = _get_apprentice_preview(request, db, current_user, context["config"], context["tavern_level"])
@@ -128,6 +141,57 @@ async def hire_apprentice_submit(
         )
     _set_apprentice_preview(request, db, current_user, None)
     return RedirectResponse("/tavern?message=Aprendiz contratado.", status_code=303)
+
+
+@router.post("/search-apprentice")
+async def search_apprentice_submit(
+    request: Request,
+    db: DbSession,
+    current_user: User | None = Depends(get_current_player),
+):
+    if current_user is None:
+        return RedirectResponse("/login", status_code=303)
+    guild, resources = get_current_guild_context(db, current_user.id)
+    if guild is None:
+        return RedirectResponse("/guild/create", status_code=303)
+    form = await read_form_fields(request)
+    try:
+        tavern_context = get_tavern_page_context(db, guild, resources, refresh_special=False)
+        if tavern_context["tavern_level"] < 1:
+            raise TavernError("Evolua a Taverna para o nível 1 antes de buscar outro Aprendiz.")
+        preview = _get_apprentice_preview(
+            request, db, current_user, tavern_context["config"], tavern_context["tavern_level"]
+        )
+        raw_expected_cost = form.get("expected_search_cost", "")
+        if not raw_expected_cost.isdecimal():
+            raise TavernError("O custo da busca mudou. Recarregue a Taverna antes de confirmar.")
+        replacement = search_apprentice_offer(
+            db,
+            guild,
+            resources,
+            preview,
+            form.get("preview_id", ""),
+            int(raw_expected_cost),
+        )
+    except TavernError as error:
+        context = build_tavern_page_context(
+            request, db, guild, resources, current_user, refresh_special=False,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="tavern/index.html",
+            context={
+                "current_user": current_user,
+                "guild": guild,
+                "error": str(error),
+                "message": None,
+                **context,
+            },
+            status_code=400,
+        )
+    if request.app.state.app_mode != "desktop":
+        _set_apprentice_preview(request, db, current_user, replacement)
+    return RedirectResponse("/tavern?message=Novo candidato encontrado.", status_code=303)
 
 
 @router.post("/hire-apprentices-bulk")

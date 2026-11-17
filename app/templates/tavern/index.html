@@ -68,6 +68,27 @@
           <span class="bonus-pill">Poder Total {{ apprentice_preview.power_score }}</span>
           <span class="bonus-pill">Evolução +{{ apprentice_preview.progression_bonus_percent }}%</span>
         </div>
+        <p class="note">Buscar outro custa {{ apprentice_search_cost }} ouro (contratação atual {{ current_apprentice_final_cost }} − reembolso {{ apprentice_search_refund }}).</p>
+        <form
+          class="form-stack"
+          method="post"
+          action="/tavern/search-apprentice"
+          data-confirm-title="Buscar outro Aprendiz?"
+          data-confirm-message="Substituir este candidato por {{ apprentice_search_cost }} ouro? O próximo pode ser pior. Para ficar com ele, será preciso contratá-lo pelo preço atualizado."
+          data-confirm-action="Buscar outro"
+          data-confirm-key="search_apprentice"
+          data-pending-label="Buscando…"
+          data-revalidate-on-error="true"
+        >
+          <input type="hidden" name="preview_id" value="{{ apprentice_preview.preview_id }}">
+          <input type="hidden" name="expected_search_cost" value="{{ apprentice_search_cost }}">
+          <button class="secondary-button" type="submit" {% if not resources or resources.gold < apprentice_search_cost %}disabled{% endif %}>Buscar outro Aprendiz ({{ apprentice_search_cost }} ouro)</button>
+          <p class="note" role="status" aria-live="polite" data-apprentice-search-status></p>
+        </form>
+        {% if not resources or resources.gold < apprentice_search_cost %}
+          {% set search_shortfall = apprentice_search_cost - (resources.gold if resources else 0) %}
+          <p class="note">Indisponível: faltam {{ search_shortfall }} ouro para buscar outro Aprendiz.</p>
+        {% endif %}
         <form class="form-stack" method="post" action="/tavern/hire-apprentice">
           <label>Nome do Aprendiz <input type="text" name="name" required></label>
           <button type="submit">Contratar Aprendiz</button>
