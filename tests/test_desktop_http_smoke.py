@@ -1365,7 +1365,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
         regional_notice_status, _notice_location, regional_notice_body = request("/regional")
         assert regional_notice_status == 200
-        assert b'desktop-evolution.css?v=20261117-1' in regional_notice_body
+        assert b'desktop-evolution.css?v=20261117-2' in regional_notice_body
         local_portal_card = re.search(
             rb'<article[^>]*id="regional-event-' + str(portal_notice_event_id).encode("ascii") + rb'".*?</article>',
             regional_notice_body, re.S,

@@ -166,6 +166,9 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn('setInterval(() => {\n    if (!tableBody.isConnected) return;', main)
         self.assertIn('document.visibilityState === "hidden"', main)
         self.assertIn("dialog.dataset.eventDeadline", dialogs)
+        self.assertIn('.evolution-page [id^="regional-event-"] { scroll-margin-top: 16px; }', theme)
+        self.assertIn("@media (min-width: 1101px)", theme)
+        self.assertIn("scroll-margin-top: 100px", theme)
         self.assertIn("@media (prefers-reduced-motion: reduce)", theme)
         self.assertIn(".regional-event-notice *", theme)
 
