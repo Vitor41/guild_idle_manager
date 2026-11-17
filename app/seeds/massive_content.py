@@ -16,7 +16,7 @@ from app.models.regional import RegionalOffer
 
 
 PACK_KEY = "conteudo_massivo_pos_mvp026"
-PACK_VERSION = 7
+PACK_VERSION = 6
 REQUIRED_MEAT_GATHERING_SLUG = "material_meat_1_001"
 BANDS = (
     ("1-20", 1, 20, 1, (10, 25, 45)),

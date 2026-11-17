@@ -58,6 +58,42 @@ test("different drop conditions stay visible inside one activity row", () => {
   ]);
 });
 
+test("two bosses for the same item share one category row and keep names with their drop data", () => {
+  const groups = groupCatalogSources([
+    { item: item("Raro"), sources: [source({ name: "Dragão do Norte", chance: "12% base", requirement: "Guilda Nv. 5+" })] },
+    { item: item("Épico"), sources: [source({ name: "Hidra", chance: "4% base", requirement: "Guilda Nv. 12+" })] },
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].source.label, "Chefes");
+  assert.equal(groups[0].entries.length, 1);
+  assert.deepEqual(groups[0].entries[0].rarities, ["Raro", "Épico"]);
+  assert.deepEqual(groups[0].entries[0].variants.map(({ source: row }) => [row.name, row.chance, row.requirement]), [
+    ["Dragão do Norte", "12% base", "Guilda Nv. 5+"],
+    ["Hidra", "4% base", "Guilda Nv. 12+"],
+  ]);
+});
+
+test("offers from two dock merchants share one Docas category row", () => {
+  const groups = groupCatalogSources([
+    { item: item("Raro"), sources: [source({
+      filter_key: "docks", type: "docks_possible_offer", label: "Docas", name: "Mercante Ferreiro",
+      price: 180, requirement: "Docas Nv. 2+",
+    })] },
+    { item: item("Épico"), sources: [source({
+      filter_key: "docks", type: "docks_possible_offer", label: "Docas", name: "Mercante das Brumas",
+      price: 260, requirement: "Docas Nv. 5+",
+    })] },
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].entries.length, 1);
+  assert.deepEqual(groups[0].entries[0].variants.map(({ source: row }) => [row.name, row.price, row.requirement]), [
+    ["Mercante Ferreiro", 180, "Docas Nv. 2+"],
+    ["Mercante das Brumas", 260, "Docas Nv. 5+"],
+  ]);
+});
+
 test("gathering level bands for one material remain consultable in one collection row", () => {
   const groups = groupCatalogSources([
     { item: item("Comum", { item_type: "material", item_type_label: "Material", family: "wood" }), sources: [source({
@@ -73,10 +109,7 @@ test("gathering level bands for one material remain consultable in one collectio
   assert.equal(groups.length, 1);
   assert.equal(groups[0].entries.length, 1);
   assert.deepEqual(groups[0].entries[0].rarities, ["Comum", "Raro"]);
-  assert.deepEqual(groups[0].entries[0].variants.map((variant) => [
-    variant.source.minimum_guild_level, variant.source.requirement,
-  ]), [
-    [1, "Coleta de madeira; níveis da guilda 1–10"],
-    [41, "Coleta de madeira; níveis da guilda 41–50"],
-  ]);
+  assert.equal(groups[0].entries[0].minimumGuildLevel, 1);
+  assert.equal(groups[0].entries[0].variants.length, 1);
+  assert.deepEqual(groups[0].entries[0].variants[0].rarities, ["Comum", "Raro"]);
 });

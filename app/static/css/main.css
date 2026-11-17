@@ -2146,6 +2146,7 @@ textarea {
 .class-requirement-state--ready { border: 1px solid #568859; color: #9bd498; background: #20392e; }
 .class-requirement-state--pending { border: 1px solid #9c7b36; color: #e6b965; background: #393321; }
 .class-requirement-state--empty { border: 1px solid #59686a; color: var(--parchment); background: #263539; }
+.class-requirement-state--occupied { border: 1px solid #496b79; color: #82bed9; background: #1d333c; }
 .class-requirement-checks { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
 .class-requirement-checks li { display: grid; grid-template-columns: minmax(90px, .55fr) minmax(0, 1fr) auto; align-items: baseline; gap: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.07); font-size: .8rem; }
 .class-requirement-checks li > span { color: var(--muted); overflow-wrap: anywhere; }

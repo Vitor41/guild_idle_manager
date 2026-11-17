@@ -69,7 +69,7 @@
       const slot = item.equipment_slot ? ` · ${item.equipment_slot}` : "";
       const itemLabel = `${item.name} · ${item.item_type_label}${slot}`;
       for (const source of sources || []) {
-        const key = JSON.stringify([source.filter_key || "none", source.type, source.label, source.name || ""]);
+        const key = JSON.stringify([source.type, source.label]);
         if (!grouped.has(key)) grouped.set(key, { source, entries: [] });
         const entries = grouped.get(key).entries;
         const equivalent = entries.find((entry) => entry.item.name === item.name &&
@@ -79,13 +79,20 @@
         if (equivalent) {
           if (!equivalent.rarities.includes(item.rarity)) equivalent.rarities.push(item.rarity);
         } else {
-          entry = { item, itemLabel, source, rarities: [], variants: [] };
+          entry = { item, itemLabel, source, rarities: [], variants: [], minimumGuildLevel: undefined };
           entries.push(entry);
         }
         if (!entry.rarities.includes(item.rarity)) entry.rarities.push(item.rarity);
-        const variantKey = JSON.stringify([source.recommendation || "", source.requirement || "",
+        if (source.type === "gathering" && Number.isFinite(Number(source.minimum_guild_level))) {
+          const minimumGuildLevel = Number(source.minimum_guild_level);
+          entry.minimumGuildLevel = entry.minimumGuildLevel === undefined
+            ? minimumGuildLevel : Math.min(entry.minimumGuildLevel, minimumGuildLevel);
+        }
+        const gathering = source.type === "gathering";
+        const variantKey = JSON.stringify([source.name && source.name !== source.label ? source.name : "",
+          source.recommendation || "", gathering ? "" : source.requirement || "",
           source.chance || "", source.quantity || "", source.price ?? "", source.condition || "",
-          source.minimum_guild_level ?? null]);
+          gathering ? null : source.minimum_guild_level ?? null]);
         let variant = entry.variants.find((row) => row.key === variantKey);
         if (!variant) {
           variant = { key: variantKey, source, rarities: [] };

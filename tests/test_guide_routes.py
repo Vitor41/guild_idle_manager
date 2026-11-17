@@ -75,7 +75,7 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("guide-catalog-icon-fallback", (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8"))
         self.assertIn('data-filter-source', html)
         self.assertIn('data-guide-catalog-retry', html)
-        self.assertLess(html.index("/static/js/guide-utils.js?v=20261117-1"), html.index("/static/js/guide.js?v=20261117-1"))
+        self.assertLess(html.index("/static/js/guide-utils.js?v=20261117-2"), html.index("/static/js/guide.js?v=20261117-2"))
         script = (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8")
         self.assertIn("addEventListener(\"submit\"", script)
         self.assertIn("document.createTreeWalker", script)
@@ -196,7 +196,53 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("[Épico]", source_lines[0])
         self.assertIn("4% base", source_lines[0])
 
-    def test_markdown_keeps_gathering_ranges_in_one_row_with_minimum_start(self):
+    def test_markdown_uses_one_category_line_for_multiple_bosses_and_dock_merchants(self):
+        base = {
+            "name": "Espada Solar", "item_type": "equipment", "item_type_label": "Equipamento",
+            "family": "", "equipment_slot": "sword", "level_band": "1-10", "item_level": 5,
+            "tier": 2, "sources": [],
+        }
+        catalog = {"items": [
+            {**base, "id": 1, "rarity": "Raro", "sources": [{
+                "type": "dungeon_or_boss", "label": "Chefes", "name": "Dragão do Norte",
+                "recommendation": "mercenário nível 18+", "requirement": "guilda nível 5+",
+                "chance": "12% base", "quantity": "1 unidade", "price": None, "condition": "",
+            }]},
+            {**base, "id": 2, "rarity": "Épico", "sources": [{
+                "type": "dungeon_or_boss", "label": "Chefes", "name": "Hidra",
+                "recommendation": "mercenário nível 22+", "requirement": "guilda nível 8+",
+                "chance": "4% base", "quantity": "1 unidade", "price": None, "condition": "",
+            }]},
+            {**base, "id": 3, "rarity": "Lendário", "sources": [{
+                "type": "docks_possible_offer", "label": "Docas", "name": "Mercante Ferreiro",
+                "recommendation": "", "requirement": "Docas nível 2+", "chance": "—",
+                "quantity": "1 unidade", "price": 180, "condition": "",
+            }]},
+            {**base, "id": 4, "rarity": "Mítico", "sources": [{
+                "type": "docks_possible_offer", "label": "Docas", "name": "Mercante das Brumas",
+                "recommendation": "", "requirement": "Docas nível 5+", "chance": "—",
+                "quantity": "1 unidade", "price": 260, "condition": "",
+            }]},
+        ]}
+
+        markdown = _catalog_markdown(catalog)
+        source_lines = [line for line in markdown.splitlines() if line.startswith("- **Raridade(s):")]
+        boss_line = next(line for line in source_lines if "· Chefes**" in line)
+        docks_line = next(line for line in source_lines if "· Docas**" in line)
+
+        self.assertEqual(len(source_lines), 2)
+        self.assertIn("Fonte: Dragão do Norte", boss_line)
+        self.assertIn("12% base", boss_line)
+        self.assertIn("Fonte: Hidra", boss_line)
+        self.assertIn("4% base", boss_line)
+        self.assertLess(boss_line.index("Fonte: Dragão do Norte"), boss_line.index("12% base"))
+        self.assertLess(boss_line.index("Fonte: Hidra"), boss_line.index("4% base"))
+        self.assertIn("Fonte: Mercante Ferreiro", docks_line)
+        self.assertIn("Preço unitário: 180 ouro", docks_line)
+        self.assertIn("Fonte: Mercante das Brumas", docks_line)
+        self.assertIn("Preço unitário: 260 ouro", docks_line)
+
+    def test_markdown_hides_gathering_bands_and_shows_only_minimum_guild_level(self):
         base = {
             "name": "Madeira Arcana", "item_type": "material", "item_type_label": "Material",
             "family": "wood", "equipment_slot": "", "level_band": "1-10", "item_level": 1,
@@ -211,6 +257,7 @@ class GuideRouteTests(unittest.TestCase):
             **base["sources"][0],
             "requirement": "Coleta de madeira; níveis da guilda 41–50",
             "minimum_guild_level": 41,
+            "chance": "4% base",
         }
         catalog = {"items": [
             {**base, "id": 1, "rarity": "Comum"},
@@ -224,12 +271,15 @@ class GuideRouteTests(unittest.TestCase):
         source_lines = [line for line in markdown.splitlines() if line.startswith("- **Raridade(s):")]
         self.assertEqual(len(source_lines), 1)
         self.assertIn("Raridade(s): Comum, Raro · Coleta", source_lines[0])
-        self.assertIn("Nível inicial listado: 1 da guilda", source_lines[0])
-        self.assertIn("disponibilidade pode variar por faixa", source_lines[0])
+        self.assertIn("A partir da guilda Nv. 1", source_lines[0])
         self.assertIn("[Comum]", source_lines[0])
-        self.assertIn("níveis da guilda 1–10", source_lines[0])
+        self.assertIn("Chance: sem chance para unidade-base", source_lines[0])
         self.assertIn("[Raro]", source_lines[0])
-        self.assertIn("níveis da guilda 41–50", source_lines[0])
+        self.assertIn("Chance: 4% base", source_lines[0])
+        self.assertNotIn("níveis da guilda", source_lines[0])
+        self.assertNotIn("1–10", source_lines[0])
+        self.assertNotIn("41–50", source_lines[0])
+        self.assertNotIn("disponibilidade pode variar", source_lines[0])
 
     def test_markdown_consolidates_same_item_across_tier_and_level_variants(self):
         base = {

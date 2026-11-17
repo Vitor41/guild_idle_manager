@@ -136,10 +136,10 @@
       const heading = document.createElement("th");
       heading.scope = "rowgroup";
       heading.colSpan = 5;
-      heading.textContent = group.source.name ? `${group.source.label} · ${group.source.name}` : group.source.label;
+      heading.textContent = group.source.label;
       headingRow.append(heading);
       rowsNode.append(headingRow);
-      for (const { item, itemLabel, source, rarities, variants } of group.entries) {
+      for (const { item, itemLabel, source, rarities, variants, minimumGuildLevel: entryMinimumGuildLevel } of group.entries) {
         const row = document.createElement("tr");
         row.dataset.guideCatalogRow = "";
         row.dataset.guideItemId = String(item.id);
@@ -153,31 +153,34 @@
         const sourceName = document.createElement("strong");
         sourceName.textContent = source.label;
         sourceCell.append(sourceName);
-        if (source.name && source.name !== source.label) {
+        if (variants.length === 1 && source.name && source.name !== source.label) {
           const detail = document.createElement("small");
           detail.textContent = source.name;
           sourceCell.append(document.createElement("br"), detail);
         }
         const minimumGuildLevel = source.type === "gathering"
-          ? variants.map((variant) => Number(variant.source.minimum_guild_level)).filter(Number.isFinite).sort((a, b) => a - b)[0]
+          ? entryMinimumGuildLevel
           : undefined;
         if (minimumGuildLevel !== undefined) {
           const levelNote = document.createElement("small");
-          levelNote.textContent = `Nível inicial listado: ${minimumGuildLevel} da guilda; disponibilidade varia por faixa.`;
+          levelNote.textContent = `A partir da guilda Nv. ${minimumGuildLevel}`;
           sourceCell.append(document.createElement("br"), levelNote);
         }
-        if (variants.length > 1) {
+        if (variants.length > 1 || source.type === "gathering") {
           const conditions = document.createElement("details");
           conditions.className = "guide-catalog-conditions";
           const summary = document.createElement("summary");
-          summary.textContent = `Consultar ${variants.length} condições`;
+          summary.textContent = variants.length === 1 ? "Consultar detalhes" : `Consultar ${variants.length} condições`;
           const list = document.createElement("ul");
           for (const variant of variants) {
             const detail = document.createElement("li");
             const parts = [];
+            if (variant.source.name && variant.source.name !== variant.source.label) {
+              parts.push(`Fonte: ${variant.source.name}`);
+            }
             if (variant.rarities.length) parts.push(`Raridade(s): ${variant.rarities.join(", ")}`);
             if (variant.source.recommendation) parts.push(`Recomendação: ${variant.source.recommendation}`);
-            parts.push(`Requisito: ${variant.source.requirement}`);
+            if (variant.source.type !== "gathering") parts.push(`Requisito: ${variant.source.requirement}`);
             parts.push(`Chance: ${variant.source.chance}`);
             parts.push(`Quantidade: ${variant.source.quantity}`);
             if (variant.source.price) parts.push(`Preço unitário: ${variant.source.price} ouro`);

@@ -13,7 +13,7 @@ from app.database.connection import SessionLocal, configure_database, create_dat
 from app.models.campaign import CampaignMetadata
 from app.models.class_change import ClassTransitionOption
 from app.models.content import ContentSeedRun
-from app.models.dock import MerchantTemplate
+from app.models.dock import MerchantOfferTemplate, MerchantTemplate
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild, GuildResources
 from app.models.item import DungeonTemplateItemDrop, GuildInventoryItem, ItemTemplate, MissionTemplateItemDrop
@@ -22,7 +22,12 @@ from app.models.mission import MissionRun, MissionTemplate
 from app.models.mercenary import Mercenary, MercenaryClass
 from app.models.regional import RegionalCycle, RegionalOffer
 from app.seeds.massive_content import PACK_KEY, PACK_VERSION
-from app.services.campaign_service import CampaignService
+from app.services.campaign_service import (
+    CLASS_TREE_REPAIR_PACK_KEY,
+    CLASS_TREE_REPAIR_VERSION,
+    CampaignService,
+)
+from app.services.economy_pricing_service import equipment_base_sell_value
 from app.services.class_change_service import get_class_change_page_context
 from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.regional_cycle_service import CYCLE_SECONDS, get_regional_board
@@ -83,6 +88,186 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     self.assertEqual(board["cycle"].content_version, PACK_VERSION)
             finally:
                 campaigns.close_active_campaign(campaign.campaign_id)
+
+    def test_v6_class_tree_backfill_preserves_economy_snapshots_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Árvore v6", "Guilda Árvore v6")
+            self.assertEqual(created.content_version, 6)
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            active = False
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    self.assertEqual(metadata.content_version, 6)
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 6,
+                    )))
+                    self.assertFalse(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 7,
+                    )))
+                    self.assertIsNone(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )))
+
+                    equipment_candidates = db.scalars(select(ItemTemplate).where(
+                        ItemTemplate.content_pack == PACK_KEY,
+                        ItemTemplate.item_type == "equipment",
+                    ))
+                    equipment = next((item for item in equipment_candidates
+                        if max(2, int((item.item_level + 4) * max(1, item.tier) * 1.8))
+                        != equipment_base_sell_value(item.equipment_slot, item.rarity)), None)
+                    self.assertIsNotNone(equipment, "v6 fixture needs an equipment whose legacy price is re-priced by the v7 seed")
+                    legacy_price = max(2, int((equipment.item_level + 4) * max(1, equipment.tier) * 1.8))
+                    self.assertNotEqual(legacy_price, equipment_base_sell_value(equipment.equipment_slot, equipment.rarity))
+                    equipment.base_sell_value = legacy_price
+
+                    merchant_offer = db.scalar(select(MerchantOfferTemplate).where(
+                        MerchantOfferTemplate.item_template_id == equipment.id,
+                    ).order_by(MerchantOfferTemplate.id))
+                    self.assertIsNotNone(merchant_offer)
+                    merchant_offer.base_price = 4321
+                    offer_price = merchant_offer.base_price
+
+                    cycle = RegionalCycle(
+                        campaign_id=created.campaign_id, cycle_number=999,
+                        starts_at_utc=datetime(2026, 11, 1, tzinfo=timezone.utc),
+                        ends_at_utc=datetime(2026, 11, 2, tzinfo=timezone.utc),
+                        seed="legacy-v6-snapshot", rules_version="v6-fixture", content_version=6,
+                        player_level_snapshot=17, player_power_snapshot=314, rank_weights_json="{}",
+                    )
+                    db.add(cycle)
+                    db.flush()
+                    offer = RegionalOffer(
+                        campaign_id=created.campaign_id, cycle_id=cycle.id, cycle_number=cycle.cycle_number,
+                        region_code="vale-fronteira", offer_type="contract", slot=999,
+                        rank="S", name_snapshot="Contrato v6 congelado", description_snapshot="Descrição original.",
+                        level_band_snapshot="1-20", recommended_level_snapshot=17,
+                        recommended_power_snapshot=314, duration_seconds_snapshot=7200,
+                        gold_reward_snapshot=1234, xp_reward_snapshot=456, success_chance_snapshot=67,
+                        status="in_progress",
+                    )
+                    db.add(offer)
+                    db.flush()
+                    offer_id = offer.id
+                    offer_snapshot = (
+                        offer.name_snapshot, offer.description_snapshot, offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot, offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot, offer.success_chance_snapshot,
+                    )
+
+                    db.execute(delete(ClassTransitionOption))
+                    for mercenary_class in db.scalars(select(MercenaryClass)):
+                        mercenary_class.parent_class_id = None
+                    db.commit()
+                    equipment_id = equipment.id
+                    transition_count_before = db.scalar(select(func.count()).select_from(ClassTransitionOption))
+                    self.assertEqual(transition_count_before, 0)
+
+                activated = campaigns.activate_campaign(created.campaign_id)
+                active = True
+                self.assertEqual(activated.content_version, 6)
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    self.assertEqual(metadata.content_version, 6)
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 6,
+                    )))
+                    self.assertFalse(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 7,
+                    )))
+                    self.assertEqual(db.scalar(select(func.count()).select_from(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )), 1)
+                    transitions = list(db.scalars(select(ClassTransitionOption)))
+                    self.assertGreater(len(transitions), 0)
+                    self.assertGreater(db.scalar(select(func.count()).select_from(MercenaryClass).where(
+                        MercenaryClass.parent_class_id.is_not(None),
+                    )), 0)
+                    equipment = db.get(ItemTemplate, equipment_id)
+                    self.assertEqual(equipment.base_sell_value, legacy_price)
+                    self.assertEqual(db.scalar(select(MerchantOfferTemplate.base_price).where(
+                        MerchantOfferTemplate.item_template_id == equipment_id,
+                    ).order_by(MerchantOfferTemplate.id)), offer_price)
+                    offer = db.get(RegionalOffer, offer_id)
+                    self.assertEqual((
+                        offer.name_snapshot, offer.description_snapshot, offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot, offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot, offer.success_chance_snapshot,
+                    ), offer_snapshot)
+                    transition_count_after = len(transitions)
+
+                campaigns.close_active_campaign(created.campaign_id)
+                active = False
+                reopened = campaigns.activate_campaign(created.campaign_id)
+                active = True
+                self.assertEqual(reopened.content_version, 6)
+                with factory() as db:
+                    self.assertEqual(db.scalar(select(func.count()).select_from(ClassTransitionOption)), transition_count_after)
+                    self.assertEqual(db.scalar(select(func.count()).select_from(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )), 1)
+                    self.assertEqual(db.get(ItemTemplate, equipment_id).base_sell_value, legacy_price)
+                    offer = db.get(RegionalOffer, offer_id)
+                    self.assertEqual((
+                        offer.name_snapshot, offer.description_snapshot, offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot, offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot, offer.success_chance_snapshot,
+                    ), offer_snapshot)
+            finally:
+                if active:
+                    campaigns.close_active_campaign(created.campaign_id)
+                engine.dispose()
+
+    def test_v5_campaign_still_runs_content_pack_upgrade_before_class_tree_repair(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Conteúdo v5", "Guilda Conteúdo v5")
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            active = False
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    metadata.content_version = 5
+                    db.execute(delete(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    ))
+                    db.add(ContentSeedRun(
+                        pack_key=PACK_KEY, version=5, report_json='{"fixture":"v5"}',
+                        applied_at=datetime(2026, 11, 1, tzinfo=timezone.utc),
+                    ))
+                    db.execute(delete(ClassTransitionOption))
+                    for mercenary_class in db.scalars(select(MercenaryClass)):
+                        mercenary_class.parent_class_id = None
+                    db.commit()
+
+                activated = campaigns.activate_campaign(created.campaign_id)
+                active = True
+                self.assertEqual(activated.content_version, PACK_VERSION)
+                with factory() as db:
+                    self.assertEqual(db.get(CampaignMetadata, created.campaign_id).content_version, PACK_VERSION)
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    )))
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 5,
+                    )))
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )))
+                    self.assertGreater(db.scalar(select(func.count()).select_from(ClassTransitionOption)), 0)
+            finally:
+                if active:
+                    campaigns.close_active_campaign(created.campaign_id)
+                engine.dispose()
 
     def test_legacy_campaign_restores_missing_class_paths_without_rewriting_existing_options(self):
         with tempfile.TemporaryDirectory() as temp_dir:
