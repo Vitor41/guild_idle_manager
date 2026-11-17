@@ -122,7 +122,9 @@
     rowsNode.replaceChildren();
     const visibleItems = new Set();
     const anchorAdded = new Set();
-    const selectedFilters = Object.fromEntries(Object.entries(filters).map(([key, control]) => [key, control?.value || "all"]));
+    const selectedFilters = Object.fromEntries(Object.entries(filters).map(([key, control]) => [
+      key, control?.value ?? (key === "name" ? "" : "all"),
+    ]));
     const visibleRows = utils.filterCatalog(catalogItems, selectedFilters);
     visibleRows.forEach(({ item }) => visibleItems.add(item.id));
     const groups = utils.groupCatalogSources(visibleRows).sort((left, right) =>
@@ -161,11 +163,6 @@
         const minimumGuildLevel = source.type === "gathering"
           ? entryMinimumGuildLevel
           : undefined;
-        if (minimumGuildLevel !== undefined) {
-          const levelNote = document.createElement("small");
-          levelNote.textContent = `A partir da guilda Nv. ${minimumGuildLevel}`;
-          sourceCell.append(document.createElement("br"), levelNote);
-        }
         if (variants.length > 1 || source.type === "gathering") {
           const conditions = document.createElement("details");
           conditions.className = "guide-catalog-conditions";
@@ -234,7 +231,9 @@
           return values.length === 1 ? values[0] : "Varia por condição; consulte as condições desta linha.";
         };
         const reqCell = document.createElement("td"); reqCell.dataset.label = "Requisito";
-        reqCell.textContent = summaryFor("requirement");
+        reqCell.textContent = source.type === "gathering"
+          ? `A partir da guilda Nv. ${minimumGuildLevel ?? "—"}`
+          : summaryFor("requirement");
         const priceValues = [...new Set(variants.map((variant) => variant.source.price).filter(Boolean))];
         if (priceValues.length === 1) reqCell.textContent += `; preço unitário registrado: ${priceValues[0]} ouro`;
         else if (priceValues.length > 1) reqCell.textContent += "; preços variam por condição, consulte as condições desta linha";

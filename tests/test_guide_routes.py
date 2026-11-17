@@ -75,7 +75,7 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("guide-catalog-icon-fallback", (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8"))
         self.assertIn('data-filter-source', html)
         self.assertIn('data-guide-catalog-retry', html)
-        self.assertLess(html.index("/static/js/guide-utils.js?v=20261117-2"), html.index("/static/js/guide.js?v=20261117-2"))
+        self.assertLess(html.index("/static/js/guide-utils.js?v=20261117-3"), html.index("/static/js/guide.js?v=20261117-3"))
         script = (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8")
         self.assertIn("addEventListener(\"submit\"", script)
         self.assertIn("document.createTreeWalker", script)

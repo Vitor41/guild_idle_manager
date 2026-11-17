@@ -543,15 +543,17 @@ class CampaignService:
         return info
 
     def activate_campaign_with_migration(
-        self, campaign_id: str, mark_active: bool = True
+        self, campaign_id: str, mark_active: bool = True, prepare_content: bool | None = None
     ) -> tuple[CampaignInfo, CampaignMigration | None]:
+        if prepare_content is None:
+            prepare_content = mark_active
         path = self._path_for(campaign_id)
         if not path.is_file():
             raise FileNotFoundError("Arquivo da campanha não encontrado.")
         self._validate_campaign_before_open(path, str(UUID(campaign_id)))
         migration = self._ensure_schema(path, str(UUID(campaign_id)))
         info = self.inspect_campaign(campaign_id)
-        if mark_active:
+        if prepare_content:
             content_engine = create_database_engine(f"sqlite:///{info.database_path.as_posix()}")
             content_factory = sessionmaker(bind=content_engine, autoflush=False, expire_on_commit=False)
             try:

@@ -60,7 +60,7 @@ class ClassChangeAndEquipmentUiContractTests(unittest.TestCase):
 
         self.assertIn("[source.type, source.label]", utils)
         self.assertIn("Fonte: ${variant.source.name}", guide)
-        self.assertIn("A partir da guilda Nv. ${minimumGuildLevel}", guide)
+        self.assertIn('`A partir da guilda Nv. ${minimumGuildLevel ?? "—"}`', guide)
         self.assertIn('variant.source.type !== "gathering"', guide)
         self.assertNotIn("Nível inicial listado:", guide)
         self.assertNotIn("disponibilidade varia por faixa", guide)

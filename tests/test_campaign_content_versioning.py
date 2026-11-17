@@ -4,12 +4,15 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.database.connection import SessionLocal, configure_database, create_database_engine
+from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
+from app.desktop.lifecycle import close_campaign, open_campaign_with_migration
 from app.models.campaign import CampaignMetadata
 from app.models.class_change import ClassTransitionOption
 from app.models.content import ContentSeedRun
@@ -96,6 +99,12 @@ class CampaignContentVersioningTests(unittest.TestCase):
             self.assertEqual(created.content_version, 6)
             engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
             factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            app = SimpleNamespace(state=SimpleNamespace(active_campaign=None, suspended_campaigns=set()))
+            clock_guard = ClockGuard(
+                anchor_store=MemoryAnchorStore(),
+                wall_clock=lambda: datetime(2026, 11, 17, tzinfo=timezone.utc),
+                monotonic_clock=lambda: 1.0,
+            )
             active = False
             try:
                 with factory() as db:
@@ -166,8 +175,11 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     transition_count_before = db.scalar(select(func.count()).select_from(ClassTransitionOption))
                     self.assertEqual(transition_count_before, 0)
 
-                activated = campaigns.activate_campaign(created.campaign_id)
+                activated, summary, _migration = open_campaign_with_migration(
+                    app, campaigns, clock_guard, created.campaign_id,
+                )
                 active = True
+                self.assertIsNone(summary)
                 self.assertEqual(activated.content_version, 6)
                 with factory() as db:
                     metadata = db.get(CampaignMetadata, created.campaign_id)
@@ -200,10 +212,13 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     ), offer_snapshot)
                     transition_count_after = len(transitions)
 
-                campaigns.close_active_campaign(created.campaign_id)
+                close_campaign(app, campaigns, clock_guard)
                 active = False
-                reopened = campaigns.activate_campaign(created.campaign_id)
+                reopened, summary, _migration = open_campaign_with_migration(
+                    app, campaigns, clock_guard, created.campaign_id,
+                )
                 active = True
+                self.assertIsNone(summary)
                 self.assertEqual(reopened.content_version, 6)
                 with factory() as db:
                     self.assertEqual(db.scalar(select(func.count()).select_from(ClassTransitionOption)), transition_count_after)
@@ -220,7 +235,7 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     ), offer_snapshot)
             finally:
                 if active:
-                    campaigns.close_active_campaign(created.campaign_id)
+                    close_campaign(app, campaigns, clock_guard)
                 engine.dispose()
 
     def test_v5_campaign_still_runs_content_pack_upgrade_before_class_tree_repair(self):
