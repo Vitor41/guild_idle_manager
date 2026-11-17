@@ -44,14 +44,16 @@ class ClassChangePresentationTests(unittest.TestCase):
         self.assertEqual([check["shortfall"] for check in cards[0]["checks"]], [300, 1, 2, 2])
         self.assertEqual(cards[0]["eligible_count"], 0)
 
-    def test_global_requirements_without_available_eligible_worker_are_explicit(self):
+    def test_busy_worker_does_not_satisfy_available_mercenary_level_check(self):
         cards = self._cards(workers=[
             {"id": 1, "class_id": 10, "level": 30, "status": "busy"},
         ])
 
         self.assertEqual(cards[0]["state"], "Sem mercenário elegível")
         self.assertEqual(cards[0]["eligible_count"], 0)
-        self.assertTrue(cards[0]["checks"][3]["met"])
+        self.assertFalse(cards[0]["checks"][3]["met"])
+        self.assertEqual(cards[0]["checks"][3]["current"], 0)
+        self.assertEqual(cards[0]["checks"][3]["shortfall"], 20)
 
     def test_equivalent_paths_are_grouped_and_requirement_variants_remain_separate(self):
         second_path = {**self.transition, "from_class_id": 11}

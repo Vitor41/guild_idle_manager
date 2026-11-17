@@ -568,6 +568,14 @@ class CampaignService:
                         deactivate_legacy_defaults=False,
                         repair_required_gathering_materials=True,
                     )
+                    # Old campaigns may predate the class transition catalog. Add
+                    # missing paths while preserving every existing option's rules.
+                    from app.services.class_service import seed_class_tree
+                    seed_class_tree(
+                        db,
+                        update_existing_transition_requirements=False,
+                        canonical_transitions_only=True,
+                    )
                     from app.services.gathering_service import freeze_legacy_assignment_targets
                     freeze_legacy_assignment_targets(db)
                     metadata.content_version = PACK_VERSION

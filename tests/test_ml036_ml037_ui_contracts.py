@@ -24,6 +24,7 @@ class ClassChangeAndEquipmentUiContractTests(unittest.TestCase):
         template = (ROOT / "app/templates/mercenaries/detail.html").read_text(encoding="utf-8")
         css = (ROOT / "app/static/css/main.css").read_text(encoding="utf-8")
         script = (ROOT / "app/static/js/equipment-details.js").read_text(encoding="utf-8")
+        base = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
 
         self.assertIn("FORTE {{ bonus.label }} +{{ bonus.strong_value }}", template)
         self.assertIn("= +{{ bonus.total_value }} aplicado", template)
@@ -31,8 +32,12 @@ class ClassChangeAndEquipmentUiContractTests(unittest.TestCase):
         self.assertIn("{{ bonus.label }} +{{ bonus.normal_value }}", template)
         self.assertNotIn("Total aplicado", template)
         self.assertIn("rarity-", template)
-        self.assertIn(".equipment-slot.filled { border: 1px solid #375057", css)
-        self.assertIn("background: #203035", css)
+        slot_rule = css.split(".equipment-slot.filled {", 1)[1].split("}", 1)[0]
+        self.assertIn("border-left: 3px solid var(--rarity-color", slot_rule)
+        self.assertIn("background: #203035", slot_rule)
+        self.assertNotIn("linear-gradient", slot_rule)
+        self.assertEqual(css.count(".equipment-slot.filled {"), 1)
+        self.assertIn("?v=20261117-1", base)
         self.assertIn("aria-expanded=\"false\"", template)
         self.assertIn("event.key === \"Escape\"", script)
 

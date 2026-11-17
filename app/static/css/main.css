@@ -1872,10 +1872,9 @@ textarea {
 }
 
 .equipment-slot.filled {
-  border-color: rgba(210, 168, 74, 0.65);
-  background:
-    linear-gradient(180deg, rgba(210, 168, 74, 0.12), rgba(0, 0, 0, 0.18)),
-    var(--surface-2);
+  border: 1px solid #375057;
+  border-left: 3px solid var(--rarity-color, #375057);
+  background: #203035;
   color: var(--text);
 }
 
@@ -2493,7 +2492,6 @@ tr:hover td {
 .equipment-slot .slot-icon { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 6px; }
 .equipment-slot .slot-item-icon { width: 42px; height: 42px; object-fit: contain; object-position: center; }
 .equipment-slot strong { margin-top: 5px; }
-.equipment-slot.filled { border: 1px solid #375057; border-left: 3px solid var(--rarity-color, #375057); background: #203035; }
 .class-requirement-checks li { grid-template-columns: minmax(76px, .45fr) minmax(0, 1fr); }
 .class-requirement-checks li > b { grid-column: 2; text-align: left; }
 
@@ -2672,6 +2670,11 @@ html { scroll-behavior: smooth; }
 .guide-catalog-rarity--lendario { border-color: #d2a84a; }
 .guide-catalog-rarity--mitico { border-color: #e0709b; }
 .guide-catalog-icon-fallback { display: inline-grid; width: 44px; height: 44px; margin: 0 8px 0 0; place-items: center; border: 1px solid var(--border); border-radius: 6px; color: var(--gold-2); font-size: 1.4rem; vertical-align: middle; }
+.guide-catalog-conditions { margin-top: 7px; font-size: .78rem; }
+.guide-catalog-conditions summary { color: var(--gold-2); cursor: pointer; }
+.guide-catalog-conditions summary:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; border-radius: 3px; }
+.guide-catalog-conditions ul { display: grid; gap: 6px; margin: 7px 0 0; padding-left: 18px; }
+.guide-catalog-conditions li { overflow-wrap: anywhere; }
 .guide-catalog-table tr:last-child td { border-bottom: 0; }
 .guide-catalog-table tr[id] { scroll-margin-top: 128px; }
 .guide-catalog-table [data-label]::before { display: none; }

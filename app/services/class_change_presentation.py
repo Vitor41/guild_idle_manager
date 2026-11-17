@@ -42,8 +42,8 @@ def build_transition_stage_cards(
             worker for worker in mercenaries
             if int(worker["class_id"]) in from_class_ids
         ]
-        current_mercenary_level = max((int(worker["level"]) for worker in matching_workers), default=0)
         available_workers = [worker for worker in matching_workers if worker["status"] == "available"]
+        current_mercenary_level = max((int(worker["level"]) for worker in available_workers), default=0)
         eligible_ids = {
             int(worker["id"])
             for worker in available_workers

@@ -139,7 +139,7 @@
       heading.textContent = group.source.name ? `${group.source.label} · ${group.source.name}` : group.source.label;
       headingRow.append(heading);
       rowsNode.append(headingRow);
-      for (const { item, itemLabel, source, rarities } of group.entries) {
+      for (const { item, itemLabel, source, rarities, variants } of group.entries) {
         const row = document.createElement("tr");
         row.dataset.guideCatalogRow = "";
         row.dataset.guideItemId = String(item.id);
@@ -153,10 +153,40 @@
         const sourceName = document.createElement("strong");
         sourceName.textContent = source.label;
         sourceCell.append(sourceName);
-        if (source.name) {
+        if (source.name && source.name !== source.label) {
           const detail = document.createElement("small");
           detail.textContent = source.name;
           sourceCell.append(document.createElement("br"), detail);
+        }
+        const minimumGuildLevel = source.type === "gathering"
+          ? variants.map((variant) => Number(variant.source.minimum_guild_level)).filter(Number.isFinite).sort((a, b) => a - b)[0]
+          : undefined;
+        if (minimumGuildLevel !== undefined) {
+          const levelNote = document.createElement("small");
+          levelNote.textContent = `Nível inicial listado: ${minimumGuildLevel} da guilda; disponibilidade varia por faixa.`;
+          sourceCell.append(document.createElement("br"), levelNote);
+        }
+        if (variants.length > 1) {
+          const conditions = document.createElement("details");
+          conditions.className = "guide-catalog-conditions";
+          const summary = document.createElement("summary");
+          summary.textContent = `Consultar ${variants.length} condições`;
+          const list = document.createElement("ul");
+          for (const variant of variants) {
+            const detail = document.createElement("li");
+            const parts = [];
+            if (variant.rarities.length) parts.push(`Raridade(s): ${variant.rarities.join(", ")}`);
+            if (variant.source.recommendation) parts.push(`Recomendação: ${variant.source.recommendation}`);
+            parts.push(`Requisito: ${variant.source.requirement}`);
+            parts.push(`Chance: ${variant.source.chance}`);
+            parts.push(`Quantidade: ${variant.source.quantity}`);
+            if (variant.source.price) parts.push(`Preço unitário: ${variant.source.price} ouro`);
+            if (variant.source.condition) parts.push(`Condição: ${variant.source.condition}`);
+            detail.textContent = parts.join(" · ");
+            list.append(detail);
+          }
+          conditions.append(summary, list);
+          sourceCell.append(document.createElement("br"), conditions);
         }
         const itemCell = document.createElement("td");
         itemCell.dataset.label = "Item";
@@ -196,12 +226,19 @@
           rarityList.append(badge);
         }
         itemCell.append(rarityList);
+        const summaryFor = (field, fallback = "—") => {
+          const values = [...new Set(variants.map((variant) => variant.source[field] || fallback))];
+          return values.length === 1 ? values[0] : "Varia por condição; consulte as condições desta linha.";
+        };
         const reqCell = document.createElement("td"); reqCell.dataset.label = "Requisito";
-        reqCell.textContent = source.price ? `${source.requirement}; preço unitário registrado: ${source.price} ouro` : source.requirement;
+        reqCell.textContent = summaryFor("requirement");
+        const priceValues = [...new Set(variants.map((variant) => variant.source.price).filter(Boolean))];
+        if (priceValues.length === 1) reqCell.textContent += `; preço unitário registrado: ${priceValues[0]} ouro`;
+        else if (priceValues.length > 1) reqCell.textContent += "; preços variam por condição, consulte as condições desta linha";
         const recommendationCell = document.createElement("td"); recommendationCell.dataset.label = "Recomendação";
-        recommendationCell.textContent = source.recommendation || "—";
-        const chanceCell = document.createElement("td"); chanceCell.dataset.label = "Chance"; chanceCell.textContent = source.chance;
-        const quantityCell = document.createElement("td"); quantityCell.dataset.label = "Quantidade"; quantityCell.textContent = source.quantity;
+        recommendationCell.textContent = summaryFor("recommendation");
+        const chanceCell = document.createElement("td"); chanceCell.dataset.label = "Chance"; chanceCell.textContent = summaryFor("chance");
+        const quantityCell = document.createElement("td"); quantityCell.dataset.label = "Quantidade"; quantityCell.textContent = summaryFor("quantity");
         row.append(sourceCell, itemCell, recommendationCell, reqCell, chanceCell, quantityCell);
         rowsNode.append(row);
       }

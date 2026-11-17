@@ -102,9 +102,14 @@ def build_guide_catalog(db) -> dict[str, object]:
                     reqs.append("3 Carnes + 2 Ervas; 5 segundos por unidade")
                 if raw.get("condition"):
                     reqs.append(clean_generated_name(raw["condition"]))
+                minimum_guild_level = None
+                if raw["type"] == "gathering":
+                    level_range = raw.get("guild_level_range") or [raw.get("guild_level", 1)]
+                    minimum_guild_level = min(int(level) for level in level_range)
                 sources.append({
                     "type": raw["type"], "filter_key": source_filter, "label": label,
                     "name": clean_generated_name(name),
+                    "minimum_guild_level": minimum_guild_level,
                     "recommendation": recommendation,
                     "requirement": "; ".join(reqs) if reqs else "sem requisito adicional registrado",
                     "chance": _chance_text(raw), "quantity": _quantity_text(raw, item["item_type"]),

@@ -11,10 +11,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database.connection import SessionLocal, configure_database, create_database_engine
 from app.models.campaign import CampaignMetadata
+from app.models.class_change import ClassTransitionOption
 from app.models.content import ContentSeedRun
 from app.models.dock import MerchantTemplate
 from app.models.dungeon import DungeonRun, DungeonTemplate
-from app.models.guild import Guild
+from app.models.guild import Guild, GuildResources
 from app.models.item import DungeonTemplateItemDrop, GuildInventoryItem, ItemTemplate, MissionTemplateItemDrop
 from app.models.content import ProfessionTemplate
 from app.models.mission import MissionRun, MissionTemplate
@@ -22,6 +23,7 @@ from app.models.mercenary import Mercenary, MercenaryClass
 from app.models.regional import RegionalCycle, RegionalOffer
 from app.seeds.massive_content import PACK_KEY, PACK_VERSION
 from app.services.campaign_service import CampaignService
+from app.services.class_change_service import get_class_change_page_context
 from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.regional_cycle_service import CYCLE_SECONDS, get_regional_board
 
@@ -81,6 +83,87 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     self.assertEqual(board["cycle"].content_version, PACK_VERSION)
             finally:
                 campaigns.close_active_campaign(campaign.campaign_id)
+
+    def test_legacy_campaign_restores_missing_class_paths_without_rewriting_existing_options(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Transições legadas", "Guilda Transições")
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            preserved_id = None
+            transition_count = 0
+            custom_class_id = None
+            active = False
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    apprentice = db.scalar(select(MercenaryClass).where(MercenaryClass.code == "apprentice"))
+                    custom = MercenaryClass(
+                        code="qa_custom_unlinked", name="Classe personalizada sem rota",
+                        display_name="Classe personalizada sem rota", description="Fixture isolado.",
+                        tier=1, parent_class_id=apprentice.id, required_level=20,
+                        allowed_weapon_profile="any", role_type="balanced",
+                        base_power=5, base_vitality=5, base_agility=5, base_intelligence=5, base_luck=5,
+                    )
+                    db.add(custom)
+                    db.flush()
+                    custom_class_id = custom.id
+                    transitions = list(db.scalars(select(ClassTransitionOption).order_by(ClassTransitionOption.id)))
+                    self.assertGreater(len(transitions), 1)
+                    self.assertEqual({row.to_class.tier for row in transitions}, {1, 2, 3})
+                    preserved = transitions[0]
+                    preserved_id = preserved.id
+                    preserved.required_guild_level = 13
+                    preserved.required_training_ground_level = 17
+                    preserved.gold_cost = 4321
+                    preserved.duration_seconds = 9876
+                    preserved.is_active = False
+                    db.execute(delete(ClassTransitionOption).where(ClassTransitionOption.id != preserved.id))
+                    metadata.content_version = PACK_VERSION - 1
+                    db.commit()
+
+                activated = campaigns.activate_campaign(created.campaign_id)
+                active = True
+                self.assertEqual(activated.content_version, PACK_VERSION)
+                with factory() as db:
+                    restored = list(db.scalars(select(ClassTransitionOption).order_by(ClassTransitionOption.id)))
+                    transition_count = len(restored)
+                    self.assertGreater(len(restored), 1)
+                    tiers = {row.to_class.tier for row in restored}
+                    self.assertEqual(tiers, {1, 2, 3})
+                    preserved = next(row for row in restored if row.id == preserved_id)
+                    self.assertEqual(preserved.required_guild_level, 13)
+                    self.assertEqual(preserved.required_training_ground_level, 17)
+                    self.assertEqual(preserved.gold_cost, 4321)
+                    self.assertEqual(preserved.duration_seconds, 9876)
+                    self.assertFalse(preserved.is_active)
+                    self.assertFalse(any(row.to_class_id == custom_class_id for row in restored))
+                    guild = db.scalar(select(Guild).where(Guild.campaign_id == created.campaign_id))
+                    resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
+                    page_context = get_class_change_page_context(db, guild, resources)
+                    self.assertEqual(
+                        [step["label"] for step in page_context["requirement_steps"]],
+                        ["1ª troca", "2ª troca", "3ª troca"],
+                    )
+                    self.assertTrue(all(step["eligible_count"] == 0 for step in page_context["requirement_steps"]))
+                    self.assertTrue(all(step["state"] == "Faltam requisitos" for step in page_context["requirement_steps"]))
+                    db.get(CampaignMetadata, created.campaign_id).content_version = PACK_VERSION - 1
+                    db.commit()
+
+                # Simulate retry after class rows committed but campaign metadata did not.
+                campaigns.activate_campaign(created.campaign_id)
+                with factory() as db:
+                    self.assertEqual(
+                        db.scalar(select(func.count()).select_from(ClassTransitionOption)),
+                        transition_count,
+                    )
+                    self.assertFalse(db.scalar(select(ClassTransitionOption.id).where(
+                        ClassTransitionOption.to_class_id == custom_class_id,
+                    )))
+            finally:
+                if active:
+                    campaigns.close_active_campaign(created.campaign_id)
+                engine.dispose()
 
     def test_legacy_migration_reactivates_only_required_meat_gathering_material(self):
         with tempfile.TemporaryDirectory() as temp_dir:

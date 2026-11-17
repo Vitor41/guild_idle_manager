@@ -75,7 +75,7 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("guide-catalog-icon-fallback", (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8"))
         self.assertIn('data-filter-source', html)
         self.assertIn('data-guide-catalog-retry', html)
-        self.assertLess(html.index("/static/js/guide-utils.js"), html.index("/static/js/guide.js"))
+        self.assertLess(html.index("/static/js/guide-utils.js?v=20261117-1"), html.index("/static/js/guide.js?v=20261117-1"))
         script = (Path(__file__).resolve().parents[1] / "app/static/js/guide.js").read_text(encoding="utf-8")
         self.assertIn("addEventListener(\"submit\"", script)
         self.assertIn("document.createTreeWalker", script)
@@ -84,7 +84,8 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("Nenhum resultado para", script)
         self.assertIn("catalogItems", script)
         self.assertIn('recommendationCell.dataset.label = "Recomendação"', script)
-        self.assertIn('source.recommendation || "—"', script)
+        self.assertIn('summaryFor("recommendation")', script)
+        self.assertIn('Varia por condição; consulte as condições desta linha.', script)
 
     def test_catalog_api_and_markdown_share_live_items_without_campaign_private_data(self):
         catalog_response = guide_catalog_api(self.db, self.user)
@@ -186,12 +187,72 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn(r"Recomendação: mercenário nível 12\+", markdown)
         self.assertNotIn("Requisito: mercenário nível", markdown)
         self.assertNotIn("Tier 2", markdown)
-        lines = [line for line in markdown.splitlines() if "base" in line]
-        self.assertEqual(len(lines), 2)
-        self.assertIn("Raridade(s): Raro", lines[0])
-        self.assertIn("10% base", lines[0])
-        self.assertIn("Raridade(s): Épico", lines[1])
-        self.assertIn("4% base", lines[1])
+        source_lines = [line for line in markdown.splitlines() if line.startswith("- **Raridade(s):")]
+        self.assertEqual(len(source_lines), 1)
+        self.assertIn("Raridade(s): Raro, Épico", source_lines[0])
+        self.assertIn("Variações:", source_lines[0])
+        self.assertIn("[Raro]", source_lines[0])
+        self.assertIn("10% base", source_lines[0])
+        self.assertIn("[Épico]", source_lines[0])
+        self.assertIn("4% base", source_lines[0])
+
+    def test_markdown_keeps_gathering_ranges_in_one_row_with_minimum_start(self):
+        base = {
+            "name": "Madeira Arcana", "item_type": "material", "item_type_label": "Material",
+            "family": "wood", "equipment_slot": "", "level_band": "1-10", "item_level": 1,
+            "tier": 1, "sources": [{
+                "type": "gathering", "label": "Coleta", "name": "Coleta",
+                "recommendation": "", "requirement": "Coleta de madeira; níveis da guilda 1–10",
+                "chance": "sem chance para unidade-base", "quantity": "1 unidade por ciclo",
+                "price": None, "condition": "seleção determinística por nível", "minimum_guild_level": 1,
+            }],
+        }
+        second_source = {
+            **base["sources"][0],
+            "requirement": "Coleta de madeira; níveis da guilda 41–50",
+            "minimum_guild_level": 41,
+        }
+        catalog = {"items": [
+            {**base, "id": 1, "rarity": "Comum"},
+            {**base, "id": 2, "tier": 5, "level_band": "41-50", "item_level": 45,
+                "rarity": "Raro", "sources": [second_source]},
+        ]}
+
+        markdown = _catalog_markdown(catalog)
+
+        self.assertEqual(markdown.count("### Madeira Arcana"), 1)
+        source_lines = [line for line in markdown.splitlines() if line.startswith("- **Raridade(s):")]
+        self.assertEqual(len(source_lines), 1)
+        self.assertIn("Raridade(s): Comum, Raro · Coleta", source_lines[0])
+        self.assertIn("Nível inicial listado: 1 da guilda", source_lines[0])
+        self.assertIn("disponibilidade pode variar por faixa", source_lines[0])
+        self.assertIn("[Comum]", source_lines[0])
+        self.assertIn("níveis da guilda 1–10", source_lines[0])
+        self.assertIn("[Raro]", source_lines[0])
+        self.assertIn("níveis da guilda 41–50", source_lines[0])
+
+    def test_markdown_consolidates_same_item_across_tier_and_level_variants(self):
+        base = {
+            "name": "Espada Solar", "item_type": "equipment", "item_type_label": "Equipamento",
+            "family": "", "equipment_slot": "sword", "level_band": "1-10", "item_level": 5,
+            "tier": 1, "sources": [{
+                "type": "dungeon_or_boss", "label": "Chefes", "name": "Dragão",
+                "recommendation": "mercenário nível 5+", "requirement": "guilda nível 5+",
+                "chance": "10% base", "quantity": "1 unidade", "price": None, "condition": "",
+            }],
+        }
+        catalog = {"items": [
+            {**base, "id": 1, "rarity": "Raro"},
+            {**base, "id": 2, "rarity": "Épico", "tier": 5, "level_band": "41-50", "item_level": 45},
+        ]}
+
+        markdown = _catalog_markdown(catalog)
+
+        self.assertEqual(markdown.count("### Espada Solar"), 1)
+        self.assertIn("Equipamento · espaço sword · raridade: Raro, Épico", markdown)
+        self.assertNotIn("faixa", markdown)
+        self.assertNotIn("Tier 5", markdown)
+        self.assertEqual(markdown.count("Raridade(s): Raro, Épico"), 1)
 
     def test_catalog_icon_urls_are_served_by_the_static_mount(self):
         import json
