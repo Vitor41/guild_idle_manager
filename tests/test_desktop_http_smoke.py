@@ -14,7 +14,7 @@ import gc, http.client, json, logging, os, re, socket, sqlite3, tempfile, thread
 from contextlib import closing
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from urllib.parse import unquote_plus
+from urllib.parse import parse_qs, unquote_plus, urlsplit
 from unittest.mock import patch
 os.environ["APP_MODE"] = "desktop"
 from app.main import app
@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         headers = {"Host": host}
         headers.update(extra_headers or {})
         if method not in {"GET", "HEAD"}:
-            headers["Origin"] = origin
+            headers.setdefault("Origin", origin)
         if body is not None:
             headers["Content-Type"] = "application/json" if body.startswith("{") else "application/x-www-form-urlencoded"
         client.request(method, path, body=body, headers=headers)
@@ -117,7 +117,11 @@ with tempfile.TemporaryDirectory() as data_dir:
             ItemTemplate.item_type == "equipment",
             ItemTemplate.equipment_slot.in_("helmet chest gloves boots main_hand off_hand necklace earring belt ring".split()),
         ).order_by(ItemTemplate.id).first()
-        assert guild and mercenary_class and item_template and equipment_template, "campaign must seed display entities for the desktop art smoke"
+        equipment_route_template = db.query(ItemTemplate).filter(
+            ItemTemplate.item_type == "equipment",
+            ItemTemplate.equipment_slot == "ring",
+        ).order_by(ItemTemplate.id).first()
+        assert guild and mercenary_class and item_template and equipment_template and equipment_route_template, "campaign must seed display entities for the desktop art smoke"
         guild_id = guild.id
         smoke_market_item_template_id = item_template.id
         mercenary_class_id = mercenary_class.id
@@ -163,6 +167,53 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=item_template.id, quantity=1))
         db.flush()
         mercenary_id = mercenary.id
+        equipment_route_mercenary = create_mercenary(db, guild.id, mercenary_class, "Equipamento HTTP")
+        db.flush()
+        equipment_route_equipped_item = GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=equipment_route_mercenary.id,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        equipment_route_second_equipped_item = GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=equipment_route_mercenary.id,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        equipment_route_free_item = GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=None,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        foreign_guild = Guild(campaign_id=None, name="Guilda externa do smoke", level=1)
+        db.add(foreign_guild)
+        db.flush()
+        foreign_mercenary = create_mercenary(db, foreign_guild.id, mercenary_class, "Mercenário externo")
+        foreign_item = GuildItemInstance(
+            guild_id=foreign_guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=None,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        db.add_all((
+            equipment_route_equipped_item,
+            equipment_route_second_equipped_item,
+            equipment_route_free_item,
+            foreign_item,
+        ))
+        db.flush()
+        equipment_route_mercenary_id = equipment_route_mercenary.id
+        equipment_route_equipped_item_id = equipment_route_equipped_item.id
+        equipment_route_second_equipped_item_id = equipment_route_second_equipped_item.id
+        equipment_route_free_item_id = equipment_route_free_item.id
+        foreign_mercenary_id = foreign_mercenary.id
+        foreign_item_id = foreign_item.id
         gathering_worker_id = gathering_worker.id
         meat_gathering_worker_id = meat_gathering_worker.id
         live_gathering_worker_id = live_gathering_worker.id
@@ -404,6 +455,139 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"FORTE FOR +12" in equipment_detail_page
         assert b"= +17 aplicado" in equipment_detail_page
         assert b"/static/js/equipment-details.js" in equipment_detail_page
+
+        def assert_equipment_error(location, expected_path, expected_reason):
+            assert location, "equipment rejection should preserve a safe return location"
+            parsed = urlsplit(location)
+            assert parsed.path == expected_path, location
+            query = parse_qs(parsed.query)
+            actual_reason = query.get("error", [""])[0]
+            assert expected_reason in actual_reason, f"expected={expected_reason!r}, actual={actual_reason!r}, location={location}"
+            diagnostic_id = query.get("diagnostic", [""])[0]
+            assert re.fullmatch(r"[a-fA-F0-9-]{16,40}", diagnostic_id), location
+            status, _detail_location, detail_body = request(location)
+            assert status == 200, (location, status, detail_body[:600])
+            assert expected_reason.encode("utf-8") in detail_body
+            assert b"Refer\xc3\xaancia de diagn\xc3\xb3stico" in detail_body
+            assert diagnostic_id.encode("ascii") in detail_body
+            return diagnostic_id
+
+        equipment_route = f"/mercenaries/{equipment_route_mercenary_id}/equip"
+        slot_failure_status, slot_failure_location, _slot_failure_body = request(
+            equipment_route,
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+            extra_headers={"X-GIM-Diagnostic-ID": "invalid/reference"},
+        )
+        assert slot_failure_status == 303, (slot_failure_status, slot_failure_location)
+        slot_failure_diagnostic = assert_equipment_error(
+            slot_failure_location,
+            f"/mercenaries/{equipment_route_mercenary_id}",
+            "Escolha qual equipamento deste slot deseja substituir.",
+        )
+        with SessionLocal() as db:
+            assert db.get(GuildItemInstance, equipment_route_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_second_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_free_item_id).equipped_to_mercenary_id is None
+
+        validation_diagnostics = []
+        for item_id, expected_reason in (
+            ("invalid", "Equipamento invalido."),
+            ("999999999", "Equipamento nao encontrado."),
+            (str(foreign_item_id), "Equipamento nao encontrado."),
+        ):
+            failure_status, failure_location, _failure_body = request(
+                equipment_route,
+                method="POST",
+                body=f"item_instance_id={item_id}",
+            )
+            assert failure_status == 303, (failure_status, failure_location, item_id)
+            validation_diagnostics.append(assert_equipment_error(
+                failure_location,
+                f"/mercenaries/{equipment_route_mercenary_id}",
+                expected_reason,
+            ))
+
+        with SessionLocal() as db:
+            http_mercenary = db.get(Mercenary, equipment_route_mercenary_id)
+            http_mercenary.status = "busy"
+            db.commit()
+        busy_status, busy_location, _busy_body = request(
+            equipment_route,
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+        )
+        assert busy_status == 303, (busy_status, busy_location)
+        busy_diagnostic = assert_equipment_error(
+            busy_location,
+            f"/mercenaries/{equipment_route_mercenary_id}",
+            "Mercenario ocupado nao pode trocar equipamentos.",
+        )
+        with SessionLocal() as db:
+            db.get(Mercenary, equipment_route_mercenary_id).status = "available"
+            db.commit()
+
+        foreign_mercenary_status, foreign_mercenary_location, _foreign_mercenary_body = request(
+            f"/mercenaries/{foreign_mercenary_id}/equip",
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+        )
+        assert foreign_mercenary_status == 303
+        foreign_mercenary_diagnostic = assert_equipment_error(
+            foreign_mercenary_location,
+            "/mercenaries",
+            "Este mercenário não está disponível nesta guilda.",
+        )
+        assert b"Mercen\xc3\xa1rio externo" not in request(foreign_mercenary_location)[2]
+
+        with patch(
+            "app.routes.mercenary_routes.equip_mercenary_item",
+            side_effect=RuntimeError("unexpected equipment transaction failure"),
+        ):
+            exception_status, exception_location, _exception_body = request(
+                equipment_route,
+                method="POST",
+                body=f"item_instance_id={equipment_route_free_item_id}",
+            )
+        assert exception_status == 303, (exception_status, exception_location)
+        exception_diagnostic = assert_equipment_error(
+            exception_location,
+            f"/mercenaries/{equipment_route_mercenary_id}",
+            "Não foi possível concluir o equipamento.",
+        )
+        assert b"unexpected equipment transaction failure" not in request(exception_location)[2]
+
+        denied_status, denied_location, _denied_body = request(
+            equipment_route,
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+            extra_headers={
+                "Origin": "http://invalid.example",
+                "X-GIM-Diagnostic-ID": "aaaaaaaaaaaaaaaa",
+            },
+        )
+        assert denied_status == 403 and denied_location is None
+        with SessionLocal() as db:
+            assert db.get(GuildItemInstance, equipment_route_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_second_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_free_item_id).equipped_to_mercenary_id is None
+
+        success_status, success_location, _success_body = request(
+            equipment_route,
+            method="POST",
+            body=(
+                f"item_instance_id={equipment_route_free_item_id}"
+                f"&replacement_item_instance_id={equipment_route_equipped_item_id}"
+            ),
+        )
+        assert success_status == 303
+        assert urlsplit(success_location).path == f"/mercenaries/{equipment_route_mercenary_id}"
+        assert "error=" not in success_location
+        with SessionLocal() as db:
+            assert db.get(GuildItemInstance, equipment_route_equipped_item_id).equipped_to_mercenary_id is None
+            assert db.get(GuildItemInstance, equipment_route_second_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_free_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+
         assert b"data-salvage-form" in rendered_pages["/blacksmith"]
         assert b'name="item_template_id"' in rendered_pages["/blacksmith"]
         assert b'name="quantity"' in rendered_pages["/blacksmith"]
@@ -1753,7 +1937,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         for diagnostic_id in (
             "3333333333333333", "4444444444444444", "5555555555555555",
             "6666666666666666", "7777777777777777", "8888888888888888",
-            "9999999999999999",
+            "9999999999999999", slot_failure_diagnostic, foreign_mercenary_diagnostic,
+            *validation_diagnostics, busy_diagnostic, exception_diagnostic, "aaaaaaaaaaaaaaaa",
         ):
             assert f"ref={diagnostic_id}" in gameplay_trace, f"missing correlated trace for {diagnostic_id}"
         for route, diagnostic_id, expected_status in (
@@ -1771,6 +1956,35 @@ with tempfile.TemporaryDirectory() as data_dir:
                 and expected_status in line
                 for line in gameplay_trace.splitlines()
             ), f"missing result trace for {route} ({diagnostic_id}): {expected_status}"
+        expected_equipment_error_routes = [
+            (equipment_route, slot_failure_diagnostic),
+            *((equipment_route, diagnostic_id) for diagnostic_id in validation_diagnostics),
+            (equipment_route, busy_diagnostic),
+            (f"/mercenaries/{foreign_mercenary_id}/equip", foreign_mercenary_diagnostic),
+        ]
+        for route, diagnostic_id in expected_equipment_error_routes:
+            route_mercenary_id = route.strip("/").split("/")[1]
+            assert any(
+                line.startswith("20")
+                and f"event=result action=mercenaries.{route_mercenary_id}.equip " in line
+                and f"route={route} ref={diagnostic_id} " in line
+                and "status=303 outcome=error" in line
+                for line in gameplay_trace.splitlines()
+            ), f"expected equipment rejection trace for {diagnostic_id}"
+        assert any(
+            line.startswith("20")
+            and f"event=exception action=mercenaries.{equipment_route_mercenary_id}.equip " in line
+            and f"route={equipment_route} ref={exception_diagnostic} " in line
+            and "status=500 outcome=unexpected_exception" in line
+            for line in gameplay_trace.splitlines()
+        ), f"expected unexpected equipment exception trace for {exception_diagnostic}"
+        assert any(
+            line.startswith("20")
+            and f"event=rejected action=mercenaries.{equipment_route_mercenary_id}.equip " in line
+            and f"route={equipment_route} ref=aaaaaaaaaaaaaaaa " in line
+            and "status=403 outcome=origin_rejected" in line
+            for line in gameplay_trace.splitlines()
+        ), "the loopback origin guard should remain in effect for equipment actions"
     finally:
         from app.desktop.lifecycle import close_campaign
         close_campaign(app, saves, guard)
@@ -1798,15 +2012,7 @@ with tempfile.TemporaryDirectory() as data_dir:
                 check=False,
             )
         lines = (result.stdout + result.stderr).splitlines()
-        relevant = [
-            line[:600] for line in lines
-            if "desktop_http_smoke_child.py" in line
-            or line.lstrip().startswith((
-                "AssertionError:", "DetachedInstanceError:", "ValueError:",
-                "TypeError:", "RuntimeError:",
-            ))
-        ]
-        diagnostic = "\n".join(relevant[-12:] or lines[-30:])
+        diagnostic = "\n".join(line[:600] for line in lines[-60:])
         self.assertEqual(result.returncode, 0, diagnostic)
 
 

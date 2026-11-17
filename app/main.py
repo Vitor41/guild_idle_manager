@@ -66,6 +66,13 @@ def _gameplay_action_for_path(path: str) -> str:
 
 
 def _diagnostic_error_redirect(path: str, diagnostic_id: str) -> str:
+    equipment_match = re.fullmatch(r"/mercenaries/(\d+)/equip", path)
+    if equipment_match:
+        query = urlencode({
+            "error": "Não foi possível concluir o equipamento. Confira o estado atual antes de tentar novamente.",
+            "diagnostic": diagnostic_id,
+        })
+        return f"/mercenaries/{equipment_match.group(1)}?{query}"
     destination = "/gathering" if path.startswith("/gathering/") else "/regional" if path.startswith("/regional/") else "/dashboard"
     query = urlencode({
         "error": f"A ação não foi concluída. Consulte o log e informe a referência {diagnostic_id}.",
