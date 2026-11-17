@@ -9,7 +9,7 @@
         {% for drop in visible_drops %}
           <span class="loot-preview-item rarity-{{ drop.rarity_class }}" role="listitem" title="{{ drop.rarity_label }}">
             <span class="loot-preview-icon" aria-hidden="true">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span>
-            <span>{{ drop.display_name }}<small>{{ drop.rarity_label }} · {{ drop.chance_percent }}% {{ drop.chance_label|default("base") }} · {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}–{{ drop.max_quantity }}{% endif %} {{ drop.quantity_unit }}</small></span>
+            <span>{{ drop.display_name }}<small>{{ drop.rarity_label }} · {{ drop.chance_percent }}% {{ drop.chance_label|default("base") }} · Qtd. base: {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}–{{ drop.max_quantity }}{% endif %} {{ drop.quantity_unit }}</small></span>
           </span>
         {% endfor %}
       </div>
@@ -20,7 +20,7 @@
             {% for drop in drops[3:] %}
               <span class="loot-preview-item rarity-{{ drop.rarity_class }}" role="listitem" title="{{ drop.rarity_label }}">
                 <span class="loot-preview-icon" aria-hidden="true">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span>
-                <span>{{ drop.display_name }}<small>{{ drop.rarity_label }} · {{ drop.chance_percent }}% {{ drop.chance_label|default("base") }} · {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}–{{ drop.max_quantity }}{% endif %} {{ drop.quantity_unit }}</small></span>
+                <span>{{ drop.display_name }}<small>{{ drop.rarity_label }} · {{ drop.chance_percent }}% {{ drop.chance_label|default("base") }} · Qtd. base: {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}–{{ drop.max_quantity }}{% endif %} {{ drop.quantity_unit }}</small></span>
               </span>
             {% endfor %}
           </div>

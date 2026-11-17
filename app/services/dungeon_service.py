@@ -430,6 +430,7 @@ def get_dungeons_page_context(
     page = max(1, min(page, total_pages))
     templates = all_templates[(page - 1) * per_page:page * per_page]
     available_mercenaries = list_available_mercenaries_by_guild(db, guild.id)
+    max_run_multiplier = get_max_run_multiplier(db, guild.id)
     for mercenary in available_mercenaries:
         annotate_mercenary_display(mercenary)
     for template in templates:
@@ -455,6 +456,12 @@ def get_dungeons_page_context(
             "Chance-base por item/entrada; rola somente após sucesso. Pode variar com "
             + ", ".join(modifiers) + "."
         )
+        if template.visible_drops:
+            template.drop_modifier_note += (
+                " Quantidade exibida como base; o multiplicador escolhido e bônus aplicáveis alteram o total (ex.: em 2x, 1–2 vira 2–4 antes dos bônus)."
+                if max_run_multiplier > 1
+                else " Quantidade exibida como base; bônus aplicáveis podem alterar o total."
+            )
         template.synergy_bonus_max = min(6, sum(2 for amount in (
             template.required_tank_count, template.required_support_count, template.required_damage_count
         ) if amount > 0))
@@ -489,7 +496,7 @@ def get_dungeons_page_context(
         ),
         "dungeons_available": are_dungeons_available(db, guild.id),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
-        "max_run_multiplier": get_max_run_multiplier(db, guild.id),
+        "max_run_multiplier": max_run_multiplier,
         "now": now,
         "format_duration": format_duration_seconds,
         "level_bands": ("1-20", "21-50", "51-100", "101-130", "131-200", "201-250", "251-300", "301-350"),

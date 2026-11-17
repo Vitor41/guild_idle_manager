@@ -704,6 +704,30 @@ with tempfile.TemporaryDirectory() as data_dir:
             time.sleep(0.1)
         assert "Preparação concluída · pronta para iniciar".encode("utf-8") in progress_body, "the server countdown must reach prepared state"
         assert re.search(rb'<progress max="100" value="100"', progress_body), progress_body[:2000]
+        prepared_dialog = re.search(
+            rb'<dialog[^>]*id="offer-' + str(prepared_offer_id).encode("ascii") + rb'".*?</dialog>',
+            progress_body, re.S,
+        )
+        assert prepared_dialog and re.search(
+            rb'name="mercenary_ids" value="' + str(regional_supply_worker_id).encode("ascii") + rb'" checked>.*?Equipe preparada',
+            prepared_dialog.group(0), re.S,
+        ), prepared_dialog.group(0) if prepared_dialog else progress_body[:4000]
+        assert b'data-prepared-team-available="true"' in prepared_dialog.group(0)
+        assert b'Equipe preparada pr' in prepared_dialog.group(0)
+        assert b'1 Kit(s) j\xc3\xa1 utilizado(s)' in prepared_dialog.group(0)
+
+        with SessionLocal() as db:
+            inventory_kit = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one()
+            inventory_kit.quantity = 0
+            db.commit()
+        empty_stock_quote_status, _empty_stock_quote_location, empty_stock_quote_body = request(
+            f"/regional/offers/{prepared_offer_id}/supply-quote", method="POST",
+            body=f"mercenary_ids={regional_supply_worker_id}",
+        )
+        empty_stock_quote = json.loads(empty_stock_quote_body)
+        assert empty_stock_quote_status == 200 and empty_stock_quote["available"] is False, empty_stock_quote
 
         prepared_start_status, prepared_start_location, prepared_start_body = request(
             f"/regional/offers/{prepared_offer_id}/start", method="POST",
@@ -727,6 +751,15 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert run_snapshot["cost_gold"] == supply_quote["cost_gold"]
             assert prepared_worker.status == "busy"
             assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == resources_after_prepare
+            assert db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one().quantity == 0
+
+            inventory_kit = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one()
+            inventory_kit.quantity = 1
+            db.commit()
 
         reinforce_prepare_status, reinforce_prepare_location, reinforce_prepare_body = request(
             f"/regional/offers/{reinforce_prepared_offer_id}/prepare", method="POST",
@@ -745,6 +778,8 @@ with tempfile.TemporaryDirectory() as data_dir:
                 guild_id=guild_id, item_template_id=supply_kit_id,
             ).one().quantity
             assert kits_during_reinforce_prepare == 0
+            reinforce_offer.supply_preparation_ends_at_utc = datetime.now(timezone.utc) - timedelta(seconds=1)
+            db.commit()
 
         regional_during_prep_status, _regional_during_prep_location, regional_during_prep_body = request("/regional")
         assert regional_during_prep_status == 200
@@ -755,6 +790,57 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert offer_dialog and b'name="supply_mode" value="none"' in offer_dialog.group(0)
         assert b'name="supply_mode" value="prepared"' in offer_dialog.group(0)
         assert b'Iniciar sem suprimento' in offer_dialog.group(0)
+        assert b"multiplicador" not in offer_dialog.group(0).lower()
+        assert re.search(
+            rb'name="mercenary_ids" value="' + str(regional_reinforce_prepared_worker_id).encode("ascii")
+            + rb'" checked>.*?Equipe preparada', offer_dialog.group(0), re.S,
+        ), offer_dialog.group(0)
+        assert re.search(
+            rb'name="mercenary_ids" value="' + str(regional_reinforce_extra_worker_id).encode("ascii")
+            + rb'">.*?' + "Reforço disponível".encode("utf-8"), offer_dialog.group(0), re.S,
+        ), offer_dialog.group(0)
+        assert b'data-prepared-team-status' in offer_dialog.group(0)
+
+        with SessionLocal() as db:
+            unavailable_worker = db.get(Mercenary, regional_reinforce_prepared_worker_id)
+            unavailable_worker.status = "busy"
+            db.commit()
+        unavailable_page_status, _unavailable_location, unavailable_page = request("/regional")
+        unavailable_dialog = re.search(
+            rb'<dialog[^>]*id="offer-' + str(reinforce_prepared_offer_id).encode("ascii") + rb'".*?</dialog>',
+            unavailable_page, re.S,
+        )
+        assert unavailable_page_status == 200 and unavailable_dialog
+        assert re.search(
+            rb'<input type="hidden" name="mercenary_ids" value="'
+            + str(regional_reinforce_prepared_worker_id).encode("ascii")
+            + rb'" data-prepared-member-hidden="true">', unavailable_dialog.group(0),
+        ), unavailable_dialog.group(0)
+        assert b"Equipe preparada indispon\xc3\xadvel" in unavailable_dialog.group(0)
+        assert re.search(rb'name="supply_mode" value="none"[^>]* disabled', unavailable_dialog.group(0))
+        with SessionLocal() as db:
+            db.get(Mercenary, regional_reinforce_prepared_worker_id).status = "available"
+            db.commit()
+
+        missed_prepared_status, missed_prepared_location, _missed_prepared_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_reinforce_extra_worker_id}&supply_mode=none",
+        )
+        assert missed_prepared_status == 303 and missed_prepared_location.startswith("/regional?error=")
+        missed_prepared_page_status, _missed_prepared_page_location, missed_prepared_page = request(missed_prepared_location)
+        assert missed_prepared_page_status == 200
+        assert b"selectedIds.has(input.value) || preparedIds.has(input.value)" in missed_prepared_page
+        with SessionLocal() as db:
+            assert db.get(RegionalOffer, reinforce_prepared_offer_id).supply_preparation_snapshot_json == reinforce_snapshot_text
+            assert db.query(MissionRun).filter_by(regional_offer_id=reinforce_prepared_offer_id).count() == 0
+
+        wrong_prepared_status, wrong_prepared_location, _wrong_prepared_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
+            body=(f"mercenary_ids={regional_reinforce_prepared_worker_id}"
+                  f"&mercenary_ids={regional_reinforce_extra_worker_id}&supply_mode=prepared"),
+        )
+        assert wrong_prepared_status == 303 and wrong_prepared_location.startswith("/regional?error=")
+        assert "exatamente+a+equipe" in wrong_prepared_location.lower(), wrong_prepared_location
 
         occupied_reinforce_status, occupied_reinforce_location, _occupied_reinforce_body = request(
             f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
@@ -1323,6 +1409,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         )
         assert portal_preview_card and b"Loot do portal" in portal_preview_card.group(0), portal_detail_body[:4000]
         assert b"Chance da faixa exclusiva" in portal_preview_card.group(0)
+        assert b"Qtd. base:" in portal_preview_card.group(0)
+        assert b"multiplicador" not in portal_preview_card.group(0).lower()
         assert b"% chance" in portal_preview_card.group(0)
         status, location, portal_start_body = request(
             f"/regional/events/{portal_event_id}/portals/start", method="POST",

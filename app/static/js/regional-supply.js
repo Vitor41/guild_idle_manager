@@ -51,11 +51,55 @@ window.initializeRegionalSupply = (root = document) => {
     const summary = form.querySelector(".supply-preparation small");
     if (!supply || !summary) return;
 
+    const preparedStartButton = form.querySelector('button[name="supply_mode"][value="prepared"]');
     let requestVersion = 0;
     let quoteState = "pending";
     form.addEventListener("click", (event) => {
       if (event.target.closest("[data-start-without-supply]")) supply.checked = false;
     });
+    form.addEventListener("submit", (event) => {
+      if (preparedStartButton || (
+        event.submitter?.name === "supply_mode" && event.submitter.value === "prepared"
+      )) return;
+      // Only block a new purchase/preparation when its latest quote says the
+      // selected supply is unavailable. Starting a paid snapshot never quotes
+      // or competes for the inventory again.
+      if (supply.checked && quoteState === "unavailable") {
+        event.preventDefault();
+        supply.focus();
+      }
+    });
+
+    if (preparedStartButton) {
+      const status = form.querySelector("[data-prepared-team-status]");
+      const preparedIds = new Set((form.dataset.preparedMercenaryIds || "")
+        .split(",").filter(Boolean));
+      if (status && form.dataset.preparedTeamAvailable !== "false"
+          && form.dataset.preparedTeamValid !== "false" && preparedIds.size) {
+        const updatePreparedTeamStatus = () => {
+          const selected = new Set(Array.from(form.querySelectorAll('input[name="mercenary_ids"]'))
+            .filter((input) => input.checked || input.dataset.preparedMemberHidden === "true")
+            .map((input) => String(input.value)));
+          const missingPrepared = Array.from(preparedIds).some((id) => !selected.has(id));
+          const hasReinforcements = Array.from(selected).some((id) => !preparedIds.has(id));
+          if (missingPrepared) {
+            status.textContent = "Mantenha toda a equipe preparada selecionada. O bônus exige a equipe exata; reforços podem iniciar sem suprimento.";
+          } else if (hasReinforcements) {
+            status.textContent = "Há reforços selecionados. O bônus preparado exige a equipe exata; use “Iniciar sem suprimento” para manter os reforços.";
+          } else if (preparedStartButton.disabled) {
+            status.textContent = "Equipe preparada selecionada. O bônus ficará disponível quando o preparo terminar.";
+          } else {
+            status.textContent = "Equipe preparada selecionada. O bônus do suprimento está pronto.";
+          }
+        };
+        form.querySelectorAll('input[name="mercenary_ids"]').forEach((input) => {
+          input.addEventListener("change", updatePreparedTeamStatus);
+        });
+        updatePreparedTeamStatus();
+      }
+      return;
+    }
+
     const prepareButton = form.querySelector("[data-prepare-action]");
     const syncPrepareButton = () => {
       if (prepareButton) prepareButton.disabled = !supply.checked || quoteState !== "available";
@@ -112,15 +156,6 @@ window.initializeRegionalSupply = (root = document) => {
         syncPrepareButton();
       }
     };
-
-    form.addEventListener("submit", (event) => {
-      // A server-side start always recalculates the quote. Only stop a submit
-      // when the latest completed quote says a selected supply is unavailable.
-      if (supply.checked && quoteState === "unavailable") {
-        event.preventDefault();
-        supply.focus();
-      }
-    });
 
     supply.addEventListener("change", syncPrepareButton);
 

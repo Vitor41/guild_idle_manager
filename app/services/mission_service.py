@@ -319,6 +319,7 @@ def get_missions_page_context(
     page = max(1, min(page, total_pages))
     mission_templates = all_templates[(page - 1) * per_page:page * per_page]
     available_mercenaries = list_available_mercenaries_by_guild(db, guild.id)
+    max_run_multiplier = get_max_run_multiplier(db, guild.id)
     for mercenary in available_mercenaries:
         annotate_mercenary_display(mercenary)
     for mission in mission_templates:
@@ -340,6 +341,12 @@ def get_missions_page_context(
             "Chance-base por item/entrada; rola somente após sucesso. Pode variar com "
             + ", ".join(modifiers) + "."
         )
+        if mission.visible_drops:
+            mission.drop_modifier_note += (
+                " Quantidade exibida como base; bônus aplicáveis podem alterar o total."
+                if mission.is_long_idle or max_run_multiplier <= 1
+                else " Quantidade exibida como base; o multiplicador escolhido e bônus aplicáveis alteram o total (ex.: em 2x, 1–2 vira 2–4 antes dos bônus)."
+            )
     mission_mercenaries = {
         mission.id: available_mercenaries
         for mission in mission_templates
@@ -387,7 +394,7 @@ def get_missions_page_context(
             1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
-        "max_run_multiplier": get_max_run_multiplier(db, guild.id),
+        "max_run_multiplier": max_run_multiplier,
         "long_idle_active_count": count_active_long_idle_runs(db, guild.id),
         "long_idle_limit": LONG_IDLE_LIMIT,
         "now": now,

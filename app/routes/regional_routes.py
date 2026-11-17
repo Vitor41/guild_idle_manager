@@ -235,6 +235,70 @@ def _annotate_supply_preparation(offer: RegionalOffer, now: datetime) -> None:
         offer.supply_prepared_at_utc = ends
 
 
+def _annotate_prepared_team(db, guild_id: int, offer: RegionalOffer) -> None:
+    offer.prepared_mercenary_ids = []
+    offer.unavailable_prepared_mercenaries = []
+    offer.prepared_team_valid = True
+    offer.prepared_team_available = True
+    offer.prepared_team_can_start = True
+    offer.prepared_team_issue = ""
+    if offer.supply_preparation_started_at_utc is None:
+        return
+
+    try:
+        snapshot = json.loads(offer.supply_preparation_snapshot_json or "{}")
+    except (TypeError, json.JSONDecodeError):
+        snapshot = None
+    if (
+        not isinstance(snapshot, dict)
+        or snapshot.get("schema") != 1
+        or snapshot.get("supply") != "regional_group_supply"
+        or snapshot.get("prepared_for_offer_id") != offer.id
+        or not isinstance(snapshot.get("mercenary_ids"), list)
+        or not snapshot["mercenary_ids"]
+    ):
+        offer.prepared_team_valid = False
+        offer.prepared_team_available = False
+        offer.prepared_team_can_start = False
+        offer.prepared_team_issue = "Não foi possível confirmar a equipe do preparo. Atualize a Vigília antes de iniciar."
+        return
+
+    try:
+        ids = [str(int(value)) for value in snapshot["mercenary_ids"]]
+    except (TypeError, ValueError, OverflowError):
+        ids = []
+    if not ids or any(int(value) < 1 for value in ids) or len(ids) != len(set(ids)):
+        offer.prepared_team_valid = False
+        offer.prepared_team_available = False
+        offer.prepared_team_can_start = False
+        offer.prepared_team_issue = "Não foi possível confirmar a equipe do preparo. Atualize a Vigília antes de iniciar."
+        return
+
+    offer.prepared_mercenary_ids = sorted(ids, key=int)
+    mercenaries = list(db.scalars(select(Mercenary).where(
+        Mercenary.guild_id == guild_id,
+        Mercenary.id.in_([int(value) for value in offer.prepared_mercenary_ids]),
+    )))
+    mercenaries_by_id = {str(mercenary.id): mercenary for mercenary in mercenaries}
+    offer.unavailable_prepared_mercenaries = [
+        {
+            "id": mercenary_id,
+            "name": getattr(mercenaries_by_id.get(mercenary_id), "name", "Integrante preparado"),
+        }
+        for mercenary_id in offer.prepared_mercenary_ids
+        if (
+            mercenary_id not in mercenaries_by_id
+            or mercenaries_by_id[mercenary_id].status != "available"
+        )
+    ]
+    offer.prepared_team_available = not offer.unavailable_prepared_mercenaries
+    if offer.supply_preparation_ends_at_utc is None:
+        offer.prepared_team_issue = "O prazo do preparo está indisponível. Atualize a Vigília antes de iniciar."
+    elif offer.unavailable_prepared_mercenaries:
+        offer.prepared_team_issue = "Libere os integrantes preparados indisponíveis antes de iniciar."
+    offer.prepared_team_can_start = offer.prepared_team_available and not offer.prepared_team_issue
+
+
 def _annotate_offer_drop_preview(db, offer: RegionalOffer) -> None:
     if offer.offer_type == "contract":
         template = db.get(MissionTemplate, offer.mission_template_id) if offer.mission_template_id else None
@@ -426,6 +490,7 @@ def regional_index(
     for offer_list in board.get("offers", {}).values():
         for offer in offer_list:
             _annotate_supply_preparation(offer, region_now)
+            _annotate_prepared_team(db, guild.id, offer)
             _annotate_offer_drop_preview(db, offer)
             try:
                 saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
@@ -514,6 +579,7 @@ def regional_index(
             ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
             for offer in rebellion_offers:
                 _annotate_supply_preparation(offer, region_now)
+                _annotate_prepared_team(db, guild.id, offer)
                 _annotate_offer_drop_preview(db, offer)
                 try:
                     saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
