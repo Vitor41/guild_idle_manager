@@ -7,10 +7,27 @@ import vm from "node:vm";
 const scriptPath = fileURLToPath(new URL("../../app/static/js/regional-supply.js", import.meta.url));
 const regionalSupplyScript = readFileSync(scriptPath, "utf8");
 
-function makeEnvironment({ prepared, fetchImpl }) {
+function makeEnvironment({
+  prepared,
+  fetchImpl,
+  teamAvailable = true,
+  teamValid = true,
+  nowMs = 6000,
+  startsAtMs = 0,
+  endsAtMs = 5000,
+}) {
   const formListeners = {};
+  const intervalCallbacks = [];
+  const clock = { now: nowMs };
   const checkboxes = [
-    { value: "101", checked: true, type: "checkbox", dataset: {}, listeners: {}, addEventListener(name, fn) { this.listeners[name] = fn; } },
+    {
+      value: "101",
+      checked: teamAvailable,
+      type: teamAvailable ? "checkbox" : "hidden",
+      dataset: teamAvailable ? {} : { preparedMemberHidden: "true" },
+      listeners: {},
+      addEventListener(name, fn) { this.listeners[name] = fn; },
+    },
     { value: "202", checked: false, type: "checkbox", dataset: {}, listeners: {}, addEventListener(name, fn) { this.listeners[name] = fn; } },
   ];
   const supply = {
@@ -22,21 +39,32 @@ function makeEnvironment({ prepared, fetchImpl }) {
   };
   const summary = { textContent: "Cotação salva do preparo." };
   const status = { textContent: "Equipe preparada pré-selecionada." };
-  const preparedButton = prepared ? { name: "supply_mode", value: "prepared", disabled: false } : null;
+  const preparedButton = prepared ? {
+    name: "supply_mode",
+    value: "prepared",
+    disabled: true,
+    dataset: { readyLabel: "Iniciar com suprimento preparado" },
+    textContent: "Aguardando preparo",
+  } : null;
   const prepareButton = prepared ? null : { disabled: false };
+  const supplyLabel = {
+    textContent: "Suprimento em preparo",
+    closest() { return { classList: { add() {} } }; },
+  };
   const form = {
     dataset: {
       regionalSupplyInitialized: "false",
       supplyQuoteUrl: "/regional/offers/1/supply-quote",
       preparedMercenaryIds: prepared ? "101" : "",
-      preparedTeamAvailable: "true",
-      preparedTeamValid: "true",
+      preparedTeamAvailable: String(teamAvailable),
+      preparedTeamValid: String(teamValid),
     },
     querySelector(selector) {
       if (selector === 'input[name="supply"]') return supply;
       if (selector === ".supply-preparation small") return summary;
       if (selector === 'button[name="supply_mode"][value="prepared"]') return preparedButton;
-      if (selector === "[data-prepared-team-status]") return status;
+      if (selector === "[data-prepared-team-status]") return teamAvailable && teamValid ? status : null;
+      if (selector === "[data-supply-preparation-label]") return supplyLabel;
       if (selector === "[data-prepare-action]") return prepareButton;
       return null;
     },
@@ -49,9 +77,28 @@ function makeEnvironment({ prepared, fetchImpl }) {
     },
     addEventListener(name, fn) { formListeners[name] = fn; },
   };
+  const time = {
+    dataset: {
+      startsAt: new Date(startsAtMs).toISOString(),
+      endsAt: new Date(endsAtMs).toISOString(),
+    },
+    textContent: "calculando",
+  };
+  const progressStatus = { textContent: "Suprimento em preparo" };
+  const progressBar = { value: 0 };
+  const progressBox = {
+    dataset: {},
+    querySelector(selector) {
+      if (selector === "time[data-ends-at]") return time;
+      if (selector === "progress") return progressBar;
+      if (selector === "strong") return progressStatus;
+      return null;
+    },
+    closest(selector) { return selector === "form" ? form : null; },
+  };
   const root = {
     querySelectorAll(selector) {
-      if (selector === ".supply-preparation-progress") return [];
+      if (selector === ".supply-preparation-progress") return prepared ? [progressBox] : [];
       if (selector === "form[data-supply-quote-url]") return [form];
       return [];
     },
@@ -61,10 +108,11 @@ function makeEnvironment({ prepared, fetchImpl }) {
     *[Symbol.iterator]() { return; }
   }
   const context = vm.createContext({
+    Date: class extends Date { static now() { return clock.now; } },
     window: {
       crypto: { randomUUID: () => "regional-supply-test" },
-      setInterval,
-      clearInterval,
+      setInterval(fn) { intervalCallbacks.push(fn); return intervalCallbacks.length - 1; },
+      clearInterval() {},
     },
     document: { addEventListener() {} },
     fetch: fetchImpl,
@@ -74,7 +122,21 @@ function makeEnvironment({ prepared, fetchImpl }) {
   });
   vm.runInContext(regionalSupplyScript, context, { filename: "regional-supply.js" });
   context.window.initializeRegionalSupply(root);
-  return { checkboxes, formListeners, form, preparedButton, prepareButton, status, supply, summary };
+  return {
+    checkboxes,
+    clock,
+    formListeners,
+    form,
+    intervalCallbacks,
+    preparedButton,
+    prepareButton,
+    progressBar,
+    progressStatus,
+    status,
+    supply,
+    summary,
+    time,
+  };
 }
 
 test("prepared start does not request inventory or get canceled by a stale negative quote", async () => {
@@ -90,10 +152,12 @@ test("prepared start does not request inventory or get canceled by a stale negat
 
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(quoteRequests, 0);
+  assert.equal(page.preparedButton.disabled, false);
   assert.match(page.status.textContent, /bônus do suprimento está pronto/);
 
   page.checkboxes[1].checked = true;
   page.checkboxes[1].listeners.change();
+  assert.equal(page.preparedButton.disabled, true);
   assert.match(page.status.textContent, /Há reforços selecionados/);
   assert.match(page.status.textContent, /Iniciar sem suprimento/);
 
@@ -103,6 +167,32 @@ test("prepared start does not request inventory or get canceled by a stale negat
     preventDefault() { prevented = true; },
   });
   assert.equal(prevented, false);
+});
+
+test("prepared start combines availability and deadline for occupied, free, and already expired teams", () => {
+  const occupiedBefore = makeEnvironment({ prepared: true, teamAvailable: false, nowMs: 1000 });
+  assert.equal(occupiedBefore.preparedButton.disabled, true);
+  occupiedBefore.intervalCallbacks[0]();
+  assert.equal(occupiedBefore.form.dataset.preparedSupplyReady, "false");
+  occupiedBefore.clock.now = 6000;
+  occupiedBefore.intervalCallbacks[0]();
+  assert.equal(occupiedBefore.form.dataset.preparedSupplyReady, "true");
+  assert.equal(occupiedBefore.preparedButton.disabled, true);
+
+  const freeBefore = makeEnvironment({ prepared: true, teamAvailable: true, nowMs: 1000 });
+  assert.equal(freeBefore.preparedButton.disabled, true);
+  freeBefore.clock.now = 6000;
+  freeBefore.intervalCallbacks[0]();
+  assert.equal(freeBefore.preparedButton.disabled, false);
+  assert.equal(freeBefore.progressBar.value, 100);
+
+  const freeAlreadyExpired = makeEnvironment({ prepared: true, teamAvailable: true, nowMs: 6000 });
+  assert.equal(freeAlreadyExpired.preparedButton.disabled, false);
+  assert.equal(freeAlreadyExpired.form.dataset.preparedSupplyReady, "true");
+
+  const occupiedAlreadyExpired = makeEnvironment({ prepared: true, teamAvailable: false, nowMs: 6000 });
+  assert.equal(occupiedAlreadyExpired.form.dataset.preparedSupplyReady, "true");
+  assert.equal(occupiedAlreadyExpired.preparedButton.disabled, true);
 });
 
 test("a new preparation still blocks a selected supply after a negative quote", async () => {
