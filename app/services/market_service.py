@@ -116,6 +116,11 @@ def start_material_sale(
     *,
     commit: bool = True,
 ) -> MarketSale:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise MarketError("Guilda nao encontrada.")
     if get_building_level(db, guild.id, "market") < 1:
         raise MarketError("Evolua o Mercado para o nível 1 antes de anunciar itens.")
     try:
@@ -137,6 +142,11 @@ def start_material_sale(
 
 
 def start_equipment_sale(db: Session, guild: Guild, item_instance_id: str) -> MarketSale:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise MarketError("Guilda nao encontrada.")
     if get_building_level(db, guild.id, "market") < 1:
         raise MarketError("Evolua o Mercado para o nível 1 antes de anunciar itens.")
     try:

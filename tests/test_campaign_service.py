@@ -56,7 +56,7 @@ from app.routes.tavern_routes import _get_apprentice_preview
 
 # Keep these expectations aligned with `alembic heads`, the schema target
 # applied by campaign creation and upgrades.
-CURRENT_ALEMBIC_HEAD = "0a1b2c3d4e5f"
+CURRENT_ALEMBIC_HEAD = "f7a8b9c0d1e2"
 
 
 class CampaignServiceTests(unittest.TestCase):
@@ -496,7 +496,7 @@ asyncio.run(main())
             self.assertIsNotNone(migration)
             self.assertEqual(migration.previous_revision, "b1c2d3e4f5a6")
             self.assertEqual(migration.current_revision, CURRENT_ALEMBIC_HEAD)
-            self.assertEqual((migration.previous_save_version, migration.current_save_version), (6, 7))
+            self.assertEqual((migration.previous_save_version, migration.current_save_version), (6, 8))
             with closing(sqlite3.connect(database_path)) as connection:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(guild_resources)")}
                 self.assertNotIn("special_crystals", columns)
@@ -667,7 +667,7 @@ asyncio.run(main())
             self.assertEqual(migration.previous_revision, "a6b7c8d9e0f1")
             self.assertEqual(migration.current_revision, CURRENT_ALEMBIC_HEAD)
             self.assertEqual(migration.previous_save_version, 3)
-            self.assertEqual(migration.current_save_version, 7)
+            self.assertEqual(migration.current_save_version, 8)
             with closing(sqlite3.connect(campaign.database_path)) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
@@ -682,7 +682,7 @@ asyncio.run(main())
                         "SELECT schema_version FROM campaign_metadata WHERE campaign_id = ?",
                         (campaign.campaign_id,),
                     ).fetchone()[0],
-                    7,
+                    8,
                 )
 
     def test_failed_migration_restores_original_schema_and_keeps_backup(self):

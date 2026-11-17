@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261117-2">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261117-3">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261117-1">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-sidebar-layout.css') }}?v=20261103-1">{% endif %}
@@ -223,5 +223,6 @@
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261117-2" defer></script>{% endif %}
+    {% block scripts %}{% endblock %}
   </body>
 </html>

@@ -1,5 +1,6 @@
 from app.database.connection import Base
 from app.models.building import BuildingTemplate, GuildBuilding
+from app.models.building_reset import GuildBuildingInvestment, GuildBuildingReset, GuildBuildingResetState
 from app.models.achievement import AchievementTemplate, CodexEntry, GuildAchievement, GuildCodexUnlock, GuildStat
 from app.models.crafting import CraftingRecipe, CraftingRecipeMaterial
 from app.models.class_change import ClassChangeRun, ClassTransitionOption
@@ -52,6 +53,9 @@ __all__ = [
     "DungeonTemplateItemDrop",
     "Guild",
     "GuildBuilding",
+    "GuildBuildingInvestment",
+    "GuildBuildingReset",
+    "GuildBuildingResetState",
     "GuildResources",
     "GatheringAssignment",
     "SupplyWorkshopJob",

@@ -39,7 +39,12 @@ def create_initial_guild(db: Session, user_id: int | str, guild_name: str) -> Gu
     return create_guild_for_user(db, user_id=user_id, name=guild_name)
 
 
-def get_current_guild_context(db: Session, user_id: int | str) -> tuple[Guild | None, GuildResources | None]:
+def get_current_guild_context(
+    db: Session,
+    user_id: int | str,
+    *,
+    sync_resources: bool = True,
+) -> tuple[Guild | None, GuildResources | None]:
     guild = (
         db.scalar(select(Guild).where(Guild.campaign_id == user_id))
         if isinstance(user_id, str)
@@ -48,7 +53,7 @@ def get_current_guild_context(db: Session, user_id: int | str) -> tuple[Guild | 
     if guild is None:
         return None, None
     resources = get_resources_by_guild_id(db, guild.id)
-    if resources is not None and sync_inventory_resource_totals(db, resources):
+    if sync_resources and resources is not None and sync_inventory_resource_totals(db, resources):
         db.commit()
         db.refresh(resources)
     return guild, resources

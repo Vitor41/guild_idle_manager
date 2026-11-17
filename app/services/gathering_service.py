@@ -122,6 +122,11 @@ def assign_worker(
     now: datetime | None = None,
     target_quantity: int | None = None,
 ) -> GatheringAssignment:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise ValueError("Guilda não encontrada.")
     if resource_family not in RESOURCE_FAMILIES:
         raise ValueError("Escolha uma família de recurso disponível para coleta.")
     target_template = _material_template(db, resource_family, guild.level)

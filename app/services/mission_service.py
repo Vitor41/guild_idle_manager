@@ -486,6 +486,11 @@ def start_mission(
     allow_regional_supply: bool = False,
     supply_snapshot_override: dict[str, object] | None = None,
 ) -> MissionRun:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise MissionError("Guilda nao encontrada.")
     if not mission_template_id:
         raise MissionError("Missao e obrigatoria.")
     if not mercenary_ids:

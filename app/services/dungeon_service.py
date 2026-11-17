@@ -542,6 +542,11 @@ def start_dungeon(
     supply_include_drops: bool = True,
     supply_snapshot_override: dict[str, object] | None = None,
 ) -> DungeonRun:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise DungeonError("Guilda nao encontrada.")
     if not are_dungeons_available(db, guild.id):
         raise DungeonError("Evolua Exploradores para o nível 1 antes de acessar Masmorras.")
     if not dungeon_template_id:

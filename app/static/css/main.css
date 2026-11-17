@@ -998,6 +998,40 @@ button.is-loading::after {
 }
 .offline-dialog > .confirmation-dialog__header,
 .offline-dialog > .confirmation-dialog__actions { flex: 0 0 auto; }
+
+.building-reset-dialog {
+  box-sizing: border-box;
+  width: min(760px, calc(100vw - 24px));
+  max-width: 760px;
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid rgba(240, 203, 114, 0.5);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, rgba(53, 42, 32, 0.98), rgba(24, 20, 16, 0.99)), var(--surface);
+  color: var(--text);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.72), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+.building-reset-dialog::backdrop { background: rgba(5, 10, 12, 0.78); backdrop-filter: blur(4px); }
+.building-reset-preview { margin: 0; border: 0; box-shadow: none; }
+.building-reset-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.building-reset-columns > div,
+.building-reset-preview section,
+.building-reset-result { min-width: 0; overflow-wrap: anywhere; }
+.building-reset-columns h3,
+.building-reset-preview section h3 { margin-bottom: 8px; }
+.building-reset-blockers { padding-left: 24px; }
+.building-reset-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.building-reset-actions [role="status"] { flex-basis: 100%; margin: 0; text-align: right; }
+.building-reset-actions :focus-visible { outline: 2px solid var(--teal, #68c3b5); outline-offset: 3px; }
+.building-reset-result { margin-bottom: 20px; }
+@media (max-width: 620px) {
+  .building-reset-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .building-reset-columns { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .building-reset-actions { justify-content: stretch; }
+  .building-reset-actions > * { flex: 1 1 100%; text-align: center; }
+  .building-reset-actions [role="status"] { text-align: left; }
+}
 .offline-dialog > .offline-summary {
   min-height: 0;
   flex: 1 1 auto;

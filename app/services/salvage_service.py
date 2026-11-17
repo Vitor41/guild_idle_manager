@@ -158,6 +158,14 @@ def start_salvage(
     *,
     commit: bool = True,
 ) -> GuildSalvageJob:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise SalvageError("Guilda nao encontrada.")
+    if resources is None:
+        raise SalvageError("Recursos da guilda indisponíveis.")
+    resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
     if resources is None:
         raise SalvageError("Recursos da guilda indisponíveis.")
     try:

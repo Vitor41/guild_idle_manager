@@ -23,7 +23,7 @@ from app.models import CampaignMetadata, ContentSeedRun, Guild, GuildResources
 from app.seeds.massive_content import PACK_VERSION, run_massive_content_seed
 
 
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 INITIAL_CONTENT_VERSION = PACK_VERSION
 CLASS_TREE_REPAIR_PACK_KEY = "ml036_class_tree_transition_backfill"
 CLASS_TREE_REPAIR_VERSION = 1

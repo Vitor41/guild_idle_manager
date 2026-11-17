@@ -999,6 +999,11 @@ async def prepare_regional_offer_supply(
     if guild is None or resources is None:
         return RedirectResponse("/regional?error=Guilda%20indispon%C3%ADvel", status_code=303)
     form = await read_form_multi_fields(request)
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        return RedirectResponse("/regional?error=Guilda%20indispon%C3%ADvel", status_code=303)
     offer = db.scalar(select(RegionalOffer).where(
         RegionalOffer.id == offer_id,
         RegionalOffer.campaign_id == campaign.campaign_id,
