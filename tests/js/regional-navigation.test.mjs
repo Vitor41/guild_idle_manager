@@ -20,6 +20,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   const historyCalls = [];
   const scrollCalls = [];
   const focusCalls = [];
+  const resetInitializerCalls = [];
   let clickHandlerCallback;
   const incomingMain = { innerHTML: "fresh regional page" };
   const currentMain = { innerHTML: "old page" };
@@ -59,6 +60,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
     requestAnimationFrame(callback) { callback(); },
     scrollTo(options) { scrollCalls.push(options); },
     GIMApplyDesktopArt() {},
+    initializeBuildingResetDialogs(root) { resetInitializerCalls.push(root); },
     locationAssignCalls: [],
   };
   window.location.assign = (url) => window.locationAssignCalls.push(url);
@@ -111,6 +113,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   assert.equal(scrollCalls[0].block, "start");
   assert.equal(scrollCalls[0].behavior, "auto");
   assert.equal(document.body.dataset.route, "/regional");
+  assert.deepEqual(resetInitializerCalls, [currentMain]);
 });
 
 test("an intentional redirect fragment takes precedence over the requested fragment", () => {

@@ -634,6 +634,8 @@ def perform_building_reset(
             raise StaleBuildingResetPreview(
                 "O saldo disponível mudou. Confira a prévia atualizada antes de confirmar.", preview=preview
             )
+        if crystal_cost:
+            db.flush()
         crystal_items_after = _inventory_quantities(db, guild_id, "crystals")
         charge_items = []
         names = {int(row.id): str(row.name) for row in db.scalars(

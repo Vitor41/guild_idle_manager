@@ -5,12 +5,14 @@
 {% block content %}
   <section class="dashboard" aria-labelledby="buildings-title">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">{{ guild.name }}</p>
-        <h1 id="buildings-title">Construções</h1>
+      <div class="buildings-heading">
+        <div>
+          <p class="eyebrow">{{ guild.name }}</p>
+          <h1 id="buildings-title">Construções</h1>
+        </div>
+        <a class="button-link secondary buildings-heading__action" href="/buildings?reset_preview=1">Resetar construções</a>
       </div>
       <div class="user-menu">
-        <a class="button-link secondary" href="/buildings?reset_preview=1">Resetar construções</a>
         <a href="javascript:history.back()">Voltar</a>
         <a href="/dashboard">Dashboard</a>
         <a href="/mercenaries">Mercenários</a>
@@ -151,5 +153,4 @@
 
 {% block scripts %}
   {{ super() }}
-  <script src="/static/js/building-reset.js" defer></script>
 {% endblock %}

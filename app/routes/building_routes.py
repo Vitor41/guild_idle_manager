@@ -1,8 +1,8 @@
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
@@ -135,3 +135,27 @@ def reset_buildings(
             f"/buildings?reset_preview=1&error={quote(str(error))}", status_code=303,
         )
     return RedirectResponse(f"/buildings?reset_id={reset.id}", status_code=303)
+
+
+@router.get("/reset/status")
+def building_reset_status(
+    db: DbSession,
+    idempotency_key: str = Query(..., alias="key", min_length=36, max_length=36),
+    current_user: User | None = Depends(get_current_player),
+):
+    headers = {"Cache-Control": "no-store"}
+    if current_user is None:
+        return JSONResponse({"completed": False, "reset_id": None}, status_code=401, headers=headers)
+
+    guild, _resources = get_current_guild_context(db, current_user.id, sync_resources=False)
+    if guild is None:
+        return JSONResponse({"completed": False, "reset_id": None}, status_code=404, headers=headers)
+
+    reset = db.scalar(select(GuildBuildingReset).where(
+        GuildBuildingReset.guild_id == guild.id,
+        GuildBuildingReset.idempotency_key == idempotency_key,
+    ))
+    return JSONResponse(
+        {"completed": reset is not None, "reset_id": reset.id if reset is not None else None},
+        headers=headers,
+    )

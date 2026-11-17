@@ -220,6 +220,7 @@
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261117-1" defer></script>
     {% if request.url.path == '/market' %}<script src="{{ url_for('static', path='/js/market-max.js') }}?v=20261102-1" defer></script>{% endif %}
     <script src="{{ url_for('static', path='/js/offline-stamina.js') }}?v=20261030-1" defer></script>
+    <script src="{{ url_for('static', path='/js/building-reset.js') }}?v=20261117-1" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261117-2" defer></script>{% endif %}

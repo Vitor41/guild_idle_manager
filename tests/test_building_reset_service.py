@@ -1,3 +1,4 @@
+import json
 import unittest
 from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
@@ -181,6 +182,7 @@ class BuildingResetServiceTests(unittest.TestCase):
 
     def test_first_free_requires_level_ten_then_paid_costs_persist_and_round_up(self):
         building = self._building("warehouse")
+        guild_id = self.guild.id
         building.building_template.base_upgrade_gold_cost = 0
         building.building_template.base_upgrade_wood_cost = 0
         building.building_template.base_upgrade_ore_cost = 0
@@ -216,17 +218,77 @@ class BuildingResetServiceTests(unittest.TestCase):
             preview = get_building_reset_preview(self.db, self.guild.id)
             self.assertEqual(preview["crystal_cost"], expected)
             self.assertTrue(preview["can_confirm"])
-            self._reset(preview)
+            reset = self._reset(preview)
+            self.assertEqual(reset.charge_json, {
+                "crystal_cost": expected,
+                "crystal_reserve": expected,
+                "items": [],
+            })
+            replay = perform_building_reset(
+                self.db, self.guild.id,
+                expected_fingerprint=preview["fingerprint"],
+                idempotency_key=preview["idempotency_key"],
+            )
+            self.assertEqual(replay.id, reset.id)
+            self.assertEqual(replay.charge_json, reset.charge_json)
             self.db.commit()
             self.db.close()
             self.db = Session(self.engine, autoflush=False, expire_on_commit=False)
-            self.guild = self.db.get(Guild, self.guild.id)
-            self.resources = self.db.scalar(select(GuildResources).where(GuildResources.guild_id == self.guild.id))
-        state = self.db.get(GuildBuildingResetState, self.guild.id)
+            self.guild = self.db.get(Guild, guild_id)
+            self.resources = self.db.scalar(select(GuildResources).where(GuildResources.guild_id == guild_id))
+        state = self.db.get(GuildBuildingResetState, guild_id)
         self.assertEqual(state.paid_reset_count, 5)
         self.assertEqual(state.previous_paid_cost, 145)
         self.assertEqual(state.reset_count, 6)
         self.assertEqual(self.resources.crystal_reserve, 1_000 - sum(expected_costs))
+
+    def test_paid_reset_charge_records_exact_material_stacks_and_reserve_composition(self):
+        crystal_one, crystal_two = self._material_templates("crystals", 2)
+        warehouse = self._building("warehouse")
+        warehouse.level = 1
+        self.resources.crystal_reserve = 0
+        self.db.add(GuildBuildingResetState(
+            guild_id=self.guild.id, free_reset_used=True, paid_reset_count=0,
+            previous_paid_cost=0, reset_count=0,
+        ))
+        add_inventory_quantity(self.db, self.guild.id, crystal_one.id, 30)
+        add_inventory_quantity(self.db, self.guild.id, crystal_two.id, 20)
+        self.db.commit()
+
+        preview = get_building_reset_preview(self.db, self.guild.id)
+        self.assertEqual(preview["crystal_cost"], 50)
+        reset = self._reset(preview)
+        self.assertEqual(reset.charge_json["crystal_cost"], 50)
+        self.assertEqual(reset.charge_json["crystal_reserve"], 0)
+        self.assertEqual(
+            {item["item_template_id"]: item["quantity"] for item in reset.charge_json["items"]},
+            {crystal_one.id: 30, crystal_two.id: 20},
+        )
+        self.assertEqual(self.db.scalar(select(func.count(GuildBuildingReset.id))), 1)
+        self.assertEqual(self.db.get(GuildBuildingResetState, self.guild.id).paid_reset_count, 1)
+
+    def test_paid_reset_charge_records_mixed_material_and_reserve_exactly(self):
+        crystal_one, crystal_two = self._material_templates("crystals", 2)
+        warehouse = self._building("warehouse")
+        warehouse.level = 1
+        self.resources.crystal_reserve = 30
+        self.db.add(GuildBuildingResetState(
+            guild_id=self.guild.id, free_reset_used=True, paid_reset_count=0,
+            previous_paid_cost=0, reset_count=0,
+        ))
+        add_inventory_quantity(self.db, self.guild.id, crystal_one.id, 8)
+        add_inventory_quantity(self.db, self.guild.id, crystal_two.id, 12)
+        self.db.commit()
+
+        preview = get_building_reset_preview(self.db, self.guild.id)
+        self.assertEqual(preview["crystal_cost"], 50)
+        reset = self._reset(preview)
+        self.assertEqual(reset.charge_json["crystal_cost"], 50)
+        self.assertEqual(reset.charge_json["crystal_reserve"], 30)
+        self.assertEqual(
+            {item["item_template_id"]: item["quantity"] for item in reset.charge_json["items"]},
+            {crystal_one.id: 8, crystal_two.id: 12},
+        )
 
     def test_stale_preview_rejects_without_changing_building_or_balance(self):
         building = self._building("warehouse")
@@ -467,6 +529,9 @@ class BuildingResetServiceTests(unittest.TestCase):
         with patch("app.routes.building_routes.get_current_guild_context", return_value=(self.guild, self.resources)):
             response = buildings_index(Request(scope), self.db, user)
         html = response.body.decode("utf-8")
+        header_html = html.split('<header class="topbar">', 1)[1].split("</header>", 1)[0]
+        self.assertIn('class="button-link secondary buildings-heading__action"', header_html)
+        self.assertLess(header_html.index("buildings-heading__action"), header_html.index('class="user-menu"'))
         self.assertIn('data-building-reset-dialog open', html)
         self.assertIn("Custo do reset", html)
         self.assertIn("Você recebe", html)
@@ -506,6 +571,43 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertIn("Reset concluído", result_html)
         self.assertIn("Você recebe", result_html)
         self.assertEqual(self._building("warehouse").level, 0)
+
+    def test_reset_status_is_read_only_and_scoped_to_current_guild(self):
+        from app.routes.building_routes import building_reset_status
+
+        idempotency_key = str(uuid4())
+        other_campaign = CampaignMetadata(
+            campaign_id="00000000-0000-0000-0000-000000000146",
+            campaign_name="Outra campanha",
+            schema_version=8,
+            content_version=PACK_VERSION,
+            home_region="Vale da Fronteira",
+        )
+        other_guild = Guild(campaign_id=other_campaign.campaign_id, name="Outra guilda", level=10)
+        self.db.add(other_campaign)
+        self.db.add(other_guild)
+        self.db.flush()
+        self.db.add(GuildBuildingReset(
+            guild_id=other_guild.id,
+            idempotency_key=idempotency_key,
+            was_free=True,
+            crystal_cost=0,
+            charge_json={},
+            refund_json={},
+            levels_before_json={},
+            has_estimated_refund=False,
+        ))
+        self.db.commit()
+        user = SimpleNamespace(id=1, username="route-test", is_admin=False)
+
+        with patch("app.routes.building_routes.get_current_guild_context", return_value=(self.guild, self.resources)):
+            other_guild_status = building_reset_status(self.db, idempotency_key, user)
+            missing_status = building_reset_status(self.db, str(uuid4()), user)
+
+        self.assertEqual(json.loads(other_guild_status.body), {"completed": False, "reset_id": None})
+        self.assertEqual(json.loads(missing_status.body), {"completed": False, "reset_id": None})
+        self.assertEqual(other_guild_status.headers["cache-control"], "no-store")
+        self.assertEqual(self.db.scalar(select(func.count(GuildBuildingReset.id))), 1)
 
 
 class BuildingResetMigrationTests(unittest.TestCase):

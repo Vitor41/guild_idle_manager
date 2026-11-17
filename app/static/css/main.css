@@ -1025,7 +1025,17 @@ button.is-loading::after {
 .building-reset-actions [role="status"] { flex-basis: 100%; margin: 0; text-align: right; }
 .building-reset-actions :focus-visible { outline: 2px solid var(--teal, #68c3b5); outline-offset: 3px; }
 .building-reset-result { margin-bottom: 20px; }
+.buildings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.buildings-heading__action { flex: 0 0 auto; }
 @media (max-width: 620px) {
+  .buildings-heading { align-items: flex-start; gap: 10px; }
+  .buildings-heading__action { width: 100%; text-align: center; }
   .building-reset-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
   .building-reset-columns { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .building-reset-actions { justify-content: stretch; }
