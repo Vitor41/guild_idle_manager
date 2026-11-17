@@ -170,6 +170,29 @@ def _finalize_portal_event(db: Session, event: RegionalEvent, now: datetime) -> 
     db.add(event)
 
 
+def _portal_has_pending_cpu_cycle(db: Session, event: RegionalEvent) -> bool:
+    pending_cycle = db.scalar(select(RegionalCycle).where(
+        RegionalCycle.campaign_id == event.campaign_id,
+        RegionalCycle.cycle_number == event.trigger_cycle_number + 1,
+        RegionalCycle.status == "open",
+    ))
+    if pending_cycle is None:
+        return False
+    cycle_start = _utc(pending_cycle.starts_at_utc)
+    return _utc(event.created_at_utc) <= cycle_start < _utc(event.expires_at_utc)
+
+
+def _finalize_portal_event_when_ready(db: Session, event: RegionalEvent, now: datetime) -> None:
+    if _has_in_progress_activity(db, event.id):
+        _mark_event_waiting_for_started_activities(db, event)
+        return
+    # A portal created at the close of cycle N remains eligible for the CPU
+    # plan in cycle N+1. Every finalization path must wait for that open cycle.
+    if _portal_has_pending_cpu_cycle(db, event):
+        return
+    _finalize_portal_event(db, event, now)
+
+
 def _finalize_rebellion_event(db: Session, event: RegionalEvent, now: datetime) -> None:
     event.status = "resolved"
     event.resolved_at_utc = _utc(now)
@@ -285,30 +308,13 @@ def expire_due_events(db: Session, campaign_id: str, now: datetime) -> None:
         RegionalEvent.expires_at_utc <= current,
     )))
     for event in due:
-        if _has_in_progress_activity(db, event.id):
-            _mark_event_waiting_for_started_activities(db, event)
-            continue
         if event.event_type == "portal":
-            # A portal created at the close of cycle N can still be used by
-            # the CPU plan for cycle N+1. That plan is materialized only when
-            # the open cycle is processed, so an intervening request at the
-            # portal deadline must not erase the event before the plan runs.
-            pending_cycle = db.scalar(select(RegionalCycle).where(
-                RegionalCycle.campaign_id == event.campaign_id,
-                RegionalCycle.cycle_number == event.trigger_cycle_number + 1,
-                RegionalCycle.status == "open",
-            ))
-            if pending_cycle is not None:
-                cycle_start = _utc(pending_cycle.starts_at_utc)
-                event_created = _utc(event.created_at_utc)
-                event_deadline = _utc(event.expires_at_utc)
-                if event_created <= cycle_start < event_deadline:
-                    # Keep the original deadline. Player entry is still
-                    # blocked by the timestamp check in the portal routes.
-                    continue
-            _finalize_portal_event(db, event, _utc(event.expires_at_utc))
+            _finalize_portal_event_when_ready(db, event, _utc(event.expires_at_utc))
         elif event.event_type == "rebellion":
-            _finalize_rebellion_event(db, event, _utc(event.expires_at_utc))
+            if _has_in_progress_activity(db, event.id):
+                _mark_event_waiting_for_started_activities(db, event)
+            else:
+                _finalize_rebellion_event(db, event, _utc(event.expires_at_utc))
     if due or priority_due:
         db.flush()
 
@@ -967,10 +973,7 @@ def resolve_portal_participant(
     db.add_all([region, participant])
     current = _utc(now)
     if event.status == "in_progress" or current >= _utc(event.expires_at_utc):
-        if _has_in_progress_activity(db, event.id):
-            _mark_event_waiting_for_started_activities(db, event)
-        else:
-            _finalize_portal_event(db, event, current)
+        _finalize_portal_event_when_ready(db, event, current)
     db.flush()
 
 

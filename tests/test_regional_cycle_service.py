@@ -552,7 +552,7 @@ class RegionalCycleSimulationTests(unittest.TestCase):
             configure_database("sqlite:///:memory:")
 
     def test_portal_expiry_request_does_not_change_pending_cpu_cycle(self):
-        def run_scenario(expire_between_cycles: bool) -> tuple[object, ...]:
+        def run_scenario(*, visit_player: bool, collect_at_t4: bool) -> tuple[object, ...]:
             configure_database("sqlite:///:memory:")
             with tempfile.TemporaryDirectory() as temp_dir:
                 campaigns = CampaignService(Path(temp_dir) / "saves")
@@ -642,10 +642,12 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         db, created.campaign_id, guild.id,
                     )
                     player_source_run_id = 987654321
-                    player_activity = attach_event_activity(
-                        db, portal, player_state, "dungeon", player_source_run_id,
-                    )
-                    self.assertEqual(player_activity.status, "in_progress")
+                    player_activity = None
+                    if visit_player:
+                        player_activity = attach_event_activity(
+                            db, portal, player_state, "dungeon", player_source_run_id,
+                        )
+                        self.assertEqual(player_activity.status, "in_progress")
                     for offer in db.scalars(select(RegionalOffer).where(
                         RegionalOffer.cycle_id == cycle.id,
                         RegionalOffer.region_code == region_code,
@@ -655,17 +657,33 @@ class RegionalCycleSimulationTests(unittest.TestCase):
 
                     deadline = portal.expires_at_utc
                     original_deadline = regional_cycle_service._utc(deadline)
-                    if expire_between_cycles:
-                        # This is the GET/expire/commit that can happen while
-                        # the CPU plan for the just-opened cycle is pending.
-                        expire_due_events(db, created.campaign_id, deadline)
-                        db.commit()
+                    # This GET/expire/commit can run at T+3 while the CPU plan
+                    # for the just-opened cycle is still pending.
+                    expire_due_events(db, created.campaign_id, deadline)
+                    db.commit()
+                    db.refresh(portal)
+                    self.assertEqual(portal.status, "in_progress" if visit_player else "active")
+                    self.assertEqual(regional_cycle_service._utc(portal.expires_at_utc), original_deadline)
+                    self.assertIn(
+                        "prazo",
+                        _portal_action_blocker(db, campaign, portal, player_state, original_deadline).lower(),
+                    )
+
+                    if collect_at_t4:
+                        self.assertIsNotNone(player_activity)
+                        player_activity = record_event_activity_result(
+                            db, "dungeon", player_source_run_id, True,
+                            original_deadline + timedelta(hours=1),
+                        )
+                        self.assertIsNotNone(player_activity)
+                        resolve_portal_participant(
+                            db, player_activity, True, original_deadline + timedelta(hours=1),
+                        )
+                        db.flush()
                         db.refresh(portal)
-                        self.assertEqual(portal.status, "in_progress")
-                        self.assertEqual(regional_cycle_service._utc(portal.expires_at_utc), original_deadline)
-                        self.assertIn(
-                            "prazo",
-                            _portal_action_blocker(db, campaign, portal, player_state, original_deadline).lower(),
+                        self.assertEqual(
+                            portal.status, "in_progress",
+                            "player collection at T+4 must not finalize before the T+6 CPU plan",
                         )
 
                     close_time = cycle.ends_at_utc
@@ -688,12 +706,13 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         regional_cycle_service._utc(datetime.fromisoformat(decision["resolved_at_utc"])),
                         regional_cycle_service._utc(datetime.fromisoformat(decision["started_at_utc"])),
                     )
-                    self.assertEqual(portal.status, "in_progress")
-                    player_activity = record_event_activity_result(
-                        db, "dungeon", player_source_run_id, True, close_time,
-                    )
-                    self.assertIsNotNone(player_activity)
-                    resolve_portal_participant(db, player_activity, True, close_time)
+                    self.assertEqual(portal.status, "in_progress" if visit_player else "active")
+                    if player_activity is not None and player_activity.status == "in_progress":
+                        player_activity = record_event_activity_result(
+                            db, "dungeon", player_source_run_id, True, close_time,
+                        )
+                        self.assertIsNotNone(player_activity)
+                        resolve_portal_participant(db, player_activity, True, close_time)
                     expire_due_events(db, created.campaign_id, close_time)
                     db.commit()
                     activity = db.scalar(select(RegionalEventActivity).where(
@@ -715,23 +734,22 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         RegionalEventParticipant.event_id == portal.id,
                         RegionalEventParticipant.guild_state_id == cpu.id,
                     ))
-                    self.assertEqual(player_participant.status, "resolved")
                     self.assertEqual(cpu_participant.status, "resolved")
-                    player_activity = db.scalar(select(RegionalEventActivity).where(
-                        RegionalEventActivity.event_id == portal.id,
-                        RegionalEventActivity.source_run_id == player_source_run_id,
-                    ))
-                    self.assertEqual(player_activity.status, "resolved")
+                    if visit_player:
+                        self.assertEqual(player_participant.status, "resolved")
+                        player_activity = db.scalar(select(RegionalEventActivity).where(
+                            RegionalEventActivity.event_id == portal.id,
+                            RegionalEventActivity.source_run_id == player_source_run_id,
+                        ))
+                        self.assertEqual(player_activity.status, "resolved")
+                    else:
+                        self.assertIsNone(player_participant)
                     final_summary = json.loads(portal.summary_json)
-                    self.assertEqual(final_summary["aggregate"]["entries"], 2)
-                    self.assertEqual(
-                        final_summary["aggregate"]["successes"],
-                        player_activity.successes + activity.successes,
-                    )
-                    self.assertEqual(
-                        final_summary["aggregate"]["failures"],
-                        player_activity.failures + activity.failures,
-                    )
+                    self.assertEqual(final_summary["aggregate"]["entries"], 2 if visit_player else 1)
+                    self.assertEqual(final_summary["aggregate"]["successes"],
+                                     activity.successes + (player_activity.successes if player_activity else 0))
+                    self.assertEqual(final_summary["aggregate"]["failures"],
+                                     activity.failures + (player_activity.failures if player_activity else 0))
                     cycle_start_utc = regional_cycle_service._utc(cycle.starts_at_utc)
                     decision_start = regional_cycle_service._utc(
                         datetime.fromisoformat(decision["started_at_utc"]),
@@ -749,13 +767,25 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         final_summary["aggregate"]["failures"],
                         (regional_cycle_service._utc(portal.expires_at_utc) - cycle_start_utc).total_seconds(),
                     )
+                    final_summary_json = portal.summary_json
+                    advance_regional_world(db, campaign, guild, close_time)
+                    expire_due_events(db, created.campaign_id, close_time)
+                    db.commit()
+                    self.assertEqual(portal.summary_json, final_summary_json)
+                    self.assertEqual(db.scalar(select(func.count(RegionalEventActivity.id)).where(
+                        RegionalEventActivity.event_id == portal.id,
+                        RegionalEventActivity.source_type == "cpu_portal",
+                    )), 1)
                 configure_database("sqlite:///:memory:")
                 gc.collect()
                 return result
 
-        unattended = run_scenario(False)
-        visited_at_expiry = run_scenario(True)
-        self.assertEqual(visited_at_expiry, unattended)
+        unvisited_at_expiry = run_scenario(visit_player=False, collect_at_t4=False)
+        visited_and_collected_at_t4 = run_scenario(visit_player=True, collect_at_t4=True)
+        visited_and_collected_after_cpu = run_scenario(visit_player=True, collect_at_t4=False)
+        self.assertEqual(unvisited_at_expiry[2] + unvisited_at_expiry[3], 1)
+        self.assertEqual(unvisited_at_expiry[5:8], (1, "resolved", 1))
+        self.assertEqual(visited_and_collected_at_t4, visited_and_collected_after_cpu)
 
     def test_offline_catchup_resolves_cpu_rebellion_without_opening_regional_board(self):
         with tempfile.TemporaryDirectory() as temp_dir:

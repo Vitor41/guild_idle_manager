@@ -611,6 +611,15 @@ function preservePageContext(responseUrl, previousUrl) {
   return merged;
 }
 
+function preserveRequestedNavigationFragment(responseUrl, requestedUrl) {
+  const response = new URL(responseUrl, window.location.origin);
+  const requested = new URL(requestedUrl, window.location.origin);
+  if (response.origin === window.location.origin && requested.origin === response.origin && !response.hash) {
+    response.hash = requested.hash;
+  }
+  return response.href;
+}
+
 function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
   const incomingMain = parsedDocument.querySelector(".game-shell");
@@ -773,7 +782,7 @@ document.addEventListener("click", async (event) => {
     if (!response.ok) throw new Error("Falha ao atualizar a tela");
     replaceGameContent(
       await response.text(),
-      response.url,
+      preserveRequestedNavigationFragment(response.url || targetUrl.href, targetUrl.href),
       previousPath,
       scrollPosition,
       true,
