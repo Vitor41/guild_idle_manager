@@ -34,6 +34,10 @@ O log A1 inclui duas mensagens `ERROR [gim.requests]` emitidas durante os casos 
 | Delta de mensagem/link do reset | Aprovado pela DA e pelo CR, sem achados, em `4ec7ae65dfe54d0297629b04d89b7ee69ca98824`. | Parecer DA/CR; teste de rota e log Node acima |
 | Checagem do diff | `git diff --check` passou após os deltas. | Sem log separado |
 
+## Revisão cumulativa independente
+
+O CR aprovou tecnicamente a candidata cumulativa `67305d057ff2aeb37b5e44cf1d69fd0cb82c0df1`, revisada desde a base `14631be0efd62e7a03a1e67562afc81edf421a64`, sem achados bloqueantes. A bateria independente repetiu 20 testes e passou, incluindo smoke HTTP completo, Guia, coleta/mercado e viabilidade pública CPU. O parecer não declara a suíte completa de 383 testes aprovada.
+
 ## Limites restantes
 
 - O resultado integrado inicial permanece vermelho no histórico. Só as 21 ocorrências afetadas foram repetidas; não houve nova execução dos 383 testes como uma suíte única.
