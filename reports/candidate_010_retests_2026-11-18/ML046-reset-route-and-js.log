@@ -1,0 +1,20 @@
+Python SSR/route test
+----------------------------------------------------------------------
+Ran 1 test in 13.906s
+
+OK
+PYTHON_EXIT_CODE=0
+JavaScript tests
+✔ a lost POST response navigates to the read-only reset receipt (4.981ms)
+✔ an inconclusive status response restores an accessible retry with the same key (1.459ms)
+✔ a failed status lookup keeps the user informed and enables safe retry (1.1764ms)
+✔ a partial-navigation preview opens once and focuses Cancelar; a result page adds no preview (1.2579ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 133.6569
+NODE_EXIT_CODE=0

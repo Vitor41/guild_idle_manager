@@ -1,7 +1,8 @@
 # Candidate 0.10.0 — matriz de retestes direcionados
 
-**Branch:** `feature/vigilia-backlog-batch`  
-**SHA do código testado:** `45467f0e1fccd3a70915ff325b459db1dd5e67d6`  
+**Branch:** `feature/vigilia-backlog-batch`
+
+**SHA do código testado:** `45467f0e1fccd3a70915ff325b459db1dd5e67d6`
 **Base de comparação do candidato:** `14631be0efd62e7a03a1e67562afc81edf421a64`
 
 ## Como interpretar
