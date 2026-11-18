@@ -590,8 +590,12 @@ class CampaignService:
                                 deactivate_legacy_defaults=False,
                                 repair_required_gathering_materials=True,
                             )
-                            from app.services.gathering_service import freeze_legacy_assignment_targets
+                            from app.services.gathering_service import (
+                                freeze_legacy_assignment_targets,
+                                migrate_assignments_to_common_targets,
+                            )
                             freeze_legacy_assignment_targets(db)
+                            migrate_assignments_to_common_targets(db)
 
                         if needs_class_tree_repair:
                             # Keep the class transition backfill independent from

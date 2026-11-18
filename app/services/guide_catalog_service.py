@@ -88,8 +88,8 @@ def build_guide_catalog(db) -> dict[str, object]:
                 building = raw.get("required_building")
                 if building and building[0] and building[1]:
                     reqs.append(f"{building[0]} nível {building[1]}+")
-                if raw.get("min_dock_level", 1) > 1:
-                    reqs.append(f"Docas nível {raw['min_dock_level']}+")
+                if raw["type"] == "docks_possible_offer":
+                    reqs.append(f"Catálogo das Docas nível {raw.get('min_dock_level', 1)}+")
                 if raw["type"] == "gathering":
                     level_range = raw.get("guild_level_range") or [raw.get("guild_level", 1), raw.get("guild_level", 1)]
                     level_text = str(level_range[0]) if level_range[0] == level_range[1] else f"{level_range[0]}–{level_range[1]}"

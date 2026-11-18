@@ -10,14 +10,23 @@ from app.models import (
     GuildResources, ItemTemplate, MarketSale, Mercenary, MercenaryClass,
 )
 from app.models.gathering import GatheringAssignment
-from app.services.gathering_service import _material_template, advance_assignment, assign_worker, freeze_legacy_assignment_targets
+from app.services.gathering_service import (
+    CANONICAL_GATHERING_MATERIAL_SLUGS,
+    RESOURCE_FAMILIES,
+    _material_template,
+    advance_assignment,
+    assign_worker,
+    freeze_legacy_assignment_targets,
+    migrate_assignments_to_common_targets,
+    preview_material_for_family,
+)
 from app.services.inventory_capacity_service import get_inventory_capacity
 from app.services.market_service import (
     MarketError, _sale_duration_seconds, cancel_market_sale, collect_market_sale,
     get_market_bonuses, start_equipment_sale, start_material_sale,
 )
 from app.seeds.massive_content import (
-    MATERIAL_PROGRESS_STAGES, PACK_KEY, _legacy_material_rows, _material_rows,
+    PACK_KEY, _legacy_material_rows, _material_rows,
     _reconcile_material_progression,
 )
 
@@ -32,7 +41,7 @@ class LotBMaterialProgressionTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
-    def test_seed_matrix_covers_all_families_and_level_seven_selects_only_common_stage(self):
+    def test_gathering_uses_one_common_canonical_target_for_every_family_and_guild_level(self):
         rows = _material_rows()
         self.assertEqual(len(rows), 447)
         self.assertEqual(len({row["material_family"] for row in rows}), 13)
@@ -41,27 +50,21 @@ class LotBMaterialProgressionTests(unittest.TestCase):
         self.db.add(guild)
         self.db.flush()
 
-        selected_wood = _material_template(self.db, "wood", guild.level)
-        selected_ore = _material_template(self.db, "ore", guild.level)
-        self.assertIsNotNone(selected_wood)
-        self.assertIsNotNone(selected_ore)
-        self.assertIn("Bruta", selected_wood.name)
-        self.assertEqual(selected_wood.rarity, "common")
-        self.assertEqual(selected_wood.required_level, 1)
-        self.assertLessEqual(selected_wood.item_level, 7)
-        self.assertIn("de Cobre", selected_ore.name)
-        self.assertEqual(selected_ore.rarity, "common")
+        self.assertEqual(set(CANONICAL_GATHERING_MATERIAL_SLUGS), set(RESOURCE_FAMILIES))
+        self.assertEqual(CANONICAL_GATHERING_MATERIAL_SLUGS["ore"], "material_ore_2_002")
         mithril_rows = [row for row in rows if row["material_family"] == "ore" and "Mithril" in str(row["name"])]
         self.assertTrue(mithril_rows)
         self.assertTrue(all(row["required_level"] >= 101 and row["rarity"] == "epic" for row in mithril_rows))
 
-        for stage_index, (unlock, _end, rarity) in enumerate(MATERIAL_PROGRESS_STAGES):
-            guild.level = unlock
-            for family in {row["material_family"] for row in rows}:
+        for level in (1, 23, 350):
+            guild.level = level
+            for family, slug in CANONICAL_GATHERING_MATERIAL_SLUGS.items():
                 selected = _material_template(self.db, family, guild.level)
-                self.assertIsNotNone(selected, (family, unlock))
-                self.assertEqual(selected.required_level, unlock, (family, unlock, selected.name))
-                self.assertEqual(selected.rarity, rarity, (family, unlock, selected.name))
+                preview = preview_material_for_family(self.db, family, guild.level)
+                self.assertIsNotNone(selected, (family, level))
+                self.assertEqual(selected.slug, slug, (family, level))
+                self.assertEqual(selected.rarity, "common", (family, level))
+                self.assertEqual(preview.id, selected.id, (family, level))
 
     def test_legacy_content_reconciliation_is_idempotent_and_preserves_admin_edits_and_inventory(self):
         old_rows = {row["slug"]: row for row in _legacy_material_rows()}
@@ -112,6 +115,7 @@ class LotBMaterialProgressionTests(unittest.TestCase):
             power=5, vitality=5, agility=5, intelligence=5, luck=5,
         )
         raw = ItemTemplate(
+            slug="material_wood_1_001",
             name="Madeira Bruta", description="", item_type="material", rarity="common",
             material_family="wood", item_level=1, level_band="1-20", required_level=1, tier=1,
         )
@@ -159,6 +163,7 @@ class LotBMaterialProgressionTests(unittest.TestCase):
             power=5, vitality=5, agility=5, intelligence=5, luck=5,
         )
         raw = ItemTemplate(
+            slug="material_wood_1_001",
             name="Madeira Bruta migrada", description="", item_type="material", rarity="common",
             material_family="wood", item_level=6, level_band="1-20", required_level=1, tier=1,
         )
@@ -177,6 +182,71 @@ class LotBMaterialProgressionTests(unittest.TestCase):
         guild.level = 300
         self.assertEqual(freeze_legacy_assignment_targets(self.db), 0)
         self.assertEqual(assignment.target_item_template_id, raw.id)
+
+    def test_common_cutover_credits_old_cycles_and_keeps_fraction_and_inventory_identity(self):
+        rows = _material_rows()
+        self.db.add_all(ItemTemplate(**row) for row in rows)
+        guild = Guild(name="Limite transacional", level=350)
+        profession = MercenaryClass(
+            name="Trabalhador", code="cutover-worker", description="", base_power=5,
+            base_vitality=5, base_agility=5, base_intelligence=5, base_luck=5,
+        )
+        self.db.add_all([guild, profession])
+        self.db.flush()
+        workers = [Mercenary(
+            guild_id=guild.id, class_id=profession.id, name=f"Trabalhador {index}", level=1,
+            power=5, vitality=5, agility=5, intelligence=5, luck=5, status="gathering",
+        ) for index in (1, 2)]
+        self.db.add_all(workers)
+        self.db.flush()
+        wood_rare = self.db.scalar(select(ItemTemplate).where(
+            ItemTemplate.slug == "material_wood_1_025",
+        ))
+        ore_rare = self.db.scalar(select(ItemTemplate).where(
+            ItemTemplate.material_family == "ore", ItemTemplate.rarity != "common",
+        ).order_by(ItemTemplate.id))
+        self.assertNotEqual(wood_rare.rarity, "common")
+        self.assertNotEqual(ore_rare.rarity, "common")
+        cutoff = datetime(2026, 11, 17, 12, 0, tzinfo=timezone.utc)
+        completed_cycles = GatheringAssignment(
+            guild_id=guild.id, mercenary_id=workers[0].id, target_item_template_id=wood_rare.id,
+            resource_family="wood", node_code="forest", progress_seconds=30, cycle_count=4,
+            target_quantity=1000, quantity_collected=7, extra_chance=0, rng_seed=17,
+            started_at_utc=cutoff - timedelta(minutes=5), checkpoint_at_utc=cutoff - timedelta(seconds=90),
+        )
+        partial_cycle = GatheringAssignment(
+            guild_id=guild.id, mercenary_id=workers[1].id, target_item_template_id=ore_rare.id,
+            resource_family="ore", node_code="quarry", progress_seconds=15, cycle_count=9,
+            target_quantity=1000, quantity_collected=6, extra_chance=0, rng_seed=23,
+            started_at_utc=cutoff - timedelta(minutes=5), checkpoint_at_utc=cutoff - timedelta(seconds=20),
+        )
+        self.db.add_all([completed_cycles, partial_cycle,
+            GuildInventoryItem(guild_id=guild.id, item_template_id=wood_rare.id, quantity=5)])
+        self.db.flush()
+
+        migrated = migrate_assignments_to_common_targets(self.db, now=cutoff)
+
+        wood_common = self.db.scalar(select(ItemTemplate).where(ItemTemplate.slug == "material_wood_1_001"))
+        ore_common = self.db.scalar(select(ItemTemplate).where(ItemTemplate.slug == "material_ore_2_002"))
+        self.assertEqual(migrated, 2)
+        self.assertEqual(completed_cycles.target_item_template_id, wood_common.id)
+        self.assertEqual(completed_cycles.cycle_count, 6)
+        self.assertEqual(completed_cycles.progress_seconds, 0)
+        self.assertEqual(completed_cycles.quantity_collected, 9)
+        self.assertEqual(partial_cycle.target_item_template_id, ore_common.id)
+        self.assertEqual(partial_cycle.cycle_count, 9)
+        self.assertEqual(partial_cycle.progress_seconds, 35)
+        self.assertEqual(partial_cycle.quantity_collected, 6)
+        self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == guild.id,
+            GuildInventoryItem.item_template_id == wood_rare.id,
+        )), 7)
+        self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == guild.id,
+            GuildInventoryItem.item_template_id == wood_common.id,
+        )), None)
+        self.assertEqual(migrate_assignments_to_common_targets(self.db, now=cutoff), 0)
+        self.assertEqual(completed_cycles.cycle_count, 6)
 
 
 class LotBMarketTests(unittest.TestCase):

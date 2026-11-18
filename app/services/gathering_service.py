@@ -19,6 +19,17 @@ RESOURCE_FAMILIES = {
     "wood": "wood", "ore": "ore", "leather": "leather", "essence": "essence",
     "gem": "gem", "herb": "herb", "relic": "relic", "cloth": "cloth", "meat": "meat",
 }
+CANONICAL_GATHERING_MATERIAL_SLUGS = {
+    "wood": "material_wood_1_001",
+    "ore": "material_ore_2_002",
+    "leather": "material_leather_1_001",
+    "essence": "material_essence_1_001",
+    "gem": "material_gem_1_001",
+    "herb": "material_herb_1_001",
+    "relic": "material_relic_1_001",
+    "cloth": "material_cloth_1_001",
+    "meat": "material_meat_1_001",
+}
 NODE_CODES = {
     "wood": "forest", "ore": "quarry", "leather": "hunting_ground",
     "essence": "leyline", "gem": "crystal_cavern", "herb": "herb_garden",
@@ -51,7 +62,7 @@ def list_assignments(db: Session, guild_id: int) -> list[GatheringAssignment]:
     ))
 
 
-def _material_template(db: Session, family: str, guild_level: int) -> ItemTemplate | None:
+def _legacy_material_template(db: Session, family: str, guild_level: int) -> ItemTemplate | None:
     return db.scalar(
         select(ItemTemplate)
         .where(
@@ -68,8 +79,24 @@ def _material_template(db: Session, family: str, guild_level: int) -> ItemTempla
     )
 
 
+def _material_template(db: Session, family: str, guild_level: int) -> ItemTemplate | None:
+    """Return the fixed common target for a gathering family at every guild level."""
+    slug = CANONICAL_GATHERING_MATERIAL_SLUGS.get(family)
+    if slug is None:
+        return None
+    template = db.scalar(select(ItemTemplate).where(
+        ItemTemplate.slug == slug,
+        ItemTemplate.item_type == "material",
+        ItemTemplate.material_family == family,
+        ItemTemplate.is_active.is_(True),
+    ))
+    if template is None or template.rarity != "common":
+        return None
+    return template
+
+
 def preview_material_for_family(db: Session, family: str, guild_level: int) -> ItemTemplate | None:
-    """Return only an actually active and unlocked material for this post."""
+    """Return the same active common target regardless of guild level."""
     if family not in RESOURCE_FAMILIES:
         return None
     return _material_template(db, family, guild_level)
@@ -87,7 +114,7 @@ def freeze_legacy_assignment_targets(db: Session) -> int:
         guild = db.get(Guild, assignment.guild_id)
         if guild is None:
             continue
-        template = _material_template(db, assignment.resource_family, guild.level)
+        template = _legacy_material_template(db, assignment.resource_family, guild.level)
         if template is None:
             continue
         assignment.target_item_template_id = template.id
@@ -97,6 +124,55 @@ def freeze_legacy_assignment_targets(db: Session) -> int:
     if frozen:
         db.flush()
     return frozen
+
+
+def migrate_assignments_to_common_targets(db: Session, *, now: datetime | None = None) -> int:
+    """Cut existing gathering jobs over after crediting work up to one transaction boundary."""
+    cutoff = _utc(now or datetime.now(timezone.utc))
+    migrated = 0
+    assignments = list(db.scalars(
+        select(GatheringAssignment).order_by(GatheringAssignment.id)
+    ))
+    for assignment in assignments:
+        guild = db.get(Guild, assignment.guild_id)
+        if guild is None:
+            continue
+        common = _material_template(db, assignment.resource_family, guild.level)
+        if common is None:
+            raise ValueError(
+                f"O material comum canônico de {FAMILY_LABELS.get(assignment.resource_family, assignment.resource_family)} "
+                "não está disponível no catálogo. A campanha não foi atualizada."
+            )
+        if assignment.target_item_template_id == common.id:
+            continue
+
+        # A target-less legacy job has no safe identity to credit. Preserve its
+        # fractional progress and cycle counter, then start the common target at
+        # the cutoff instead of granting output retroactively.
+        if assignment.target_item_template_id is None:
+            legacy = _legacy_material_template(db, assignment.resource_family, guild.level)
+            if legacy is None:
+                assignment.checkpoint_at_utc = cutoff
+            else:
+                assignment.target_item_template = legacy
+                assignment.target_item_template_id = legacy.id
+                db.add(assignment)
+
+        if assignment.target_item_template_id is not None:
+            credited = advance_assignment(
+                db, guild, assignment, now=cutoff, max_seconds=OFFLINE_CAP_SECONDS,
+            )
+            if credited.get("completed"):
+                continue
+
+        assignment.target_item_template = common
+        assignment.target_item_template_id = common.id
+        assignment.checkpoint_at_utc = cutoff
+        db.add(assignment)
+        migrated += 1
+    if migrated:
+        db.flush()
+    return migrated
 
 
 def get_inventory_quantity_by_family(db: Session, guild_id: int) -> dict[str, int]:

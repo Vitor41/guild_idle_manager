@@ -33,11 +33,16 @@ class MaterialSourceManifestTests(unittest.TestCase):
                 self.assertEqual(active_families, {"wood", "ore", "stone", "leather", "cloth", "herb", "meat",
                     "essence", "gem", "beast", "relic", "catalyst", "insignia", "supply_kit"})
                 obtainable_ids = {row["item"]["id"] for row in manifest["materials"] if row["sources"]}
+                obtainable_without_gathering = {
+                    row["item"]["id"] for row in manifest["materials"]
+                    if any(source["type"] != "gathering" for source in row["sources"])
+                }
                 active_ingredient_ids = set(db.scalars(select(CraftingRecipeMaterial.item_template_id)
                     .join(CraftingRecipe, CraftingRecipe.id == CraftingRecipeMaterial.recipe_id)
                     .where(CraftingRecipe.is_active.is_(True))))
                 self.assertTrue(active_ingredient_ids)
                 self.assertTrue(active_ingredient_ids.issubset(obtainable_ids))
+                self.assertTrue(active_ingredient_ids.issubset(obtainable_without_gathering))
                 types = {source["type"] for row in manifest["materials"] for source in row["sources"]}
                 self.assertTrue({"mission", "dungeon_or_boss", "docks_possible_offer", "gathering",
                     "salvage", "workshop_output"}.issubset(types))
@@ -51,6 +56,31 @@ class MaterialSourceManifestTests(unittest.TestCase):
                 gathering = [s for row in manifest["materials"] for s in row["sources"]
                     if s["type"] == "gathering"]
                 self.assertTrue(all("guild_level_range" in source and "condition" in source for source in gathering))
+                self.assertTrue(all(source["guild_level_range"] == [1, 350] for source in gathering))
+
+                for slug, minimum_catalog_level, price, stock, weight in (
+                    ("material_essence_4_020", 3, 148, [5, 50], 90),
+                    ("material_relic_2_002", 1, 32, [5, 30], 110),
+                ):
+                    row = next(row for row in manifest["materials"] if row["item"]["slug"] == slug)
+                    offer = next(source for source in row["sources"] if source["type"] == "docks_possible_offer")
+                    self.assertEqual(offer["min_dock_level"], minimum_catalog_level)
+                    self.assertEqual(offer["effective_unit_price"], price)
+                    self.assertEqual(offer["stock_range"], stock)
+                    self.assertEqual(offer["weight"], weight)
+                essence_item = next(item for item in db.scalars(select(ItemTemplate))
+                    if item.slug == "material_essence_4_020")
+                relic_item = next(item for item in db.scalars(select(ItemTemplate))
+                    if item.slug == "material_relic_2_002")
+                guide = build_guide_catalog(db)
+                for item, expected_requirement in (
+                    (essence_item, "Catálogo das Docas nível 3+"),
+                    (relic_item, "Catálogo das Docas nível 1+"),
+                ):
+                    guide_row = next(row for row in guide["items"] if row["id"] == item.id)
+                    dock_source = next(source for source in guide_row["sources"] if source["type"] == "docks_possible_offer")
+                    self.assertIn(expected_requirement, dock_source["requirement"])
+                    self.assertIn("depende da rotação", dock_source["chance"])
 
                 late_variant = ItemTemplate(name="Minério desbloqueado no 350", description="", item_type="material",
                     rarity="common", material_family="ore", item_level=350, required_level=350,
@@ -62,9 +92,8 @@ class MaterialSourceManifestTests(unittest.TestCase):
                 db.commit()
                 expanded = build_material_source_manifest(db)
                 late_row = next(row for row in expanded["materials"] if row["item"]["id"] == late_variant.id)
-                self.assertTrue(any(source["type"] == "gathering" and source["guild_level_range"] == [350, 350]
-                    for source in late_row["sources"]))
-                self.assertNotIn(late_variant.id, {item["id"] for item in expanded["gaps"]})
+                self.assertFalse(any(source["type"] == "gathering" for source in late_row["sources"]))
+                self.assertIn(late_variant.id, {item["id"] for item in expanded["gaps"]})
                 self.assertIn(stranded_variant.id, {item["id"] for item in expanded["gaps"]})
                 stranded_row = next(row for row in expanded["materials"] if row["item"]["id"] == stranded_variant.id)
                 self.assertEqual(stranded_row["sources"], [])

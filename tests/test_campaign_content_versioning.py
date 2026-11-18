@@ -16,13 +16,14 @@ from app.desktop.lifecycle import close_campaign, open_campaign_with_migration
 from app.models.campaign import CampaignMetadata
 from app.models.class_change import ClassTransitionOption
 from app.models.content import ContentSeedRun
-from app.models.dock import MerchantOfferTemplate, MerchantTemplate
+from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild, GuildResources
 from app.models.item import DungeonTemplateItemDrop, GuildInventoryItem, ItemTemplate, MissionTemplateItemDrop
 from app.models.content import ProfessionTemplate
 from app.models.mission import MissionRun, MissionTemplate
 from app.models.mercenary import Mercenary, MercenaryClass
+from app.models.gathering import GatheringAssignment
 from app.models.regional import RegionalCycle, RegionalOffer
 from app.seeds.massive_content import PACK_KEY, PACK_VERSION
 from app.services.campaign_service import (
@@ -92,11 +93,11 @@ class CampaignContentVersioningTests(unittest.TestCase):
             finally:
                 campaigns.close_active_campaign(campaign.campaign_id)
 
-    def test_v6_class_tree_backfill_preserves_economy_snapshots_and_is_idempotent(self):
+    def test_current_content_class_tree_backfill_does_not_replay_economy_seed(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             campaigns = CampaignService(Path(temp_dir) / "saves")
-            created = campaigns.create_campaign("Árvore v6", "Guilda Árvore v6")
-            self.assertEqual(created.content_version, 6)
+            created = campaigns.create_campaign("Árvore de classe", "Guilda Árvore de classe")
+            self.assertEqual(created.content_version, PACK_VERSION)
             engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
             factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
             app = SimpleNamespace(state=SimpleNamespace(active_campaign=None, suspended_campaigns=set()))
@@ -109,12 +110,12 @@ class CampaignContentVersioningTests(unittest.TestCase):
             try:
                 with factory() as db:
                     metadata = db.get(CampaignMetadata, created.campaign_id)
-                    self.assertEqual(metadata.content_version, 6)
-                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
-                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 6,
-                    )))
+                    self.assertEqual(metadata.content_version, PACK_VERSION)
+                    db.execute(delete(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
+                    ))
                     self.assertFalse(db.scalar(select(ContentSeedRun).where(
-                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 7,
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
                     )))
                     self.assertIsNone(db.scalar(select(ContentSeedRun).where(
                         ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
@@ -144,7 +145,8 @@ class CampaignContentVersioningTests(unittest.TestCase):
                         campaign_id=created.campaign_id, cycle_number=999,
                         starts_at_utc=datetime(2026, 11, 1, tzinfo=timezone.utc),
                         ends_at_utc=datetime(2026, 11, 2, tzinfo=timezone.utc),
-                        seed="legacy-v6-snapshot", rules_version="v6-fixture", content_version=6,
+                        seed=f"legacy-v{PACK_VERSION - 1}-snapshot",
+                        rules_version=f"v{PACK_VERSION - 1}-fixture", content_version=PACK_VERSION - 1,
                         player_level_snapshot=17, player_power_snapshot=314, rank_weights_json="{}",
                     )
                     db.add(cycle)
@@ -180,15 +182,12 @@ class CampaignContentVersioningTests(unittest.TestCase):
                 )
                 active = True
                 self.assertIsNone(summary)
-                self.assertEqual(activated.content_version, 6)
+                self.assertEqual(activated.content_version, PACK_VERSION)
                 with factory() as db:
                     metadata = db.get(CampaignMetadata, created.campaign_id)
-                    self.assertEqual(metadata.content_version, 6)
-                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
-                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 6,
-                    )))
+                    self.assertEqual(metadata.content_version, PACK_VERSION)
                     self.assertFalse(db.scalar(select(ContentSeedRun).where(
-                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 7,
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
                     )))
                     self.assertEqual(db.scalar(select(func.count()).select_from(ContentSeedRun).where(
                         ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
@@ -219,8 +218,11 @@ class CampaignContentVersioningTests(unittest.TestCase):
                 )
                 active = True
                 self.assertIsNone(summary)
-                self.assertEqual(reopened.content_version, 6)
+                self.assertEqual(reopened.content_version, PACK_VERSION)
                 with factory() as db:
+                    self.assertFalse(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
+                    )))
                     self.assertEqual(db.scalar(select(func.count()).select_from(ClassTransitionOption)), transition_count_after)
                     self.assertEqual(db.scalar(select(func.count()).select_from(ContentSeedRun).where(
                         ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,

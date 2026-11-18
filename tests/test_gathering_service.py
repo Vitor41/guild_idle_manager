@@ -32,6 +32,7 @@ class GatheringServiceTests(unittest.TestCase):
         )
         self.db.add(self.worker)
         self.wood = ItemTemplate(
+            slug="material_wood_1_001",
             name="Madeira", description="", item_type="material", rarity="common",
             material_family="wood", item_level=1, level_band="1-20", tier=1,
         )
@@ -63,9 +64,9 @@ class GatheringServiceTests(unittest.TestCase):
             guild_id=self.guild.id, class_id=self.mercenary_class.id, name="Caçador",
             level=1, power=5, vitality=5, agility=5, intelligence=5, luck=5,
         )
-        meat = ItemTemplate(name="Carne de teste", description="", item_type="material", rarity="common",
+        meat = ItemTemplate(slug="material_meat_1_001", name="Carne de teste", description="", item_type="material", rarity="common",
                             material_family="meat", item_level=1, level_band="1-20", tier=1)
-        leather = ItemTemplate(name="Couro de teste", description="", item_type="material", rarity="common",
+        leather = ItemTemplate(slug="material_leather_1_001", name="Couro de teste", description="", item_type="material", rarity="common",
                                material_family="leather", item_level=1, level_band="1-20", tier=1)
         self.db.add_all([second_worker, meat, leather])
         self.db.flush()

@@ -16,7 +16,7 @@ from app.models.regional import RegionalOffer
 
 
 PACK_KEY = "conteudo_massivo_pos_mvp026"
-PACK_VERSION = 6
+PACK_VERSION = 7
 REQUIRED_MEAT_GATHERING_SLUG = "material_meat_1_001"
 BANDS = (
     ("1-20", 1, 20, 1, (10, 25, 45)),
@@ -547,6 +547,8 @@ def run_massive_content_seed(
     for merchant_index, merchant in enumerate(merchants):
         for offset in range(15):
             item = offer_items[(merchant_index * 23 + offset * 7) % len(offer_items)]
+            if item.slug in {"material_essence_4_020", "material_relic_2_002"}:
+                continue
             pair = (merchant.id, item.id)
             if pair in existing_offer_pairs:
                 continue
@@ -556,6 +558,57 @@ def run_massive_content_seed(
                 min_stock=1 if equipment_stock else 5, max_stock=1 if equipment_stock else 20 + item.tier * 10,
                 min_dock_level=max(1, min(10, item.tier)), weight=max(1, 120 - item.tier * 10), is_active=True))
             existing_offer_pairs.add(pair)
+    catalog_by_slug = {item.slug: item for item in material_items}
+    gap_offer_requirements = {
+        "material_essence_4_020": {
+            "min_dock_level": 3, "base_price": 148, "min_stock": 5, "max_stock": 50, "weight": 90,
+        },
+        "material_relic_2_002": {
+            "min_dock_level": 1, "base_price": 32, "min_stock": 5, "max_stock": 30, "weight": 110,
+        },
+    }
+    eligible_merchants = list(db.scalars(select(MerchantTemplate).where(
+        MerchantTemplate.is_active.is_(True), MerchantTemplate.min_dock_level <= 1,
+    ).order_by(MerchantTemplate.id)))
+    preferred_merchant = db.scalar(select(MerchantTemplate).where(
+        MerchantTemplate.slug == "mercante_011", MerchantTemplate.is_active.is_(True),
+        MerchantTemplate.min_dock_level <= 1,
+    ))
+    offer_merchant = preferred_merchant or (eligible_merchants[0] if eligible_merchants else None)
+    if offer_merchant is None:
+        raise ValueError("Não há mercante ativo no nível inicial das Docas para cadastrar as ofertas aprovadas.")
+
+    for slug, config in gap_offer_requirements.items():
+        item = catalog_by_slug.get(slug)
+        if item is None or not item.is_active:
+            raise ValueError(f"Material de lacuna ausente ou inativo no catálogo: {slug}.")
+        existing_rows = list(db.scalars(select(MerchantOfferTemplate).where(
+            MerchantOfferTemplate.item_template_id == item.id,
+        )))
+        # The approved route is exclusive to the Colecionador at its stated price.
+        # Keep historical rotations frozen, while aligning future template selection.
+        for existing in existing_rows:
+            existing.is_active = existing.merchant_template_id == offer_merchant.id
+            if existing.merchant_template_id == offer_merchant.id:
+                existing.base_price = config["base_price"]
+                existing.min_stock = config["min_stock"]
+                existing.max_stock = config["max_stock"]
+                existing.min_dock_level = config["min_dock_level"]
+                existing.weight = config["weight"]
+            db.add(existing)
+        preferred_offer = next((row for row in existing_rows
+            if row.merchant_template_id == offer_merchant.id), None)
+        if preferred_offer is None:
+            offers.append(MerchantOfferTemplate(
+                merchant_template_id=offer_merchant.id,
+                item_template_id=item.id,
+                base_price=config["base_price"],
+                min_stock=config["min_stock"],
+                max_stock=config["max_stock"],
+                min_dock_level=config["min_dock_level"],
+                weight=config["weight"],
+                is_active=True,
+            ))
     db.add_all(offers)
     db.flush()
 
