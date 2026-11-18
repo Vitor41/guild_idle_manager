@@ -129,6 +129,14 @@ class LotBMaterialProgressionTests(unittest.TestCase):
         self.db.add(assignment)
         self.db.flush()
 
+        self.assertEqual(
+            freeze_legacy_assignment_targets(
+                self.db, now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            ),
+            1,
+        )
+        self.assertEqual(assignment.target_item_template_id, raw.id)
+
         first = advance_assignment(
             self.db, guild, assignment,
             now=datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),

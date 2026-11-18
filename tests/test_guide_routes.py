@@ -165,7 +165,7 @@ class GuideRouteTests(unittest.TestCase):
         self.assertIn("dispensar o aviso não aceita o convite", markdown)
         self.assertIn("na ordem de registro do inventário", markdown)
         self.assertIn("retorno é sorteado por unidade entre 1 e 3 materiais", markdown)
-        self.assertIn("Versão: 0.9.0", markdown)
+        self.assertIn("Versão: 0.10.0", markdown)
         self.assertIn("Gerado em:", markdown)
         self.assertIn("| Raridade | Tempo-base por unidade |", markdown)
         for rarity, duration in (("Comum", "10 s"), ("Incomum", "25 s"), ("Raro", "60 s"), ("Épico", "180 s"), ("Lendário", "600 s"), ("Mítico", "1.200 s")):

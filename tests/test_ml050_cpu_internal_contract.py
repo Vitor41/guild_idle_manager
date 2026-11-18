@@ -253,14 +253,39 @@ class CpuInternalContractTests(unittest.TestCase):
                     public_offer = next(offer for offer in offers if offer.offer_type == "contract")
                     public_offer.required_guild_level_snapshot = 1
                     public_offer.duration_seconds_snapshot = 60
+                    public_offer.recommended_power_snapshot = 1
+                    public_offer.required_total_power_snapshot = 0
+                    public_offer.required_class_code_snapshot = None
+                    public_offer.required_tank_count_snapshot = 0
+                    public_offer.required_support_count_snapshot = 0
+                    public_offer.required_damage_count_snapshot = 0
+                    public_offer.required_equipment_tier_snapshot = 0
+                    public_offer.min_party_size_snapshot = 1
+                    public_offer.max_party_size_snapshot = 1
                     db.flush()
 
                     prepared_starts = regional_cycle_service._prepare_cpu_region_cycle_start(
                         db, info.campaign_id, cycle, region, [strong_cpu],
                     )
+                    prepared_start = prepared_starts[strong_cpu.id]
+                    roster = prepared_start["roster"]
+                    self.assertTrue(roster, "A fixture precisa de uma equipe CPU ativa.")
+                    self.assertEqual(public_offer.status, "available")
+                    cycle_start = regional_cycle_service._utc(cycle.starts_at_utc)
+                    busy_until = {
+                        member.id: cycle_start + timedelta(hours=1)
+                        for member in roster
+                    }
+                    self.assertIsNotNone(regional_cycle_service._cpu_offer_party(
+                        public_offer, strong_cpu, roster, busy_until,
+                        regional_cycle_service._utc(cycle.ends_at_utc), {},
+                        include_synergy_power=True,
+                        require_equipment_for_each_member=True,
+                        optimize_cpu_value=True,
+                    ), "A oferta pública precisa ser viável no início do planejamento.")
                     plan = regional_cycle_service._cpu_plan_for_guild_v6(
                         db, info.campaign_id, cycle, region, strong_cpu,
-                        prepared_start=prepared_starts[strong_cpu.id],
+                        prepared_start=prepared_start,
                     )[0]
                     decisions = json.loads(plan.decisions_json)
                     self.assertEqual(len(decisions), 1, decisions)

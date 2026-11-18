@@ -644,7 +644,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         close_campaign(app, saves, guard)
         open_campaign(app, saves, guard, campaign.campaign_id)
         assert b"data-market-fill-max" in rendered_pages["/market"]
-        assert b"alvo fica fixo at\xc3\xa9 liberar o trabalhador" in rendered_pages["/guide"]
+        assert b"Cada posto produz o mesmo material comum can\xc3\xb4nico da fam\xc3\xadlia em todos os n\xc3\xadveis da guilda" in rendered_pages["/guide"]
         assert b"cancelar antes do prazo" in rendered_pages["/guide"]
         assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
         assert b"Tempo base por raridade" not in rendered_pages["/market"]

@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 0.10.0 — Eventos regionais, progressão e qualidade de vida
+
+- Torna portais e rebeliões regionais mais fáceis de localizar e participar; usa 5% de chance por Vigília elegível nas novas regras de rebelião e preserva 2% nos ciclos legados. O prazo de entrada do portal continua correndo durante o processamento offline; acesso e cooldowns permanecem iguais.
+- Permite resetar construções com prévia de custos, reembolso e bloqueios; exibe drops e chances nos detalhes das atividades.
+- Ajusta a coleta para materiais comuns e reserva raridades superiores a fontes próprias, preservando a abertura e retomada funcional de campanhas existentes sem igualar sua economia à de campanhas novas.
+- Melhora a busca de materiais no Guia, os requisitos de troca de classe e a leitura de equipamentos, da desmontagem e das ofertas regionais.
+- Permite buscar outro Aprendiz sem contratar e demitir; ajusta ofertas internas da CPU sem torná-las acessíveis ao jogador.
+- Ajusta as faixas de nível recomendado dos contratos da Vigília aos marcos de progressão da guilda.
+- Registra o estudo de sustentabilidade do ranking; a fórmula e a pontuação atuais do ranking permanecem inalteradas.
+
 ## 0.9.0 — Progressão, oficinas e economia
 
 - Consolida melhorias aprovadas para eventos regionais, busca/exportação do Guia, indicadores de trabalho, oficinas e fluxo de atualização.

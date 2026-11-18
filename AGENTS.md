@@ -12,6 +12,8 @@ O checkout de implementação fica em `C:\Users\vitor\Guild Idle Manager\App GIM
 
 ## Fluxo obrigatório de cada entrega
 
+Este projeto segue o fluxo local deste arquivo. Não há `.pipeline/project.adapter.yaml` configurado neste checkout; essa ausência já foi verificada durante o pacote atual. Não procurar, gerar nem repetir a execução de um verificador que dependa desse adapter a cada item. Usar os testes reais do projeto e registrar a limitação uma vez no handoff. Uma esteira de outro projeto não substitui estes critérios locais.
+
 1. A conversa principal registra o escopo, critérios verificáveis, restrições e evidências esperadas. Quando houver trabalho visual, consulta a DA antes ou durante a implementação.
 2. Antes de editar, o DEV confere a branch, o commit-base e `git status`. Arquivos de usuário, saves, credenciais, relatórios e arquivos não rastreados não relacionados devem ser preservados.
 3. O DEV trabalha em uma branch própria da tarefa, dentro de `App GIM`; não cria worktrees ou cópias paralelas sem autorização.
@@ -56,3 +58,10 @@ Sem branch/hash imutáveis e evidência dos testes, a tarefa não está pronta p
 
 - O catálogo de Equipamentos e Materiais deve continuar derivado das fontes ativas da campanha e compartilhar a mesma estrutura com a tela e a exportação Markdown. Não trate ingredientes consumidos como fontes de obtenção, não invente chances e preserve os requisitos que limitam cada atividade.
 - Ao alterar os filtros, normalização de nomes, fontes ou exportação, mantenha testes de paridade API/HTML/Markdown e verifique que nenhuma resposta ou arquivo exportado contenha IDs, estoques ou progresso privados da guilda.
+
+## Campanhas existentes e decisões de coordenação
+
+- Diretriz do usuário: saves antigos não são prioridade de balanceamento econômico. Nunca corromper ou impedir a abertura de uma campanha existente, e permitir que funcionalidades novas sejam iniciadas nela para o usuário testar. Não exigir campanha nova por conveniência de implementação.
+- Não criar migrações, compensações, conversões ou regras econômicas complexas apenas para igualar campanhas antigas às novas. Um rebalanceamento pode valer somente para campanhas novas se preservar a integridade e o acesso funcional das existentes; documentar o alcance no handoff e no Guia quando relevante.
+- Regras de compatibilidade explicitamente aprovadas para uma entrega continuam válidas. Não apagar trabalho ou dados nem retirar garantias específicas sem evidência de necessidade e decisão de coordenação.
+- Quando o usuário delegar decisões de produto à conversa principal, o DEV encaminha dúvidas de regra a ela primeiro e continua o trabalho independente. Não abrir perguntas ao usuário apenas para repetir uma decisão já delegada. Aprovações de segurança, permissões reais e escolhas pessoais indispensáveis continuam com o usuário; se uma ferramenta aguardar resposta humana obrigatória, informar o bloqueio concreto.
