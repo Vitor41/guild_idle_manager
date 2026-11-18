@@ -54,6 +54,314 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
+    def test_contract_candidates_follow_guild_bands_and_keep_100_plus_ceiling(self):
+        from random import Random
+
+        expected_bands = (
+            (1, (1, 10)),
+            (9, (1, 10)),
+            (10, (5, 20)),
+            (14, (5, 20)),
+            (15, (10, 25)),
+            (24, (15, 30)),
+            (25, (20, 35)),
+            (29, (20, 35)),
+            (30, (25, 40)),
+            (49, (40, 55)),
+            (50, (45, 60)),
+            (99, (90, 105)),
+        )
+        with tempfile.TemporaryDirectory(
+            prefix="ml050-contract-bands-", dir=Path(__file__).resolve().parents[1],
+        ) as temp_dir:
+            try:
+                campaigns = CampaignService(Path(temp_dir) / "saves")
+                info = campaigns.create_campaign("Faixas ML-050", "Guilda Faixas")
+                campaigns.activate_campaign(info.campaign_id)
+                with SessionLocal() as db:
+                    campaign = db.get(CampaignMetadata, info.campaign_id)
+                    guild, _resources = get_current_guild_context(db, info.campaign_id)
+                    regional_cycle_service.ensure_campaign_world(db, campaign, guild)
+                    cpu_levels = set(db.scalars(select(RegionalCpuMercenary.level).where(
+                        RegionalCpuMercenary.campaign_id == info.campaign_id,
+                        RegionalCpuMercenary.active.is_(True),
+                    )))
+                    self.assertTrue({1, 2, 3, 5}.issubset(cpu_levels), cpu_levels)
+
+                    for guild_level, band in expected_bands:
+                        with self.subTest(guild_level=guild_level):
+                            self.assertEqual(
+                                regional_cycle_service._contract_recommended_level_band(guild_level),
+                                band,
+                            )
+                            pool = regional_cycle_service._contract_candidates(db, guild_level, 1)
+                            roster_independent_pool = regional_cycle_service._contract_candidates(
+                                db, guild_level, 350,
+                            )
+                            self.assertTrue(pool, f"no seeded contracts for guild level {guild_level}")
+                            self.assertEqual(
+                                [row.id for row in pool],
+                                [row.id for row in roster_independent_pool],
+                            )
+                            self.assertTrue(all(
+                                band[0] <= int(row.recommended_level) <= band[1]
+                                and int(row.required_min_mercenary_level) <= band[1]
+                                for row in pool
+                            ))
+                            templates = regional_cycle_service._select_contract_templates(
+                                roster_independent_pool, 10, Random(guild_level), guild_level, 350,
+                            )
+                            rank_sequence = ["E", "D", "C", "B", "A", "S", "E", "D", "C", "B"]
+                            paired = regional_cycle_service._pair_contract_templates_with_ranks(
+                                templates, rank_sequence,
+                            )
+                            self.assertEqual({rank for _template, rank in paired}, set(RANKS))
+                            self.assertTrue(all(
+                                band[0] <= int(template.recommended_level) <= band[1]
+                                for template, _rank in paired
+                            ))
+
+                    self.assertIsNone(regional_cycle_service._contract_recommended_level_band(100))
+                    guild_100_roster_1 = regional_cycle_service._contract_candidates(db, 100, 1)
+                    guild_100_roster_350 = regional_cycle_service._contract_candidates(db, 100, 350)
+                    self.assertTrue(guild_100_roster_1)
+                    self.assertTrue(guild_100_roster_350)
+                    self.assertLessEqual(max(row.recommended_level for row in guild_100_roster_1), 100)
+                    self.assertLessEqual(max(row.required_min_mercenary_level for row in guild_100_roster_1), 100)
+                    self.assertLessEqual(max(row.recommended_level for row in guild_100_roster_350), 350)
+                    self.assertLessEqual(max(row.required_min_mercenary_level for row in guild_100_roster_350), 350)
+                    self.assertGreater(
+                        max(row.recommended_level for row in guild_100_roster_350),
+                        max(row.recommended_level for row in guild_100_roster_1),
+                    )
+            finally:
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
+    def test_contract_cutover_preserves_existing_in_progress_offer_snapshot(self):
+        with tempfile.TemporaryDirectory(
+            prefix="ml050-contract-cutover-", dir=Path(__file__).resolve().parents[1],
+        ) as temp_dir:
+            try:
+                campaigns = CampaignService(Path(temp_dir) / "saves")
+                info = campaigns.create_campaign("Virada ML-050", "Guilda Virada")
+                campaigns.activate_campaign(info.campaign_id)
+                with SessionLocal() as db:
+                    campaign = db.get(CampaignMetadata, info.campaign_id)
+                    guild, _resources = get_current_guild_context(db, info.campaign_id)
+                    start = campaign.created_at_utc
+                    advance_regional_world(db, campaign, guild, start)
+                    first_cycle = db.scalar(select(RegionalCycle).where(
+                        RegionalCycle.campaign_id == info.campaign_id,
+                        RegionalCycle.cycle_number == 0,
+                    ))
+                    offer = db.scalar(select(RegionalOffer).where(
+                        RegionalOffer.cycle_id == first_cycle.id,
+                        RegionalOffer.offer_type == "contract",
+                    ).order_by(RegionalOffer.slot).limit(1))
+                    self.assertIsNotNone(offer)
+                    offer.status = "in_progress"
+                    frozen = (
+                        offer.name_snapshot,
+                        offer.rank,
+                        offer.recommended_level_snapshot,
+                        offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot,
+                        offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot,
+                        offer.success_chance_snapshot,
+                    )
+                    guild.level = 15
+                    db.flush()
+
+                    advance_regional_world(db, campaign, guild, start + timedelta(seconds=CYCLE_SECONDS))
+                    next_cycle = db.scalar(select(RegionalCycle).where(
+                        RegionalCycle.campaign_id == info.campaign_id,
+                        RegionalCycle.cycle_number == 1,
+                    ))
+                    next_offers = list(db.scalars(select(RegionalOffer).where(
+                        RegionalOffer.cycle_id == next_cycle.id,
+                        RegionalOffer.region_code == offer.region_code,
+                        RegionalOffer.offer_type == "contract",
+                    ).order_by(RegionalOffer.slot)))
+                    self.assertEqual(len(next_offers), 10)
+                    self.assertTrue(all(10 <= row.recommended_level_snapshot <= 25 for row in next_offers))
+                    self.assertEqual(offer.status, "in_progress")
+                    self.assertEqual((
+                        offer.name_snapshot,
+                        offer.rank,
+                        offer.recommended_level_snapshot,
+                        offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot,
+                        offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot,
+                        offer.success_chance_snapshot,
+                    ), frozen)
+            finally:
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
+    def test_ml050_short_cpu_trace_contract_dungeon_idle(self):
+        with tempfile.TemporaryDirectory(
+            prefix="ml050-short-cpu-trace-", dir=Path(__file__).resolve().parents[1],
+        ) as temp_dir:
+            try:
+                campaigns = CampaignService(Path(temp_dir) / "saves")
+                with patch(
+                    "app.services.campaign_service.uuid4",
+                    return_value=UUID("00000000-0000-4000-8000-000000000050"),
+                ):
+                    info = campaigns.create_campaign("Traço curto ML-050", "Guilda Traço")
+                campaigns.activate_campaign(info.campaign_id)
+                with SessionLocal() as db:
+                    campaign = db.get(CampaignMetadata, info.campaign_id)
+                    guild, _resources = get_current_guild_context(db, info.campaign_id)
+                    home_code = next(
+                        code for code, name in regional_cycle_service.REGIONS
+                        if name == campaign.home_region
+                    )
+                    start = campaign.created_at_utc
+                    advance_regional_world(db, campaign, guild, start)
+
+                    cpu_states = list(db.scalars(select(RegionalGuildState).where(
+                        RegionalGuildState.campaign_id == info.campaign_id,
+                        RegionalGuildState.guild_id.is_(None),
+                    )))
+                    cpu = next(
+                        state for state in cpu_states
+                        if state.region_code == home_code and state.profile == "strong"
+                    )
+                    for state in cpu_states:
+                        state.active = state.id == cpu.id
+                    cpu.archetype = "contracts"
+                    cpu.level = 50
+                    roster = list(db.scalars(select(RegionalCpuMercenary).where(
+                        RegionalCpuMercenary.guild_state_id == cpu.id,
+                        RegionalCpuMercenary.active.is_(True),
+                    ).order_by(RegionalCpuMercenary.slot)))
+                    self.assertTrue(roster)
+                    for member in roster:
+                        member.level = 5
+
+                    cycle_zero = db.scalar(select(RegionalCycle).where(
+                        RegionalCycle.campaign_id == info.campaign_id,
+                        RegionalCycle.cycle_number == 0,
+                    ))
+                    offers_zero = list(db.scalars(select(RegionalOffer).where(
+                        RegionalOffer.cycle_id == cycle_zero.id,
+                        RegionalOffer.region_code == home_code,
+                        RegionalOffer.offer_type == "contract",
+                    )))
+                    self.assertEqual(len(offers_zero), 10)
+                    self.assertTrue(all(1 <= offer.recommended_level_snapshot <= 10
+                                        for offer in offers_zero))
+
+                    guild.level = 49
+                    advance_regional_world(
+                        db, campaign, guild, start + timedelta(seconds=CYCLE_SECONDS),
+                    )
+                    plan_zero = db.scalar(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.cycle_id == cycle_zero.id,
+                        RegionalCpuCyclePlan.guild_state_id == cpu.id,
+                    ))
+                    decisions_zero = json.loads(plan_zero.decisions_json)
+                    self.assertTrue(decisions_zero, "CPU roster should take an eligible low-band offer")
+                    self.assertIn("contract", [row["offer_type"] for row in decisions_zero])
+
+                    cycle_one = db.scalar(select(RegionalCycle).where(
+                        RegionalCycle.campaign_id == info.campaign_id,
+                        RegionalCycle.cycle_number == 1,
+                    ))
+                    offers_one = list(db.scalars(select(RegionalOffer).where(
+                        RegionalOffer.cycle_id == cycle_one.id,
+                        RegionalOffer.region_code == home_code,
+                        RegionalOffer.offer_type == "contract",
+                    )))
+                    self.assertEqual(len(offers_one), 10)
+                    self.assertTrue(all(40 <= offer.recommended_level_snapshot <= 55
+                                        for offer in offers_one))
+                    # Adversarially make the high-band contracts require a guild
+                    # level above this rival's level; the real planner must fall back
+                    # to any feasible dungeon/boss rather than stalling on contracts.
+                    for offer in offers_one:
+                        offer.required_guild_level_snapshot = 51
+                    fallback_offers = list(db.scalars(select(RegionalOffer).where(
+                        RegionalOffer.cycle_id == cycle_one.id,
+                        RegionalOffer.region_code == home_code,
+                        RegionalOffer.offer_type.in_(("dungeon", "boss")),
+                    )))
+                    self.assertTrue(fallback_offers)
+                    for offer in fallback_offers:
+                        offer.required_guild_level_snapshot = 1
+                        offer.required_total_power_snapshot = 0
+                        offer.required_tank_count_snapshot = 0
+                        offer.required_support_count_snapshot = 0
+                        offer.required_damage_count_snapshot = 0
+                        offer.min_party_size_snapshot = 1
+                        offer.max_party_size_snapshot = 1
+
+                    cpu.archetype = "exploration"
+                    cpu.level = 50
+                    db.flush()
+                    fallback_id = fallback_offers[0].id
+
+                    def force_one_eligible_fallback(
+                        offer, state, party_roster, available_at, cycle_end, class_roles, **_kwargs,
+                    ):
+                        if offer.id != fallback_id or not party_roster:
+                            return None
+                        member = party_roster[0]
+                        start_at = max(
+                            available_at.get(member.id, cycle_end),
+                            cycle_end - timedelta(seconds=CYCLE_SECONDS) + timedelta(hours=1),
+                        )
+                        if start_at + timedelta(seconds=offer.duration_seconds_snapshot) > cycle_end:
+                            return None
+                        return start_at, [member]
+
+                    with patch.object(
+                        regional_cycle_service, "_cpu_offer_party",
+                        side_effect=force_one_eligible_fallback,
+                    ):
+                        advance_regional_world(
+                            db, campaign, guild, start + timedelta(seconds=2 * CYCLE_SECONDS),
+                        )
+                    plan_one = db.scalar(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.cycle_id == cycle_one.id,
+                        RegionalCpuCyclePlan.guild_state_id == cpu.id,
+                    ))
+                    decisions_one = json.loads(plan_one.decisions_json)
+                    self.assertTrue(decisions_one, "CPU should substitute an eligible exploration offer")
+                    self.assertIn(
+                        decisions_one[0]["offer_type"], {"dungeon", "boss"}, decisions_one,
+                    )
+                    self.assertEqual(decisions_one[0]["offer_id"], fallback_id)
+
+                    for member in roster:
+                        member.active = False
+                    cpu_gold = db.scalar(select(RegionalCpuResource).where(
+                        RegionalCpuResource.guild_state_id == cpu.id,
+                        RegionalCpuResource.resource_code == "gold",
+                    ))
+                    cpu_gold.amount = 0
+                    db.flush()
+                    cycle_two = db.scalar(select(RegionalCycle).where(
+                        RegionalCycle.campaign_id == info.campaign_id,
+                        RegionalCycle.cycle_number == 2,
+                    ))
+                    advance_regional_world(
+                        db, campaign, guild, start + timedelta(seconds=3 * CYCLE_SECONDS),
+                    )
+                    plan_two = db.scalar(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.cycle_id == cycle_two.id,
+                        RegionalCpuCyclePlan.guild_state_id == cpu.id,
+                    ))
+                    self.assertEqual(plan_two.actions, 0)
+                    self.assertEqual(json.loads(plan_two.decisions_json), [])
+            finally:
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
     def test_cpu_offer_policy_ranks_expected_xp_rate_before_rank(self):
         from app.services.regional_cycle_service import _cpu_offer_preference
 
@@ -1264,31 +1572,53 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     candidate_pool_metrics = {}
                     for stage_name, guild_level, roster_level, _stage_value in contract_stages:
                         pool = contract_pools[stage_name]
-                        challenge_ceiling = max(20, guild_level, roster_level)
-                        self.assertGreaterEqual(len(pool), 10)
-                        self.assertLessEqual(max(row.recommended_level for row in pool), challenge_ceiling)
+                        recommended_band = regional_cycle_service._contract_recommended_level_band(guild_level)
+                        if recommended_band is None:
+                            challenge_ceiling = max(20, guild_level, roster_level)
+                            self.assertTrue(all(row.recommended_level <= challenge_ceiling for row in pool))
+                        else:
+                            minimum_recommended, maximum_recommended = recommended_band
+                            challenge_ceiling = maximum_recommended
+                            self.assertTrue(all(
+                                minimum_recommended <= row.recommended_level <= maximum_recommended
+                                for row in pool
+                            ))
+                        self.assertTrue(pool)
                         self.assertLessEqual(max(row.required_min_mercenary_level for row in pool), challenge_ceiling)
                         candidate_pool_metrics[stage_name] = {
                             "guild_level": guild_level,
                             "roster_level": roster_level,
-                            "challenge_ceiling": challenge_ceiling,
+                            "recommended_band": list(recommended_band) if recommended_band else None,
+                            "legacy_100_plus_ceiling": challenge_ceiling if recommended_band is None else None,
                             "templates": len(pool),
                             "max_recommended_level": max(row.recommended_level for row in pool),
                             "max_required_mercenary_level": max(row.required_min_mercenary_level for row in pool),
                         }
                     guild_only_pool = regional_cycle_service._contract_candidates(db, 50, 50)
-                    self.assertLessEqual(max(row.recommended_level for row in guild_only_pool), 50)
+                    self.assertTrue(all(45 <= row.recommended_level <= 60 for row in guild_only_pool))
                     candidate_pool_metrics["guild_50_roster_50"] = {
                         "guild_level": 50,
                         "roster_level": 50,
-                        "challenge_ceiling": 50,
+                        "recommended_band": [45, 60],
                         "templates": len(guild_only_pool),
                         "max_recommended_level": max(row.recommended_level for row in guild_only_pool),
                         "max_required_mercenary_level": max(
                             row.required_min_mercenary_level for row in guild_only_pool
                         ),
                     }
-                    self.assertGreaterEqual(candidate_pool_metrics["late"]["max_recommended_level"], 301)
+                    guild_100_pool = regional_cycle_service._contract_candidates(db, 100, 350)
+                    self.assertTrue(guild_100_pool)
+                    self.assertLessEqual(max(row.recommended_level for row in guild_100_pool), 350)
+                    self.assertLessEqual(max(row.required_min_mercenary_level for row in guild_100_pool), 350)
+                    candidate_pool_metrics["guild_100_roster_350_legacy_rule"] = {
+                        "guild_level": 100,
+                        "roster_level": 350,
+                        "recommended_band": None,
+                        "legacy_100_plus_ceiling": 350,
+                        "templates": len(guild_100_pool),
+                        "max_recommended_level": max(row.recommended_level for row in guild_100_pool),
+                        "max_required_mercenary_level": max(row.required_min_mercenary_level for row in guild_100_pool),
+                    }
                     late_high_rank_counts = {"offers": 0, "eligible": 0}
                     early_s_levels = []
                     early_startability = {
@@ -1426,14 +1756,11 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     late_contracts = rank_template_correlation["contract_late"]
                     self.assertEqual(regional_cycle_service.rank_weights_for_stage(0.0)["S"], 1)
                     for contracts_at_stage in (early_contracts, mid_contracts, late_contracts):
-                        self.assertGreaterEqual(
-                            contracts_at_stage["S"]["avg_level"], contracts_at_stage["E"]["avg_level"] + 5,
+                        self.assertGreater(
+                            contracts_at_stage["S"]["avg_level"], contracts_at_stage["E"]["avg_level"],
                         )
                     self.assertTrue(early_s_levels)
-                    self.assertGreaterEqual(
-                        sum(early_s_levels) / len(early_s_levels), 10,
-                        "early S contracts should average into aspirational content",
-                    )
+                    self.assertTrue(all(1 <= level <= 10 for level in early_s_levels))
                     early_startability["avg_startable_offers_per_board"] = round(
                         early_startability["startable_offers"] / max(1, early_startability["boards"]), 3,
                     )

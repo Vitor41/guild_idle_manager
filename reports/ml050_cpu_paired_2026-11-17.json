@@ -1,0 +1,1007 @@
+{
+  "card": "ML-050",
+  "seed_start": 2026110301,
+  "seeds": [
+    2026110301,
+    2026110302,
+    2026110303,
+    2026110304,
+    2026110305
+  ],
+  "horizon_cycles": 100,
+  "runner": "simulator live services with identical seeded SQLite content, deterministic campaign UUIDs, and separate disposable databases",
+  "previous_rule": "recommended_level and required_min_mercenary_level <= max(20, guild_level, roster_level)",
+  "ml050_rule": "guild-level recommendation bands for 1-99; previous ceiling unchanged at 100+",
+  "data_source": {
+    "checkpoint": "ml050_cpu_paired_2026-11-17.checkpoint.json",
+    "configuration_sha256": "ef6101439163e32b853cc930e89b48af85f6f9b62d19c29fc79391c451626f85",
+    "source_sha256": {
+      "app/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "app/core/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "app/core/config.py": "f136fab465bf49d160f99c195d5eb82b5d3594fd4d8921ab156076e0e37be8cb",
+      "app/core/dependencies.py": "0f18e2178d170942154c5b02ad6006a304eb20903e2464943fd7d6abffaede17",
+      "app/core/forms.py": "24645bb8c4959a2761a123aac2b0b5a87fec429f2d95d1b331e7a4d952101c21",
+      "app/core/game_balance.py": "47c2840aa309f6f081221f6caaf5fd7b8ce3c287582dadb5ee554f3e2e78b44d",
+      "app/core/security.py": "fa052a885879cc0da6ad6ea0ec31e8b650208b39ceda448857013f6184a5ea90",
+      "app/core/time.py": "a95e83701b50e42d292bb4578dc5b71715bb10d53057c874a3985cfb34ad43f5",
+      "app/core/version.py": "f6d56479bc9d2f00774e9facc3e546f164f1475a1b9e77f2bb585c0a0a4543a4",
+      "app/database/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "app/database/connection.py": "d209b44cafac83f438c6506b79eb5131649ae028e5bff8a7b1965a44b0163ecf",
+      "app/desktop/__init__.py": "872a93632fa356ee2c8ed640c3aadf002ad26b74c9adf358100b317a1314e187",
+      "app/desktop/__main__.py": "0c549abafad9c5c458e06d40a9b01e087a89135c80d3959258ad588cc1be0fe6",
+      "app/desktop/bridge.py": "798260e9b33805263797ae677fabec16da4ca8994e677a8fa9090f2b55ed5165",
+      "app/desktop/clock_guard.py": "4d6ea4d5854bacdc4bab3f2365b7517b50a917b4025bf1d9c357e79c2ff00f88",
+      "app/desktop/gameplay_diagnostics.py": "97b8f0c52abd07be1b95a872685217a85cbf61b129d69c29a4324f1d24a23f1e",
+      "app/desktop/launcher.py": "3f0046dfbea950a3d3f619b02f2e677ecf94d2828f5d1befac618b26a478b90a",
+      "app/desktop/lifecycle.py": "bb20896bd71dab7f0325db80bbd10d1d04b22249426ea3f601337bd89c492cc2",
+      "app/desktop/offline_smoke.py": "55076efe1a613d8189724998624a81273ce039cebe7ddc0dbe58bef9969c6a11",
+      "app/desktop/paths.py": "130f169e4ced73414639927f5fa0f7d02d3b52477f090af4e49d1f981d9d6b84",
+      "app/desktop/routes.py": "5c4c1f27707ae5586adf05eac3380ba870feffe5fefa08d43bc83ea4b10af4be",
+      "app/desktop/update_launcher.py": "95f1ffb890647962b9179f97b74f502d94a2d993d2751fb73ac90671c151b8d9",
+      "app/main.py": "f0d1fad7a1ddacb6c0d57000008d42b0a8f864e34033a468f76c410324fb8901",
+      "app/models/__init__.py": "3c0d5137b391ff63a552ae55b3a6de58badfd89a63997426fddb300e87cdb43b",
+      "app/models/achievement.py": "206f627189e015f77c4d2ef2446dd0ea8363a1a51378748d0e38ce54e8221d57",
+      "app/models/building.py": "ca8ed5e0ccd9ef7fe87b1abd46085b07f20cf794e76a43a8313312502d6d2120",
+      "app/models/building_reset.py": "b5c2f583fd5864abb3443d260649fe8c609673f50699ad4c4a5c7c20baed8fb6",
+      "app/models/campaign.py": "d5a419f0275473d6bec86bcc66ffe3d548124430b22630abc37fa266992dc81b",
+      "app/models/class_change.py": "1308876d8e90dcab698bd184ad60a33ec7840fde4fa35dab0985d79887c376d7",
+      "app/models/content.py": "775acb0bec5ba273c08960e88837b3b7a78300384b53e11cfa0fddf4e8e54ea6",
+      "app/models/crafting.py": "7bd1f72cc72eec785748088cba6f6afe95a189706d4817c1b62a51262abbf72e",
+      "app/models/dock.py": "477918142a8a2da09d8ccb86c6fd0bbc415cd48f3191db7c832b68224a813232",
+      "app/models/dungeon.py": "b105c07875713361651ddce37f06c090457bc3de0ade96adb3b6c851c48808b4",
+      "app/models/gathering.py": "0d0f0261d0f6bbd0fbdfd1180881fd2d594cfe67f5844de58b8c36af6e30b10b",
+      "app/models/guild.py": "01da670ac8093feec8a5e97acd3699c8321451e9311a9d7fef2decd7f1db45ed",
+      "app/models/item.py": "6d578baf1bde45164ce31b1b0e6e9dca2a97d3d855fa6ae4c47128379974a3d5",
+      "app/models/market.py": "93dbd789aae667529adf815e987961910b1566450a7442e9c103fa21c094948b",
+      "app/models/mercenary.py": "dc6a3a27523b7f5a8458a9071e154a524f33485564bb8127049463cfc4ede6bb",
+      "app/models/mission.py": "e06ec47827f506d064595b71dbcaf6a8298552b75d125a66059e2635d085b702",
+      "app/models/regional.py": "9b27f6df17eae8aee2e7b9eb94f8b8f2a2360940c5099426152818092adcb4bf",
+      "app/models/salvage.py": "afd43e2541949738be113c3612a351e71acc358773b9406c185df3b2cae7ba7d",
+      "app/models/skill.py": "435fd39ddd0b61d9a85a8f9c0273ecd5d601a8f7705332bada70b357283064e7",
+      "app/models/tavern.py": "c04e29bbafe7d697962660492983783d5fd55ffeedf5d623753fefcc7dcde3ed",
+      "app/models/user.py": "d37c6a25e80723361a23116b08d0aa50f2334883cadc39e11b40edf3dcf952b4",
+      "app/models/workshop.py": "c85abbcd0f18648d31f1035d35125146de2135a67e2ab9af75d85c5dff9be06a",
+      "app/repositories/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "app/repositories/achievement_repository.py": "bb638f33b4e56a2ae99152941976e4d65d669e86d1537e176eddbc5464a9df22",
+      "app/repositories/building_repository.py": "7422dee3a9c61fe47e4e951810e11f7c009e1e2262250ad0bcfc3aa686044cce",
+      "app/repositories/class_change_repository.py": "642d52574e8c21d90924f0f76eb6b57993bec0015a56b32829035facb0dfe1a9",
+      "app/repositories/crafting_repository.py": "420000cabef12fba292b0baeaeffaaac977757bbf453bf764533d6d32035d399",
+      "app/repositories/dungeon_repository.py": "2c05439dc156222b27ed0fae2e048a436a71f8394cb2ea4df230f0a71a852a9b",
+      "app/repositories/guild_repository.py": "1c99fa7c6a5161fae8852b222b9bc3f3ebed971b71457accd21b701b0a102817",
+      "app/repositories/item_repository.py": "faec6c51ac2854f6b8f8ce7ea3edcd64df1c36e424afae1a315a3bb24851b398",
+      "app/repositories/market_repository.py": "1d68f6c2b2584d10243df6cca162011693391ee5031b3294086742f42cd78867",
+      "app/repositories/mercenary_repository.py": "cfd4f37833409e2f4c59a638f32ba8e9ccbc4e93b2e538619d3249a3e80f9cf8",
+      "app/repositories/mission_repository.py": "19cb1aea5d8f608dfa825d1e7623a9515e1259a7aa6fac1c1f726f0afe3622ad",
+      "app/repositories/salvage_repository.py": "052a4e039eb4c82180dd03a03377d0a615defd06cb7ccf1ecca3e44efc595f71",
+      "app/repositories/skill_repository.py": "9d168680297cdaf478de720c68d29f63fe1cfe82efa7772ee7c19ccb6e686048",
+      "app/repositories/tavern_repository.py": "62409c053b55ad1f2fe3ac2c0db9e13d7fb7bfb8aa5aab5c17572627709d5e07",
+      "app/repositories/user_repository.py": "aec3760d39ce2e7cf26cd23dd94b559cdd3c3b2d7446bfdc07c4709b12d6d6a6",
+      "app/routes/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "app/routes/admin_routes.py": "0e20d81b524f51d9d759d10c3f37846d1b35c2c65e9df4a88b1179b834ed59b1",
+      "app/routes/auth_routes.py": "b5dacd9d45679c3d43eebcb7a39a572d3e61053df0edc0ebfd7faca7891583fa",
+      "app/routes/blacksmith_routes.py": "d9582fdff2283836676056b98bf11d6cbdcff4268fb8f9e8472a0d2b7b4e7376",
+      "app/routes/building_routes.py": "63625660146463b8663a5e8bda8210a3dd6c45d4feca39d87adea950eb59fbb2",
+      "app/routes/class_change_routes.py": "7bf6378081a6ab40fa499bd16480a775dc3309abc31993de311ae29832a18042",
+      "app/routes/class_routes.py": "a4ea9c86bf8924b495ce7fb1e8f930c53f94ec968b43115a5ad07db9ed34b07c",
+      "app/routes/codex_routes.py": "2fbfa8c5176cb63de80d604ff49df51d0d8b2b557ea00b9af352ec2988954451",
+      "app/routes/dashboard_routes.py": "936513ef5e3c20d847427e331c0e72d24ce032f5b2f021b5723d0452498cb0b8",
+      "app/routes/dock_routes.py": "9313bbfb462b0764d016b381a41851689efbd8e97754cc5e93f6742142b1421b",
+      "app/routes/dungeon_routes.py": "a8bbe65f9c564f3797522e946bdc066b9c58e8c406e11cb43022f42b75e83ad4",
+      "app/routes/gathering_routes.py": "a568da5035cca252dee8bf0f42fe330e04be661946af1cbcd62efd25e0f5cc3f",
+      "app/routes/guide_routes.py": "ff6bd360f2a3e457bfa486037ec2937d7ea30055aadd4a78ca200c079322ebf5",
+      "app/routes/guild_routes.py": "da07e8213b884dd34d34e7a57a3308fbb25e83e85e45c68013e662444fb8b99e",
+      "app/routes/home_routes.py": "89cf755475f8409d8e5eb6e1f6023f6ede22efc332aee6e2d65b933592ed60a6",
+      "app/routes/inventory_routes.py": "32a18601575030b406f9ecd1826d8bd38606ab25569476ce714044468dcdf553",
+      "app/routes/market_routes.py": "5345e88bd3f200dd2083073193970bc79a259f27e5e75955a4e2b7e8604c4a07",
+      "app/routes/mercenary_routes.py": "0490fdce57226379e7287fd7e416a4c19d52bfe412779bae937c443f404b9447",
+      "app/routes/mission_routes.py": "c939e3a5ad5554c19900bf856a4d916d00a451ef205da90784d9de3d1b61c01e",
+      "app/routes/navigation_routes.py": "d8173c499ce845030d8bfd464faefef4ab2145dd6c4b3848c321a46652b5a895",
+      "app/routes/profession_routes.py": "db2bab6dc42c835b85e75d2289b77ddb410e209046a8a87f051e4b71526dd2a8",
+      "app/routes/progress_routes.py": "96b1818053742a6fc2afcbf3bb77704697e8049a1e4bcc52909ab54b7cd2a1f5",
+      "app/routes/regional_routes.py": "bd705b0571d6f0b7457e99593ab9771418e69fd4316e1e1e876d4af882b2fa4b",
+      "app/routes/session_routes.py": "a59511b210bea81c3a74e11d889768bbd23b67791f82c5ffdf1f687c86ccfe4d",
+      "app/routes/tavern_routes.py": "213ca7b1fbc3ac69a4c6530f047291bb7b868f96ab61e06d133f7c97b2fe5719",
+      "app/routes/tier_routes.py": "03f5ce7898dd16ef6b4e3b804293b71d3339888c292993eefd7d0884b3de8caa",
+      "app/routes/tutorial_routes.py": "c6e7434fd7a6bcded30c2ab55e81a36123fa542c5bf5bfdc0fa59a4b8a7dd248",
+      "app/routes/update_routes.py": "f9d2b2c37ef6dd1b7a4b9f2a4378475a471ef8e9d8c7b66ffe91ec5720ea8799",
+      "app/routes/workshop_routes.py": "ca34db2847d9c8bde7899c9cef3fd2a8b16657d63197203b0a2fb93017592620",
+      "app/seeds/__init__.py": "fe9c0e2ed9994d8e69cf831436ed8cf3b2301ce5ba03c18ff9c8bed483b1fd01",
+      "app/seeds/campaign_content.py": "3b7abb69c9a9846fc22b3dd563e4ab72e0042760a21b56f2278ae699af74f20c",
+      "app/seeds/massive_content.py": "58928423909b55a7a700bfc717102c00421ae03296d7c0b4fbd2d3164da5fe39",
+      "app/services/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "app/services/achievement_service.py": "6fb4c5c2983e1ca03138e5fd0d02a4a9fffcdddde313ce33b4c54b9ea309ce0c",
+      "app/services/admin_service.py": "c70ad82ff9e865764379bc4bba73222befeeea27f73b3f41cdee401add3da7b5",
+      "app/services/auth_service.py": "40082ae71dd5f2de11555a9f9a1a9571bf674abeac33a97da8a8a803cc3ecc0f",
+      "app/services/balance_service.py": "a4f7c06311ac5446440be99951a28779558fd6a8f7ad7ce5144eb961fd575c59",
+      "app/services/building_balance_service.py": "00083b5fdbf945d7788936bbff63099b0e6afe62613dcc9cc94a238440c9578a",
+      "app/services/building_reset_service.py": "e5ee0901f634ee9d1e2d1a57e4e9565fed3da531eba9bd157614391fe2efc24a",
+      "app/services/building_service.py": "038481999287ccc03c3e571137b71e22b78a8fff3844330fd56398db7a16f62d",
+      "app/services/campaign_service.py": "d32df7e42d6aca9246aaa378c9c80bd710a13649e945d80ec407567e32266138",
+      "app/services/class_change_presentation.py": "7db4570854f63d9feac36f766efaac53e55ae330fbe98a7aaafb43964f90e496",
+      "app/services/class_change_service.py": "0283e4502cc8507d49ad58b91c404e96c6686a4a359074c4dfde6f4fdb343b90",
+      "app/services/class_service.py": "1027be33a3d9920b2fd9456fafaa198b67b064a9070b4389aecd652a17e1f4ed",
+      "app/services/content_refinement_service.py": "43f1813c15c986070e1acce6f583bfd2b9a48f0ad536ada207ac8df3c1c21938",
+      "app/services/content_validation_service.py": "677389025f7f626e29ce8230e37a45f4619c50069d74685e4be09cc78db64e84",
+      "app/services/crafting_service.py": "0ad1e1ae16eb4c9a8a4d77f00bdbd9cfb1b92c6faf90e2e027ad6ab034e5a980",
+      "app/services/display_service.py": "f4f7004b66773e2c1ee94c5f103f0dddb254fbb56308d57f8725f6bf8e2a24d7",
+      "app/services/dock_service.py": "cee4a580b1f8a5da22a407e7bd8f897b2c2b6c3dab7801f9fea9a9a577b8fa26",
+      "app/services/drop_preview_service.py": "2e1778c34ea5a908380b4fca7e21b888965cd3df77f957a9010679d75141dd4a",
+      "app/services/dungeon_balance_study_service.py": "d969ef28e00a910d0c69dc7494ed5ad2350215d7b32a73679ca40a7b64a1184c",
+      "app/services/dungeon_service.py": "7a0c52046a980f8b675c9a9374921fc34bd71b089724b556318f4658f049e491",
+      "app/services/economy_pricing_service.py": "19737ec85c4ba3f90b575e63cdf95c762d5b7b9cd97bd35f87a7922dadb86bb8",
+      "app/services/equipment_service.py": "446ecb1a6d3bdf70a4e2a66cf67eca1714cf87cfdd1cc9230c7e419ae55bb0b0",
+      "app/services/evolution_art_service.py": "709c840eea0e9a3ccc81734de46340ac40b4970ae0571d4f7cbc015d297edc2c",
+      "app/services/gathering_service.py": "ff1023f4e29cbb33bd1bfc6522d23133c649e3aceb19ed5843bd0b2faea339ec",
+      "app/services/github_releases.py": "9513d86de4bbccede302570ec53d1fd9d0a876dffa9207556d71923d1186b943",
+      "app/services/guide_catalog_service.py": "0eaad3b018bbaa9910647d5a7fdd9c85f847471ceb0525583811562321981ebf",
+      "app/services/guild_progression_service.py": "58810254d7e97f672a91ea19e4837c20c6d7003cfb9cdc6ce0fa4bf2cd048947",
+      "app/services/guild_service.py": "ce3a0934d991f6f9f3a30fbb0fe7fff58bfefe28772dd389996ab8443667b5e8",
+      "app/services/icon_service.py": "9b7bdc557301e7ad3b9fdd1a239b1322cceb1e853997743f21326dd67e5032ad",
+      "app/services/inventory_capacity_service.py": "f67afc543e3b8cc920b490e4e653da3c83c876913f11a9cc892e0a1921cdd144",
+      "app/services/inventory_service.py": "66fab1f06eec6ebc3f9300673326c682b0e2442179342febec4df187a6a98bfd",
+      "app/services/item_service.py": "a0948ce02576ad5a48d46bd7897dfa3d9770f58acaa198fec0c699a9b7e431ce",
+      "app/services/market_service.py": "9996586bcd28374cd9c1b80b4379a56d763dc28e3391a3b02f57aba62dc4b013",
+      "app/services/material_source_manifest.py": "78fc7ff81842a265e09e8faa3a4124f4610041599bcd08bbab7e7e089017e3dd",
+      "app/services/mercenary_name_service.py": "d82640b2c83421a12e28a6a0360e6f72418be1f91d1933de6e00c8231c39965f",
+      "app/services/mercenary_service.py": "3f7ab886b43bd6341f8a9b5828d5818a36a169f577299557fa3cbce9e6d91ce8",
+      "app/services/mission_power_service.py": "7a4794a9c9694e668804ceaf6945b04d1a4f3b5e793dc465052f74895038fcdf",
+      "app/services/mission_service.py": "cf6552d7fd300628451f88113b0e89f5db6a06ed1748da0780b3f9032a074b41",
+      "app/services/navigation_work_status_service.py": "51f5911b6e77c42605e4b044b9b6d74531d9c32bf613d51deae5496094513ed5",
+      "app/services/offline_progress_service.py": "1375798532a2b7a5506c0dd8e70d344c3fb327fe424085ee8f9a0f1726214c8e",
+      "app/services/prd2_balance_service.py": "1b551e38193814075b7f45d79755b8a19a22da5e2e2268775bb9c79a22f3c54d",
+      "app/services/prd2_qa_service.py": "7055935fee2da0d71f44700ba1a066dd2756b7606c11373998c520ddbc3d0f9f",
+      "app/services/prd3_dungeon_balance_service.py": "9a21aa5da016b1be20b9bdab98b48f4c6d84a8ceae46c91e1473da2ba6f5836c",
+      "app/services/prd3_dungeon_qa_service.py": "d8cbe58cb59aff9aeb3cfde1004513be844af9663087480cdd5bc340f3d1aaf5",
+      "app/services/profession_service.py": "a79fe705562d834ab24964319436f4e51d9b8afe75a4052f869134fa3bfc8b4b",
+      "app/services/progression_service.py": "39c4a225493030b0f0116da1d3de903ce813d5d55bba04cf8bd524492f40bd75",
+      "app/services/progression_simulation_service.py": "57e0b3091f743334c4dded9f0a5ce37d223f77c817f5aab714115ad89afd6152",
+      "app/services/regional_cycle_service.py": "929277ba768ffcd9deeb4683fba6a888277af56c2ea391ab1589994c099eccb1",
+      "app/services/regional_event_service.py": "473759727f709992080d3188f9538435e9fa05ccfe38fb749eca593510edaada",
+      "app/services/result_detail_service.py": "57637cfefe13b4e5d7f756776efcb5e3017776b28147358438f8f29b9291de2b",
+      "app/services/salvage_service.py": "4b06fde8947ea47c3e8f3bba28f8dc0a692f58e23f13fac7da03d053842b421d",
+      "app/services/session_service.py": "e1c64cbdf3f1078192e81efa54a662e22b97282d41bafd2885352292cab62773",
+      "app/services/skill_service.py": "638123ba78943ac695b11c7a3d7fa557673a131706df311067f281a7685982df",
+      "app/services/supply_preparation_service.py": "652ec8fe7b630a5f3fe499089e149d266b73c3545d9a12928ef299ed36c2ca55",
+      "app/services/tavern_service.py": "0fb84b69bc1169a55c8b11b11a4acff2c0c1023c0140101308f5b8021230a58c",
+      "app/services/tier_service.py": "d5661e20319b2b8ef435ffc2fee49a309c782c2243d8595789febc85da494e45",
+      "app/services/workshop_service.py": "7bf8c9e2b2701dd9d1e7bc9586ab9cc5ad0b20c3d28a1f0d0edef23d071b4d55",
+      "requirements-desktop-dev.txt": "d9cd84b4a2a59cb81092f40b337201a6c621247800de1f5e61f0cea4c8f45b21",
+      "requirements.txt": "d9372b875c3b615e5ff63f7fdf167b71024ced5eb1192759ccfbfab64f54f99d",
+      "scripts/balance/compare_ml050_cpu_campaigns.py": "bdb395c1b4eb198392d29a4362bd5e1c9e8e06ec6e3a9c8f02390993917a9a15",
+      "scripts/balance/simulate_regional_cpu_campaigns.py": "8704c732548a3d875cc5c4c8e867c3d3de5bb836d3d110ed6b2095c805675881"
+    },
+    "profile_metrics": "raw per-profile counters saved after each seed/variant completed",
+    "runner_totals": "cpu_actions_total and cpu_xp_net returned by the live campaign simulator"
+  },
+  "campaigns": [
+    {
+      "seed": 2026110301,
+      "previous": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 997,
+            "dungeon": 3,
+            "boss": 17,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 1021,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0197,
+          "xp_earned": 352013,
+          "mean_final_guild_level": 20.4,
+          "mean_guild_level_gain": 16.6,
+          "mean_final_active_mercenary_level": 6.6,
+          "active_mercenaries": 58,
+          "mean_max_inactive_streak": 4.6,
+          "longest_inactive_streak": 7,
+          "guild_cycles_with_activity_percent": 26.6
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1177,
+            "dungeon": 13,
+            "boss": 13,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1205,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0216,
+          "xp_earned": 351240,
+          "mean_final_guild_level": 20.2,
+          "mean_guild_level_gain": 17.4,
+          "mean_final_active_mercenary_level": 6.12,
+          "active_mercenaries": 49,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 27.6
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 2826,
+            "dungeon": 8,
+            "boss": 24,
+            "portal": 4,
+            "other": 4
+          },
+          "activity_starts_total": 2866,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0112,
+          "xp_earned": 596879,
+          "mean_final_guild_level": 16.21,
+          "mean_guild_level_gain": 14.36,
+          "mean_final_active_mercenary_level": 6.44,
+          "active_mercenaries": 93,
+          "mean_max_inactive_streak": 4.21,
+          "longest_inactive_streak": 9,
+          "guild_cycles_with_activity_percent": 22.14
+        }
+      },
+      "ml050": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 958,
+            "dungeon": 4,
+            "boss": 23,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 987,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0274,
+          "xp_earned": 340194,
+          "mean_final_guild_level": 19.4,
+          "mean_guild_level_gain": 15.6,
+          "mean_final_active_mercenary_level": 7.04,
+          "active_mercenaries": 56,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 27.4
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1169,
+            "dungeon": 12,
+            "boss": 16,
+            "portal": 0,
+            "other": 0
+          },
+          "activity_starts_total": 1197,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0234,
+          "xp_earned": 315985,
+          "mean_final_guild_level": 19.0,
+          "mean_guild_level_gain": 16.2,
+          "mean_final_active_mercenary_level": 6.15,
+          "active_mercenaries": 46,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 26.2
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 2873,
+            "dungeon": 9,
+            "boss": 22,
+            "portal": 4,
+            "other": 4
+          },
+          "activity_starts_total": 2912,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0107,
+          "xp_earned": 561820,
+          "mean_final_guild_level": 15.07,
+          "mean_guild_level_gain": 13.21,
+          "mean_final_active_mercenary_level": 6.2,
+          "active_mercenaries": 87,
+          "mean_max_inactive_streak": 3.86,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 22.07
+        }
+      }
+    },
+    {
+      "seed": 2026110302,
+      "previous": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1247,
+            "dungeon": 28,
+            "boss": 18,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1295,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0356,
+          "xp_earned": 451181,
+          "mean_final_guild_level": 23.0,
+          "mean_guild_level_gain": 19.2,
+          "mean_final_active_mercenary_level": 6.76,
+          "active_mercenaries": 62,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 32.4
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1030,
+            "dungeon": 0,
+            "boss": 11,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 1045,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0106,
+          "xp_earned": 304532,
+          "mean_final_guild_level": 18.8,
+          "mean_guild_level_gain": 16.0,
+          "mean_final_active_mercenary_level": 6.26,
+          "active_mercenaries": 46,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 21.4
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 2723,
+            "dungeon": 10,
+            "boss": 21,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 2758,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0113,
+          "xp_earned": 591984,
+          "mean_final_guild_level": 15.71,
+          "mean_guild_level_gain": 13.86,
+          "mean_final_active_mercenary_level": 6.26,
+          "active_mercenaries": 92,
+          "mean_max_inactive_streak": 4.57,
+          "longest_inactive_streak": 14,
+          "guild_cycles_with_activity_percent": 23.0
+        }
+      },
+      "ml050": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1158,
+            "dungeon": 27,
+            "boss": 22,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1209,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0406,
+          "xp_earned": 410580,
+          "mean_final_guild_level": 21.6,
+          "mean_guild_level_gain": 17.8,
+          "mean_final_active_mercenary_level": 6.68,
+          "active_mercenaries": 60,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 31.2
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1007,
+            "dungeon": 1,
+            "boss": 10,
+            "portal": 0,
+            "other": 0
+          },
+          "activity_starts_total": 1018,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0108,
+          "xp_earned": 270295,
+          "mean_final_guild_level": 17.2,
+          "mean_guild_level_gain": 14.4,
+          "mean_final_active_mercenary_level": 5.81,
+          "active_mercenaries": 43,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 21.0
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 2835,
+            "dungeon": 9,
+            "boss": 16,
+            "portal": 0,
+            "other": 0
+          },
+          "activity_starts_total": 2860,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0087,
+          "xp_earned": 560560,
+          "mean_final_guild_level": 15.0,
+          "mean_guild_level_gain": 13.14,
+          "mean_final_active_mercenary_level": 6.06,
+          "active_mercenaries": 88,
+          "mean_max_inactive_streak": 4.14,
+          "longest_inactive_streak": 8,
+          "guild_cycles_with_activity_percent": 23.21
+        }
+      }
+    },
+    {
+      "seed": 2026110303,
+      "previous": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1054,
+            "dungeon": 20,
+            "boss": 30,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1106,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0453,
+          "xp_earned": 442642,
+          "mean_final_guild_level": 22.8,
+          "mean_guild_level_gain": 19.0,
+          "mean_final_active_mercenary_level": 7.24,
+          "active_mercenaries": 62,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 29.8
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 917,
+            "dungeon": 3,
+            "boss": 9,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 933,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0129,
+          "xp_earned": 250194,
+          "mean_final_guild_level": 17.0,
+          "mean_guild_level_gain": 14.2,
+          "mean_final_active_mercenary_level": 6.12,
+          "active_mercenaries": 43,
+          "mean_max_inactive_streak": 4.8,
+          "longest_inactive_streak": 9,
+          "guild_cycles_with_activity_percent": 23.6
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 3029,
+            "dungeon": 10,
+            "boss": 21,
+            "portal": 3,
+            "other": 3
+          },
+          "activity_starts_total": 3066,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0101,
+          "xp_earned": 660901,
+          "mean_final_guild_level": 16.86,
+          "mean_guild_level_gain": 15.07,
+          "mean_final_active_mercenary_level": 6.45,
+          "active_mercenaries": 96,
+          "mean_max_inactive_streak": 4.07,
+          "longest_inactive_streak": 7,
+          "guild_cycles_with_activity_percent": 25.07
+        }
+      },
+      "ml050": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 971,
+            "dungeon": 23,
+            "boss": 23,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1019,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0452,
+          "xp_earned": 361026,
+          "mean_final_guild_level": 20.0,
+          "mean_guild_level_gain": 16.2,
+          "mean_final_active_mercenary_level": 6.82,
+          "active_mercenaries": 57,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 28.6
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 961,
+            "dungeon": 7,
+            "boss": 12,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 984,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0194,
+          "xp_earned": 269338,
+          "mean_final_guild_level": 17.4,
+          "mean_guild_level_gain": 14.6,
+          "mean_final_active_mercenary_level": 6.23,
+          "active_mercenaries": 43,
+          "mean_max_inactive_streak": 4.6,
+          "longest_inactive_streak": 7,
+          "guild_cycles_with_activity_percent": 24.0
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 3068,
+            "dungeon": 9,
+            "boss": 19,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 3100,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.009,
+          "xp_earned": 612017,
+          "mean_final_guild_level": 15.86,
+          "mean_guild_level_gain": 14.07,
+          "mean_final_active_mercenary_level": 6.04,
+          "active_mercenaries": 92,
+          "mean_max_inactive_streak": 3.86,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 25.0
+        }
+      }
+    },
+    {
+      "seed": 2026110304,
+      "previous": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1193,
+            "dungeon": 5,
+            "boss": 33,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 1235,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0309,
+          "xp_earned": 466900,
+          "mean_final_guild_level": 23.6,
+          "mean_guild_level_gain": 19.8,
+          "mean_final_active_mercenary_level": 7.5,
+          "active_mercenaries": 62,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 30.8
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1045,
+            "dungeon": 14,
+            "boss": 13,
+            "portal": 2,
+            "other": 2
+          },
+          "activity_starts_total": 1076,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0252,
+          "xp_earned": 318208,
+          "mean_final_guild_level": 19.2,
+          "mean_guild_level_gain": 16.4,
+          "mean_final_active_mercenary_level": 6.15,
+          "active_mercenaries": 47,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 24.0
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 2762,
+            "dungeon": 11,
+            "boss": 22,
+            "portal": 5,
+            "other": 5
+          },
+          "activity_starts_total": 2805,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0118,
+          "xp_earned": 579228,
+          "mean_final_guild_level": 15.79,
+          "mean_guild_level_gain": 13.93,
+          "mean_final_active_mercenary_level": 6.25,
+          "active_mercenaries": 89,
+          "mean_max_inactive_streak": 4.5,
+          "longest_inactive_streak": 13,
+          "guild_cycles_with_activity_percent": 24.29
+        }
+      },
+      "ml050": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1123,
+            "dungeon": 9,
+            "boss": 21,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1155,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.026,
+          "xp_earned": 372850,
+          "mean_final_guild_level": 20.6,
+          "mean_guild_level_gain": 16.8,
+          "mean_final_active_mercenary_level": 6.86,
+          "active_mercenaries": 58,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 27.8
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1058,
+            "dungeon": 14,
+            "boss": 10,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1084,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0222,
+          "xp_earned": 290015,
+          "mean_final_guild_level": 18.0,
+          "mean_guild_level_gain": 15.2,
+          "mean_final_active_mercenary_level": 6.02,
+          "active_mercenaries": 45,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 23.4
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 2819,
+            "dungeon": 11,
+            "boss": 24,
+            "portal": 5,
+            "other": 5
+          },
+          "activity_starts_total": 2864,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0123,
+          "xp_earned": 577648,
+          "mean_final_guild_level": 15.36,
+          "mean_guild_level_gain": 13.5,
+          "mean_final_active_mercenary_level": 6.24,
+          "active_mercenaries": 88,
+          "mean_max_inactive_streak": 4.5,
+          "longest_inactive_streak": 9,
+          "guild_cycles_with_activity_percent": 23.07
+        }
+      }
+    },
+    {
+      "seed": 2026110305,
+      "previous": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1114,
+            "dungeon": 14,
+            "boss": 28,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 1158,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0363,
+          "xp_earned": 414044,
+          "mean_final_guild_level": 22.4,
+          "mean_guild_level_gain": 18.6,
+          "mean_final_active_mercenary_level": 7.11,
+          "active_mercenaries": 61,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 29.0
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 884,
+            "dungeon": 0,
+            "boss": 12,
+            "portal": 3,
+            "other": 3
+          },
+          "activity_starts_total": 902,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0134,
+          "xp_earned": 264746,
+          "mean_final_guild_level": 17.6,
+          "mean_guild_level_gain": 14.8,
+          "mean_final_active_mercenary_level": 6.4,
+          "active_mercenaries": 43,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 21.4
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 3002,
+            "dungeon": 11,
+            "boss": 21,
+            "portal": 8,
+            "other": 8
+          },
+          "activity_starts_total": 3050,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0105,
+          "xp_earned": 656434,
+          "mean_final_guild_level": 16.64,
+          "mean_guild_level_gain": 14.93,
+          "mean_final_active_mercenary_level": 6.25,
+          "active_mercenaries": 95,
+          "mean_max_inactive_streak": 4.57,
+          "longest_inactive_streak": 9,
+          "guild_cycles_with_activity_percent": 25.93
+        }
+      },
+      "ml050": {
+        "strong": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 1034,
+            "dungeon": 22,
+            "boss": 23,
+            "portal": 3,
+            "other": 3
+          },
+          "activity_starts_total": 1085,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0417,
+          "xp_earned": 374125,
+          "mean_final_guild_level": 20.8,
+          "mean_guild_level_gain": 17.0,
+          "mean_final_active_mercenary_level": 6.83,
+          "active_mercenaries": 59,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 29.2
+        },
+        "medium": {
+          "cpu_guild_states": 5,
+          "action_starts_by_type": {
+            "contract": 833,
+            "dungeon": 0,
+            "boss": 7,
+            "portal": 1,
+            "other": 1
+          },
+          "activity_starts_total": 842,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0083,
+          "xp_earned": 220903,
+          "mean_final_guild_level": 15.4,
+          "mean_guild_level_gain": 12.6,
+          "mean_final_active_mercenary_level": 5.65,
+          "active_mercenaries": 40,
+          "mean_max_inactive_streak": 3.8,
+          "longest_inactive_streak": 4,
+          "guild_cycles_with_activity_percent": 21.2
+        },
+        "new": {
+          "cpu_guild_states": 14,
+          "action_starts_by_type": {
+            "contract": 3133,
+            "dungeon": 8,
+            "boss": 22,
+            "portal": 7,
+            "other": 7
+          },
+          "activity_starts_total": 3177,
+          "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0095,
+          "xp_earned": 609598,
+          "mean_final_guild_level": 15.64,
+          "mean_guild_level_gain": 13.93,
+          "mean_final_active_mercenary_level": 6.01,
+          "active_mercenaries": 91,
+          "mean_max_inactive_streak": 4.21,
+          "longest_inactive_streak": 9,
+          "guild_cycles_with_activity_percent": 25.64
+        }
+      }
+    }
+  ],
+  "runner_totals_by_campaign": [
+    {
+      "seed": 2026110301,
+      "previous": {
+        "cpu_actions_total": 5085,
+        "cpu_xp_net": 1527982
+      },
+      "ml050": {
+        "cpu_actions_total": 5091,
+        "cpu_xp_net": 1371729
+      }
+    },
+    {
+      "seed": 2026110302,
+      "previous": {
+        "cpu_actions_total": 5093,
+        "cpu_xp_net": 1559213
+      },
+      "ml050": {
+        "cpu_actions_total": 5086,
+        "cpu_xp_net": 1383675
+      }
+    },
+    {
+      "seed": 2026110303,
+      "previous": {
+        "cpu_actions_total": 5099,
+        "cpu_xp_net": 1576543
+      },
+      "ml050": {
+        "cpu_actions_total": 5098,
+        "cpu_xp_net": 1394022
+      }
+    },
+    {
+      "seed": 2026110304,
+      "previous": {
+        "cpu_actions_total": 5107,
+        "cpu_xp_net": 1584494
+      },
+      "ml050": {
+        "cpu_actions_total": 5096,
+        "cpu_xp_net": 1383058
+      }
+    },
+    {
+      "seed": 2026110305,
+      "previous": {
+        "cpu_actions_total": 5098,
+        "cpu_xp_net": 1558225
+      },
+      "ml050": {
+        "cpu_actions_total": 5093,
+        "cpu_xp_net": 1359326
+      }
+    }
+  ],
+  "profile_summary": {
+    "strong": {
+      "previous": {
+        "cpu_guild_states": 25,
+        "action_starts_by_type": {
+          "contract": 5605,
+          "dungeon": 70,
+          "boss": 126,
+          "portal": 7,
+          "other": 7
+        },
+        "activity_starts_total": 5815,
+        "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0338,
+        "xp_earned": 2126780,
+        "mean_final_guild_level": 22.44,
+        "mean_guild_level_gain": 18.64,
+        "mean_final_active_mercenary_level": 7.05,
+        "active_mercenaries": 305,
+        "mean_max_inactive_streak": 3.96,
+        "longest_inactive_streak": 7,
+        "guild_cycles_with_activity_percent": 29.72
+      },
+      "ml050": {
+        "cpu_guild_states": 25,
+        "action_starts_by_type": {
+          "contract": 5244,
+          "dungeon": 85,
+          "boss": 112,
+          "portal": 7,
+          "other": 7
+        },
+        "activity_starts_total": 5455,
+        "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0362,
+        "xp_earned": 1858775,
+        "mean_final_guild_level": 20.48,
+        "mean_guild_level_gain": 16.68,
+        "mean_final_active_mercenary_level": 6.84,
+        "active_mercenaries": 290,
+        "mean_max_inactive_streak": 3.8,
+        "longest_inactive_streak": 4,
+        "guild_cycles_with_activity_percent": 28.84
+      }
+    },
+    "medium": {
+      "previous": {
+        "cpu_guild_states": 25,
+        "action_starts_by_type": {
+          "contract": 5053,
+          "dungeon": 30,
+          "boss": 58,
+          "portal": 10,
+          "other": 10
+        },
+        "activity_starts_total": 5161,
+        "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0171,
+        "xp_earned": 1488920,
+        "mean_final_guild_level": 18.56,
+        "mean_guild_level_gain": 15.76,
+        "mean_final_active_mercenary_level": 6.21,
+        "active_mercenaries": 228,
+        "mean_max_inactive_streak": 4.0,
+        "longest_inactive_streak": 9,
+        "guild_cycles_with_activity_percent": 23.6
+      },
+      "ml050": {
+        "cpu_guild_states": 25,
+        "action_starts_by_type": {
+          "contract": 5028,
+          "dungeon": 34,
+          "boss": 55,
+          "portal": 4,
+          "other": 4
+        },
+        "activity_starts_total": 5125,
+        "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.0174,
+        "xp_earned": 1366536,
+        "mean_final_guild_level": 17.4,
+        "mean_guild_level_gain": 14.6,
+        "mean_final_active_mercenary_level": 5.98,
+        "active_mercenaries": 217,
+        "mean_max_inactive_streak": 3.96,
+        "longest_inactive_streak": 7,
+        "guild_cycles_with_activity_percent": 23.16
+      }
+    },
+    "new": {
+      "previous": {
+        "cpu_guild_states": 70,
+        "action_starts_by_type": {
+          "contract": 14342,
+          "dungeon": 50,
+          "boss": 109,
+          "portal": 22,
+          "other": 22
+        },
+        "activity_starts_total": 14545,
+        "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.011,
+        "xp_earned": 3085426,
+        "mean_final_guild_level": 16.24,
+        "mean_guild_level_gain": 14.43,
+        "mean_final_active_mercenary_level": 6.33,
+        "active_mercenaries": 465,
+        "mean_max_inactive_streak": 4.39,
+        "longest_inactive_streak": 14,
+        "guild_cycles_with_activity_percent": 24.09
+      },
+      "ml050": {
+        "cpu_guild_states": 70,
+        "action_starts_by_type": {
+          "contract": 14728,
+          "dungeon": 46,
+          "boss": 103,
+          "portal": 18,
+          "other": 18
+        },
+        "activity_starts_total": 14913,
+        "dungeon_boss_share_of_contract_dungeon_boss_starts": 0.01,
+        "xp_earned": 2921643,
+        "mean_final_guild_level": 15.39,
+        "mean_guild_level_gain": 13.57,
+        "mean_final_active_mercenary_level": 6.11,
+        "active_mercenaries": 446,
+        "mean_max_inactive_streak": 4.11,
+        "longest_inactive_streak": 9,
+        "guild_cycles_with_activity_percent": 23.8
+      }
+    }
+  },
+  "measurement_scope": {
+    "campaign_player_guild_level": 1,
+    "contract_band_measured_by_paired_run": "1-10",
+    "high_level_cutovers": "covered by separate short boundary regression, not by the 5x100 pairing",
+    "xp_metric": "sum of RegionalCpuCyclePlan.xp_earned; success-plan telemetry only, excludes failure XP",
+    "guild_level_metrics": "CPU guild states; final level and gain are means across CPU guild states",
+    "boundary_trace": "three-cycle synthetic eligibility trace; fallback eligibility is controlled in-memory",
+    "report_format_sha256": "48754c1ad8af805703e9a2ade4dbbb46e003098e5d898e668329de7b543c2c24"
+  }
+}

@@ -754,19 +754,44 @@ def _select_contract_templates(
     return _select_templates(pool, count, rng)
 
 
+def _contract_recommended_level_band(guild_level: int) -> tuple[int, int] | None:
+    """Return the live contract recommendation band, or None for the legacy 100+ rule."""
+    level = max(1, int(guild_level))
+    if level < 10:
+        return (1, 10)
+    if level < 100:
+        milestone = (level // 5) * 5
+        return (milestone - 5, milestone + 10)
+    return None
+
+
 def _contract_candidates(
     db: Session,
     guild_level: int,
     roster_level: int = 1,
 ) -> list[MissionTemplate]:
-    """Use an aspirational level-20 floor, then follow the player's real roster."""
-    challenge_ceiling = max(20, max(1, int(guild_level)), max(1, int(roster_level)))
-    return list(db.scalars(select(MissionTemplate).where(
+    """Select active combat contracts by guild progression; keep the current 100+ ceiling."""
+    level = max(1, int(guild_level))
+    roster = max(1, int(roster_level))
+    band = _contract_recommended_level_band(level)
+    filters = [
         MissionTemplate.is_active.is_(True),
         ~MissionTemplate.mission_type.in_(("gathering", "long_idle")),
-        MissionTemplate.required_min_mercenary_level <= challenge_ceiling,
-        MissionTemplate.recommended_level <= challenge_ceiling,
-    ).order_by(MissionTemplate.id)))
+    ]
+    if band is None:
+        challenge_ceiling = max(20, level, roster)
+        filters.extend((
+            MissionTemplate.required_min_mercenary_level <= challenge_ceiling,
+            MissionTemplate.recommended_level <= challenge_ceiling,
+        ))
+    else:
+        minimum_recommended, maximum_recommended = band
+        filters.extend((
+            MissionTemplate.required_min_mercenary_level <= maximum_recommended,
+            MissionTemplate.recommended_level >= minimum_recommended,
+            MissionTemplate.recommended_level <= maximum_recommended,
+        ))
+    return list(db.scalars(select(MissionTemplate).where(*filters).order_by(MissionTemplate.id)))
 
 
 def _template_rank_order(template: MissionTemplate | DungeonTemplate) -> tuple[int, int, int, int, int, int]:
