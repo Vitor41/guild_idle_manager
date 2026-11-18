@@ -34,6 +34,7 @@
     <a href="#grupos">Grupos e classes</a>
     <a href="#construcoes">Construções</a>
     <a href="#progressao">Progressão</a>
+    <a href="#vigilia-regional">Vigília e eventos</a>
     <a href="#economia">Economia</a>
     <a href="#docas-mercado">Docas e Mercado</a>
     <a href="#equipamentos-materiais">Equipamentos e Materiais</a>
@@ -111,21 +112,32 @@
       <article><span>▣</span><h3>Armazém</h3><p>Adiciona uma quantidade fixa ao material principal obtido e também contribui para a produção offline.</p><small class="guide-private-value">Bônus atual: +{{ building_bonuses.material_quantity_bonus }} materiais principais</small></article>
       <article><span>✦</span><h3>Escritório de Missões</h3><p>Melhora ouro e XP dos contratos e reduz seu tempo conforme o nível do prédio. O tamanho dos grupos vem do contrato e não exige comprar o Escritório.</p><small class="guide-private-value">Bônus atual de recompensa: +{{ building_bonuses.contract_reward_bonus_percent }}%</small></article>
       <article><span>◇</span><h3>Exploradores</h3><p>Abre Masmorras e libera multiplicadores que trocam mais tempo por mais recompensas.</p><small class="guide-private-value">Multiplicador atual: {{ building_bonuses.max_run_multiplier }}x</small></article>
+      <article><span>↻</span><h3>Reset de construções</h3><p>A partir do nível 10 da guilda, você pode fazer um reset gratuito, uma única vez. Os seguintes custam 50 Cristais e aumentam 30%, arredondados para cima. O reset devolve os investimentos registrados; em campanhas antigas, parte do reembolso pode ser uma estimativa identificada. A cobrança do reset não é devolvida. Vendas, atividades e entregas ainda não coletadas bloqueiam o reset, mesmo quando já estão prontas. Mercenários e estoque são preservados; novas entradas continuam sujeitas aos limites atuais.</p></article>
     </div>
   </section>
 
   <section class="guide-section" id="progressao">
     <header class="guide-section-heading"><span class="guide-number">04</span><div><p class="eyebrow">Escolhas de longo prazo</p><h2>Mercenários e progressão</h2></div></header>
     <div class="guide-columns">
-      <article><h3>Aprendizes têm potencial diferente</h3><p>Raridade, atributos iniciais e crescimento tornam cada contratação uma aposta. Compare poder e distribuição de atributos; o maior número nem sempre é o melhor encaixe para o caminho desejado.</p></article>
+      <article><h3>Aprendizes têm potencial diferente</h3><p>Raridade, atributos iniciais e crescimento tornam cada contratação uma aposta. Compare poder e distribuição de atributos; o maior número nem sempre é o melhor encaixe para o caminho desejado. Na Taverna, você pode buscar outro candidato normal: a busca custa o preço efetivo da contratação atual menos 30% desse preço, arredondados para baixo no abatimento. Cada busca bem-sucedida avança uma vez o preço de contratação; o próximo candidato pode ser pior. Buscar não contrata nem ocupa vaga, e a oferta especial não muda.</p></article>
       <article><h3>Evoluir exige preparação</h3><p>Trocas de classe dependem do nível do mercenário, da guilda e do Campo de Treino. Apenas candidatos elegíveis aparecem na seleção, e a mudança é concluída após a missão especial.</p></article>
-      <article><h3>Profissão e combate são decisões distintas</h3><p>A profissão melhora famílias específicas de coleta sem substituir a classe de combate. Escolha pensando nos materiais que sua guilda mais procura. Cada posto escolhe um material ativo já desbloqueado pelo nível da guilda; o alvo fica fixo até liberar o trabalhador e designá-lo novamente.</p></article>
+      <article><h3>Profissão e combate são decisões distintas</h3><p>A profissão melhora famílias específicas de coleta sem substituir a classe de combate. Escolha pensando nos materiais que sua guilda mais procura. Cada posto produz o mesmo material comum canônico da família em todos os níveis da guilda. O estoque já obtido permanece; designações ativas passam a produzir o comum a partir da próxima atualização da campanha. Materiais de raridade superior vêm de recompensas de missões, masmorras e chefes, e algumas identidades também podem aparecer nas ofertas temporárias das Docas. O refino de materiais ainda não está disponível.</p></article>
       <article><h3>Raridade recompensa investimento</h3><p>Mercenários mais raros recebem uma vantagem gradual de crescimento. Equipamentos também usam raridade, que influencia seus bônus e valor.</p></article>
     </div>
   </section>
 
+  <section class="guide-section" id="vigilia-regional">
+    <header class="guide-section-heading"><span class="guide-number">05</span><div><p class="eyebrow">O mundo continua em movimento</p><h2>Vigília regional, portais e rebeliões</h2></div></header>
+    <div class="guide-columns">
+      <article><h3>Ciclos regionais</h3><p>Cada Vigília dura 6 horas. As guildas controladas pela CPU continuam agindo durante sua ausência, e os prazos dos eventos avançam mesmo com o jogo fechado.</p><p>Novos contratos de combate acompanham o nível da guilda: nos níveis 1–9, a recomendação vai de 1 a 10; dos níveis 10 a 99, cada marco de 5 níveis define uma faixa que começa 5 níveis antes e termina 10 depois. O nível do elenco não altera essa faixa. Requisitos próprios continuam valendo para iniciar, e ofertas e atividades já existentes são preservadas.</p></article>
+      <article><h3>Portais na região natal</h3><p>Quando a região pode gerar outro portal, a rolagem por Vigília tem chance-base de 4% abaixo de ameaça 70, mais o bônus de detecção de Exploradores; a partir de 70, segue a curva de 5% em ameaça 70 até 25% em ameaça 100. O bônus vigente se aplica às duas faixas, com chance total limitada a 30%. Um portal pode ser enfrentado diretamente na região natal, uma vez por guilda, ao enviar uma equipe antes do prazo de 3 horas. O prazo limita o início: uma atividade iniciada dentro da janela pode terminar depois e ainda entrar no resultado. Um portal de outra região não pode ser acessado, mesmo que sua guilda aceite uma rebelião; a rebelião abre atividades regionais próprias.</p></article>
+      <article><h3>Convites para rebelião</h3><p>Uma rebelião pode surgir quando uma região elegível alcança ameaça 85 ou mais e segurança 25 ou menos. Quando as regras globais permitem uma nova tentativa, uma região elegível é sorteada e tem 5% de chance; apenas uma rebelião pode ficar ativa no mundo. O convite tem 1 hora de prioridade. Aceitar abre 12 horas de atividade após essa prioridade; delegar ou não responder entrega a decisão à CPU. O prazo segue correndo offline.</p></article>
+      <article><h3>Participação e resultado</h3><p>Depois de aceitar, sua guilda pode iniciar atividades elegíveis na região da rebelião; atividades da região natal também contam quando a rebelião acontece ali. Fechar ou dispensar o aviso não aceita o convite. A seção de eventos regionais mantém os cartões e o histórico mostra contribuições e resultados, inclusive quando a CPU termina uma atividade iniciada dentro do prazo.</p></article>
+    </div>
+  </section>
+
   <section class="guide-section" id="economia">
-    <header class="guide-section-heading"><span class="guide-number">05</span><div><p class="eyebrow">Nada prospera isoladamente</p><h2>Loot, equipamentos e economia</h2></div></header>
+    <header class="guide-section-heading"><span class="guide-number">06</span><div><p class="eyebrow">Nada prospera isoladamente</p><h2>Loot, equipamentos e economia</h2></div></header>
     <div class="guide-path">
       <article><span>1</span><h3>Escolha a fonte</h3><p>Missões, coletas, Masmorras e Chefes exibem o loot possível. Compare chance, duração e necessidade atual.</p></article>
       <article><span>2</span><h3>Transforme o resultado</h3><p>Materiais alimentam progressão e criação. Equipamentos podem fortalecer o elenco, seguir para o Mercado ou, com Ferreiro nível 10, ser refinados.</p></article>
@@ -142,7 +154,7 @@
       <article><h3>Qualidade do equipamento</h3><p>A raridade identifica a qualidade e influencia os bônus e o valor do equipamento.</p></article>
       <article><h3>Docas e Mercado</h3><p>As Docas ajudam a encontrar recursos e equipamentos rotativos. O Mercado converte excedentes em ouro. O prazo de cada anúncio usa a raridade e a quantidade, com redução conforme o nível do Mercado; o prazo definido ao anunciar permanece igual. É possível cancelar antes do prazo para devolver os itens e liberar o espaço, sem receber ouro. Depois do prazo, a venda fica pronta para coleta. A quantidade anunciada depende do estoque disponível e dos espaços livres.</p></article>
       <article><h3>Multiplicadores</h3><p>Multiplicar uma atividade aumenta tempo e recompensas sem elevar a chance de sucesso. Use quando confiar no grupo e quiser reduzir interações.</p></article>
-      <article><h3>Desmontagem no Ferreiro</h3><p>Equipamentos livres podem virar materiais de sua composição: madeira, minério, couro, tecido ou gemas. Cada item retorna de 1 a 3 unidades; quantidade, custo e tempo crescem juntos. O equipamento e seus aprimoramentos são consumidos ao iniciar, então compare essa escolha com a venda no Mercado.</p></article>
+      <article><h3>Desmontagem no Ferreiro</h3><p>Equipamentos livres podem virar materiais de sua composição: madeira, minério, couro, tecido ou gemas. Ao escolher uma quantidade, o Ferreiro consome primeiro as unidades livres mais antigas daquele equipamento, na ordem de registro do inventário. O retorno é sorteado por unidade entre 1 e 3 materiais; custo e tempo crescem com a quantidade. O equipamento e seus aprimoramentos são consumidos ao iniciar, então compare essa escolha com a venda no Mercado.</p></article>
       <article><h3>Bônus FORTE</h3><p>Equipamentos Lendários e Míticos podem trazer FORTE FOR, VIT, AGI ou INT, indicado por uma estrela. O valor FORTE sorteado fica entre +10 e +20 e soma ao bônus normal do mesmo atributo; por exemplo, FOR +8 e FORTE FOR +15 resultam em +23 de Força. Os bônus normais usam estes tipos e faixas de pontos: Comum 1–2 tipos com +1–2; Incomum 2–3 com +2–3; Raro 3–4 com +3–4; Épico 4–5 com +4–5; Lendário 5–7 com +5–7; Mítico 8–10 com +8–10. As quantidades contam tipos FORTE junto dos normais. Lendários de 7 tipos têm pelo menos 1 FORTE; Míticos têm pelo menos 2 e os de 10 tipos têm os 4. O bônus fica gravado na instância e não é sorteado novamente ao abrir, equipar ou refinar o item.</p></article>
     </div>
   </section>
@@ -182,6 +194,6 @@
     <div class="guide-actions"><a class="button-link" href="/dashboard">Voltar à guilda</a><a class="button-link secondary" href="/tutorial?replay=1">Rever tutorial básico</a></div>
   </section>
 </section>
-<script src="{{ url_for('static', path='/js/guide-utils.js') }}" defer></script>
-<script src="{{ url_for('static', path='/js/guide.js') }}" defer></script>
+<script src="{{ url_for('static', path='/js/guide-utils.js') }}?v=20261117-3" defer></script>
+<script src="{{ url_for('static', path='/js/guide.js') }}?v=20261117-3" defer></script>
 {% endblock %}

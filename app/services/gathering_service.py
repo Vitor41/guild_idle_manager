@@ -19,6 +19,17 @@ RESOURCE_FAMILIES = {
     "wood": "wood", "ore": "ore", "leather": "leather", "essence": "essence",
     "gem": "gem", "herb": "herb", "relic": "relic", "cloth": "cloth", "meat": "meat",
 }
+CANONICAL_GATHERING_MATERIAL_SLUGS = {
+    "wood": "material_wood_1_001",
+    "ore": "material_ore_2_002",
+    "leather": "material_leather_1_001",
+    "essence": "material_essence_1_001",
+    "gem": "material_gem_1_001",
+    "herb": "material_herb_1_001",
+    "relic": "material_relic_1_001",
+    "cloth": "material_cloth_1_001",
+    "meat": "material_meat_1_001",
+}
 NODE_CODES = {
     "wood": "forest", "ore": "quarry", "leather": "hunting_ground",
     "essence": "leyline", "gem": "crystal_cavern", "herb": "herb_garden",
@@ -52,32 +63,32 @@ def list_assignments(db: Session, guild_id: int) -> list[GatheringAssignment]:
 
 
 def _material_template(db: Session, family: str, guild_level: int) -> ItemTemplate | None:
-    return db.scalar(
-        select(ItemTemplate)
-        .where(
-            ItemTemplate.item_type == "material",
-            ItemTemplate.material_family == family,
-            ItemTemplate.is_active.is_(True),
-            ItemTemplate.required_level <= max(1, guild_level),
-            ItemTemplate.item_level <= max(1, guild_level),
-        )
-        .order_by(
-            ItemTemplate.required_level.desc(), ItemTemplate.item_level.desc(),
-            ItemTemplate.tier.desc(), ItemTemplate.id,
-        )
-    )
+    """Return the fixed common target for a gathering family at every guild level."""
+    slug = CANONICAL_GATHERING_MATERIAL_SLUGS.get(family)
+    if slug is None:
+        return None
+    template = db.scalar(select(ItemTemplate).where(
+        ItemTemplate.slug == slug,
+        ItemTemplate.item_type == "material",
+        ItemTemplate.material_family == family,
+        ItemTemplate.is_active.is_(True),
+    ))
+    if template is None or template.rarity != "common":
+        return None
+    return template
 
 
 def preview_material_for_family(db: Session, family: str, guild_level: int) -> ItemTemplate | None:
-    """Return only an actually active and unlocked material for this post."""
+    """Return the same active common target regardless of guild level."""
     if family not in RESOURCE_FAMILIES:
         return None
     return _material_template(db, family, guild_level)
 
 
-def freeze_legacy_assignment_targets(db: Session) -> int:
-    """Backfill one deterministic eligible target for each legacy assignment."""
+def freeze_legacy_assignment_targets(db: Session, *, now: datetime | None = None) -> int:
+    """Freeze only active common targets and discard elapsed time before cutover."""
     frozen = 0
+    cutoff = _utc(now or datetime.now(timezone.utc))
     assignments = db.scalars(
         select(GatheringAssignment)
         .where(GatheringAssignment.target_item_template_id.is_(None))
@@ -92,11 +103,45 @@ def freeze_legacy_assignment_targets(db: Session) -> int:
             continue
         assignment.target_item_template_id = template.id
         assignment.target_item_template = template
+        assignment.checkpoint_at_utc = cutoff
         db.add(assignment)
         frozen += 1
     if frozen:
         db.flush()
     return frozen
+
+
+def migrate_assignments_to_common_targets(db: Session, *, now: datetime | None = None) -> int:
+    """Retarget legacy gathering jobs without granting or resetting progress."""
+    migrated = 0
+    cutoff = _utc(now or datetime.now(timezone.utc))
+    assignments = list(db.scalars(
+        select(GatheringAssignment).order_by(GatheringAssignment.id)
+    ))
+    for assignment in assignments:
+        guild = db.get(Guild, assignment.guild_id)
+        if guild is None:
+            continue
+        common = _material_template(db, assignment.resource_family, guild.level)
+        if common is None:
+            # Keep the saved target and checkpoint untouched. The gathering
+            # service will mark this assignment unavailable without crediting
+            # production until its canonical common material is active again.
+            continue
+        if assignment.target_item_template_id == common.id:
+            continue
+
+        # Start the canonical target at the migration boundary. Fractional
+        # progress remains saved, while pre-cutover time is never credited to
+        # either the retired target or its replacement.
+        assignment.target_item_template = common
+        assignment.target_item_template_id = common.id
+        assignment.checkpoint_at_utc = cutoff
+        db.add(assignment)
+        migrated += 1
+    if migrated:
+        db.flush()
+    return migrated
 
 
 def get_inventory_quantity_by_family(db: Session, guild_id: int) -> dict[str, int]:
@@ -122,6 +167,11 @@ def assign_worker(
     now: datetime | None = None,
     target_quantity: int | None = None,
 ) -> GatheringAssignment:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise ValueError("Guilda não encontrada.")
     if resource_family not in RESOURCE_FAMILIES:
         raise ValueError("Escolha uma família de recurso disponível para coleta.")
     target_template = _material_template(db, resource_family, guild.level)
@@ -176,10 +226,11 @@ def release_worker(db: Session, guild: Guild, assignment_id: int, *, now: dateti
         raise ValueError("A designação não foi encontrada.")
     summary = advance_assignment(db, guild, assignment, now=now)
     if summary.get("catalog_missing"):
-        raise ValueError(
-            f"O material de {FAMILY_LABELS[assignment.resource_family]} não está disponível no catálogo. "
-            "Nenhum ciclo foi consumido; verifique Atualizações ou contate o suporte."
-        )
+        assignment.mercenary.status = "available"
+        db.add(assignment.mercenary)
+        db.delete(assignment)
+        summary["released_without_credit"] = True
+        return summary
     assignment.mercenary.status = "available"
     db.delete(assignment)
     return summary
@@ -197,17 +248,26 @@ def advance_assignment(
     elapsed = max(0, floor((timestamp - _utc(assignment.checkpoint_at_utc)).total_seconds()))
     if max_seconds is not None:
         elapsed = min(elapsed, max(0, max_seconds))
-    template = assignment.target_item_template
-    if template is None and assignment.target_item_template_id is not None:
-        template = db.get(ItemTemplate, assignment.target_item_template_id)
+    template = _material_template(db, assignment.resource_family, guild.level)
+    target_changed = template is not None and assignment.target_item_template_id != template.id
+    catalog_resumed = template is not None and assignment.catalog_paused
+    if target_changed:
+        # A legacy target is never paid after the cutover. Resume the canonical
+        # target at this observation without crediting time since the last
+        # blocked observation.
         assignment.target_item_template = template
-    if template is None and assignment.target_item_template_id is None:
-        # Legacy active assignments are frozen deterministically on first use.
-        template = _material_template(db, assignment.resource_family, guild.level)
-        if template is not None:
-            assignment.target_item_template = template
-            assignment.target_item_template_id = template.id
-            db.add(assignment)
+        assignment.target_item_template_id = template.id
+        assignment.catalog_paused = False
+        assignment.checkpoint_at_utc = timestamp
+        elapsed = 0
+        db.add(assignment)
+    elif catalog_resumed:
+        # The canonical target may itself have been inactive. The marker
+        # survives reloads so the blocked interval cannot be credited later.
+        assignment.catalog_paused = False
+        assignment.checkpoint_at_utc = timestamp
+        elapsed = 0
+        db.add(assignment)
     produced = 0
     stored = 0
     discarded = 0
@@ -217,6 +277,12 @@ def advance_assignment(
     used = get_inventory_usage(db, guild.id)
 
     if template is None:
+        # Drop the elapsed interval while unavailable so reactivation later
+        # cannot turn blocked online/offline time into a backlog of rewards.
+        checkpoint = _utc(assignment.checkpoint_at_utc)
+        assignment.checkpoint_at_utc = max(checkpoint, timestamp)
+        assignment.catalog_paused = True
+        db.add(assignment)
         return {
             "cycles": 0,
             "produced": 0,
@@ -231,6 +297,11 @@ def advance_assignment(
             "target_quantity": assignment.target_quantity or 0,
             "quantity_collected": assignment.quantity_collected,
             "catalog_missing": True,
+            "catalog_message": (
+                f"Coleta de {FAMILY_LABELS.get(assignment.resource_family, assignment.resource_family)} pausada: "
+                "o material comum não está disponível no catálogo. Nenhum ciclo ou item será concedido "
+                "durante a pausa; o inventário e o progresso já registrado foram preservados."
+            ),
         }
 
     # Time spent while full is paused. On the first call after space is freed,

@@ -270,6 +270,19 @@ def upgrade_guild_building(
     *,
     commit: bool = True,
 ) -> GuildBuilding:
+    from app.services.building_reset_service import (
+        _inventory_quantities,
+        _lock_guild_for_building_mutation,
+        record_building_investment,
+    )
+
+    if resources is None:
+        raise BuildingError("Recursos da guilda indisponiveis.")
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise BuildingError("Guilda nao encontrada.")
+    resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
     if resources is None:
         raise BuildingError("Recursos da guilda indisponiveis.")
 
@@ -290,6 +303,11 @@ def upgrade_guild_building(
     if not can_pay(resources, cost):
         raise BuildingError("Recursos insuficientes para evoluir esta construcao.")
 
+    before_items = {
+        resource_name: _inventory_quantities(db, guild.id, resource_name)
+        for resource_name in ("wood", "ore", "crystals")
+    }
+    before_reserve = max(0, int(resources.crystal_reserve or 0))
     resources.gold -= cost["gold"]
     for resource_name in ("wood", "ore", "crystals"):
         if not consume_inventory_resource(db, resources, resource_name, cost[resource_name]):
@@ -299,6 +317,7 @@ def upgrade_guild_building(
     db.add(resources)
     db.add(building)
     db.add(guild)
+    record_building_investment(db, guild, building, resources, cost, before_items, before_reserve)
     if commit:
         db.commit()
         db.refresh(building)

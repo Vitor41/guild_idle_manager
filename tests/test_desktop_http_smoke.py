@@ -14,6 +14,7 @@ import gc, http.client, json, logging, os, re, socket, sqlite3, tempfile, thread
 from contextlib import closing
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+from urllib.parse import parse_qs, unquote_plus, urlsplit
 from unittest.mock import patch
 os.environ["APP_MODE"] = "desktop"
 from app.main import app
@@ -37,6 +38,7 @@ from app.repositories.mercenary_repository import create_mercenary
 from app.services.regional_cycle_service import REGIONS, ensure_campaign_world, get_regional_board
 from app.services.regional_event_service import expire_due_events
 from app.services.equipment_service import RARITY_BONUS_RULES, get_item_bonus_rolls
+from app.services.display_service import clean_generated_name
 from sqlalchemy import select
 import uvicorn
 
@@ -74,7 +76,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         headers = {"Host": host}
         headers.update(extra_headers or {})
         if method not in {"GET", "HEAD"}:
-            headers["Origin"] = origin
+            headers.setdefault("Origin", origin)
         if body is not None:
             headers["Content-Type"] = "application/json" if body.startswith("{") else "application/x-www-form-urlencoded"
         client.request(method, path, body=body, headers=headers)
@@ -115,7 +117,11 @@ with tempfile.TemporaryDirectory() as data_dir:
             ItemTemplate.item_type == "equipment",
             ItemTemplate.equipment_slot.in_("helmet chest gloves boots main_hand off_hand necklace earring belt ring".split()),
         ).order_by(ItemTemplate.id).first()
-        assert guild and mercenary_class and item_template and equipment_template, "campaign must seed display entities for the desktop art smoke"
+        equipment_route_template = db.query(ItemTemplate).filter(
+            ItemTemplate.item_type == "equipment",
+            ItemTemplate.equipment_slot == "ring",
+        ).order_by(ItemTemplate.id).first()
+        assert guild and mercenary_class and item_template and equipment_template and equipment_route_template, "campaign must seed display entities for the desktop art smoke"
         guild_id = guild.id
         smoke_market_item_template_id = item_template.id
         mercenary_class_id = mercenary_class.id
@@ -135,6 +141,16 @@ with tempfile.TemporaryDirectory() as data_dir:
             upgrade_level=2,
         )
         db.add(equipped_detail_item)
+        db.add(GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_template.id,
+            equipped_to_mercenary_id=None,
+            equipment_slot=equipment_template.equipment_slot,
+            required_level=1,
+            bonus_power=2,
+            bonus_rolls=[],
+            upgrade_level=0,
+        ))
         gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador disponível")
         meat_gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador de Carne")
         live_gathering_worker = create_mercenary(db, guild.id, mercenary_class, "Trabalhador ao vivo")
@@ -142,6 +158,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         regional_supply_worker = create_mercenary(db, guild.id, mercenary_class, "Contrato preparado")
         regional_snapshot_worker_a = create_mercenary(db, guild.id, mercenary_class, "Snapshot equipe A")
         regional_snapshot_worker_b = create_mercenary(db, guild.id, mercenary_class, "Snapshot equipe B")
+        regional_reinforce_prepared_worker = create_mercenary(db, guild.id, mercenary_class, "Equipe preparada para reforço")
+        regional_reinforce_extra_worker = create_mercenary(db, guild.id, mercenary_class, "Reforço disponível")
         regional_ineligible_worker = create_mercenary(db, guild.id, mercenary_class, "Snapshot inelegível")
         no_building_mission_worker = create_mercenary(db, guild.id, mercenary_class, "Missão sem prédios")
         no_building_dungeon_worker = create_mercenary(db, guild.id, mercenary_class, "Masmorra sem prédios")
@@ -149,6 +167,53 @@ with tempfile.TemporaryDirectory() as data_dir:
         db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=item_template.id, quantity=1))
         db.flush()
         mercenary_id = mercenary.id
+        equipment_route_mercenary = create_mercenary(db, guild.id, mercenary_class, "Equipamento HTTP")
+        db.flush()
+        equipment_route_equipped_item = GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=equipment_route_mercenary.id,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        equipment_route_second_equipped_item = GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=equipment_route_mercenary.id,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        equipment_route_free_item = GuildItemInstance(
+            guild_id=guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=None,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        foreign_guild = Guild(campaign_id=None, name="Guilda externa do smoke", level=1)
+        db.add(foreign_guild)
+        db.flush()
+        foreign_mercenary = create_mercenary(db, foreign_guild.id, mercenary_class, "Mercenário externo")
+        foreign_item = GuildItemInstance(
+            guild_id=foreign_guild.id,
+            item_template_id=equipment_route_template.id,
+            equipped_to_mercenary_id=None,
+            equipment_slot="ring",
+            required_level=1,
+        )
+        db.add_all((
+            equipment_route_equipped_item,
+            equipment_route_second_equipped_item,
+            equipment_route_free_item,
+            foreign_item,
+        ))
+        db.flush()
+        equipment_route_mercenary_id = equipment_route_mercenary.id
+        equipment_route_equipped_item_id = equipment_route_equipped_item.id
+        equipment_route_second_equipped_item_id = equipment_route_second_equipped_item.id
+        equipment_route_free_item_id = equipment_route_free_item.id
+        foreign_mercenary_id = foreign_mercenary.id
+        foreign_item_id = foreign_item.id
         gathering_worker_id = gathering_worker.id
         meat_gathering_worker_id = meat_gathering_worker.id
         live_gathering_worker_id = live_gathering_worker.id
@@ -156,11 +221,16 @@ with tempfile.TemporaryDirectory() as data_dir:
         regional_supply_worker_id = regional_supply_worker.id
         regional_snapshot_worker_a_id = regional_snapshot_worker_a.id
         regional_snapshot_worker_b_id = regional_snapshot_worker_b.id
+        regional_reinforce_prepared_worker_id = regional_reinforce_prepared_worker.id
+        regional_reinforce_extra_worker_id = regional_reinforce_extra_worker.id
         regional_ineligible_worker_id = regional_ineligible_worker.id
         no_building_mission_worker_id = no_building_mission_worker.id
         no_building_dungeon_worker_id = no_building_dungeon_worker.id
         no_building_boss_worker_id = no_building_boss_worker.id
-        for worker in (regional_no_supply_worker, regional_supply_worker):
+        for worker in (
+            regional_no_supply_worker, regional_supply_worker,
+            regional_reinforce_prepared_worker, regional_reinforce_extra_worker,
+        ):
             worker.level = 1
             worker.power, worker.vitality, worker.agility, worker.intelligence, worker.luck = 6, 4, 4, 2, 3
         now = datetime.now(timezone.utc)
@@ -217,7 +287,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         no_building_boss_template_id = no_building_boss_template.id
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="scouts").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="market").one().id, level=1))
-        db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="blacksmith").one().id, level=1))
+        db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="blacksmith").one().id, level=25))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="tavern").one().id, level=1))
         db.add(GuildBuilding(guild_id=guild.id, building_template_id=db.query(BuildingTemplate).filter_by(effect_type="docks").one().id, level=1))
         db.add(TavernSpecialOffer(
@@ -261,7 +331,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.add(GuildInventoryItem(guild_id=guild.id, item_template_id=material.id, quantity=2))
         else:
             inventory_material.quantity += 2
-        db.add(GuildSalvageJob(guild_id=guild.id, slot_number=1, item_template_id=item_template.id,
+        db.add(GuildSalvageJob(guild_id=guild.id, slot_number=2, item_template_id=item_template.id,
             material_template_id=material.id, quantity=1, gold_cost=1, started_at=now, ends_at=later))
         db.commit()
         ensure_campaign_world(db, db.get(CampaignMetadata, campaign.campaign_id), guild)
@@ -385,6 +455,154 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"FORTE FOR +12" in equipment_detail_page
         assert b"= +17 aplicado" in equipment_detail_page
         assert b"/static/js/equipment-details.js" in equipment_detail_page
+
+        def assert_equipment_error(location, expected_path, expected_reason):
+            assert location, "equipment rejection should preserve a safe return location"
+            parsed = urlsplit(location)
+            assert parsed.path == expected_path, location
+            query = parse_qs(parsed.query)
+            actual_reason = query.get("error", [""])[0]
+            assert expected_reason in actual_reason, f"expected={expected_reason!r}, actual={actual_reason!r}, location={location}"
+            diagnostic_id = query.get("diagnostic", [""])[0]
+            assert re.fullmatch(r"[a-fA-F0-9-]{16,40}", diagnostic_id), location
+            status, _detail_location, detail_body = request(location)
+            assert status == 200, (location, status, detail_body[:600])
+            assert expected_reason.encode("utf-8") in detail_body
+            assert b"Refer\xc3\xaancia de diagn\xc3\xb3stico" in detail_body
+            assert diagnostic_id.encode("ascii") in detail_body
+            return diagnostic_id
+
+        equipment_route = f"/mercenaries/{equipment_route_mercenary_id}/equip"
+        slot_failure_status, slot_failure_location, _slot_failure_body = request(
+            equipment_route,
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+            extra_headers={"X-GIM-Diagnostic-ID": "invalid/reference"},
+        )
+        assert slot_failure_status == 303, (slot_failure_status, slot_failure_location)
+        slot_failure_diagnostic = assert_equipment_error(
+            slot_failure_location,
+            f"/mercenaries/{equipment_route_mercenary_id}",
+            "Escolha qual equipamento deste slot deseja substituir.",
+        )
+        with SessionLocal() as db:
+            assert db.get(GuildItemInstance, equipment_route_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_second_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_free_item_id).equipped_to_mercenary_id is None
+
+        validation_diagnostics = []
+        for item_id, expected_reason in (
+            ("invalid", "Equipamento invalido."),
+            ("999999999", "Equipamento nao encontrado."),
+            (str(foreign_item_id), "Equipamento nao encontrado."),
+        ):
+            failure_status, failure_location, _failure_body = request(
+                equipment_route,
+                method="POST",
+                body=f"item_instance_id={item_id}",
+            )
+            assert failure_status == 303, (failure_status, failure_location, item_id)
+            validation_diagnostics.append(assert_equipment_error(
+                failure_location,
+                f"/mercenaries/{equipment_route_mercenary_id}",
+                expected_reason,
+            ))
+
+        with SessionLocal() as db:
+            http_mercenary = db.get(Mercenary, equipment_route_mercenary_id)
+            http_mercenary.status = "busy"
+            db.commit()
+        busy_status, busy_location, _busy_body = request(
+            equipment_route,
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+        )
+        assert busy_status == 303, (busy_status, busy_location)
+        busy_diagnostic = assert_equipment_error(
+            busy_location,
+            f"/mercenaries/{equipment_route_mercenary_id}",
+            "Mercenario ocupado nao pode trocar equipamentos.",
+        )
+        with SessionLocal() as db:
+            db.get(Mercenary, equipment_route_mercenary_id).status = "available"
+            db.commit()
+
+        foreign_mercenary_status, foreign_mercenary_location, _foreign_mercenary_body = request(
+            f"/mercenaries/{foreign_mercenary_id}/equip",
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+        )
+        assert foreign_mercenary_status == 303
+        foreign_mercenary_diagnostic = assert_equipment_error(
+            foreign_mercenary_location,
+            "/mercenaries",
+            "Este mercenário não está disponível nesta guilda.",
+        )
+        assert b"Mercen\xc3\xa1rio externo" not in request(foreign_mercenary_location)[2]
+
+        with patch(
+            "app.routes.mercenary_routes.equip_mercenary_item",
+            side_effect=RuntimeError("unexpected equipment transaction failure"),
+        ):
+            exception_status, exception_location, _exception_body = request(
+                equipment_route,
+                method="POST",
+                body=f"item_instance_id={equipment_route_free_item_id}",
+            )
+        assert exception_status == 303, (exception_status, exception_location)
+        exception_diagnostic = assert_equipment_error(
+            exception_location,
+            f"/mercenaries/{equipment_route_mercenary_id}",
+            "Não foi possível concluir o equipamento.",
+        )
+        assert b"unexpected equipment transaction failure" not in request(exception_location)[2]
+
+        denied_status, denied_location, _denied_body = request(
+            equipment_route,
+            method="POST",
+            body=f"item_instance_id={equipment_route_free_item_id}",
+            extra_headers={
+                "Origin": "http://invalid.example",
+                "X-GIM-Diagnostic-ID": "aaaaaaaaaaaaaaaa",
+            },
+        )
+        assert denied_status == 403 and denied_location is None
+        with SessionLocal() as db:
+            assert db.get(GuildItemInstance, equipment_route_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_second_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_free_item_id).equipped_to_mercenary_id is None
+
+        success_status, success_location, _success_body = request(
+            equipment_route,
+            method="POST",
+            body=(
+                f"item_instance_id={equipment_route_free_item_id}"
+                f"&replacement_item_instance_id={equipment_route_equipped_item_id}"
+            ),
+        )
+        assert success_status == 303
+        assert urlsplit(success_location).path == f"/mercenaries/{equipment_route_mercenary_id}"
+        assert "error=" not in success_location
+        with SessionLocal() as db:
+            assert db.get(GuildItemInstance, equipment_route_equipped_item_id).equipped_to_mercenary_id is None
+            assert db.get(GuildItemInstance, equipment_route_second_equipped_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+            assert db.get(GuildItemInstance, equipment_route_free_item_id).equipped_to_mercenary_id == equipment_route_mercenary_id
+
+        assert b"data-salvage-form" in rendered_pages["/blacksmith"]
+        assert b'name="item_template_id"' in rendered_pages["/blacksmith"]
+        assert b'name="quantity"' in rendered_pages["/blacksmith"]
+        assert b'data-salvage-cost' in rendered_pages["/blacksmith"]
+        assert b'data-salvage-return' in rendered_pages["/blacksmith"]
+        assert b'data-salvage-duration' in rendered_pages["/blacksmith"]
+        assert b"Itens candidatos na ordem" not in rendered_pages["/blacksmith"]
+        assert not re.search(rb"#[0-9]+\s", rendered_pages["/blacksmith"])
+        guide_export_status, _guide_export_location, guide_export_body = request("/guide/export.md")
+        assert guide_export_status == 200
+        for body in (rendered_pages["/guide"], guide_export_body):
+            assert "na ordem de registro do inventário".encode("utf-8") in body
+            assert "retorno é sorteado por unidade entre 1 e 3 materiais".encode("utf-8") in body
+        assert b'data-drop-preview' in rendered_pages["/regional"]
+        assert "Chance-base por item/entrada".encode("utf-8") in rendered_pages["/regional"]
         assert b"class-requirement-card" in rendered_pages["/class-change"]
         assert b"Requisitos por etapa" in rendered_pages["/class-change"]
         assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
@@ -426,7 +644,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         close_campaign(app, saves, guard)
         open_campaign(app, saves, guard, campaign.campaign_id)
         assert b"data-market-fill-max" in rendered_pages["/market"]
-        assert b"alvo fica fixo at\xc3\xa9 liberar o trabalhador" in rendered_pages["/guide"]
+        assert b"Cada posto produz o mesmo material comum can\xc3\xb4nico da fam\xc3\xadlia em todos os n\xc3\xadveis da guilda" in rendered_pages["/guide"]
         assert b"cancelar antes do prazo" in rendered_pages["/guide"]
         assert b"todos os espa\xc3\xa7os de venda est\xc3\xa3o ocupados" in rendered_pages["/market"]
         assert b"Tempo base por raridade" not in rendered_pages["/market"]
@@ -463,15 +681,16 @@ with tempfile.TemporaryDirectory() as data_dir:
             ).order_by(RegionalCycle.cycle_number.desc()).first()
             resources = db.query(GuildResources).filter_by(guild_id=guild_id).one()
             assert active_cycle is not None
+            active_cycle_id = active_cycle.id
             resources.gold = 1000
             supply_kit = db.query(ItemTemplate).filter_by(slug="supply_kit").one()
             inventory_kit = db.query(GuildInventoryItem).filter_by(
                 guild_id=guild_id, item_template_id=supply_kit.id,
             ).one_or_none()
             if inventory_kit is None:
-                db.add(GuildInventoryItem(guild_id=guild_id, item_template_id=supply_kit.id, quantity=1))
+                db.add(GuildInventoryItem(guild_id=guild_id, item_template_id=supply_kit.id, quantity=2))
             else:
-                inventory_kit.quantity = 1
+                inventory_kit.quantity = 2
             supply_kit_id = supply_kit.id
             home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
             no_supply_offer = RegionalOffer(
@@ -516,11 +735,22 @@ with tempfile.TemporaryDirectory() as data_dir:
                 required_min_mercenary_level_snapshot=99,
                 gold_reward_snapshot=100, xp_reward_snapshot=10, success_chance_snapshot=80,
             )
-            db.add_all([no_supply_offer, prepared_offer, ineligible_snapshot_offer, party_snapshot_offer])
+            reinforce_prepared_offer = RegionalOffer(
+                campaign_id=campaign.campaign_id, cycle_id=active_cycle.id,
+                cycle_number=active_cycle.cycle_number, region_code=home_region_code,
+                offer_type="contract", slot=9005, mission_template_id=regional_mission_template_id,
+                rank="E", name_snapshot="Contrato preparado com reforço",
+                recommended_level_snapshot=1, recommended_power_snapshot=10,
+                min_party_size_snapshot=1, max_party_size_snapshot=2,
+                duration_seconds_snapshot=60000, gold_reward_snapshot=100,
+                xp_reward_snapshot=10, success_chance_snapshot=80,
+            )
+            db.add_all([no_supply_offer, prepared_offer, ineligible_snapshot_offer, party_snapshot_offer, reinforce_prepared_offer])
             db.flush()
             no_supply_offer_id, prepared_offer_id = no_supply_offer.id, prepared_offer.id
             ineligible_snapshot_offer_id = ineligible_snapshot_offer.id
             party_snapshot_offer_id = party_snapshot_offer.id
+            reinforce_prepared_offer_id = reinforce_prepared_offer.id
             # Simulate admin edits after offer creation: the offer's frozen level and party bounds win.
             db.get(MissionTemplate, regional_mission_template_id).required_guild_level = 99
             db.get(MissionTemplate, regional_mission_template_id).min_party_size = 1
@@ -586,7 +816,7 @@ with tempfile.TemporaryDirectory() as data_dir:
 
         no_supply_status, no_supply_location, no_supply_body = request(
             f"/regional/offers/{no_supply_offer_id}/start", method="POST",
-            body=f"mercenary_ids={regional_no_supply_worker_id}",
+            body=f"mercenary_ids={regional_no_supply_worker_id}&supply_mode=none",
             extra_headers={"X-GIM-Diagnostic-ID": "4444444444444444"},
         )
         assert no_supply_status == 303 and no_supply_location.startswith("/regional?message="), (
@@ -630,13 +860,26 @@ with tempfile.TemporaryDirectory() as data_dir:
                 guild_id=guild_id, item_template_id=supply_kit_id,
             ).one().quantity
             preparation = json.loads(prepared_offer.supply_preparation_snapshot_json)
+            preparation_snapshot_text = prepared_offer.supply_preparation_snapshot_json
             assert prepared_offer.status == "supply_preparing"
             assert preparation["prepared_for_offer_id"] == prepared_offer_id
             assert preparation["mercenary_ids"] == [str(regional_supply_worker_id)]
             assert preparation["chance_bonus_pp"] == 5
             assert preparation["cost_kits"] == supply_quote["cost_kits"]
-            assert kits_after_prepare == 0
+            assert kits_after_prepare == 1
             assert resources_after_prepare == 1000
+
+        implicit_prepared_status, implicit_prepared_location, _implicit_prepared_body = request(
+            f"/regional/offers/{prepared_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_supply_worker_id}",
+        )
+        assert implicit_prepared_status == 303 and "selected_mercenary_id=" in implicit_prepared_location
+        assert "explicitamente" in implicit_prepared_location.lower(), implicit_prepared_location
+        with SessionLocal() as db:
+            implicit_offer = db.get(RegionalOffer, prepared_offer_id)
+            assert implicit_offer.status == "supply_preparing"
+            assert implicit_offer.supply_preparation_snapshot_json == preparation_snapshot_text
+            assert db.query(MissionRun).filter_by(regional_offer_id=prepared_offer_id).count() == 0
 
         preparation_deadline = time.monotonic() + 4
         while time.monotonic() < preparation_deadline:
@@ -647,10 +890,34 @@ with tempfile.TemporaryDirectory() as data_dir:
             time.sleep(0.1)
         assert "Preparação concluída · pronta para iniciar".encode("utf-8") in progress_body, "the server countdown must reach prepared state"
         assert re.search(rb'<progress max="100" value="100"', progress_body), progress_body[:2000]
+        prepared_dialog = re.search(
+            rb'<dialog[^>]*id="offer-' + str(prepared_offer_id).encode("ascii") + rb'".*?</dialog>',
+            progress_body, re.S,
+        )
+        assert prepared_dialog and re.search(
+            rb'name="mercenary_ids" value="' + str(regional_supply_worker_id).encode("ascii") + rb'" checked>.*?Equipe preparada',
+            prepared_dialog.group(0), re.S,
+        ), prepared_dialog.group(0) if prepared_dialog else progress_body[:4000]
+        assert b'data-prepared-team-available="true"' in prepared_dialog.group(0)
+        assert b'Equipe preparada pr' in prepared_dialog.group(0)
+        assert b'1 Kit(s) j\xc3\xa1 utilizado(s)' in prepared_dialog.group(0)
+
+        with SessionLocal() as db:
+            inventory_kit = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one()
+            inventory_kit.quantity = 0
+            db.commit()
+        empty_stock_quote_status, _empty_stock_quote_location, empty_stock_quote_body = request(
+            f"/regional/offers/{prepared_offer_id}/supply-quote", method="POST",
+            body=f"mercenary_ids={regional_supply_worker_id}",
+        )
+        empty_stock_quote = json.loads(empty_stock_quote_body)
+        assert empty_stock_quote_status == 200 and empty_stock_quote["available"] is False, empty_stock_quote
 
         prepared_start_status, prepared_start_location, prepared_start_body = request(
             f"/regional/offers/{prepared_offer_id}/start", method="POST",
-            body=f"mercenary_ids={regional_supply_worker_id}",
+            body=f"mercenary_ids={regional_supply_worker_id}&supply_mode=prepared",
             extra_headers={"X-GIM-Diagnostic-ID": "7777777777777777"},
         )
         assert prepared_start_status == 303 and prepared_start_location.startswith("/regional?message="), (
@@ -670,6 +937,148 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert run_snapshot["cost_gold"] == supply_quote["cost_gold"]
             assert prepared_worker.status == "busy"
             assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == resources_after_prepare
+            assert db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one().quantity == 0
+
+            inventory_kit = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one()
+            inventory_kit.quantity = 1
+            db.commit()
+
+        reinforce_prepare_status, reinforce_prepare_location, reinforce_prepare_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/prepare", method="POST",
+            body=f"mercenary_ids={regional_reinforce_prepared_worker_id}&supply=1",
+        )
+        assert reinforce_prepare_status == 303 and reinforce_prepare_location.startswith("/regional?message="), (
+            reinforce_prepare_status, reinforce_prepare_location, reinforce_prepare_body[:300],
+        )
+        with SessionLocal() as db:
+            reinforce_offer = db.get(RegionalOffer, reinforce_prepared_offer_id)
+            reinforce_snapshot_text = reinforce_offer.supply_preparation_snapshot_json
+            reinforce_snapshot = json.loads(reinforce_snapshot_text)
+            assert reinforce_offer.status == "supply_preparing"
+            assert reinforce_snapshot["mercenary_ids"] == [str(regional_reinforce_prepared_worker_id)]
+            kits_during_reinforce_prepare = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one().quantity
+            assert kits_during_reinforce_prepare == 0
+            reinforce_offer.supply_preparation_ends_at_utc = datetime.now(timezone.utc) - timedelta(seconds=1)
+            db.commit()
+
+        regional_during_prep_status, _regional_during_prep_location, regional_during_prep_body = request("/regional")
+        assert regional_during_prep_status == 200
+        offer_dialog = re.search(
+            rb'<dialog[^>]*id="offer-' + str(reinforce_prepared_offer_id).encode("ascii") + rb'".*?</dialog>',
+            regional_during_prep_body, re.S,
+        )
+        assert offer_dialog and b'name="supply_mode" value="none"' in offer_dialog.group(0)
+        assert b'name="supply_mode" value="prepared"' in offer_dialog.group(0)
+        assert b'Iniciar sem suprimento' in offer_dialog.group(0)
+        assert b"multiplicador" not in offer_dialog.group(0).lower()
+        assert re.search(
+            rb'name="mercenary_ids" value="' + str(regional_reinforce_prepared_worker_id).encode("ascii")
+            + rb'" checked>.*?Equipe preparada', offer_dialog.group(0), re.S,
+        ), offer_dialog.group(0)
+        assert re.search(
+            rb'name="mercenary_ids" value="' + str(regional_reinforce_extra_worker_id).encode("ascii")
+            + rb'">.*?' + "Reforço disponível".encode("utf-8"), offer_dialog.group(0), re.S,
+        ), offer_dialog.group(0)
+        assert b'data-prepared-team-status' in offer_dialog.group(0)
+
+        with SessionLocal() as db:
+            unavailable_worker = db.get(Mercenary, regional_reinforce_prepared_worker_id)
+            unavailable_worker.status = "busy"
+            db.commit()
+        unavailable_page_status, _unavailable_location, unavailable_page = request("/regional")
+        unavailable_dialog = re.search(
+            rb'<dialog[^>]*id="offer-' + str(reinforce_prepared_offer_id).encode("ascii") + rb'".*?</dialog>',
+            unavailable_page, re.S,
+        )
+        assert unavailable_page_status == 200 and unavailable_dialog
+        assert re.search(
+            rb'<input type="hidden" name="mercenary_ids" value="'
+            + str(regional_reinforce_prepared_worker_id).encode("ascii")
+            + rb'" data-prepared-member-hidden="true">', unavailable_dialog.group(0),
+        ), unavailable_dialog.group(0)
+        assert b"Equipe preparada indispon\xc3\xadvel" in unavailable_dialog.group(0)
+        assert re.search(rb'name="supply_mode" value="none"[^>]* disabled', unavailable_dialog.group(0))
+        with SessionLocal() as db:
+            db.get(Mercenary, regional_reinforce_prepared_worker_id).status = "available"
+            db.commit()
+
+        missed_prepared_status, missed_prepared_location, _missed_prepared_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
+            body=f"mercenary_ids={regional_reinforce_extra_worker_id}&supply_mode=none",
+        )
+        assert missed_prepared_status == 303 and missed_prepared_location.startswith("/regional?error=")
+        missed_prepared_page_status, _missed_prepared_page_location, missed_prepared_page = request(missed_prepared_location)
+        assert missed_prepared_page_status == 200
+        assert b"selectedIds.has(input.value) || preparedIds.has(input.value)" in missed_prepared_page
+        with SessionLocal() as db:
+            assert db.get(RegionalOffer, reinforce_prepared_offer_id).supply_preparation_snapshot_json == reinforce_snapshot_text
+            assert db.query(MissionRun).filter_by(regional_offer_id=reinforce_prepared_offer_id).count() == 0
+
+        wrong_prepared_status, wrong_prepared_location, _wrong_prepared_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
+            body=(f"mercenary_ids={regional_reinforce_prepared_worker_id}"
+                  f"&mercenary_ids={regional_reinforce_extra_worker_id}&supply_mode=prepared"),
+        )
+        assert wrong_prepared_status == 303 and wrong_prepared_location.startswith("/regional?error=")
+        assert "exatamente+a+equipe" in wrong_prepared_location.lower(), wrong_prepared_location
+
+        occupied_reinforce_status, occupied_reinforce_location, _occupied_reinforce_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
+            body=(f"mercenary_ids={regional_reinforce_prepared_worker_id}"
+                  f"&mercenary_ids={regional_no_supply_worker_id}&supply_mode=none"),
+        )
+        assert occupied_reinforce_status == 303 and occupied_reinforce_location.startswith("/regional?error="), (
+            occupied_reinforce_status, occupied_reinforce_location,
+        )
+        with SessionLocal() as db:
+            reinforce_offer = db.get(RegionalOffer, reinforce_prepared_offer_id)
+            assert reinforce_offer.status == "supply_preparing"
+            assert reinforce_offer.supply_preparation_snapshot_json == reinforce_snapshot_text
+            assert db.query(MissionRun).filter_by(regional_offer_id=reinforce_prepared_offer_id).count() == 0
+
+        reinforced_start_status, reinforced_start_location, reinforced_start_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
+            body=(f"mercenary_ids={regional_reinforce_prepared_worker_id}"
+                  f"&mercenary_ids={regional_reinforce_extra_worker_id}&supply_mode=none"),
+        )
+        assert reinforced_start_status == 303 and reinforced_start_location.startswith("/regional?message="), (
+            reinforced_start_status, reinforced_start_location, reinforced_start_body[:300],
+        )
+        with SessionLocal() as db:
+            reinforce_offer = db.get(RegionalOffer, reinforce_prepared_offer_id)
+            reinforce_run = db.query(MissionRun).filter_by(regional_offer_id=reinforce_prepared_offer_id).one()
+            reinforce_team_ids = {
+                member.mercenary_id for member in db.query(MissionRunMember).filter_by(mission_run_id=reinforce_run.id)
+            }
+            assert reinforce_offer.status == "in_progress"
+            assert reinforce_offer.supply_preparation_snapshot_json == reinforce_snapshot_text
+            assert json.loads(reinforce_offer.supply_preparation_snapshot_json)["mercenary_ids"] == [
+                str(regional_reinforce_prepared_worker_id)
+            ]
+            assert reinforce_run.preparation_snapshot_json is None
+            assert reinforce_team_ids == {
+                regional_reinforce_prepared_worker_id, regional_reinforce_extra_worker_id,
+            }
+            assert db.get(Mercenary, regional_reinforce_prepared_worker_id).status == "busy"
+            assert db.get(Mercenary, regional_reinforce_extra_worker_id).status == "busy"
+            assert db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one().quantity == 0
+
+        repeated_reinforced_status, _repeated_reinforced_location, _repeated_reinforced_body = request(
+            f"/regional/offers/{reinforce_prepared_offer_id}/start", method="POST",
+            body=(f"mercenary_ids={regional_reinforce_prepared_worker_id}"
+                  f"&mercenary_ids={regional_reinforce_extra_worker_id}&supply_mode=none"),
+        )
+        assert repeated_reinforced_status == 303
+        with SessionLocal() as db:
+            assert db.query(MissionRun).filter_by(regional_offer_id=reinforce_prepared_offer_id).count() == 1
 
         gathering_status, gathering_location, gathering_body = request(
             "/gathering/assign", method="POST",
@@ -888,7 +1297,13 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert "event=result action=gathering.assign" in gameplay_log_text
         assert "Traceback (most recent call last)" in gameplay_log_text
         assert "do-not-log" not in gameplay_log_text and "do-not-log-this" not in gameplay_log_text
-        assert b"/static/js/regional-supply.js?v=20261031-1" in rendered_pages["/dungeons"]
+        base_template_for_supply_version = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
+        regional_supply_version = re.search(
+            rb"regional-supply\.js.*?\?v=([^\"&\s]+)", base_template_for_supply_version,
+        )
+        assert regional_supply_version, "base.html should declare the active regional supply script version"
+        regional_supply_url = b"/static/js/regional-supply.js?v=" + regional_supply_version.group(1)
+        assert regional_supply_url in rendered_pages["/dungeons"]
         assert b"Modo Offline" in rendered_pages["/dashboard"]
         assert b"Estamina 8h 0min / 8h" in rendered_pages["/dashboard"]
         assert b"2h de estamina por 1h online" in rendered_pages["/dashboard"]
@@ -943,17 +1358,50 @@ with tempfile.TemporaryDirectory() as data_dir:
             f"/codex?category=class&trail=events&entry={detail_link.group(1).decode('ascii')}"
         )
         assert detail_status == 200 and b"DETALHES DO REGISTRO" in codex_detail, (detail_status, codex_detail[:1000])
-        assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in rendered_pages["/regional"]
         assert b"evolution/illustrations/gathering-worksite.webp" in rendered_pages["/gathering"]
         assert b"events-title" in rendered_pages["/regional"]
-        assert b'/static/js/evolution-dialogs.js?v=20261110-1' in dashboard_with_invite
+        base_template_for_ui_versions = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
+        main_script_version = re.search(
+            rb"main\.js.*?\?v=([^\"&\s]+)", base_template_for_ui_versions,
+        )
+        assert main_script_version, "base.html should declare the active main script version"
+        main_script_url = b"/static/js/main.js?v=" + main_script_version.group(1)
+        assert main_script_url in dashboard_with_invite
+        main_script_status, _location, main_script = request(main_script_url.decode("ascii"))
+        assert main_script_status == 200 and b"refreshRegionalEventAnchorOffset" in main_script
+        evolution_dialogs_version = re.search(
+            rb"evolution-dialogs\.js.*?\?v=([^\"&\s]+)", base_template_for_ui_versions,
+        )
+        assert evolution_dialogs_version, "base.html should declare the active evolution dialog script version"
+        evolution_dialogs_url = b"/static/js/evolution-dialogs.js?v=" + evolution_dialogs_version.group(1)
+        assert evolution_dialogs_url in dashboard_with_invite
+        dialogs_script_status, _location, dialogs_script = request(evolution_dialogs_url.decode("ascii"))
+        assert dialogs_script_status == 200 and b"GIMEnqueueRegionalNotices" in dialogs_script
         assert b'data-regional-event-notice' not in dashboard_with_invite, "event notices open when entering Vigília"
         regional_notice_status, _notice_location, regional_notice_body = request("/regional")
         assert regional_notice_status == 200
+        evolution_css_version = re.search(
+            rb"desktop-evolution\.css.*?\?v=([^\"&\s]+)", base_template_for_ui_versions,
+        )
+        assert evolution_css_version, "base.html should declare the active desktop evolution stylesheet version"
+        evolution_css_url = b"/static/css/desktop-evolution.css?v=" + evolution_css_version.group(1)
+        assert evolution_css_url in regional_notice_body
+        evolution_css_status, _location, evolution_css = request(evolution_css_url.decode("ascii"))
+        assert evolution_css_status == 200 and b"--regional-event-sticky-topbar-height" in evolution_css
+        local_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(portal_notice_event_id).encode("ascii") + rb'".*?</article>',
+            regional_notice_body, re.S,
+        )
+        assert local_portal_card
+        assert b"Regi\xc3\xa3o:" in local_portal_card.group(0)
+        assert b"Entrada dispon\xc3\xadvel" in local_portal_card.group(0)
+        assert b"Portal aberto" not in local_portal_card.group(0)
+        assert b'tabindex="-1"' in local_portal_card.group(0)
         assert b'id="regional-rebellion-notice"' in regional_notice_body
         assert b"Aceitar convite" in regional_notice_body and b"Delegar \xc3\xa0 CPU" in regional_notice_body
         assert b"regional-rebellion.webp" in regional_notice_body and b"rebellion-shield.png" in regional_notice_body
         assert b'id="regional-portal-notice"' in regional_notice_body
+        assert f'id="regional-event-{portal_notice_event_id}"'.encode("ascii") in regional_notice_body
         assert b"dimensional-portal.webp" in regional_notice_body and b"portal-gate.png" in regional_notice_body
         portal_dialog = re.search(rb'<dialog[^>]*id="regional-portal-notice".*?</dialog>', regional_notice_body, re.S)
         assert portal_dialog and b"Enviar equipe" not in portal_dialog.group(0)
@@ -965,12 +1413,97 @@ with tempfile.TemporaryDirectory() as data_dir:
             db.commit()
         used_portal_status, _used_portal_location, used_portal_body = request("/regional")
         assert used_portal_status == 200 and b'id="regional-portal-notice"' not in used_portal_body
+        used_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(portal_notice_event_id).encode("ascii") + rb'".*?</article>',
+            used_portal_body, re.S,
+        )
+        assert used_portal_card and b"Entrada j\xc3\xa1 utilizada" in used_portal_card.group(0)
+        assert b"Portal aberto" not in used_portal_card.group(0)
+        used_quote_status, _used_quote_location, used_quote_body = request(
+            f"/regional/events/{portal_notice_event_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert used_quote_status == 409, (
+            used_quote_status, _used_quote_location, used_quote_body[:800],
+        )
+        used_quote_reason = json.loads(used_quote_body).get("reason", "")
+        assert "já usou" in used_quote_reason, used_quote_reason
         with SessionLocal() as db:
             expired_portal = db.get(RegionalEvent, portal_notice_event_id)
             expired_portal.expires_at_utc = datetime.now(timezone.utc) - timedelta(seconds=5)
             db.commit()
         expired_portal_status, _expired_portal_location, expired_portal_body = request("/regional")
         assert expired_portal_status == 200 and b'id="regional-portal-notice"' not in expired_portal_body
+        expired_quote_status, _expired_quote_location, expired_quote_body = request(
+            f"/regional/events/{portal_notice_event_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert expired_quote_status == 409 and "prazo" in json.loads(expired_quote_body)["reason"]
+        with SessionLocal() as db:
+            home_region_code = next(code for code, name in REGIONS if name == campaign.home_region)
+            outside_region_code = next(code for code, _name in REGIONS if code != home_region_code)
+            home_portal = db.get(RegionalEvent, portal_notice_event_id)
+            outside_portal = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="portal", region_code=outside_region_code,
+                trigger_cycle_number=home_portal.trigger_cycle_number, rules_version=home_portal.rules_version,
+                seed="outside-home-portal-smoke", status="active",
+                dungeon_template_id=home_portal.dungeon_template_id,
+                created_at_utc=datetime.now(timezone.utc),
+                expires_at_utc=datetime.now(timezone.utc) + timedelta(hours=3),
+                summary_json=home_portal.summary_json,
+            )
+            db.add(outside_portal)
+            db.flush()
+            outside_portal_id = outside_portal.id
+            db.commit()
+        outside_portal_status, _outside_portal_location, outside_portal_body = request("/regional")
+        outside_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(outside_portal_id).encode("ascii") + rb'".*?</article>',
+            outside_portal_body, re.S,
+        )
+        assert outside_portal_status == 200 and outside_portal_card
+        assert b"Ver contribui\xc3\xa7\xc3\xa3o e resultado" in outside_portal_body
+        assert b"Prazo aberto \xc2\xb7 fora do alcance da guilda" in outside_portal_card.group(0)
+        assert b"Portais s\xc3\xb3 aceitam entrada na regi\xc3\xa3o natal" in outside_portal_card.group(0)
+        assert b"/portals/start" not in outside_portal_card.group(0)
+        outside_portal_quote_status, _outside_portal_quote_location, outside_portal_quote_body = request(
+            f"/regional/events/{outside_portal_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert outside_portal_quote_status == 409
+        assert "região natal" in json.loads(outside_portal_quote_body)["reason"]
+        outside_portal_start_status, outside_portal_start_location, _outside_portal_start_body = request(
+            f"/regional/events/{outside_portal_id}/portals/start", method="POST",
+        )
+        assert outside_portal_start_status == 303
+        assert "região natal" in unquote_plus(outside_portal_start_location)
+        with SessionLocal() as db:
+            home_portal = db.get(RegionalEvent, portal_notice_event_id)
+            expired_external_portal = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="portal", region_code=outside_region_code,
+                trigger_cycle_number=home_portal.trigger_cycle_number + 1, rules_version=home_portal.rules_version,
+                seed="expired-external-portal-smoke", status="in_progress",
+                dungeon_template_id=home_portal.dungeon_template_id,
+                created_at_utc=datetime.now(timezone.utc) - timedelta(minutes=20),
+                expires_at_utc=datetime.now(timezone.utc) - timedelta(minutes=5),
+                summary_json=home_portal.summary_json,
+            )
+            db.add(expired_external_portal)
+            db.flush()
+            expired_external_portal_id = expired_external_portal.id
+            db.add(RegionalEventActivity(
+                event_id=expired_external_portal.id, guild_state_id=portal_notice_state_id,
+                source_type="dungeon", source_run_id=987654321,
+                status="in_progress",
+            ))
+            db.commit()
+        expired_external_status, _expired_external_location, expired_external_body = request("/regional")
+        expired_external_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(expired_external_portal_id).encode("ascii") + rb'".*?</article>',
+            expired_external_body, re.S,
+        )
+        assert expired_external_status == 200 and expired_external_card
+        assert b"Prazo encerrado \xc2\xb7 fora do alcance da guilda" in expired_external_card.group(0)
+        assert b"Prazo aberto" not in expired_external_card.group(0)
+        with SessionLocal() as db:
+            assert db.get(RegionalEvent, expired_external_portal_id).status == "in_progress"
         with SessionLocal() as db:
             invite_event = db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion", status="active",
@@ -1000,17 +1533,63 @@ with tempfile.TemporaryDirectory() as data_dir:
         decision_status, decision_location, _decision_body = request(
             f"/regional/events/{invite_event_id}/decision", method="POST", body="decision=accept",
         )
-        assert decision_status == 303 and decision_location.endswith("#events-title")
+        assert decision_status == 303 and decision_location.endswith(f"#regional-event-{invite_event_id}")
         with SessionLocal() as db:
             invite_event = db.get(RegionalEvent, invite_event_id)
             invited_participant = db.query(RegionalEventParticipant).filter_by(event_id=invite_event_id).one()
             assert invite_event.player_decision == "accept" and invited_participant.status == "accepted"
+        accepted_external_portal_status, _accepted_external_portal_location, accepted_external_portal_body = request(
+            f"/regional/events/{outside_portal_id}/portals/supply-quote", method="POST", body="",
+        )
+        assert accepted_external_portal_status == 409
+        assert "região natal" in json.loads(accepted_external_portal_body)["reason"]
+        with SessionLocal() as db:
+            active_regions = set(db.scalars(select(RegionalEvent.region_code).where(
+                RegionalEvent.campaign_id == campaign.campaign_id,
+                RegionalEvent.event_type == "rebellion",
+                RegionalEvent.status.in_(("active", "in_progress")),
+            )))
+            blocked_external_offer = db.scalar(select(RegionalOffer).where(
+                RegionalOffer.campaign_id == campaign.campaign_id,
+                RegionalOffer.cycle_id == active_cycle_id,
+                RegionalOffer.region_code != home_region_code,
+                RegionalOffer.region_code.not_in(active_regions),
+                RegionalOffer.status == "available",
+            ).order_by(RegionalOffer.region_code, RegionalOffer.offer_type, RegionalOffer.slot).limit(1))
+            assert blocked_external_offer is not None
+            blocked_external_offer_id = blocked_external_offer.id
+        blocked_quote_status, _blocked_quote_location, blocked_quote_body = request(
+            f"/regional/offers/{blocked_external_offer_id}/supply-quote", method="POST",
+        )
+        assert blocked_quote_status == 409
+        assert "sem uma rebelião ativa" in json.loads(blocked_quote_body)["reason"]
+        blocked_prepare_status, blocked_prepare_location, _blocked_prepare_body = request(
+            f"/regional/offers/{blocked_external_offer_id}/prepare", method="POST", body="supply=1",
+        )
+        assert blocked_prepare_status == 303
+        assert "sem uma rebelião ativa" in unquote_plus(blocked_prepare_location)
+        blocked_start_status, blocked_start_location, _blocked_start_body = request(
+            f"/regional/offers/{blocked_external_offer_id}/start", method="POST", body="supply_mode=none",
+        )
+        assert blocked_start_status == 303
+        assert "sem uma rebelião ativa" in unquote_plus(blocked_start_location)
         post_decision_status, _location, post_decision_dashboard = request("/dashboard")
         assert post_decision_status == 200 and b'data-regional-event-notice' not in post_decision_dashboard
         post_decision_regional_status, _location, post_decision_regional = request("/regional")
         assert post_decision_regional_status == 200 and b'id="regional-rebellion-notice"' not in post_decision_regional
+        assert f'id="regional-event-{invite_event_id}"'.encode("ascii") in post_decision_regional
+        assert b"Convite aceito." in post_decision_regional
+        assert b"Sua prioridade segue at\xc3\xa9" in post_decision_regional
+        assert b"Prioridade encerrada." not in post_decision_regional
+        assert b"a CPU tamb\xc3\xa9m participa" not in post_decision_regional
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
-        assert b"/css/desktop-theme.css?v=20261027-1" in rendered_pages["/dashboard"]
+        base_template = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
+        desktop_theme_version = re.search(rb"desktop-theme\.css.*?\?v=([^\"&\s]+)", base_template)
+        assert desktop_theme_version, "base.html should declare the active desktop theme version"
+        desktop_theme_url = b"/static/css/desktop-theme.css?v=" + desktop_theme_version.group(1)
+        assert desktop_theme_url in rendered_pages["/dashboard"]
+        theme_status, _theme_location, theme_body = request(desktop_theme_url.decode("ascii"))
+        assert theme_status == 200 and theme_body, (theme_status, desktop_theme_url)
         assert b'desktop-resource-row' in rendered_pages["/dashboard"]
         assert b'desktop-operations-band' in rendered_pages["/dashboard"]
         assert b'desktop-operations-intro desktop-page-hero' in rendered_pages["/missions"]
@@ -1168,6 +1747,23 @@ with tempfile.TemporaryDirectory() as data_dir:
             portal_item_template.rng_bonus_max = 0
             portal_item_template.is_active = False
             db.commit()
+        portal_detail_status, _portal_detail_location, portal_detail_body = request("/regional")
+        assert portal_detail_status == 200
+        displayed_portal_item_name = clean_generated_name(original_item_name).encode("utf-8")
+        portal_preview_card = re.search(
+            rb'<article class="evolution-future-card"[^>]*id="regional-event-'
+            + str(portal_event_id).encode("ascii")
+            + rb'"(?:(?!<article class="evolution-future-card"[^>]*>).)*'
+            + re.escape(displayed_portal_item_name)
+            + rb'.*?</article>',
+            portal_detail_body,
+            re.S,
+        )
+        assert portal_preview_card and b"Loot do portal" in portal_preview_card.group(0), portal_detail_body[:4000]
+        assert b"Chance da faixa exclusiva" in portal_preview_card.group(0)
+        assert b"Qtd. base:" in portal_preview_card.group(0)
+        assert b"multiplicador" not in portal_preview_card.group(0).lower()
+        assert b"% chance" in portal_preview_card.group(0)
         status, location, portal_start_body = request(
             f"/regional/events/{portal_event_id}/portals/start", method="POST",
             body=f"mercenary_ids={portal_mercenary_id}",
@@ -1319,14 +1915,19 @@ with tempfile.TemporaryDirectory() as data_dir:
             "previous_revision": notice["previous_revision"],
             "current_revision": notice["current_revision"],
             "previous_save_version": 1,
-            "current_save_version": 7,
+            "current_save_version": 8,
             "backup_created": True,
         }, notice
         backup_files = list(
             (Path(data_dir) / "backups" / previous_campaign.campaign_id).glob("pre-migration-*.db")
         )
-        assert len(backup_files) == 1, backup_files
-        with closing(sqlite3.connect(backup_files[0])) as connection:
+        migration_backups = [
+            path for path in backup_files
+            if path.name.startswith(f"pre-migration-{notice['previous_revision']}-")
+        ]
+        assert len(migration_backups) == 1, backup_files
+        migration_backup = migration_backups[0]
+        with closing(sqlite3.connect(migration_backup)) as connection:
             backup_version, backup_revision = connection.execute(
                 "SELECT campaign_metadata.schema_version, alembic_version.version_num "
                 "FROM campaign_metadata CROSS JOIN alembic_version WHERE campaign_id = ?",
@@ -1341,10 +1942,10 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert status == 200
         assert b'role="status" aria-live="polite"' in dashboard_body
         assert "Dados da campanha atualizados.".encode("utf-8") in dashboard_body
-        assert "Versão 1 → 7".encode("utf-8") in dashboard_body
+        assert "Versão 1 → 8".encode("utf-8") in dashboard_body
         assert "cópia de segurança foi criada antes da atualização".encode("utf-8") in dashboard_body
-        assert str(backup_files[0]).encode("utf-8") not in dashboard_body
-        assert str(backup_files[0]).encode("utf-8") not in migration_body
+        assert str(migration_backup).encode("utf-8") not in dashboard_body
+        assert str(migration_backup).encode("utf-8") not in migration_body
         assert b"offline-dialog" not in dashboard_body
         status, _location, migrated_regional_body = request("/regional")
         assert status == 200, ("/regional after migration", status, migrated_regional_body[:400])
@@ -1358,7 +1959,8 @@ with tempfile.TemporaryDirectory() as data_dir:
         for diagnostic_id in (
             "3333333333333333", "4444444444444444", "5555555555555555",
             "6666666666666666", "7777777777777777", "8888888888888888",
-            "9999999999999999",
+            "9999999999999999", slot_failure_diagnostic, foreign_mercenary_diagnostic,
+            *validation_diagnostics, busy_diagnostic, exception_diagnostic, "aaaaaaaaaaaaaaaa",
         ):
             assert f"ref={diagnostic_id}" in gameplay_trace, f"missing correlated trace for {diagnostic_id}"
         for route, diagnostic_id, expected_status in (
@@ -1376,6 +1978,35 @@ with tempfile.TemporaryDirectory() as data_dir:
                 and expected_status in line
                 for line in gameplay_trace.splitlines()
             ), f"missing result trace for {route} ({diagnostic_id}): {expected_status}"
+        expected_equipment_error_routes = [
+            (equipment_route, slot_failure_diagnostic),
+            *((equipment_route, diagnostic_id) for diagnostic_id in validation_diagnostics),
+            (equipment_route, busy_diagnostic),
+            (f"/mercenaries/{foreign_mercenary_id}/equip", foreign_mercenary_diagnostic),
+        ]
+        for route, diagnostic_id in expected_equipment_error_routes:
+            route_mercenary_id = route.strip("/").split("/")[1]
+            assert any(
+                line.startswith("20")
+                and f"event=result action=mercenaries.{route_mercenary_id}.equip " in line
+                and f"route={route} ref={diagnostic_id} " in line
+                and "status=303 outcome=error" in line
+                for line in gameplay_trace.splitlines()
+            ), f"expected equipment rejection trace for {diagnostic_id}"
+        assert any(
+            line.startswith("20")
+            and f"event=exception action=mercenaries.{equipment_route_mercenary_id}.equip " in line
+            and f"route={equipment_route} ref={exception_diagnostic} " in line
+            and "status=500 outcome=unexpected_exception" in line
+            for line in gameplay_trace.splitlines()
+        ), f"expected unexpected equipment exception trace for {exception_diagnostic}"
+        assert any(
+            line.startswith("20")
+            and f"event=rejected action=mercenaries.{equipment_route_mercenary_id}.equip " in line
+            and f"route={equipment_route} ref=aaaaaaaaaaaaaaaa " in line
+            and "status=403 outcome=origin_rejected" in line
+            for line in gameplay_trace.splitlines()
+        ), "the loopback origin guard should remain in effect for equipment actions"
     finally:
         from app.desktop.lifecycle import close_campaign
         close_campaign(app, saves, guard)
@@ -1402,7 +2033,9 @@ with tempfile.TemporaryDirectory() as data_dir:
                 text=True,
                 check=False,
             )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        lines = (result.stdout + result.stderr).splitlines()
+        diagnostic = "\n".join(line[:600] for line in lines[-60:])
+        self.assertEqual(result.returncode, 0, diagnostic)
 
 
 if __name__ == "__main__":

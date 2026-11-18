@@ -25,6 +25,8 @@ from app.models.regional import (
 from app.services.building_balance_service import scouts_values
 from app.services.regional_cycle_service import (
     REGIONS,
+    VIGILIA_RULES_VERSION,
+    VIGILIA_V7_RULES_VERSION,
     _rng,
     _seed_text,
     get_current_player_regional_guild,
@@ -32,12 +34,14 @@ from app.services.regional_cycle_service import (
 )
 
 
-EVENT_RULES_VERSION = "regional-events-v4"
+EVENT_RULES_VERSION = "regional-events-v5"
+V7_EVENT_RULES_VERSION = "regional-events-v4"
 LEGACY_EVENT_RULES_VERSION = "regional-events-v3"
 PORTAL_LOOT_VERSION = "portal-loot-v1"
 PORTAL_LOOT_CHANCE_BY_RARITY = {"rare": 20, "epic": 6, "legendary": 1}
 PORTAL_BOSS_SNAPSHOT_VERSION = "portal-boss-v2"
-REBELLION_CHANCE = 0.02
+LEGACY_REBELLION_CHANCE = 0.02
+REBELLION_CHANCE = 0.05
 REBELLION_REGION_ROLL_COOLDOWN_CYCLES = 0
 LEGACY_REBELLION_REGION_ROLL_COOLDOWN_CYCLES = 5
 PORTAL_TTL = timedelta(hours=3)
@@ -46,6 +50,8 @@ REBELLION_PRIORITY = timedelta(hours=1)
 REBELLION_TTL = timedelta(hours=12)
 PORTAL_BASE_CHANCE = 0.05
 PORTAL_MAX_CHANCE = 0.25
+PORTAL_LOW_THREAT_CHANCE = 0.04
+PORTAL_CHANCE_CAP = 0.30
 PORTAL_MIN_THREAT = 70.0
 PORTAL_CPU_PARTICIPATION_CHANCE = 0.25
 REBELLION_MIN_THREAT = 85.0
@@ -90,7 +96,19 @@ def _utc(value: datetime) -> datetime:
 
 
 def _event_rules_version_for_cycle(cycle: RegionalCycle) -> str:
-    return EVENT_RULES_VERSION if cycle.rules_version == "vigilia-v7" else LEGACY_EVENT_RULES_VERSION
+    if cycle.rules_version == VIGILIA_RULES_VERSION:
+        return EVENT_RULES_VERSION
+    if cycle.rules_version == VIGILIA_V7_RULES_VERSION:
+        return V7_EVENT_RULES_VERSION
+    return LEGACY_EVENT_RULES_VERSION
+
+
+def _portal_spawn_chance(threat: float, detection_bonus_pp: float = 0.0) -> float:
+    if float(threat) < PORTAL_MIN_THREAT:
+        base_chance = PORTAL_LOW_THREAT_CHANCE
+    else:
+        base_chance = PORTAL_BASE_CHANCE + (float(threat) - PORTAL_MIN_THREAT) * (0.20 / 30.0)
+    return min(PORTAL_CHANCE_CAP, base_chance + float(detection_bonus_pp) / 100.0)
 
 
 def _summary(event: RegionalEvent) -> dict[str, object]:
@@ -168,6 +186,29 @@ def _finalize_portal_event(db: Session, event: RegionalEvent, now: datetime) -> 
     event.resolved_at_utc = _utc(now)
     _save_summary(event, payload)
     db.add(event)
+
+
+def _portal_has_pending_cpu_cycle(db: Session, event: RegionalEvent) -> bool:
+    pending_cycle = db.scalar(select(RegionalCycle).where(
+        RegionalCycle.campaign_id == event.campaign_id,
+        RegionalCycle.cycle_number == event.trigger_cycle_number + 1,
+        RegionalCycle.status == "open",
+    ))
+    if pending_cycle is None:
+        return False
+    cycle_start = _utc(pending_cycle.starts_at_utc)
+    return _utc(event.created_at_utc) <= cycle_start < _utc(event.expires_at_utc)
+
+
+def _finalize_portal_event_when_ready(db: Session, event: RegionalEvent, now: datetime) -> None:
+    if _has_in_progress_activity(db, event.id):
+        _mark_event_waiting_for_started_activities(db, event)
+        return
+    # A portal created at the close of cycle N remains eligible for the CPU
+    # plan in cycle N+1. Every finalization path must wait for that open cycle.
+    if _portal_has_pending_cpu_cycle(db, event):
+        return
+    _finalize_portal_event(db, event, now)
 
 
 def _finalize_rebellion_event(db: Session, event: RegionalEvent, now: datetime) -> None:
@@ -281,17 +322,17 @@ def expire_due_events(db: Session, campaign_id: str, now: datetime) -> None:
         db.add(event)
     due = list(db.scalars(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign_id,
-        RegionalEvent.status == "active",
+        RegionalEvent.status.in_(("active", "in_progress")),
         RegionalEvent.expires_at_utc <= current,
     )))
     for event in due:
-        if _has_in_progress_activity(db, event.id):
-            _mark_event_waiting_for_started_activities(db, event)
-            continue
         if event.event_type == "portal":
-            _finalize_portal_event(db, event, _utc(event.expires_at_utc))
+            _finalize_portal_event_when_ready(db, event, _utc(event.expires_at_utc))
         elif event.event_type == "rebellion":
-            _finalize_rebellion_event(db, event, _utc(event.expires_at_utc))
+            if _has_in_progress_activity(db, event.id):
+                _mark_event_waiting_for_started_activities(db, event)
+            else:
+                _finalize_rebellion_event(db, event, _utc(event.expires_at_utc))
     if due or priority_due:
         db.flush()
 
@@ -383,7 +424,7 @@ def _create_cycle_portals_locked(
     cycle_end = _utc(cycle.ends_at_utc)
     expire_due_events(db, campaign_id, cycle_end)
     event_rules_version = _event_rules_version_for_cycle(cycle)
-    stage_eligible = event_rules_version == EVENT_RULES_VERSION
+    stage_eligible = event_rules_version in {V7_EVENT_RULES_VERSION, EVENT_RULES_VERSION}
     # New rules add the introductory boss and gate portal bosses by the
     # campaign stage. Older cycles retain their original portal-biome pool.
     boss_query = select(DungeonTemplate).where(
@@ -407,7 +448,8 @@ def _create_cycle_portals_locked(
     if not portal_bosses:
         return
     for region in sorted(regions, key=lambda row: row.region_code):
-        if region.threat < PORTAL_MIN_THREAT:
+        if (region.threat < PORTAL_MIN_THREAT
+                and event_rules_version != EVENT_RULES_VERSION):
             continue
         active_id = db.scalar(select(RegionalEvent.id).where(
             RegionalEvent.campaign_id == campaign_id,
@@ -442,11 +484,7 @@ def _create_cycle_portals_locked(
                 BuildingTemplate.effect_type == "scouts",
             )) or 0)
         detection_bonus_pp = scouts_values(scouts_level)["portal_detection_bonus_percentage_points"]
-        chance = min(
-            PORTAL_MAX_CHANCE + 0.05,
-            PORTAL_BASE_CHANCE + (float(region.threat) - PORTAL_MIN_THREAT) * (0.20 / 30.0)
-            + detection_bonus_pp / 100.0,
-        )
+        chance = _portal_spawn_chance(region.threat, detection_bonus_pp)
         seed = _seed_text(
             campaign_id, cycle.cycle_number, region.region_code, event_rules_version, "portal",
         )
@@ -511,9 +549,14 @@ def _evaluate_open_rebellion_locked(
     current = _utc(now)
     expire_due_events(db, campaign.campaign_id, current)
     event_rules_version = _event_rules_version_for_cycle(cycle)
+    current_rebellion_rules = event_rules_version in {V7_EVENT_RULES_VERSION, EVENT_RULES_VERSION}
     rebellion_cooldown = (
-        REBELLION_REGION_ROLL_COOLDOWN_CYCLES if event_rules_version == EVENT_RULES_VERSION
+        REBELLION_REGION_ROLL_COOLDOWN_CYCLES if current_rebellion_rules
         else LEGACY_REBELLION_REGION_ROLL_COOLDOWN_CYCLES
+    )
+    rebellion_chance = (
+        REBELLION_CHANCE if event_rules_version == EVENT_RULES_VERSION
+        else LEGACY_REBELLION_CHANCE
     )
     active = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign.campaign_id,
@@ -574,7 +617,7 @@ def _evaluate_open_rebellion_locked(
     rolled: list[tuple[RegionalRegionState, str]] = []
     if roll_target is not None:
         target_seed = seeds[roll_target.region_code]
-        if _rng(target_seed).random() < REBELLION_CHANCE:
+        if _rng(target_seed).random() < rebellion_chance:
             rolled.append((roll_target, target_seed))
     winner = rolled[0] if rolled else None
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild_id)
@@ -598,7 +641,7 @@ def _evaluate_open_rebellion_locked(
                 "threshold_eligible": region.region_code in eligible,
                 "roll_selected": region.region_code == (roll_target.region_code if roll_target else None),
                 "chance_per_eligible_region_cycle": (
-                    REBELLION_CHANCE
+                    rebellion_chance
                     if region.region_code == (roll_target.region_code if roll_target else None)
                     else 0
                 ),
@@ -761,7 +804,7 @@ def record_cpu_event_activity(
         RegionalEvent.campaign_id == campaign_id,
         RegionalEvent.event_type == "portal",
         RegionalEvent.region_code == region_code,
-        RegionalEvent.status == "active",
+        RegionalEvent.status.in_(("active", "in_progress")),
         RegionalEvent.created_at_utc <= cycle_start,
         RegionalEvent.expires_at_utc > cycle_start,
     ).order_by(RegionalEvent.id.desc()).limit(1))
@@ -772,7 +815,9 @@ def record_cpu_event_activity(
         ))
         if participant_exists is None:
             rng = _rng(portal.seed, plan.seed, "cpu-portal-entry")
-            if cycle.rules_version in {"vigilia-v5", "vigilia-v6", "vigilia-v7"}:
+            if cycle.rules_version in {
+                "vigilia-v5", "vigilia-v6", VIGILIA_V7_RULES_VERSION, VIGILIA_RULES_VERSION,
+            }:
                 decisions = json.loads(plan.decisions_json or "[]")
                 outcomes = json.loads(plan.outcomes_json or "[]")
                 outcome_by_offer = {item.get("offer_id"): item for item in outcomes}
@@ -789,14 +834,15 @@ def record_cpu_event_activity(
                 )
                 eligible_portal_action = portal_run is not None and resolved_at is not None
                 success = bool(outcome_by_offer.get(portal_run["offer_id"], {}).get("success")) if eligible_portal_action else False
-                participate = eligible_portal_action and resolved_at <= _utc(portal.expires_at_utc)
+                # The entry window gates the start time. An eligible run may
+                # finish after the portal closes and still count in its result.
+                participate = eligible_portal_action
             else:
                 # Legacy CPU rules assigned a fixed two-hour, independent portal roll.
                 resolved_at = cycle_start + timedelta(hours=2)
                 participate = rng.random() < PORTAL_CPU_PARTICIPATION_CHANCE
                 if participate:
                     success = rng.random() < (plan.successes / max(1, plan.actions))
-                participate = participate and resolved_at <= _utc(portal.expires_at_utc)
             if participate:
                 db.add(RegionalEventParticipant(
                     event_id=portal.id,
@@ -828,7 +874,6 @@ def record_cpu_event_activity(
         RegionalEvent.region_code == region_code,
         RegionalEvent.status == "active",
         RegionalEvent.created_at_utc <= _utc(cycle.starts_at_utc),
-        RegionalEvent.cpu_started_at_utc <= _utc(cycle.starts_at_utc),
         RegionalEvent.expires_at_utc > cycle_start,
     ).order_by(RegionalEvent.id.desc()).limit(1))
     if event is None:
@@ -840,6 +885,54 @@ def record_cpu_event_activity(
         RegionalEventActivity.source_run_id == plan.id,
     ))
     if existing is not None:
+        return portal_security_delta, portal_threat_delta
+    try:
+        decisions = json.loads(getattr(plan, "decisions_json", "[]") or "[]")
+        outcomes = json.loads(getattr(plan, "outcomes_json", "[]") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        decisions, outcomes = [], []
+    cpu_start = event.cpu_started_at_utc or event.priority_ends_at_utc or event.created_at_utc
+    cpu_start = _utc(cpu_start)
+    event_deadline = _utc(event.expires_at_utc)
+    if decisions:
+        eligible_decisions = []
+        for decision in decisions:
+            if not isinstance(decision, dict) or decision.get("internal_contract"):
+                continue
+            started_value = decision.get("started_at_utc")
+            if not started_value:
+                continue
+            started_at = _utc(datetime.fromisoformat(started_value))
+            if cpu_start <= started_at < event_deadline:
+                eligible_decisions.append(decision)
+        if not eligible_decisions:
+            return portal_security_delta, portal_threat_delta
+        eligible_offer_ids = {str(row.get("offer_id")) for row in eligible_decisions}
+        eligible_outcomes = [
+            row for row in outcomes
+            if isinstance(row, dict) and str(row.get("offer_id")) in eligible_offer_ids
+        ]
+        successes = sum(bool(row.get("success")) for row in eligible_outcomes)
+        failures = len(eligible_outcomes) - successes
+        contribution = len(eligible_outcomes)
+        resolved_values = [
+            row.get("resolved_at_utc") for row in eligible_decisions
+            if row.get("resolved_at_utc")
+        ]
+        resolved_at = max(
+            (_utc(datetime.fromisoformat(value)) for value in resolved_values),
+            default=cycle_end,
+        )
+    elif cpu_start <= cycle_start:
+        # Legacy plans don't carry per-action timestamps; keep their original
+        # whole-cycle accounting when the CPU window had already opened.
+        successes = int(plan.successes or 0)
+        failures = int(plan.failures or 0)
+        contribution = int(plan.actions or 0)
+        resolved_at = cycle_end
+        if contribution <= 0:
+            return portal_security_delta, portal_threat_delta
+    else:
         return portal_security_delta, portal_threat_delta
     participant = db.scalar(select(RegionalEventParticipant).where(
         RegionalEventParticipant.event_id == event.id,
@@ -861,10 +954,10 @@ def record_cpu_event_activity(
         source_type="cpu_cycle",
         source_run_id=plan.id,
         status="resolved",
-        successes=plan.successes,
-        failures=plan.failures,
-        contribution=plan.actions,
-        resolved_at_utc=cycle_end,
+        successes=successes,
+        failures=failures,
+        contribution=contribution,
+        resolved_at_utc=resolved_at,
     ))
     db.flush()
     return portal_security_delta, portal_threat_delta
@@ -904,10 +997,7 @@ def resolve_portal_participant(
     db.add_all([region, participant])
     current = _utc(now)
     if event.status == "in_progress" or current >= _utc(event.expires_at_utc):
-        if _has_in_progress_activity(db, event.id):
-            _mark_event_waiting_for_started_activities(db, event)
-        else:
-            _finalize_portal_event(db, event, current)
+        _finalize_portal_event_when_ready(db, event, current)
     db.flush()
 
 

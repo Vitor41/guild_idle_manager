@@ -12,7 +12,7 @@ from app.models.mission import MissionTemplate
 from app.services.display_service import clean_generated_name
 from app.services.economy_pricing_service import effective_dock_unit_price, effective_equipment_dock_unit_price
 from app.services.building_balance_service import BUILDING_MAX_LEVEL, docks_values, required_guild_level_for_upgrade
-from app.services.gathering_service import preview_material_for_family
+from app.services.gathering_service import RESOURCE_FAMILIES, preview_material_for_family
 from app.services.salvage_service import _select_salvage_material, salvage_material_family
 
 MAX_GATHERING_GUILD_LEVEL = 350
@@ -133,32 +133,23 @@ def build_material_source_manifest(db: Session, guild_level: int | None = None, 
                     "remaining_stock": offer.remaining_stock, "unit_price": offer.unit_price,
                     "rotation_ends_at": rotation.ends_at.isoformat(),
                     "provenance": "campaign DockOffer snapshot; scoped to requested guild"})
-    families = {item.material_family for item in materials if item.is_active and item.material_family}
-    for family in families:
-        if guild_level is not None:
-            selected = preview_material_for_family(db, family, max(1, int(guild_level)))
-            if selected:
-                rows[selected.id]["sources"].append({"type": "gathering", "family": family,
-                    "guild_level": int(guild_level), "guild_level_range": [int(guild_level), int(guild_level)],
-                    "condition": "seleção determinística por família e nível; sem chance de drop",
-                    "provenance": "preview_material_for_family live rule"})
-            continue
-        thresholds = {1, MAX_GATHERING_GUILD_LEVEL}
-        for item in materials:
-            if item.is_active and item.material_family == family:
-                unlock = max(1, int(item.required_level), int(item.item_level))
-                if unlock <= MAX_GATHERING_GUILD_LEVEL:
-                    thresholds.add(unlock)
-        ordered = sorted(thresholds)
-        for index, start_level in enumerate(ordered):
-            end_level = min(MAX_GATHERING_GUILD_LEVEL,
-                ordered[index + 1] - 1 if index + 1 < len(ordered) else MAX_GATHERING_GUILD_LEVEL)
-            selected = preview_material_for_family(db, family, start_level)
-            if selected:
-                rows[selected.id]["sources"].append({"type": "gathering", "family": family,
-                    "guild_level_range": [start_level, end_level],
-                    "condition": "seleção determinística por família e nível; sem chance de drop",
-                    "provenance": "preview_material_for_family live rule"})
+    for family in sorted(RESOURCE_FAMILIES):
+        level = max(1, int(guild_level)) if guild_level is not None else 1
+        selected = preview_material_for_family(db, family, level)
+        if selected:
+            level_range = (
+                [level, level] if guild_level is not None
+                else [1, MAX_GATHERING_GUILD_LEVEL]
+            )
+            source = {
+                "type": "gathering", "family": family,
+                "guild_level_range": level_range,
+                "condition": "material comum canônico da família em todos os níveis da guilda; sem chance de drop",
+                "provenance": "explicit canonical slug + preview_material_for_family live rule",
+            }
+            if guild_level is not None:
+                source["guild_level"] = level
+            rows[selected.id]["sources"].append(source)
     active_equipment = [gear for gear in equipment if gear.is_active]
     for gear in active_equipment:
         try:

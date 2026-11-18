@@ -44,14 +44,35 @@ class ClassChangePresentationTests(unittest.TestCase):
         self.assertEqual([check["shortfall"] for check in cards[0]["checks"]], [300, 1, 2, 2])
         self.assertEqual(cards[0]["eligible_count"], 0)
 
-    def test_global_requirements_without_available_eligible_worker_are_explicit(self):
+    def test_qualified_busy_worker_is_not_reported_as_missing_level(self):
         cards = self._cards(workers=[
             {"id": 1, "class_id": 10, "level": 30, "status": "busy"},
         ])
 
-        self.assertEqual(cards[0]["state"], "Sem mercenário elegível")
+        self.assertEqual(cards[0]["state"], "Mercenário ocupado")
         self.assertEqual(cards[0]["eligible_count"], 0)
         self.assertTrue(cards[0]["checks"][3]["met"])
+        self.assertEqual(cards[0]["checks"][3]["current"], 30)
+        self.assertIn("está ocupado", cards[0]["worker_summary"])
+
+    def test_no_matching_worker_uses_dash_instead_of_fake_zero_level(self):
+        cards = self._cards()
+
+        self.assertEqual(cards[0]["state"], "Sem mercenário na classe")
+        self.assertEqual(cards[0]["checks"][3]["current"], "—")
+        self.assertEqual(cards[0]["checks"][3]["shortfall"], None)
+        self.assertEqual(cards[0]["checks"][3]["missing"], "Sem mercenário da classe de origem")
+        self.assertIn("Nenhum mercenário", cards[0]["worker_summary"])
+
+    def test_available_worker_below_required_level_reports_shortfall(self):
+        cards = self._cards(workers=[
+            {"id": 1, "class_id": 10, "level": 18, "status": "available"},
+        ])
+
+        self.assertEqual(cards[0]["state"], "Nível insuficiente")
+        self.assertEqual(cards[0]["checks"][3]["current"], 18)
+        self.assertEqual(cards[0]["checks"][3]["shortfall"], 2)
+        self.assertIn("mercenário disponível", cards[0]["worker_summary"])
 
     def test_equivalent_paths_are_grouped_and_requirement_variants_remain_separate(self):
         second_path = {**self.transition, "from_class_id": 11}

@@ -7,7 +7,12 @@ from sqlalchemy.orm import Session
 from app.database.connection import Base, create_database_engine
 from app.models import BuildingTemplate, Guild, GuildBuilding, GuildInventoryItem, GuildResources, ItemTemplate, Mercenary, MercenaryClass
 from app.models.gathering import GatheringAssignment
-from app.services.gathering_service import advance_assignment, assign_worker
+from app.services.gathering_service import (
+    advance_assignment,
+    assign_worker,
+    migrate_assignments_to_common_targets,
+    release_worker,
+)
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 
 
@@ -32,6 +37,7 @@ class GatheringServiceTests(unittest.TestCase):
         )
         self.db.add(self.worker)
         self.wood = ItemTemplate(
+            slug="material_wood_1_001",
             name="Madeira", description="", item_type="material", rarity="common",
             material_family="wood", item_level=1, level_band="1-20", tier=1,
         )
@@ -63,9 +69,9 @@ class GatheringServiceTests(unittest.TestCase):
             guild_id=self.guild.id, class_id=self.mercenary_class.id, name="Caçador",
             level=1, power=5, vitality=5, agility=5, intelligence=5, luck=5,
         )
-        meat = ItemTemplate(name="Carne de teste", description="", item_type="material", rarity="common",
+        meat = ItemTemplate(slug="material_meat_1_001", name="Carne de teste", description="", item_type="material", rarity="common",
                             material_family="meat", item_level=1, level_band="1-20", tier=1)
-        leather = ItemTemplate(name="Couro de teste", description="", item_type="material", rarity="common",
+        leather = ItemTemplate(slug="material_leather_1_001", name="Couro de teste", description="", item_type="material", rarity="common",
                                material_family="leather", item_level=1, level_band="1-20", tier=1)
         self.db.add_all([second_worker, meat, leather])
         self.db.flush()
@@ -103,7 +109,205 @@ class GatheringServiceTests(unittest.TestCase):
         self.assertTrue(result["catalog_missing"])
         self.assertEqual(result["cycles"], 0)
         self.assertEqual(assignment.cycle_count, 0)
-        self.assertEqual(assignment.checkpoint_at_utc, self.start)
+        self.assertEqual(assignment.checkpoint_at_utc, self.start + timedelta(minutes=3))
+
+    def test_target_migration_preserves_progress_and_never_credits_before_clock_guard(self):
+        legacy_wood = ItemTemplate(
+            slug="material_wood_1_025", name="Madeira antiga", description="",
+            item_type="material", rarity="common", material_family="wood",
+            item_level=25, level_band="21-40", tier=2,
+        )
+        self.db.add(legacy_wood)
+        self.db.flush()
+        checkpoint = self.start - timedelta(seconds=120)
+        assignment = GatheringAssignment(
+            guild_id=self.guild.id, mercenary_id=self.worker.id,
+            target_item_template_id=legacy_wood.id, resource_family="wood",
+            node_code="forest", progress_seconds=37, cycle_count=9,
+            target_quantity=20, quantity_collected=4, extra_chance=20,
+            rng_seed=123, started_at_utc=self.start - timedelta(hours=2),
+            checkpoint_at_utc=checkpoint,
+        )
+        old_inventory = GuildInventoryItem(
+            guild_id=self.guild.id, item_template_id=legacy_wood.id, quantity=7,
+        )
+        self.db.add_all([assignment, old_inventory])
+        self.db.flush()
+
+        migrated = migrate_assignments_to_common_targets(
+            self.db, now=self.start + timedelta(hours=8),
+        )
+
+        self.assertEqual(migrated, 1)
+        self.assertEqual(assignment.target_item_template_id, self.wood.id)
+        self.assertEqual(assignment.progress_seconds, 37)
+        self.assertEqual(assignment.cycle_count, 9)
+        self.assertEqual(assignment.target_quantity, 20)
+        self.assertEqual(assignment.quantity_collected, 4)
+        cutoff = self.start + timedelta(hours=8)
+        self.assertEqual(assignment.checkpoint_at_utc, cutoff)
+        self.assertEqual(old_inventory.quantity, 7)
+        self.assertIsNone(self.db.scalar(select(GuildInventoryItem.id).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == self.wood.id,
+        )))
+        same_instant = advance_assignment(self.db, self.guild, assignment, now=cutoff)
+        self.assertEqual(same_instant["cycles"], 0)
+        self.assertEqual(assignment.cycle_count, 9)
+        later = advance_assignment(self.db, self.guild, assignment, now=cutoff + timedelta(seconds=23))
+        self.assertEqual(later["cycles"], 1)
+        self.assertEqual(assignment.cycle_count, 10)
+
+    def test_inactive_common_target_keeps_campaign_assignment_and_blocks_all_rewards(self):
+        rare_wood = ItemTemplate(
+            slug="material_wood_1_025", name="Madeira Rara", description="",
+            item_type="material", rarity="rare", material_family="wood",
+            item_level=25, level_band="21-40", tier=2,
+        )
+        self.wood.is_active = False
+        self.db.add(rare_wood)
+        self.db.flush()
+        checkpoint = self.start - timedelta(seconds=90)
+        assignment = GatheringAssignment(
+            guild_id=self.guild.id, mercenary_id=self.worker.id,
+            target_item_template_id=rare_wood.id, resource_family="wood", node_code="forest",
+            progress_seconds=30, cycle_count=4, target_quantity=100,
+            quantity_collected=7, extra_chance=0, rng_seed=17,
+            started_at_utc=self.start - timedelta(minutes=5), checkpoint_at_utc=checkpoint,
+        )
+        old_inventory = GuildInventoryItem(
+            guild_id=self.guild.id, item_template_id=rare_wood.id, quantity=5,
+        )
+        self.db.add_all([assignment, old_inventory])
+        self.db.flush()
+
+        migrated = migrate_assignments_to_common_targets(
+            self.db, now=self.start + timedelta(minutes=1),
+        )
+
+        self.assertEqual(migrated, 0)
+        self.assertEqual(assignment.target_item_template_id, rare_wood.id)
+        self.assertEqual(assignment.progress_seconds, 30)
+        self.assertEqual(assignment.cycle_count, 4)
+        self.assertEqual(assignment.quantity_collected, 7)
+        self.assertEqual(assignment.checkpoint_at_utc, checkpoint)
+        self.assertEqual(old_inventory.quantity, 5)
+
+        blocked_at = self.start + timedelta(minutes=5)
+        blocked = advance_assignment(self.db, self.guild, assignment, now=blocked_at)
+        self.assertTrue(blocked["catalog_missing"])
+        self.assertIn("pausada", blocked["catalog_message"])
+        self.assertEqual(blocked["cycles"], 0)
+        self.assertEqual(assignment.cycle_count, 4)
+        self.assertEqual(assignment.progress_seconds, 30)
+        self.assertEqual(assignment.quantity_collected, 7)
+        self.assertEqual(assignment.checkpoint_at_utc, blocked_at)
+        self.assertEqual(old_inventory.quantity, 5)
+        self.assertIsNone(self.db.scalar(select(GuildInventoryItem.id).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == self.wood.id,
+        )))
+
+        still_blocked = advance_assignment(
+            self.db, self.guild, assignment, now=blocked_at + timedelta(hours=2),
+        )
+        self.assertEqual(still_blocked["cycles"], 0)
+        self.assertEqual(assignment.checkpoint_at_utc, blocked_at + timedelta(hours=2))
+        self.wood.is_active = True
+        self.db.flush()
+        resumed = advance_assignment(
+            self.db, self.guild, assignment, now=blocked_at + timedelta(hours=2, minutes=1),
+        )
+        self.assertEqual(resumed["cycles"], 0)
+        self.assertFalse(assignment.catalog_paused)
+        resumed_at = blocked_at + timedelta(hours=2, minutes=1)
+        self.assertEqual(assignment.checkpoint_at_utc, resumed_at)
+        self.assertEqual(assignment.target_item_template_id, self.wood.id)
+        self.assertEqual(assignment.cycle_count, 4)
+        self.assertEqual(assignment.quantity_collected, 7)
+        later = advance_assignment(
+            self.db, self.guild, assignment, now=resumed_at + timedelta(seconds=30),
+        )
+        self.assertEqual(later["cycles"], 1)
+        self.assertEqual(assignment.cycle_count, 5)
+        self.assertEqual(assignment.quantity_collected, 8)
+        self.assertEqual(old_inventory.quantity, 5)
+
+    def test_catalog_pause_marker_survives_reload_and_same_target_resumes_without_backpay(self):
+        assignment = GatheringAssignment(
+            guild_id=self.guild.id, mercenary_id=self.worker.id, target_item_template_id=self.wood.id,
+            resource_family="wood", node_code="forest", progress_seconds=30, cycle_count=4,
+            rng_seed=17, started_at_utc=self.start, checkpoint_at_utc=self.start,
+        )
+        self.db.add(assignment)
+        self.db.flush()
+        self.wood.is_active = False
+        self.db.flush()
+
+        blocked_at = self.start + timedelta(minutes=1)
+        blocked = advance_assignment(self.db, self.guild, assignment, now=blocked_at)
+        self.assertTrue(blocked["catalog_missing"])
+        self.assertTrue(assignment.catalog_paused)
+        assignment_id = assignment.id
+        guild_id = self.guild.id
+        wood_id = self.wood.id
+        self.db.commit()
+        self.db.close()
+        self.db = Session(self.engine, autoflush=False, expire_on_commit=False)
+        self.guild = self.db.get(Guild, guild_id)
+        self.wood = self.db.get(ItemTemplate, wood_id)
+
+        # The catalog returns two hours later, with no observation during the gap.
+        self.wood.is_active = True
+        self.db.commit()
+        assignment = self.db.get(GatheringAssignment, assignment_id)
+        self.assertIsNotNone(assignment)
+        self.assertTrue(assignment.catalog_paused)
+        resumed_at = blocked_at + timedelta(hours=2)
+        resumed = advance_assignment(self.db, self.guild, assignment, now=resumed_at)
+        self.assertEqual(resumed["cycles"], 0)
+        self.assertFalse(assignment.catalog_paused)
+        self.assertEqual(assignment.checkpoint_at_utc, resumed_at)
+        self.assertEqual(assignment.progress_seconds, 30)
+        self.assertEqual(assignment.cycle_count, 4)
+
+        later = advance_assignment(self.db, self.guild, assignment, now=resumed_at + timedelta(seconds=30))
+        self.assertEqual(later["cycles"], 1)
+        self.assertEqual(assignment.cycle_count, 5)
+
+    def test_release_unavailable_assignment_frees_worker_without_material_credit(self):
+        rare_wood = ItemTemplate(
+            slug="material_wood_1_025", name="Madeira Rara", description="",
+            item_type="material", rarity="rare", material_family="wood",
+            item_level=25, level_band="21-40", tier=2,
+        )
+        self.wood.is_active = False
+        self.db.add(rare_wood)
+        self.db.flush()
+        assignment = GatheringAssignment(
+            guild_id=self.guild.id, mercenary_id=self.worker.id,
+            target_item_template_id=rare_wood.id, resource_family="wood", node_code="forest",
+            progress_seconds=30, cycle_count=4, target_quantity=100,
+            quantity_collected=7, extra_chance=0, rng_seed=17,
+            started_at_utc=self.start - timedelta(minutes=5),
+            checkpoint_at_utc=self.start - timedelta(minutes=5),
+        )
+        self.db.add(assignment)
+        self.db.flush()
+
+        result = release_worker(
+            self.db, self.guild, assignment.id, now=self.start + timedelta(hours=1),
+        )
+        self.db.flush()
+
+        self.assertTrue(result["released_without_credit"])
+        self.assertTrue(result["catalog_missing"])
+        self.assertEqual(result["cycles"], 0)
+        self.assertEqual(self.worker.status, "available")
+        self.assertIsNone(self.db.get(GatheringAssignment, assignment.id))
+        self.assertIsNone(self.db.scalar(select(GuildInventoryItem.id).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+        )))
 
     def test_max_seconds_caps_24h_elapsed_and_advances_checkpoint(self):
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)

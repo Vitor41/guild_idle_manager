@@ -124,6 +124,11 @@ def get_supply_workshop_context(db: Session, guild: Guild, *, now: datetime | No
 
 
 def craft_supply_kit(db: Session, guild: Guild, quantity: int = 1, *, now: datetime | None = None) -> SupplyWorkshopJob:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise WorkshopError("Guilda não encontrada.")
     now = _utc(now or datetime.now(timezone.utc))
     if isinstance(quantity, bool) or int(quantity) != quantity or int(quantity) < 1:
         raise WorkshopError("Informe uma quantidade inteira maior que zero.")

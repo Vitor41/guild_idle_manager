@@ -1,10 +1,16 @@
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from math import ceil
+import json
+from math import ceil, floor
 from random import choice, randint
+from threading import Lock
+from uuid import uuid4
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.time import as_utc
+from app.models.campaign import CampaignMetadata
 from app.models.guild import Guild, GuildResources
 from app.models.mercenary import MercenaryClass
 from app.models.tavern import GuildTavernState, TavernConfig, TavernSpecialOffer
@@ -42,6 +48,18 @@ from app.services.achievement_service import record_guild_stat
 
 class TavernError(ValueError):
     pass
+
+
+_APPRENTICE_SEARCH_LOCKS_GUARD = Lock()
+_APPRENTICE_SEARCH_LOCKS: dict[int, Lock] = {}
+
+
+@contextmanager
+def _hold_apprentice_search_lock(guild_id: int):
+    with _APPRENTICE_SEARCH_LOCKS_GUARD:
+        lock = _APPRENTICE_SEARCH_LOCKS.setdefault(guild_id, Lock())
+    with lock:
+        yield
 
 
 SPECIAL_CLASS_CODES = ["warrior", "rogue", "mage", "cleric", "archer"]
@@ -157,6 +175,12 @@ def get_discounted_hire_cost(base_cost: int, discount_percent: int) -> int:
     return max(1, ceil(base_cost * (100 - discount_percent) / 100))
 
 
+def calculate_apprentice_search_cost(hire_cost: int) -> int:
+    """Return the net cost of replacing a normal Apprentice candidate."""
+    actual_hire_cost = max(0, int(hire_cost))
+    return max(0, actual_hire_cost - floor(actual_hire_cost * 0.3))
+
+
 def generate_apprentice_preview(config: TavernConfig, tavern_level: int = 0) -> dict[str, object]:
     chances = get_tavern_apprentice_chances(tavern_level, config)
     rarity = choose_weighted(
@@ -167,6 +191,7 @@ def generate_apprentice_preview(config: TavernConfig, tavern_level: int = 0) -> 
     )
     attributes = roll_attributes(rarity)
     return {
+        "preview_id": uuid4().hex,
         "rarity": rarity,
         "rarity_label": rarity_label(rarity),
         "progression_bonus_percent": rarity_progression_bonus_percent(rarity),
@@ -289,18 +314,30 @@ def refresh_special_offer(db: Session, guild: Guild, state: GuildTavernState, co
     return offer
 
 
-def get_tavern_page_context(db: Session, guild: Guild, resources: GuildResources | None) -> dict[str, object]:
+def get_tavern_page_context(
+    db: Session,
+    guild: Guild,
+    resources: GuildResources | None,
+    *,
+    refresh_special: bool = True,
+) -> dict[str, object]:
     ensure_guild_buildings(db, guild.id)
     tavern_level = get_building_level(db, guild.id, "tavern")
     if tavern_level < 1:
         return {"resources": resources, "tavern_level": tavern_level}
     config = get_or_create_tavern_config(db)
     state = get_or_create_tavern_state(db, guild.id, config)
-    active_offer = refresh_special_offer(db, guild, state, config)
+    active_offer = (
+        refresh_special_offer(db, guild, state, config)
+        if refresh_special
+        else get_active_special_offer(db, guild.id, utc_now())
+    )
     bulk_count = 10
     chances = get_tavern_apprentice_chances(tavern_level, config)
     current_base_cost = state.current_apprentice_hire_cost
     current_final_cost = get_discounted_hire_cost(current_base_cost, int(chances["hire_discount_percent"]))
+    search_refund = floor(current_final_cost * 0.3)
+    search_cost = calculate_apprentice_search_cost(current_final_cost)
     bulk_costs = calculate_bulk_apprentice_costs(
         state.current_apprentice_hire_cost, config, bulk_count, int(chances["hire_discount_percent"]),
     )
@@ -333,10 +370,99 @@ def get_tavern_page_context(db: Session, guild: Guild, resources: GuildResources
         "bulk_hire_base_cost": bulk_costs["base"],
         "current_apprentice_base_cost": current_base_cost,
         "current_apprentice_final_cost": current_final_cost,
+        "apprentice_search_refund": search_refund,
+        "apprentice_search_cost": search_cost,
         "apprentice_chances": chances,
         "manual_refresh_cost": TAVERN_MANUAL_REFRESH_COST,
         "now": utc_now(),
     }
+
+
+def search_apprentice(
+    db: Session,
+    guild: Guild,
+    resources: GuildResources | None,
+    preview: dict[str, object] | None,
+    expected_preview_id: str,
+    expected_search_cost: int,
+) -> dict[str, object]:
+    """Replace the normal preview and charge the search as one transaction."""
+    with _hold_apprentice_search_lock(guild.id):
+        # The route read the preview first; clear that snapshot so a waiting
+        # SQLite request observes any search committed before it acquired this lock.
+        db.rollback()
+        require_tavern(db, guild)
+        config = get_or_create_tavern_config(db)
+        tavern_level = get_building_level(db, guild.id, "tavern")
+        state = db.scalar(
+            select(GuildTavernState)
+            .where(GuildTavernState.guild_id == guild.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if state is None:
+            state = create_guild_tavern_state(
+                db,
+                guild_id=guild.id,
+                apprentice_cost=config.base_apprentice_cost,
+                next_special_check_at=utc_now(),
+            )
+            db.flush()
+
+        locked_resources = db.scalar(
+            select(GuildResources)
+            .where(GuildResources.guild_id == guild.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked_resources is None:
+            raise TavernError("Recursos da guilda indisponíveis.")
+
+        metadata = None
+        current_preview = preview
+        if guild.campaign_id:
+            metadata = db.scalar(
+                select(CampaignMetadata)
+                .where(CampaignMetadata.campaign_id == guild.campaign_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if metadata is None:
+                raise TavernError("A oferta de Aprendiz expirou. Recarregue a Taverna.")
+            try:
+                current_preview = json.loads(metadata.apprentice_preview) if metadata.apprentice_preview else None
+            except (TypeError, json.JSONDecodeError):
+                current_preview = None
+
+        if (
+            not isinstance(current_preview, dict)
+            or not expected_preview_id
+            or current_preview.get("preview_id") != expected_preview_id
+            or not is_valid_apprentice_preview(current_preview, config, tavern_level)
+        ):
+            raise TavernError("A oferta de Aprendiz mudou. Recarregue a Taverna antes de buscar outro.")
+
+        chances = get_tavern_apprentice_chances(tavern_level, config)
+        actual_hire_cost = get_discounted_hire_cost(
+            state.current_apprentice_hire_cost,
+            int(chances["hire_discount_percent"]),
+        )
+        search_cost = calculate_apprentice_search_cost(actual_hire_cost)
+        if expected_search_cost != search_cost:
+            raise TavernError("O custo da busca mudou. Recarregue a Taverna antes de confirmar.")
+        if locked_resources.gold < search_cost:
+            raise TavernError("Ouro insuficiente para buscar outro Aprendiz.")
+
+        replacement = generate_apprentice_preview(config, tavern_level)
+        locked_resources.gold -= search_cost
+        state.current_apprentice_hire_cost = next_apprentice_cost(state.current_apprentice_hire_cost, config)
+        if metadata is not None:
+            metadata.apprentice_preview = json.dumps(replacement, separators=(",", ":"))
+            db.add(metadata)
+        db.add(locked_resources)
+        db.add(state)
+        db.commit()
+        return replacement
 
 
 def calculate_bulk_apprentice_cost(current_cost: int, config: TavernConfig, count: int) -> int:
@@ -375,65 +501,117 @@ def hire_apprentice(
     resources: GuildResources | None,
     name: str,
     preview: dict[str, object] | None = None,
+    expected_preview_id: str | None = None,
+    expected_final_cost: int | None = None,
 ) -> None:
-    require_tavern(db, guild)
     name = name.strip()
     if not name:
         raise TavernError("Nome do Aprendiz e obrigatorio.")
-    if resources is None:
-        raise TavernError("Recursos da guilda indisponiveis.")
-    config = get_or_create_tavern_config(db)
-    state = get_or_create_tavern_state(db, guild.id, config)
-    tavern_level = get_building_level(db, guild.id, "tavern")
-    chances = get_tavern_apprentice_chances(tavern_level, config)
-    apprentice_class = get_mercenary_class_by_code(db, "apprentice")
-    if apprentice_class is None:
-        raise TavernError("Classe Aprendiz indisponivel.")
-    validate_hire_capacity(db, guild)
-    final_cost = get_discounted_hire_cost(
-        state.current_apprentice_hire_cost, int(chances["hire_discount_percent"]),
-    )
-    if resources.gold < final_cost:
-        raise TavernError("Ouro insuficiente para contratar Aprendiz.")
+    with _hold_apprentice_search_lock(guild.id):
+        db.rollback()
+        require_tavern(db, guild)
+        config = get_or_create_tavern_config(db)
+        tavern_level = get_building_level(db, guild.id, "tavern")
+        state = db.scalar(
+            select(GuildTavernState)
+            .where(GuildTavernState.guild_id == guild.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if state is None:
+            state = create_guild_tavern_state(
+                db,
+                guild_id=guild.id,
+                apprentice_cost=config.base_apprentice_cost,
+                next_special_check_at=utc_now(),
+            )
+            db.flush()
 
-    rarity = str(preview.get("rarity")) if preview else ""
-    attributes = preview.get("attributes") if preview else None
-    if not is_valid_apprentice_preview(preview, config, tavern_level):
-        generated_preview = generate_apprentice_preview(config, tavern_level)
-        rarity = str(generated_preview["rarity"])
-        attributes = generated_preview["attributes"]
-    validated_attributes = {
-        attribute: int(attributes.get(attribute, 1))
-        for attribute in ("power", "vitality", "agility", "intelligence", "luck")
-    }
-    cap = APPRENTICE_RARITY_CAPS[rarity]
-    minimum_power, maximum_power = get_mercenary_power_range(rarity)
-    power_score = tavern_candidate_power(validated_attributes)
-    if (
-        any(value < 1 or value > cap for value in validated_attributes.values())
-        or power_score < minimum_power
-        or (maximum_power is not None and power_score > maximum_power)
-    ):
-        raise TavernError("A oferta de Aprendiz expirou. Recarregue a Taverna.")
-    paid_cost = final_cost
-    resources.gold -= paid_cost
-    state.apprentice_hire_count += 1
-    state.current_apprentice_hire_cost = next_apprentice_cost(state.current_apprentice_hire_cost, config)
-    create_mercenary(
-        db,
-        guild.id,
-        apprentice_class,
-        name=name,
-        rarity=rarity,
-        hire_cost=paid_cost,
-        **validated_attributes,
-    )
-    record_guild_stat(db, guild.id, "mercenaries_hired", 1)
-    add_guild_xp(guild, 10)
-    db.add(resources)
-    db.add(state)
-    db.add(guild)
-    db.commit()
+        locked_resources = db.scalar(
+            select(GuildResources)
+            .where(GuildResources.guild_id == guild.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked_resources is None:
+            raise TavernError("Recursos da guilda indisponiveis.")
+
+        metadata = None
+        current_preview = preview
+        if guild.campaign_id and expected_preview_id is not None:
+            metadata = db.scalar(
+                select(CampaignMetadata)
+                .where(CampaignMetadata.campaign_id == guild.campaign_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if metadata is None:
+                raise TavernError("A oferta de Aprendiz expirou. Recarregue a Taverna.")
+            try:
+                current_preview = json.loads(metadata.apprentice_preview) if metadata.apprentice_preview else None
+            except (TypeError, json.JSONDecodeError):
+                current_preview = None
+
+        if expected_preview_id is not None and (
+            not isinstance(current_preview, dict)
+            or current_preview.get("preview_id") != expected_preview_id
+            or not is_valid_apprentice_preview(current_preview, config, tavern_level)
+        ):
+            raise TavernError("O candidato mudou. Recarregue a Taverna antes de contratar.")
+        if not is_valid_apprentice_preview(current_preview, config, tavern_level):
+            generated_preview = generate_apprentice_preview(config, tavern_level)
+            current_preview = generated_preview
+
+        chances = get_tavern_apprentice_chances(tavern_level, config)
+        final_cost = get_discounted_hire_cost(
+            state.current_apprentice_hire_cost, int(chances["hire_discount_percent"]),
+        )
+        if expected_final_cost is not None and expected_final_cost != final_cost:
+            raise TavernError("O preço da contratação mudou. Recarregue a Taverna antes de confirmar.")
+        apprentice_class = get_mercenary_class_by_code(db, "apprentice")
+        if apprentice_class is None:
+            raise TavernError("Classe Aprendiz indisponivel.")
+        validate_hire_capacity(db, guild)
+        if locked_resources.gold < final_cost:
+            raise TavernError("Ouro insuficiente para contratar Aprendiz.")
+
+        rarity = str(current_preview.get("rarity"))
+        attributes = current_preview.get("attributes")
+        validated_attributes = {
+            attribute: int(attributes.get(attribute, 1))
+            for attribute in ("power", "vitality", "agility", "intelligence", "luck")
+        }
+        cap = APPRENTICE_RARITY_CAPS[rarity]
+        minimum_power, maximum_power = get_mercenary_power_range(rarity)
+        power_score = tavern_candidate_power(validated_attributes)
+        if (
+            any(value < 1 or value > cap for value in validated_attributes.values())
+            or power_score < minimum_power
+            or (maximum_power is not None and power_score > maximum_power)
+        ):
+            raise TavernError("A oferta de Aprendiz expirou. Recarregue a Taverna.")
+
+        locked_resources.gold -= final_cost
+        state.apprentice_hire_count += 1
+        state.current_apprentice_hire_cost = next_apprentice_cost(state.current_apprentice_hire_cost, config)
+        create_mercenary(
+            db,
+            guild.id,
+            apprentice_class,
+            name=name,
+            rarity=rarity,
+            hire_cost=final_cost,
+            **validated_attributes,
+        )
+        record_guild_stat(db, guild.id, "mercenaries_hired", 1)
+        add_guild_xp(guild, 10)
+        if metadata is not None:
+            metadata.apprentice_preview = None
+            db.add(metadata)
+        db.add(locked_resources)
+        db.add(state)
+        db.add(guild)
+        db.commit()
 
 
 def hire_apprentices_bulk(

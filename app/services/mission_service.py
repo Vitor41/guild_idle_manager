@@ -49,8 +49,8 @@ from app.services.result_detail_service import parse_result_details, serialize_r
 from app.services.skill_service import get_party_skill_effects
 from app.services.achievement_service import record_guild_stat, unlock_codex_reference
 from app.services.profession_service import PROFESSION_COLORS, get_profession_drop_bonus_percentage_points
-from app.services.display_service import annotate_mercenary_display, clean_generated_name, rarity_label
-from app.services.icon_service import get_item_icon_path
+from app.services.display_service import annotate_mercenary_display, clean_generated_name
+from app.services.drop_preview_service import build_drop_preview
 from app.services.building_balance_service import mission_office_values
 from app.services.supply_preparation_service import (
     encode_supply_snapshot, prepare_supply_snapshot, supply_bonus_from_snapshot,
@@ -319,23 +319,33 @@ def get_missions_page_context(
     page = max(1, min(page, total_pages))
     mission_templates = all_templates[(page - 1) * per_page:page * per_page]
     available_mercenaries = list_available_mercenaries_by_guild(db, guild.id)
+    max_run_multiplier = get_max_run_multiplier(db, guild.id)
     for mercenary in available_mercenaries:
         annotate_mercenary_display(mercenary)
     for mission in mission_templates:
         mission.is_long_idle = mission.mission_type == "long_idle"
         mission.long_idle_hours = mission.duration_seconds // 3600 if mission.is_long_idle else 0
-        mission.visible_drops = [drop for drop in mission.item_drops if drop.is_active]
-        for drop in mission.visible_drops:
-            drop.display_name = clean_generated_name(drop.item_template.name)
-            drop.rarity_label = rarity_label(drop.item_template.rarity)
-            drop.icon_path = get_item_icon_path(drop.item_template)
-            drop.base_drop_chance = drop.drop_chance
-            drop.effective_drop_chance = min(
-                100,
-                drop.drop_chance + (
-                    get_equipment_drop_bonus_percent(db, guild.id)
-                    if drop.item_template.item_type == "equipment" else 0
-                ),
+        drop_preview = build_drop_preview(getattr(mission, "item_drops", None))
+        mission.drop_preview_available = drop_preview["available"]
+        mission.visible_drops = drop_preview["drops"]
+        modifiers = ["habilidades da equipe"]
+        if mission.mission_type == "gathering":
+            modifiers.append("profissão para o material principal")
+        active_entries = getattr(mission, "item_drops", None) or []
+        if any(
+            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
+            for entry in active_entries
+        ):
+            modifiers.append("Ferreiro para equipamentos")
+        mission.drop_modifier_note = (
+            "Chance-base por item/entrada; rola somente após sucesso. Pode variar com "
+            + ", ".join(modifiers) + "."
+        )
+        if mission.visible_drops:
+            mission.drop_modifier_note += (
+                " Quantidade exibida como base; bônus aplicáveis podem alterar o total."
+                if mission.is_long_idle or max_run_multiplier <= 1
+                else " Quantidade exibida como base; o multiplicador escolhido e bônus aplicáveis alteram o total (ex.: em 2x, 1–2 vira 2–4 antes dos bônus)."
             )
     mission_mercenaries = {
         mission.id: available_mercenaries
@@ -384,7 +394,7 @@ def get_missions_page_context(
             1 for run in runs if run.status == "in_progress" and as_utc(run.ends_at) <= now
         ),
         "building_bonuses": get_building_bonus_summary(db, guild.id),
-        "max_run_multiplier": get_max_run_multiplier(db, guild.id),
+        "max_run_multiplier": max_run_multiplier,
         "long_idle_active_count": count_active_long_idle_runs(db, guild.id),
         "long_idle_limit": LONG_IDLE_LIMIT,
         "now": now,
@@ -476,6 +486,11 @@ def start_mission(
     allow_regional_supply: bool = False,
     supply_snapshot_override: dict[str, object] | None = None,
 ) -> MissionRun:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise MissionError("Guilda nao encontrada.")
     if not mission_template_id:
         raise MissionError("Missao e obrigatoria.")
     if not mercenary_ids:

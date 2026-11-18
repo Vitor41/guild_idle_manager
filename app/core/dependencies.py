@@ -108,12 +108,13 @@ def get_current_campaign(request: Request, db: DbSession) -> CampaignMetadata | 
                 )) if portal is not None else None
                 if portal is not None and entered is None:
                     template = db.get(DungeonTemplate, portal.dungeon_template_id) if portal.dungeon_template_id else None
-                    request.state.pending_portal_notice = {
-                        "event_id": portal.id,
-                        "region_name": metadata.home_region,
-                        "boss_name": template.name if template is not None else "Desafio dimensional",
-                        "expires_at_iso": as_utc(portal.expires_at_utc).isoformat(),
-                    }
+                    if template is not None:
+                        request.state.pending_portal_notice = {
+                            "event_id": portal.id,
+                            "region_name": metadata.home_region,
+                            "boss_name": template.name,
+                            "expires_at_iso": as_utc(portal.expires_at_utc).isoformat(),
+                        }
             # A campaign-wide route can be the first open request after a
             # cycle boundary; persist the one-time roll before rendering.
             db.commit()

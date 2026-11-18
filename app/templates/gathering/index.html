@@ -16,8 +16,6 @@
 
     {% if error %}<p class="form-error" role="alert">{{ error }}{% if diagnostic_id %} Referência de diagnóstico: {{ diagnostic_id }}. Log: %LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log{% endif %}</p>{% endif %}
     {% if message %}<p class="form-success" role="status">{{ message }}</p>{% endif %}
-    {% if catalog_errors %}<p class="form-error" role="alert">O catálogo está sem item para: {{ catalog_errors|join(", ") }}. Feche e reabra a campanha para aplicar a atualização de conteúdo.</p>{% endif %}
-
     <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">
       <div><span>Armazém compartilhado</span><strong data-gathering-warehouse-label>{{ "{:,.0f}".format(used).replace(",", ".") }} / {{ "{:,.0f}".format(capacity).replace(",", ".") }}</strong></div>
       <progress max="{{ capacity }}" value="{{ [used, capacity]|min }}" data-gathering-warehouse-progress>{{ used }} de {{ capacity }}</progress>
@@ -28,24 +26,33 @@
       {% for family, label in family_labels.items() %}
         {% set node = node_labels[family] %}
         {% set assignment = assignments|selectattr('resource_family', 'equalto', family)|first %}
-        <article class="panel gathering-card" data-gathering-card="{{ family }}">
+        <article class="panel gathering-card" data-gathering-card="{{ family }}" data-gathering-assigned="{{ 'true' if assignment else 'false' }}">
           <div class="gathering-card__heading"><span class="eyebrow">{{ node }}</span><h2>{{ label }}</h2></div>
           {% if assignment %}
             {% if assignment.target_item_template %}<div class="gathering-target" role="group" aria-label="Alvo desta designação">
               <span class="asset-placeholder item-icon-frame" aria-hidden="true" data-desktop-item-group="{{ assignment.target_item_template.icon_group or family }}" data-desktop-item-family="{{ assignment.target_item_template.material_family or family }}">◇</span>
-              <p><strong>Alvo desta designação:</strong> {{ assignment.target_item_template.name }} · {{ {'common':'Comum','uncommon':'Incomum','rare':'Raro','epic':'Épico','legendary':'Lendário','mythic':'Mítico'}.get(assignment.target_item_template.rarity, assignment.target_item_template.rarity) }}<small>Este alvo permanece fixo até liberar o trabalhador. Para escolher outro material disponível, designe novamente.</small></p>
-            </div>{% else %}<p class="gathering-target" role="status">Alvo ainda não definido. O primeiro avanço escolherá e congelará um material disponível para este posto.</p>{% endif %}
-            {% if assignment.capacity_paused %}
+              <p><strong data-gathering-target-label>{% if catalog_unavailable.get(family) %}Alvo salvo (indisponível):{% else %}Alvo desta designação:{% endif %}</strong> <span data-gathering-target-value>{{ assignment.target_item_template.name }} · {{ {'common':'Comum','uncommon':'Incomum','rare':'Raro','epic':'Épico','legendary':'Lendário','mythic':'Mítico'}.get(assignment.target_item_template.rarity, assignment.target_item_template.rarity) }}</span><small>Se o material comum ficar indisponível, a coleta pausa. O tempo parado não acumula ciclos. Para escolher outro material, libere o trabalhador e designe novamente.</small></p>
+            </div>{% elif catalog_unavailable.get(family) %}<p class="gathering-target" role="status">O alvo desta designação não tem um material comum ativo no catálogo.</p>{% else %}<p class="gathering-target" role="status">Alvo ainda não definido. O primeiro avanço escolherá e congelará um material disponível para este posto.</p>{% endif %}
+            {% if catalog_unavailable.get(family) %}
+              <p class="form-error gathering-catalog-warning" data-gathering-catalog-warning role="alert">Coleta de {{ label }} pausada: o material comum não está disponível no catálogo. Nenhum ciclo ou item será concedido durante a pausa; o inventário e o progresso já registrado foram preservados. Liberar o trabalhador encerra a coleta sem material e descarta o progresso parcial.</p>
+            {% else %}
+              <p class="form-error gathering-catalog-warning" data-gathering-catalog-warning role="alert" hidden>Esta coleta está pausada porque o material comum não está disponível. Nenhum ciclo ou item será concedido durante a pausa. Liberar o trabalhador encerra a coleta sem material e descarta o progresso parcial.</p>
+            {% endif %}
+            {% if catalog_unavailable.get(family) %}
+              <p class="gathering-status" role="status" data-gathering-status>Indisponível · catálogo · <strong>{{ assignment.mercenary.name }}</strong></p>
+            {% elif assignment.capacity_paused %}
               <p class="gathering-status" role="status" data-gathering-status>Pausada · Armazém cheio · <strong>{{ assignment.mercenary.name }}</strong></p>
-              <p>Libere espaço no Armazém para retomar a produção. O tempo em pausa não acumula ciclos.</p>
-              <a class="secondary-button" href="{{ inventory_url }}">Abrir inventário e liberar espaço</a>
             {% else %}
               <p class="gathering-status" data-gathering-status>Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
-              <div class="gathering-cycle" data-gathering-cycle data-gathering-family="{{ family }}" data-progress-seconds="{{ assignment.progress_seconds }}">
-                <progress max="60" value="{{ assignment.progress_seconds }}" aria-label="Progresso do ciclo de {{ label }}">{{ assignment.progress_seconds }} de 60 segundos</progress>
-                <p class="gathering-progress" role="timer" aria-live="off">Próximo ciclo em <strong data-gathering-remaining>{{ 60 - assignment.progress_seconds }}</strong> s</p>
-              </div>
             {% endif %}
+            <div data-gathering-capacity-help{% if not assignment.capacity_paused or catalog_unavailable.get(family) %} hidden{% endif %}>
+              <p>Libere espaço no Armazém para retomar a produção. O tempo em pausa não acumula ciclos.</p>
+              <a class="secondary-button" href="{{ inventory_url }}">Abrir inventário e liberar espaço</a>
+            </div>
+            <div class="gathering-cycle" data-gathering-cycle data-gathering-family="{{ family }}" data-progress-seconds="{{ assignment.progress_seconds }}"{% if assignment.capacity_paused or catalog_unavailable.get(family) %} hidden{% endif %}>
+              <progress max="60" value="{{ assignment.progress_seconds }}" aria-label="Progresso do ciclo de {{ label }}">{{ assignment.progress_seconds }} de 60 segundos</progress>
+              <p class="gathering-progress" role="timer" aria-live="off">Próximo ciclo em <strong data-gathering-remaining>{{ 60 - assignment.progress_seconds }}</strong> s</p>
+            </div>
             <p class="gathering-inventory-count">Armazenado: <strong data-gathering-family-count="{{ family }}">{{ inventory_by_family.get(family, 0) }}</strong></p>
             <p>1 unidade por ciclo de 60 s{% if assignment.extra_chance %} · +{{ assignment.extra_chance }}% de chance para 1 extra{% endif %}</p>
             {% if assignment.target_quantity %}<p>Meta: {{ assignment.quantity_collected }} / {{ assignment.target_quantity }} unidades</p>{% endif %}

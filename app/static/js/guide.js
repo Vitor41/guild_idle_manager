@@ -122,7 +122,9 @@
     rowsNode.replaceChildren();
     const visibleItems = new Set();
     const anchorAdded = new Set();
-    const selectedFilters = Object.fromEntries(Object.entries(filters).map(([key, control]) => [key, control?.value || "all"]));
+    const selectedFilters = Object.fromEntries(Object.entries(filters).map(([key, control]) => [
+      key, control?.value ?? (key === "name" ? "" : "all"),
+    ]));
     const visibleRows = utils.filterCatalog(catalogItems, selectedFilters);
     visibleRows.forEach(({ item }) => visibleItems.add(item.id));
     const groups = utils.groupCatalogSources(visibleRows).sort((left, right) =>
@@ -136,10 +138,10 @@
       const heading = document.createElement("th");
       heading.scope = "rowgroup";
       heading.colSpan = 5;
-      heading.textContent = group.source.name ? `${group.source.label} · ${group.source.name}` : group.source.label;
+      heading.textContent = group.source.label;
       headingRow.append(heading);
       rowsNode.append(headingRow);
-      for (const { item, itemLabel, source, rarities } of group.entries) {
+      for (const { item, itemLabel, source, rarities, variants, minimumGuildLevel: entryMinimumGuildLevel } of group.entries) {
         const row = document.createElement("tr");
         row.dataset.guideCatalogRow = "";
         row.dataset.guideItemId = String(item.id);
@@ -153,10 +155,38 @@
         const sourceName = document.createElement("strong");
         sourceName.textContent = source.label;
         sourceCell.append(sourceName);
-        if (source.name) {
+        if (variants.length === 1 && source.name && source.name !== source.label) {
           const detail = document.createElement("small");
           detail.textContent = source.name;
           sourceCell.append(document.createElement("br"), detail);
+        }
+        const minimumGuildLevel = source.type === "gathering"
+          ? entryMinimumGuildLevel
+          : undefined;
+        if (variants.length > 1 || source.type === "gathering") {
+          const conditions = document.createElement("details");
+          conditions.className = "guide-catalog-conditions";
+          const summary = document.createElement("summary");
+          summary.textContent = variants.length === 1 ? "Consultar detalhes" : `Consultar ${variants.length} condições`;
+          const list = document.createElement("ul");
+          for (const variant of variants) {
+            const detail = document.createElement("li");
+            const parts = [];
+            if (variant.source.name && variant.source.name !== variant.source.label) {
+              parts.push(`Fonte: ${variant.source.name}`);
+            }
+            if (variant.rarities.length) parts.push(`Raridade(s): ${variant.rarities.join(", ")}`);
+            if (variant.source.recommendation) parts.push(`Recomendação: ${variant.source.recommendation}`);
+            if (variant.source.type !== "gathering") parts.push(`Requisito: ${variant.source.requirement}`);
+            parts.push(`Chance: ${variant.source.chance}`);
+            parts.push(`Quantidade: ${variant.source.quantity}`);
+            if (variant.source.price) parts.push(`Preço unitário: ${variant.source.price} ouro`);
+            if (variant.source.condition) parts.push(`Condição: ${variant.source.condition}`);
+            detail.textContent = parts.join(" · ");
+            list.append(detail);
+          }
+          conditions.append(summary, list);
+          sourceCell.append(document.createElement("br"), conditions);
         }
         const itemCell = document.createElement("td");
         itemCell.dataset.label = "Item";
@@ -196,12 +226,21 @@
           rarityList.append(badge);
         }
         itemCell.append(rarityList);
+        const summaryFor = (field, fallback = "—") => {
+          const values = [...new Set(variants.map((variant) => variant.source[field] || fallback))];
+          return values.length === 1 ? values[0] : "Varia por condição; consulte as condições desta linha.";
+        };
         const reqCell = document.createElement("td"); reqCell.dataset.label = "Requisito";
-        reqCell.textContent = source.price ? `${source.requirement}; preço unitário registrado: ${source.price} ouro` : source.requirement;
+        reqCell.textContent = source.type === "gathering"
+          ? `A partir da guilda Nv. ${minimumGuildLevel ?? "—"}`
+          : summaryFor("requirement");
+        const priceValues = [...new Set(variants.map((variant) => variant.source.price).filter(Boolean))];
+        if (priceValues.length === 1) reqCell.textContent += `; preço unitário registrado: ${priceValues[0]} ouro`;
+        else if (priceValues.length > 1) reqCell.textContent += "; preços variam por condição, consulte as condições desta linha";
         const recommendationCell = document.createElement("td"); recommendationCell.dataset.label = "Recomendação";
-        recommendationCell.textContent = source.recommendation || "—";
-        const chanceCell = document.createElement("td"); chanceCell.dataset.label = "Chance"; chanceCell.textContent = source.chance;
-        const quantityCell = document.createElement("td"); quantityCell.dataset.label = "Quantidade"; quantityCell.textContent = source.quantity;
+        recommendationCell.textContent = summaryFor("recommendation");
+        const chanceCell = document.createElement("td"); chanceCell.dataset.label = "Chance"; chanceCell.textContent = summaryFor("chance");
+        const quantityCell = document.createElement("td"); quantityCell.dataset.label = "Quantidade"; quantityCell.textContent = summaryFor("quantity");
         row.append(sourceCell, itemCell, recommendationCell, reqCell, chanceCell, quantityCell);
         rowsNode.append(row);
       }

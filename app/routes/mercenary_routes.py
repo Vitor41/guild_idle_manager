@@ -1,4 +1,7 @@
 from pathlib import Path
+import re
+import uuid
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -29,6 +32,35 @@ templates.env.globals.update(
     get_slot_icon=get_slot_icon,
 )
 
+_DIAGNOSTIC_ID_PATTERN = re.compile(r"[a-fA-F0-9-]{16,40}")
+
+
+def _diagnostic_id_for_request(request: Request) -> str:
+    candidate = getattr(request.state, "diagnostic_id", "")
+    if not isinstance(candidate, str) or not _DIAGNOSTIC_ID_PATTERN.fullmatch(candidate):
+        candidate = uuid.uuid4().hex
+        request.state.diagnostic_id = candidate
+    return candidate
+
+
+def _safe_equipment_error(value: object) -> str:
+    cleaned = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value))
+    cleaned = " ".join(cleaned.split())
+    return cleaned[:240] or "Não foi possível equipar este item."
+
+
+def _equipment_error_redirect(request: Request, mercenary_id: int, error: object) -> RedirectResponse:
+    query = urlencode({
+        "error": _safe_equipment_error(error),
+        "diagnostic": _diagnostic_id_for_request(request),
+    })
+    return RedirectResponse(f"/mercenaries/{mercenary_id}?{query}", status_code=303)
+
+
+def _safe_query_diagnostic_id(request: Request) -> str | None:
+    candidate = request.query_params.get("diagnostic", "")
+    return candidate if _DIAGNOSTIC_ID_PATTERN.fullmatch(candidate) else None
+
 
 @router.get("")
 def mercenaries_index(
@@ -55,8 +87,9 @@ def mercenaries_index(
         context={
             "current_user": current_user,
             "guild": guild,
-            "error": None,
+            "error": request.query_params.get("error"),
             "message": request.query_params.get("message"),
+            "diagnostic_id": _safe_query_diagnostic_id(request),
             "form": {},
             **context,
         },
@@ -105,6 +138,7 @@ def mercenary_detail(
             "resources": resources,
             "error": request.query_params.get("error"),
             "message": request.query_params.get("message"),
+            "diagnostic_id": _safe_query_diagnostic_id(request),
             **context,
         },
     )
@@ -136,7 +170,15 @@ async def equip(
     except MercenaryEquipmentError as error:
         context = get_mercenary_detail_context(db, guild, mercenary_id)
         if context is None:
+            if request.app.state.app_mode == "desktop":
+                query = urlencode({
+                    "error": "Este mercenário não está disponível nesta guilda.",
+                    "diagnostic": _diagnostic_id_for_request(request),
+                })
+                return RedirectResponse(f"/mercenaries?{query}", status_code=303)
             return RedirectResponse("/mercenaries", status_code=303)
+        if request.app.state.app_mode == "desktop":
+            return _equipment_error_redirect(request, mercenary_id, error)
         return templates.TemplateResponse(
             request=request,
             name="mercenaries/detail.html",

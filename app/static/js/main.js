@@ -45,6 +45,9 @@ const startupModalQueue = (() => {
       if (index >= 0) pending.splice(index, 1);
       if (active === dialog && dialog.open) dialog.close();
     },
+    isIdle() {
+      return pending.length === 0 && !active?.open;
+    },
   };
 })();
 window.GIMStartupModalQueue = startupModalQueue;
@@ -608,6 +611,46 @@ function preservePageContext(responseUrl, previousUrl) {
   return merged;
 }
 
+function preserveRequestedNavigationFragment(responseUrl, requestedUrl) {
+  const response = new URL(responseUrl, window.location.origin);
+  const requested = new URL(requestedUrl, window.location.origin);
+  if (response.origin === window.location.origin && requested.origin === response.origin && !response.hash) {
+    response.hash = requested.hash;
+  }
+  return response.href;
+}
+
+let regionalEventTopbarObserver = null;
+let regionalEventTopbarObserved = null;
+
+function refreshRegionalEventAnchorOffset() {
+  const topbar = document.querySelector(".game-topbar");
+  const root = document.documentElement;
+  let offset = 0;
+  if (topbar) {
+    const style = window.getComputedStyle(topbar);
+    if (style.position === "sticky" || style.position === "fixed") {
+      const top = Number.parseFloat(style.top);
+      offset = Math.ceil(topbar.getBoundingClientRect().height + (Number.isFinite(top) ? Math.max(0, top) : 0));
+    }
+  }
+  root.style.setProperty("--regional-event-sticky-topbar-height", `${offset}px`);
+
+  if (regionalEventTopbarObserved !== topbar && regionalEventTopbarObserver) {
+    if (regionalEventTopbarObserved) regionalEventTopbarObserver.unobserve(regionalEventTopbarObserved);
+    regionalEventTopbarObserved = null;
+  }
+  if (topbar && regionalEventTopbarObserved !== topbar && typeof ResizeObserver === "function") {
+    regionalEventTopbarObserver ||= new ResizeObserver(() => refreshRegionalEventAnchorOffset());
+    regionalEventTopbarObserved = topbar;
+    regionalEventTopbarObserver.observe(topbar);
+  }
+}
+
+window.refreshRegionalEventAnchorOffset = refreshRegionalEventAnchorOffset;
+window.addEventListener("resize", refreshRegionalEventAnchorOffset);
+refreshRegionalEventAnchorOffset();
+
 function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
   const incomingMain = parsedDocument.querySelector(".game-shell");
@@ -620,6 +663,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
 
   currentMain.innerHTML = incomingMain.innerHTML;
   window.initializeEquipmentDetails?.(currentMain);
+  window.initializeBuildingResetDialogs?.(currentMain);
   initializeMarketEstimates(currentMain);
   syncRegionalEventNoticeDialogs(parsedDocument);
   window.initializeGatheringCycles?.();
@@ -628,6 +672,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   if (updateTopbar && incomingTopbar && currentTopbar) {
     currentTopbar.innerHTML = incomingTopbar.innerHTML;
   }
+  window.refreshRegionalEventAnchorOffset?.();
 
   document.title = parsedDocument.title || document.title;
   const nextUrl = new URL(responseUrl, window.location.origin);
@@ -644,6 +689,19 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
 
   const targetScroll = scrollToTop ? 0 : nextUrl.pathname === previousPath ? scrollPosition : 0;
   window.requestAnimationFrame(() => {
+    let hashTarget = null;
+    if (nextUrl.hash) {
+      try {
+        hashTarget = document.getElementById(decodeURIComponent(nextUrl.hash.slice(1)));
+      } catch {
+        hashTarget = null;
+      }
+    }
+    if (hashTarget) {
+      hashTarget.focus?.({ preventScroll: true });
+      hashTarget.scrollIntoView({ block: "start", behavior: "auto" });
+      return;
+    }
     const maximumScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(targetScroll, maximumScroll), behavior: "auto" });
   });
@@ -664,6 +722,7 @@ function syncRegionalEventNoticeDialogs(parsedDocument) {
     for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
       const replacement = incomingById.get(current.id);
       if (replacement && regionalNoticeMatches(current, replacement)) continue;
+      current.dataset.regionalNoticeProgrammaticClose = "true";
       modalQueue?.remove(current);
       if (current.open) current.close();
       current.remove();
@@ -729,7 +788,12 @@ initializeRegionalComparison();
 
 document.addEventListener("click", async (event) => {
   if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
-    event.target.closest("[data-regional-notice-close]")?.closest("dialog")?.close();
+    const noticeLink = event.target.closest("[data-regional-notice-close]");
+    if (noticeLink) {
+      const dialog = noticeLink.closest("dialog[data-regional-event-notice]");
+      if (dialog) dialog.dataset.regionalNoticeProgrammaticClose = "true";
+      noticeLink.closest("dialog")?.close();
+    }
   }
   const link = event.target.closest(".game-shell .filter-tabs a, .game-shell .pagination a, [data-async-navigation]");
   if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -751,7 +815,7 @@ document.addEventListener("click", async (event) => {
     if (!response.ok) throw new Error("Falha ao atualizar a tela");
     replaceGameContent(
       await response.text(),
-      response.url,
+      preserveRequestedNavigationFragment(response.url || targetUrl.href, targetUrl.href),
       previousPath,
       scrollPosition,
       true,
@@ -768,6 +832,50 @@ window.addEventListener("pageshow", () => {
   if (document.body.dataset.route !== "/regional" || window.location.hash) return;
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
 });
+
+async function fetchTavernStateAfterUncertainAction(previousUrl) {
+  try {
+    const refreshed = await fetch(previousUrl, {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
+    });
+    if (!refreshed.ok) return null;
+    return {
+      html: await refreshed.text(),
+      url: refreshed.url || previousUrl,
+    };
+  } catch (_refreshError) {
+    return null;
+  }
+}
+
+function lockTavernActionsUntilReload(form, submitter, previousUrl) {
+  document.querySelectorAll("[data-tavern-candidate-price-mutation] button[type='submit']")
+    .forEach((button) => { button.disabled = true; });
+  if (submitter instanceof HTMLElement) {
+    submitter.disabled = true;
+    submitter.classList.remove("is-loading");
+    submitter.textContent = "Aguardando atualização";
+  }
+  let status = form.querySelector("[data-apprentice-search-status]");
+  if (!status) {
+    status = document.createElement("p");
+    status.dataset.apprenticeSearchStatus = "true";
+    form.append(status);
+  }
+  status.setAttribute("role", "alert");
+  status.setAttribute("aria-live", "assertive");
+  const reloadLink = document.createElement("a");
+  reloadLink.href = previousUrl;
+  reloadLink.textContent = "Recarregar estado";
+  reloadLink.className = "button-link secondary";
+  status.replaceChildren(
+    document.createTextNode("Não foi possível confirmar o resultado da busca. As ações de contratação e preço estão bloqueadas até sincronizar o candidato. "),
+    reloadLink,
+  );
+}
 
 document.addEventListener("submit", async (event) => {
   const form = event.target;
@@ -796,12 +904,19 @@ document.addEventListener("submit", async (event) => {
   const previousPath = window.location.pathname;
   const scrollPosition = window.scrollY;
   const formState = captureGameFormState();
+  const originalSubmitterText = submitter instanceof HTMLElement ? submitter.textContent : null;
+  const pendingLabel = submitter instanceof HTMLElement ? submitter.dataset.pendingLabel : "";
   const diagnosticId = form.dataset.gimDiagnosticId || createGameplayDiagnosticId();
   delete form.dataset.gimDiagnosticId;
   form.setAttribute("aria-busy", "true");
   if (submitter) {
     submitter.disabled = true;
     submitter.classList.add("is-loading");
+    if (pendingLabel) submitter.textContent = pendingLabel;
+  }
+  const submitStatus = form.querySelector("[data-apprentice-search-status]");
+  if (submitStatus) {
+    submitStatus.textContent = "Buscando outro Aprendiz…";
   }
   try {
     if (method === "post") {
@@ -842,9 +957,32 @@ document.addEventListener("submit", async (event) => {
     replaceGameContent(html, responseUrl, previousPath, scrollPosition, response.ok, formState);
   } catch (error) {
     form.removeAttribute("aria-busy");
-    if (submitter) {
+    const needsTavernRevalidation = form.dataset.revalidateOnError === "true";
+    if (submitter && !needsTavernRevalidation) {
       submitter.disabled = false;
       submitter.classList.remove("is-loading");
+      if (originalSubmitterText !== null) submitter.textContent = originalSubmitterText;
+    }
+    if (needsTavernRevalidation) {
+      const refreshed = await fetchTavernStateAfterUncertainAction(previousUrl);
+      if (refreshed) {
+        replaceGameContent(
+          refreshed.html,
+          refreshed.url,
+          previousPath,
+          scrollPosition,
+          true,
+          formState,
+        );
+        const refreshedStatus = document.querySelector("[data-apprentice-search-status]");
+        if (refreshedStatus) {
+          refreshedStatus.textContent = "A Taverna foi sincronizada. Confira o candidato e o preço antes de agir novamente.";
+        }
+      } else {
+        window.reportGameplayClientFailure?.(getFormSubmitAction(form, submitter), diagnosticId);
+        lockTavernActionsUntilReload(form, submitter, previousUrl);
+      }
+      return;
     }
     form.querySelector("[data-client-action-error]")?.remove();
     window.reportGameplayClientFailure?.(getFormSubmitAction(form, submitter), diagnosticId);

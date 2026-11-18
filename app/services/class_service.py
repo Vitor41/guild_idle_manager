@@ -174,12 +174,17 @@ def _with_defaults(data: dict[str, object]) -> dict[str, object]:
     return base
 
 
-def seed_class_tree(db: Session) -> None:
+def seed_class_tree(
+    db: Session,
+    *,
+    update_existing_transition_requirements: bool = True,
+    canonical_transitions_only: bool = False,
+) -> None:
     changed = False
     for raw_data in CLASS_TREE:
         data = _with_defaults(raw_data)
         code = str(data.pop("code"))
-        parent_code = data.pop("parent_code", None)
+        data.pop("parent_code", None)
         mercenary_class = get_mercenary_class_by_code(db, code) or get_mercenary_class_by_name(db, str(data["name"]))
         if mercenary_class is None:
             mercenary_class = create_mercenary_class(db, {"code": code, **data})
@@ -192,23 +197,43 @@ def seed_class_tree(db: Session) -> None:
             mercenary_class.allowed_weapon_profile = str(data["allowed_weapon_profile"])
             mercenary_class.role_type = str(data["role_type"])
             changed = True
-        if parent_code:
-            parent = get_mercenary_class_by_code(db, str(parent_code))
-            if parent is not None and mercenary_class.parent_class_id is None:
-                mercenary_class.parent_class_id = parent.id
-                changed = True
 
     if changed:
         db.commit()
     changed = False
+    for raw_data in CLASS_TREE:
+        parent_code = str(raw_data.get("parent") or "")
+        if not parent_code:
+            continue
+        code = str(raw_data["code"])
+        mercenary_class = get_mercenary_class_by_code(db, code) or get_mercenary_class_by_name(db, str(raw_data["name"]))
+        parent = get_mercenary_class_by_code(db, parent_code)
+        if mercenary_class is not None and parent is not None and mercenary_class.parent_class_id is None:
+            mercenary_class.parent_class_id = parent.id
+            changed = True
+    if changed:
+        db.commit()
+    changed = False
+    canonical_parent_by_code = {
+        str(row["code"]): str(row["parent"]) if row.get("parent") else None
+        for row in CLASS_TREE
+    }
     for mercenary_class in db.scalars(select(MercenaryClass).where(MercenaryClass.parent_class_id.is_not(None))):
         parent = db.get(MercenaryClass, mercenary_class.parent_class_id)
         if parent is None:
             continue
+        expected_parent_code = canonical_parent_by_code.get(mercenary_class.code or "")
+        if canonical_transitions_only and (
+            expected_parent_code is None or parent.code != expected_parent_code
+        ):
+            continue
         requirement = get_transition_requirements(mercenary_class.tier)
         existing_transition = get_transition_by_classes(db, parent.id, mercenary_class.id)
         if existing_transition:
-            if existing_transition.required_training_ground_level != requirement["required_training_ground_level"]:
+            if (
+                update_existing_transition_requirements
+                and existing_transition.required_training_ground_level != requirement["required_training_ground_level"]
+            ):
                 existing_transition.required_training_ground_level = requirement["required_training_ground_level"]
                 changed = True
             continue

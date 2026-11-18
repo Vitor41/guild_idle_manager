@@ -182,7 +182,7 @@ def _catalog_markdown(catalog: dict[str, object]) -> str:
         return "\n".join(lines + ["Nenhum equipamento ou material ativo neste catálogo.", ""])
     item_groups: dict[tuple[object, ...], list[dict[str, object]]] = {}
     for row in rows:
-        key = (row["name"], row["item_type"], row["family"], row["equipment_slot"], row["level_band"], row["item_level"])
+        key = (row["name"], row["item_type"], row["family"], row["equipment_slot"])
         item_groups.setdefault(key, []).append(row)
     rarity_order = {label: index for index, label in enumerate(("Comum", "Incomum", "Raro", "Épico", "Lendário", "Mítico"))}
     for item_rows in item_groups.values():
@@ -190,23 +190,88 @@ def _catalog_markdown(catalog: dict[str, object]) -> str:
         slot_text = f" · espaço {_markdown_escape(row['equipment_slot'])}" if row["equipment_slot"] else ""
         rarities = sorted({str(item["rarity"]) for item in item_rows}, key=lambda rarity: rarity_order.get(rarity, 99))
         lines.extend([f"### {_markdown_escape(row['name'])}", "",
-            f"{_markdown_escape(row['item_type_label'])}{slot_text} · raridade: {_markdown_escape(', '.join(rarities))} · faixa {_markdown_escape(row['level_band'])} · nível {row['item_level']}", ""])
+            f"{_markdown_escape(row['item_type_label'])}{slot_text} · raridade: {_markdown_escape(', '.join(rarities))}", ""])
         sources: dict[tuple[object, ...], dict[str, object]] = {}
         for item in item_rows:
             for source in item["sources"]:
-                source_key = tuple(source.get(field) for field in ("type", "label", "name", "recommendation", "requirement", "chance", "quantity", "price", "condition"))
-                grouped_source = sources.setdefault(source_key, {"source": source, "rarities": set()})
-                grouped_source["rarities"].add(str(item["rarity"]))
+                gathering = source.get("type") == "gathering"
+                source_key = (source.get("type"), source.get("label"))
+                grouped_source = sources.setdefault(source_key, {
+                    "source": source, "variants": {}, "minimum_guild_level": None,
+                })
+                if gathering and source.get("minimum_guild_level") is not None:
+                    level = int(source["minimum_guild_level"])
+                    current_minimum = grouped_source["minimum_guild_level"]
+                    grouped_source["minimum_guild_level"] = (
+                        level if current_minimum is None else min(int(current_minimum), level)
+                    )
+                variant_key = (
+                    source.get("name") if source.get("name") != source.get("label") else "",
+                    source.get("recommendation"),
+                    "" if gathering else source.get("requirement"),
+                    source.get("chance"), source.get("quantity"), source.get("price"),
+                    source.get("condition"),
+                    None if gathering else source.get("minimum_guild_level"),
+                )
+                variant = grouped_source["variants"].setdefault(variant_key, {"source": source, "rarities": set()})
+                variant["rarities"].add(str(item["rarity"]))
         if not sources:
             lines.extend([f"**Sem fonte disponível para:** {_markdown_escape(', '.join(rarities))}.", ""])
             continue
         for grouped_source in sources.values():
             source = grouped_source["source"]
-            source_rarities = sorted(grouped_source["rarities"], key=lambda rarity: rarity_order.get(rarity, 99))
+            variants = list(grouped_source["variants"].values())
+            source_rarities = sorted({rarity for variant in variants for rarity in variant["rarities"]},
+                key=lambda rarity: rarity_order.get(rarity, 99))
             rarity_text = _markdown_escape(", ".join(source_rarities))
-            price_text = f" Preço unitário registrado: {_markdown_escape(source['price'])} ouro." if source["price"] else ""
-            recommendation = _markdown_escape(source.get("recommendation") or "—")
-            lines.append(f"- **Raridade(s): {rarity_text} · {_markdown_escape(source['label'])}** — {_markdown_escape(source['name'])}. {_markdown_escape(source['chance'])}. Quantidade: {_markdown_escape(source['quantity'])}. Recomendação: {recommendation}. Requisito: {_markdown_escape(source['requirement'])}.{price_text}")
+            summary = ""
+            if source.get("type") == "gathering":
+                minimum_level = grouped_source["minimum_guild_level"]
+                if minimum_level is not None:
+                    summary = f" A partir da guilda Nv. {minimum_level}."
+            if len(variants) == 1:
+                variant = variants[0]
+                details = variant["source"]
+                source_name = (
+                    f" Fonte: {_markdown_escape(details['name'])}."
+                    if details.get("name") and details["name"] != details["label"] else ""
+                )
+                recommendation = (
+                    f" Recomendação: {_markdown_escape(details['recommendation'])}."
+                    if details.get("recommendation") else ""
+                )
+                requirement = (
+                    f" Requisito: {_markdown_escape(details.get('requirement') or '—')}."
+                    if source.get("type") != "gathering" else ""
+                )
+                condition_text = f" Condição: {_markdown_escape(details['condition'])}." if details.get("condition") else ""
+                price_text = f" Preço unitário registrado: {_markdown_escape(details['price'])} ouro." if details.get("price") else ""
+                lines.append(f"- **Raridade(s): {rarity_text} · {_markdown_escape(source['label'])}**.{summary}{source_name}{recommendation}{requirement} Chance: {_markdown_escape(details['chance'])}. Quantidade: {_markdown_escape(details['quantity'])}.{price_text}{condition_text}")
+                continue
+            variant_texts = []
+            for variant in variants:
+                details = variant["source"]
+                variant_rarities = sorted(variant["rarities"], key=lambda rarity: rarity_order.get(rarity, 99))
+                source_name = (
+                    f"Fonte: {_markdown_escape(details['name'])}. "
+                    if details.get("name") and details["name"] != details["label"] else ""
+                )
+                recommendation = (
+                    f"Recomendação: {_markdown_escape(details['recommendation'])}. "
+                    if details.get("recommendation") else ""
+                )
+                requirement = (
+                    f"Requisito: {_markdown_escape(details.get('requirement') or '—')}. "
+                    if source.get("type") != "gathering" else ""
+                )
+                price_text = f" Preço unitário: {_markdown_escape(details['price'])} ouro." if details.get("price") else ""
+                condition_text = f" Condição: {_markdown_escape(details['condition'])}." if details.get("condition") else ""
+                variant_texts.append(
+                    f"[{_markdown_escape(', '.join(variant_rarities))}] {source_name}{recommendation}"
+                    f"{requirement}Chance: {_markdown_escape(details['chance'])}. "
+                    f"Quantidade: {_markdown_escape(details['quantity'])}.{price_text}{condition_text}"
+                )
+            lines.append(f"- **Raridade(s): {rarity_text} · {_markdown_escape(source['label'])}**.{summary} Variações: {'; '.join(variant_texts)}")
         lines.append("")
     return "\n".join(lines)
 

@@ -67,22 +67,38 @@
     const grouped = new Map();
     for (const { item, sources } of visibleRows || []) {
       const slot = item.equipment_slot ? ` · ${item.equipment_slot}` : "";
-      const itemLabel = `${item.name} · ${item.item_type_label}${slot} · ${item.level_band}`;
+      const itemLabel = `${item.name} · ${item.item_type_label}${slot}`;
       for (const source of sources || []) {
-        const key = JSON.stringify([source.filter_key || "none", source.type, source.label,
-          source.name || "", source.recommendation || "", source.requirement, source.chance,
-          source.quantity, source.price ?? "", source.condition || ""]);
+        const key = JSON.stringify([source.type, source.label]);
         if (!grouped.has(key)) grouped.set(key, { source, entries: [] });
         const entries = grouped.get(key).entries;
         const equivalent = entries.find((entry) => entry.item.name === item.name &&
           entry.item.item_type === item.item_type && entry.item.family === item.family &&
-          entry.item.equipment_slot === item.equipment_slot && entry.item.level_band === item.level_band &&
-          entry.item.item_level === item.item_level);
+          entry.item.equipment_slot === item.equipment_slot);
+        let entry = equivalent;
         if (equivalent) {
           if (!equivalent.rarities.includes(item.rarity)) equivalent.rarities.push(item.rarity);
         } else {
-          entries.push({ item, itemLabel, source, rarities: [item.rarity] });
+          entry = { item, itemLabel, source, rarities: [], variants: [], minimumGuildLevel: undefined };
+          entries.push(entry);
         }
+        if (!entry.rarities.includes(item.rarity)) entry.rarities.push(item.rarity);
+        if (source.type === "gathering" && Number.isFinite(Number(source.minimum_guild_level))) {
+          const minimumGuildLevel = Number(source.minimum_guild_level);
+          entry.minimumGuildLevel = entry.minimumGuildLevel === undefined
+            ? minimumGuildLevel : Math.min(entry.minimumGuildLevel, minimumGuildLevel);
+        }
+        const gathering = source.type === "gathering";
+        const variantKey = JSON.stringify([source.name && source.name !== source.label ? source.name : "",
+          source.recommendation || "", gathering ? "" : source.requirement || "",
+          source.chance || "", source.quantity || "", source.price ?? "", source.condition || "",
+          gathering ? null : source.minimum_guild_level ?? null]);
+        let variant = entry.variants.find((row) => row.key === variantKey);
+        if (!variant) {
+          variant = { key: variantKey, source, rarities: [] };
+          entry.variants.push(variant);
+        }
+        if (!variant.rarities.includes(item.rarity)) variant.rarities.push(item.rarity);
       }
     }
     return Array.from(grouped.values());

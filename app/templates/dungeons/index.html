@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "components/result_card.html" import result_card %}
 {% from "components/building_lock.html" import building_lock %}
+{% from "components/drop_preview.html" import drop_preview with context %}
 {% block title %}Masmorras - Guild Idle Manager{% endblock %}
 
 {% block content %}
@@ -100,7 +101,7 @@
                 {% if dungeon.content_type == 'boss' %}<p class="boss-risk-warning"><strong>Desafio de Chefe:</strong> risco superior e foco em raridades altas; não é a melhor rota para ouro ou XP básico.</p>{% endif %}
                 <div class="mission-card-info-footer">
                   <div class="bonus-box"><strong>Bônus de construções</strong><span>XP +{{ building_bonuses.xp_bonus_percent }}%</span><span>Equip. +{{ building_bonuses.equipment_drop_bonus_percent }} p.p.</span><span>+{{ building_bonuses.material_quantity_bonus }} materiais principais</span><span>Máx. {{ building_bonuses.max_run_multiplier }}x</span></div>
-                  <div class="loot-preview"><strong>Loot possível</strong><div class="loot-preview-list">{% for drop in dungeon.visible_drops %}<span class="loot-preview-item rarity-{{ drop.item_template.rarity }}" title="{{ drop.rarity_label }}"><span class="loot-preview-icon">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span><span>{{ drop.display_name }}<small>{{ drop.effective_drop_chance }}%{% if drop.effective_drop_chance > drop.base_drop_chance %} ({{ drop.base_drop_chance }}% + Ferreiro){% endif %} · {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}-{{ drop.max_quantity }}{% endif %}x</small></span></span>{% else %}<span class="subtle-note">Sem loot cadastrado</span>{% endfor %}</div></div>
+                  {{ drop_preview(dungeon.visible_drops, dungeon.drop_preview_available, dungeon.drop_modifier_note) }}
                 </div>
               </div>
               <form class="party-form" method="post" action="/dungeons/start" data-supply-quote-url="/dungeons/supply-quote">

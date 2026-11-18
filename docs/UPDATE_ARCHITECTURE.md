@@ -1,6 +1,6 @@
 # Atualização do aplicativo
 
-Versão candidata desta integração: `0.9.0` (`app/core/version.py`).
+Versão candidata desta integração: `0.10.0` (`app/core/version.py`).
 
 ## Fluxo do launcher
 

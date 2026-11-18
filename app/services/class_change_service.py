@@ -129,6 +129,14 @@ def start_class_change(
     mercenary_id: str,
     to_class_id: str,
 ) -> ClassChangeRun:
+    from app.services.building_reset_service import _lock_guild_for_building_mutation
+
+    guild = _lock_guild_for_building_mutation(db, guild.id)
+    if guild is None:
+        raise ClassChangeError("Guilda nao encontrada.")
+    if resources is None:
+        raise ClassChangeError("Recursos da guilda indisponiveis.")
+    resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
     if resources is None:
         raise ClassChangeError("Recursos da guilda indisponiveis.")
     try:

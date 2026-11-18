@@ -26,7 +26,9 @@ def open_campaign_with_migration(app, campaigns: CampaignService, clock_guard: C
         except FileNotFoundError:
             pass
         suspended.discard(offline_campaign_id)
-    info, migration = campaigns.activate_campaign_with_migration(campaign_id, mark_active=False)
+    info, migration = campaigns.activate_campaign_with_migration(
+        campaign_id, mark_active=False, prepare_content=True,
+    )
     summary = clock_guard.activate_campaign(info.campaign_id)
     info = campaigns.inspect_campaign(info.campaign_id)
     app.state.active_campaign = info

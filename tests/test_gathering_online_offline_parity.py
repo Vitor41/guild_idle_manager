@@ -44,6 +44,7 @@ class GatheringOnlineOfflineParityTests(unittest.TestCase):
                 material_family="wood", bonus_percent=15,
             )
             self.material = ItemTemplate(
+                slug="material_wood_1_001",
                 name="Madeira pareada", description="Fixture.", item_type="material", rarity="common",
                 material_family="wood", item_level=1, level_band="1-20", tier=1,
             )

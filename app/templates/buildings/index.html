@@ -5,9 +5,12 @@
 {% block content %}
   <section class="dashboard" aria-labelledby="buildings-title">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">{{ guild.name }}</p>
-        <h1 id="buildings-title">Construções</h1>
+      <div class="buildings-heading">
+        <div>
+          <p class="eyebrow">{{ guild.name }}</p>
+          <h1 id="buildings-title">Construções</h1>
+        </div>
+        <a class="button-link secondary buildings-heading__action" href="/buildings?reset_preview=1">Resetar construções</a>
       </div>
       <div class="user-menu">
         <a href="javascript:history.back()">Voltar</a>
@@ -22,7 +25,93 @@
     </header>
 
     {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
-    {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+    {% if error and not reset_preview %}<p class="error-message">{{ error }}</p>{% endif %}
+
+    {% if reset_result %}
+      <section class="panel building-reset-result" aria-labelledby="building-reset-result-title" aria-live="polite">
+        <h2 id="building-reset-result-title">Reset concluído</h2>
+        <p>{% if reset_result.was_free %}Este foi o primeiro reset gratuito.{% else %}O custo do reset não foi devolvido.{% endif %}</p>
+        <div class="building-reset-columns">
+          <div>
+            <h3>Custo do reset</h3>
+            <p>{{ reset_result.crystal_cost }} Cristais</p>
+            {% if reset_result.charge_json.crystal_reserve %}<p>{{ reset_result.charge_json.crystal_reserve }} da reserva de Cristais</p>{% endif %}
+            <ul>{% for item in reset_result.charge_json['items'] %}<li>{{ item.quantity }} × {{ item.item_name }}</li>{% endfor %}</ul>
+          </div>
+          <div>
+            <h3>Você recebe</h3>
+            <p>Investimento registrado: {{ reset_result.refund_json.gold.exact }} ouro e {{ reset_result.refund_json.crystal_reserve.exact }} Cristais da reserva.</p>
+            <ul>{% for item in reset_result.refund_json['items'] if not item.estimated %}<li>{{ item.quantity }} × {{ item.item_name }}</li>{% endfor %}</ul>
+            {% if reset_result.has_estimated_refund %}
+              <p>Estimativa de investimento antigo: {{ reset_result.refund_json.gold.estimated }} ouro e {{ reset_result.refund_json.crystal_reserve.estimated }} Cristais da reserva.</p>
+              <ul>{% for item in reset_result.refund_json['items'] if item.estimated %}<li>{{ item.quantity }} × {{ item.item_name }} (estimativa)</li>{% endfor %}</ul>
+              <p class="note">{{ reset_result.refund_json.estimate_basis }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {% if reset_preview %}
+      <dialog class="building-reset-dialog" data-building-reset-dialog open aria-labelledby="building-reset-title">
+        <section class="panel building-reset-preview">
+          <h2 id="building-reset-title">Prévia do reset</h2>
+          {% if error %}<p class="error-message" role="alert" aria-live="assertive" data-reset-preview-error>{{ error }}</p>{% endif %}
+          <p>As construções da guilda voltarão ao nível 0. Mercenários, estoque, histórico e progresso já obtido serão preservados.</p>
+          <div class="building-reset-columns">
+            <div>
+              <h3>Custo do reset</h3>
+              {% if reset_preview.was_free %}
+                <p>Gratuito, uma única vez.</p>
+              {% else %}
+                <p>{{ reset_preview.crystal_cost }} Cristais. Esta cobrança não é devolvida.</p>
+                {% if reset_preview.charge_quote.crystal_reserve %}<p>{{ reset_preview.charge_quote.crystal_reserve }} serão usados da reserva.</p>{% endif %}
+                <ul>{% for item in reset_preview.charge_quote['items'] %}<li>{{ item.quantity }} × {{ item.item_name }}</li>{% endfor %}</ul>
+                {% if reset_preview.charge_quote.uncovered %}<p class="error-message">Faltam {{ reset_preview.charge_quote.uncovered }} Cristais.</p>{% endif %}
+              {% endif %}
+            </div>
+            <div>
+              <h3>Você recebe</h3>
+              <p>Investimento registrado: {{ reset_preview.refund.gold.exact }} ouro e {{ reset_preview.refund.crystal_reserve.exact }} Cristais da reserva.</p>
+              <ul>{% for item in reset_preview.refund['items'] if not item.estimated %}<li>{{ item.quantity }} × {{ item.item_name }}</li>{% endfor %}</ul>
+              {% if reset_preview.has_estimated_refund %}
+                <p>Estimativa de investimento antigo: {{ reset_preview.refund.gold.estimated }} ouro e {{ reset_preview.refund.crystal_reserve.estimated }} Cristais da reserva.</p>
+                <ul>{% for item in reset_preview.refund['items'] if item.estimated %}<li>{{ item.quantity }} × {{ item.item_name }} (estimativa)</li>{% endfor %}</ul>
+                <p class="note">{{ reset_preview.estimate_basis }}</p>
+              {% endif %}
+            </div>
+          </div>
+          <section aria-labelledby="building-reset-capacity-title">
+            <h3 id="building-reset-capacity-title">Capacidade após o reset</h3>
+            <p>Alojamento: {{ reset_preview.capacity_after.housing_slots }} vagas; elenco atual: {{ reset_preview.capacity_after.active_mercenaries }}. Nenhum mercenário será removido.</p>
+            <p>Armazém: {{ reset_preview.capacity_after.warehouse_capacity }} unidades; estoque e reservas após a cobrança e os reembolsos: {{ reset_preview.capacity_after.inventory_usage }}.{% if reset_preview.capacity_after.inventory_over_capacity %} {{ reset_preview.capacity_after.inventory_over_capacity }} ficarão acima do limite e serão preservadas; novas entradas seguem os bloqueios normais.{% endif %}</p>
+          </section>
+          {% if reset_preview.blockers %}
+            <section aria-labelledby="building-reset-blockers-title">
+              <h3 id="building-reset-blockers-title">Pendências que bloqueiam o reset</h3>
+              <ul class="building-reset-blockers">
+                {% for blocker in reset_preview.blockers %}
+                    <li>
+                      {% if blocker.href %}
+                        <a href="{{ blocker.href }}">{{ blocker.label }}{% if blocker.count %} ({{ blocker.count }}){% endif %}</a>
+                      {% else %}
+                        <span>{{ blocker.label }}{% if blocker.count %} ({{ blocker.count }}){% endif %}</span>
+                      {% endif %}
+                    </li>
+                {% endfor %}
+              </ul>
+            </section>
+          {% endif %}
+          <form class="building-reset-actions" method="post" action="/buildings/reset" data-building-reset-form>
+            <input type="hidden" name="expected_fingerprint" value="{{ reset_preview.fingerprint }}">
+            <input type="hidden" name="idempotency_key" value="{{ reset_preview.idempotency_key }}">
+            <a class="button-link secondary" href="/buildings" data-reset-cancel autofocus>Cancelar</a>
+            <button type="submit" data-reset-submit {% if not reset_preview.can_confirm %}disabled{% endif %}>Confirmar reset</button>
+            <p class="note" role="status" aria-live="polite" data-reset-status></p>
+          </form>
+        </section>
+      </dialog>
+    {% endif %}
 
     <section class="panel">
       <h2>Recursos</h2>
@@ -67,4 +156,8 @@
       </div>
     </section>
   </section>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
 {% endblock %}

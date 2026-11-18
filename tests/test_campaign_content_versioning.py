@@ -4,24 +4,35 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.database.connection import SessionLocal, configure_database, create_database_engine
+from app.desktop.clock_guard import ClockGuard, MemoryAnchorStore
+from app.desktop.lifecycle import close_campaign, open_campaign_with_migration
 from app.models.campaign import CampaignMetadata
+from app.models.class_change import ClassTransitionOption
 from app.models.content import ContentSeedRun
-from app.models.dock import MerchantTemplate
+from app.models.dock import DockOffer, DockRotation, DockRotationMerchant, MerchantOfferTemplate, MerchantTemplate
 from app.models.dungeon import DungeonRun, DungeonTemplate
-from app.models.guild import Guild
+from app.models.guild import Guild, GuildResources
 from app.models.item import DungeonTemplateItemDrop, GuildInventoryItem, ItemTemplate, MissionTemplateItemDrop
 from app.models.content import ProfessionTemplate
 from app.models.mission import MissionRun, MissionTemplate
 from app.models.mercenary import Mercenary, MercenaryClass
+from app.models.gathering import GatheringAssignment
 from app.models.regional import RegionalCycle, RegionalOffer
 from app.seeds.massive_content import PACK_KEY, PACK_VERSION
-from app.services.campaign_service import CampaignService
+from app.services.campaign_service import (
+    CLASS_TREE_REPAIR_PACK_KEY,
+    CLASS_TREE_REPAIR_VERSION,
+    CampaignService,
+)
+from app.services.economy_pricing_service import equipment_base_sell_value
+from app.services.class_change_service import get_class_change_page_context
 from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.regional_cycle_service import CYCLE_SECONDS, get_regional_board
 
@@ -81,6 +92,280 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     self.assertEqual(board["cycle"].content_version, PACK_VERSION)
             finally:
                 campaigns.close_active_campaign(campaign.campaign_id)
+
+    def test_current_content_class_tree_backfill_does_not_replay_economy_seed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Árvore de classe", "Guilda Árvore de classe")
+            self.assertEqual(created.content_version, PACK_VERSION)
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            app = SimpleNamespace(state=SimpleNamespace(active_campaign=None, suspended_campaigns=set()))
+            clock_guard = ClockGuard(
+                anchor_store=MemoryAnchorStore(),
+                wall_clock=lambda: datetime(2026, 11, 17, tzinfo=timezone.utc),
+                monotonic_clock=lambda: 1.0,
+            )
+            active = False
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    self.assertEqual(metadata.content_version, PACK_VERSION)
+                    db.execute(delete(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
+                    ))
+                    self.assertFalse(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
+                    )))
+                    self.assertIsNone(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )))
+
+                    equipment_candidates = db.scalars(select(ItemTemplate).where(
+                        ItemTemplate.content_pack == PACK_KEY,
+                        ItemTemplate.item_type == "equipment",
+                    ))
+                    equipment = next((item for item in equipment_candidates
+                        if max(2, int((item.item_level + 4) * max(1, item.tier) * 1.8))
+                        != equipment_base_sell_value(item.equipment_slot, item.rarity)), None)
+                    self.assertIsNotNone(equipment, "v6 fixture needs an equipment whose legacy price is re-priced by the v7 seed")
+                    legacy_price = max(2, int((equipment.item_level + 4) * max(1, equipment.tier) * 1.8))
+                    self.assertNotEqual(legacy_price, equipment_base_sell_value(equipment.equipment_slot, equipment.rarity))
+                    equipment.base_sell_value = legacy_price
+
+                    merchant_offer = db.scalar(select(MerchantOfferTemplate).where(
+                        MerchantOfferTemplate.item_template_id == equipment.id,
+                    ).order_by(MerchantOfferTemplate.id))
+                    self.assertIsNotNone(merchant_offer)
+                    merchant_offer.base_price = 4321
+                    offer_price = merchant_offer.base_price
+
+                    cycle = RegionalCycle(
+                        campaign_id=created.campaign_id, cycle_number=999,
+                        starts_at_utc=datetime(2026, 11, 1, tzinfo=timezone.utc),
+                        ends_at_utc=datetime(2026, 11, 2, tzinfo=timezone.utc),
+                        seed=f"legacy-v{PACK_VERSION - 1}-snapshot",
+                        rules_version=f"v{PACK_VERSION - 1}-fixture", content_version=PACK_VERSION - 1,
+                        player_level_snapshot=17, player_power_snapshot=314, rank_weights_json="{}",
+                    )
+                    db.add(cycle)
+                    db.flush()
+                    offer = RegionalOffer(
+                        campaign_id=created.campaign_id, cycle_id=cycle.id, cycle_number=cycle.cycle_number,
+                        region_code="vale-fronteira", offer_type="contract", slot=999,
+                        rank="S", name_snapshot="Contrato v6 congelado", description_snapshot="Descrição original.",
+                        level_band_snapshot="1-20", recommended_level_snapshot=17,
+                        recommended_power_snapshot=314, duration_seconds_snapshot=7200,
+                        gold_reward_snapshot=1234, xp_reward_snapshot=456, success_chance_snapshot=67,
+                        status="in_progress",
+                    )
+                    db.add(offer)
+                    db.flush()
+                    offer_id = offer.id
+                    offer_snapshot = (
+                        offer.name_snapshot, offer.description_snapshot, offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot, offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot, offer.success_chance_snapshot,
+                    )
+
+                    db.execute(delete(ClassTransitionOption))
+                    for mercenary_class in db.scalars(select(MercenaryClass)):
+                        mercenary_class.parent_class_id = None
+                    db.commit()
+                    equipment_id = equipment.id
+                    transition_count_before = db.scalar(select(func.count()).select_from(ClassTransitionOption))
+                    self.assertEqual(transition_count_before, 0)
+
+                activated, summary, _migration = open_campaign_with_migration(
+                    app, campaigns, clock_guard, created.campaign_id,
+                )
+                active = True
+                self.assertIsNone(summary)
+                self.assertEqual(activated.content_version, PACK_VERSION)
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    self.assertEqual(metadata.content_version, PACK_VERSION)
+                    self.assertFalse(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
+                    )))
+                    self.assertEqual(db.scalar(select(func.count()).select_from(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )), 1)
+                    transitions = list(db.scalars(select(ClassTransitionOption)))
+                    self.assertGreater(len(transitions), 0)
+                    self.assertGreater(db.scalar(select(func.count()).select_from(MercenaryClass).where(
+                        MercenaryClass.parent_class_id.is_not(None),
+                    )), 0)
+                    equipment = db.get(ItemTemplate, equipment_id)
+                    self.assertEqual(equipment.base_sell_value, legacy_price)
+                    self.assertEqual(db.scalar(select(MerchantOfferTemplate.base_price).where(
+                        MerchantOfferTemplate.item_template_id == equipment_id,
+                    ).order_by(MerchantOfferTemplate.id)), offer_price)
+                    offer = db.get(RegionalOffer, offer_id)
+                    self.assertEqual((
+                        offer.name_snapshot, offer.description_snapshot, offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot, offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot, offer.success_chance_snapshot,
+                    ), offer_snapshot)
+                    transition_count_after = len(transitions)
+
+                close_campaign(app, campaigns, clock_guard)
+                active = False
+                reopened, summary, _migration = open_campaign_with_migration(
+                    app, campaigns, clock_guard, created.campaign_id,
+                )
+                active = True
+                self.assertIsNone(summary)
+                self.assertEqual(reopened.content_version, PACK_VERSION)
+                with factory() as db:
+                    self.assertFalse(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == PACK_VERSION,
+                    )))
+                    self.assertEqual(db.scalar(select(func.count()).select_from(ClassTransitionOption)), transition_count_after)
+                    self.assertEqual(db.scalar(select(func.count()).select_from(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )), 1)
+                    self.assertEqual(db.get(ItemTemplate, equipment_id).base_sell_value, legacy_price)
+                    offer = db.get(RegionalOffer, offer_id)
+                    self.assertEqual((
+                        offer.name_snapshot, offer.description_snapshot, offer.recommended_power_snapshot,
+                        offer.duration_seconds_snapshot, offer.gold_reward_snapshot,
+                        offer.xp_reward_snapshot, offer.success_chance_snapshot,
+                    ), offer_snapshot)
+            finally:
+                if active:
+                    close_campaign(app, campaigns, clock_guard)
+                engine.dispose()
+
+    def test_v5_campaign_still_runs_content_pack_upgrade_before_class_tree_repair(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Conteúdo v5", "Guilda Conteúdo v5")
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            active = False
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    metadata.content_version = 5
+                    db.execute(delete(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    ))
+                    db.add(ContentSeedRun(
+                        pack_key=PACK_KEY, version=5, report_json='{"fixture":"v5"}',
+                        applied_at=datetime(2026, 11, 1, tzinfo=timezone.utc),
+                    ))
+                    db.execute(delete(ClassTransitionOption))
+                    for mercenary_class in db.scalars(select(MercenaryClass)):
+                        mercenary_class.parent_class_id = None
+                    db.commit()
+
+                activated = campaigns.activate_campaign(created.campaign_id)
+                active = True
+                self.assertEqual(activated.content_version, PACK_VERSION)
+                with factory() as db:
+                    self.assertEqual(db.get(CampaignMetadata, created.campaign_id).content_version, PACK_VERSION)
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    )))
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY, ContentSeedRun.version == 5,
+                    )))
+                    self.assertTrue(db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    )))
+                    self.assertGreater(db.scalar(select(func.count()).select_from(ClassTransitionOption)), 0)
+            finally:
+                if active:
+                    campaigns.close_active_campaign(created.campaign_id)
+                engine.dispose()
+
+    def test_legacy_campaign_restores_missing_class_paths_without_rewriting_existing_options(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Transições legadas", "Guilda Transições")
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            preserved_id = None
+            transition_count = 0
+            custom_class_id = None
+            active = False
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    apprentice = db.scalar(select(MercenaryClass).where(MercenaryClass.code == "apprentice"))
+                    custom = MercenaryClass(
+                        code="qa_custom_unlinked", name="Classe personalizada sem rota",
+                        display_name="Classe personalizada sem rota", description="Fixture isolado.",
+                        tier=1, parent_class_id=apprentice.id, required_level=20,
+                        allowed_weapon_profile="any", role_type="balanced",
+                        base_power=5, base_vitality=5, base_agility=5, base_intelligence=5, base_luck=5,
+                    )
+                    db.add(custom)
+                    db.flush()
+                    custom_class_id = custom.id
+                    transitions = list(db.scalars(select(ClassTransitionOption).order_by(ClassTransitionOption.id)))
+                    self.assertGreater(len(transitions), 1)
+                    self.assertEqual({row.to_class.tier for row in transitions}, {1, 2, 3})
+                    preserved = transitions[0]
+                    preserved_id = preserved.id
+                    preserved.required_guild_level = 13
+                    preserved.required_training_ground_level = 17
+                    preserved.gold_cost = 4321
+                    preserved.duration_seconds = 9876
+                    preserved.is_active = False
+                    db.execute(delete(ClassTransitionOption).where(ClassTransitionOption.id != preserved.id))
+                    metadata.content_version = PACK_VERSION - 1
+                    db.commit()
+
+                activated = campaigns.activate_campaign(created.campaign_id)
+                active = True
+                self.assertEqual(activated.content_version, PACK_VERSION)
+                with factory() as db:
+                    restored = list(db.scalars(select(ClassTransitionOption).order_by(ClassTransitionOption.id)))
+                    transition_count = len(restored)
+                    self.assertGreater(len(restored), 1)
+                    tiers = {row.to_class.tier for row in restored}
+                    self.assertEqual(tiers, {1, 2, 3})
+                    preserved = next(row for row in restored if row.id == preserved_id)
+                    self.assertEqual(preserved.required_guild_level, 13)
+                    self.assertEqual(preserved.required_training_ground_level, 17)
+                    self.assertEqual(preserved.gold_cost, 4321)
+                    self.assertEqual(preserved.duration_seconds, 9876)
+                    self.assertFalse(preserved.is_active)
+                    self.assertFalse(any(row.to_class_id == custom_class_id for row in restored))
+                    guild = db.scalar(select(Guild).where(Guild.campaign_id == created.campaign_id))
+                    resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == guild.id))
+                    page_context = get_class_change_page_context(db, guild, resources)
+                    self.assertEqual(
+                        [step["label"] for step in page_context["requirement_steps"]],
+                        ["1ª troca", "2ª troca", "3ª troca"],
+                    )
+                    self.assertTrue(all(step["eligible_count"] == 0 for step in page_context["requirement_steps"]))
+                    self.assertTrue(all(step["state"] == "Faltam requisitos" for step in page_context["requirement_steps"]))
+                    db.get(CampaignMetadata, created.campaign_id).content_version = PACK_VERSION - 1
+                    db.commit()
+
+                # Simulate retry after class rows committed but campaign metadata did not.
+                campaigns.activate_campaign(created.campaign_id)
+                with factory() as db:
+                    self.assertEqual(
+                        db.scalar(select(func.count()).select_from(ClassTransitionOption)),
+                        transition_count,
+                    )
+                    self.assertFalse(db.scalar(select(ClassTransitionOption.id).where(
+                        ClassTransitionOption.to_class_id == custom_class_id,
+                    )))
+            finally:
+                if active:
+                    campaigns.close_active_campaign(created.campaign_id)
+                engine.dispose()
 
     def test_legacy_migration_reactivates_only_required_meat_gathering_material(self):
         with tempfile.TemporaryDirectory() as temp_dir:

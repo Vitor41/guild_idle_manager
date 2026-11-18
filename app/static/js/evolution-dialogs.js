@@ -15,18 +15,33 @@ document.querySelectorAll(".evolution-dialog").forEach((dialog) => {
   });
 });
 
-window.GIMEnqueueRegionalNotice = (dialog) => {
+const bindRegionalNoticeFocusReturn = (dialog) => {
   if (!(dialog instanceof HTMLDialogElement)) return;
+  if (!dialog.dataset.focusReturnBound) {
+    dialog.dataset.focusReturnBound = "true";
+    dialog.addEventListener("close", () => {
+      if (dialog.dataset.regionalNoticeProgrammaticClose === "true") return;
+      window.requestAnimationFrame(() => {
+        if (!window.GIMStartupModalQueue?.isIdle?.()) return;
+        const heading = document.getElementById("events-title");
+        if (heading) heading.focus({ preventScroll: true });
+      });
+    });
+  }
+};
+const regionalNoticeQueueEntry = (dialog) => {
+  if (!(dialog instanceof HTMLDialogElement)) return null;
+  bindRegionalNoticeFocusReturn(dialog);
   const rawDeadline = dialog.dataset.eventDeadline || "";
   const deadline = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(rawDeadline) ? rawDeadline : `${rawDeadline}Z`);
-  window.GIMStartupModalQueue?.enqueue(dialog, 2, deadline);
+  return { dialog, priority: 2, deadline };
+};
+window.GIMEnqueueRegionalNotice = (dialog) => {
+  const entry = regionalNoticeQueueEntry(dialog);
+  if (entry) window.GIMStartupModalQueue?.enqueue(entry.dialog, entry.priority, entry.deadline);
 };
 window.GIMEnqueueRegionalNotices = (dialogs) => {
-  const entries = [...dialogs].map((dialog) => {
-    const rawDeadline = dialog.dataset.eventDeadline || "";
-    const deadline = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(rawDeadline) ? rawDeadline : `${rawDeadline}Z`);
-    return { dialog, priority: 2, deadline };
-  });
+  const entries = [...dialogs].map(regionalNoticeQueueEntry).filter(Boolean);
   window.GIMStartupModalQueue?.enqueueMany(entries);
 };
 window.GIMEnqueueRegionalNotices(document.querySelectorAll("dialog[data-regional-event-notice]"));

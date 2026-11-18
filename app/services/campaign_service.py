@@ -19,12 +19,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.database.connection import SessionLocal, configure_database, create_database_engine, get_engine
-from app.models import CampaignMetadata, Guild, GuildResources
+from app.models import CampaignMetadata, ContentSeedRun, Guild, GuildResources
 from app.seeds.massive_content import PACK_VERSION, run_massive_content_seed
 
 
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 INITIAL_CONTENT_VERSION = PACK_VERSION
+CLASS_TREE_REPAIR_PACK_KEY = "ml036_class_tree_transition_backfill"
+CLASS_TREE_REPAIR_VERSION = 1
 _activation_lock = RLock()
 
 
@@ -541,21 +543,17 @@ class CampaignService:
         return info
 
     def activate_campaign_with_migration(
-        self, campaign_id: str, mark_active: bool = True
+        self, campaign_id: str, mark_active: bool = True, prepare_content: bool | None = None
     ) -> tuple[CampaignInfo, CampaignMigration | None]:
+        if prepare_content is None:
+            prepare_content = mark_active
         path = self._path_for(campaign_id)
         if not path.is_file():
             raise FileNotFoundError("Arquivo da campanha não encontrado.")
         self._validate_campaign_before_open(path, str(UUID(campaign_id)))
         migration = self._ensure_schema(path, str(UUID(campaign_id)))
         info = self.inspect_campaign(campaign_id)
-        if mark_active and info.content_version < PACK_VERSION:
-            # Content updates are additive, but still back up old campaigns before
-            # inserting catalog rows or advancing their content version.
-            self._backup_before_schema_change(
-                info.database_path, info.campaign_id,
-                f"content-{info.content_version}-to-{PACK_VERSION}",
-            )
+        if prepare_content:
             content_engine = create_database_engine(f"sqlite:///{info.database_path.as_posix()}")
             content_factory = sessionmaker(bind=content_engine, autoflush=False, expire_on_commit=False)
             try:
@@ -563,19 +561,67 @@ class CampaignService:
                     metadata = db.get(CampaignMetadata, info.campaign_id)
                     if metadata is None:
                         raise ValueError("O save não contém os dados da campanha para atualizar o catálogo.")
-                    run_massive_content_seed(
-                        db,
-                        deactivate_legacy_defaults=False,
-                        repair_required_gathering_materials=True,
+                    needs_content_upgrade = metadata.content_version < PACK_VERSION
+                    tree_backfill = db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == CLASS_TREE_REPAIR_PACK_KEY,
+                        ContentSeedRun.version == CLASS_TREE_REPAIR_VERSION,
+                    ))
+                    needs_class_tree_repair = tree_backfill is None
+
+                if needs_content_upgrade or needs_class_tree_repair:
+                    backup_reason = (
+                        f"content-{info.content_version}-to-{PACK_VERSION}"
+                        if needs_content_upgrade
+                        else f"class-tree-{CLASS_TREE_REPAIR_VERSION}"
                     )
-                    from app.services.gathering_service import freeze_legacy_assignment_targets
-                    freeze_legacy_assignment_targets(db)
-                    metadata.content_version = PACK_VERSION
-                    metadata.updated_at_utc = datetime.now(timezone.utc)
-                    db.commit()
+                    self._backup_before_schema_change(
+                        info.database_path, info.campaign_id, backup_reason,
+                    )
+                    with content_factory() as db:
+                        metadata = db.get(CampaignMetadata, info.campaign_id)
+                        if metadata is None:
+                            raise ValueError("O save não contém os dados da campanha para atualizar o catálogo.")
+                        if needs_content_upgrade:
+                            # This versioned content-pack upgrade remains reserved for
+                            # saves older than the current pack. A class-tree repair
+                            # alone must never replay economic catalog pricing.
+                            run_massive_content_seed(
+                                db,
+                                deactivate_legacy_defaults=False,
+                                repair_required_gathering_materials=True,
+                            )
+                            from app.services.gathering_service import (
+                                freeze_legacy_assignment_targets,
+                                migrate_assignments_to_common_targets,
+                            )
+                            freeze_legacy_assignment_targets(db)
+                            migrate_assignments_to_common_targets(db)
+
+                        if needs_class_tree_repair:
+                            # Keep the class transition backfill independent from
+                            # the economic content-pack version. It can be retried
+                            # after any partial commit without re-running catalog seeds.
+                            from app.services.class_service import seed_class_tree
+                            seed_class_tree(
+                                db,
+                                update_existing_transition_requirements=False,
+                                canonical_transitions_only=True,
+                            )
+                            db.add(ContentSeedRun(
+                                pack_key=CLASS_TREE_REPAIR_PACK_KEY,
+                                version=CLASS_TREE_REPAIR_VERSION,
+                                report_json='{"added":"canonical class transitions"}',
+                                applied_at=datetime.now(timezone.utc),
+                            ))
+
+                        if needs_content_upgrade:
+                            metadata.content_version = PACK_VERSION
+                        metadata.updated_at_utc = datetime.now(timezone.utc)
+                        db.commit()
             finally:
                 content_engine.dispose()
-            info = self.inspect_campaign(campaign_id)
+            if needs_content_upgrade:
+                info = self.inspect_campaign(campaign_id)
         with _activation_lock:
             configure_database(f"sqlite:///{info.database_path.as_posix()}")
             if mark_active:

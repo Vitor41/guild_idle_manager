@@ -66,6 +66,13 @@ def _gameplay_action_for_path(path: str) -> str:
 
 
 def _diagnostic_error_redirect(path: str, diagnostic_id: str) -> str:
+    equipment_match = re.fullmatch(r"/mercenaries/(\d+)/equip", path)
+    if equipment_match:
+        query = urlencode({
+            "error": "Não foi possível concluir o equipamento. Confira o estado atual antes de tentar novamente.",
+            "diagnostic": diagnostic_id,
+        })
+        return f"/mercenaries/{equipment_match.group(1)}?{query}"
     destination = "/gathering" if path.startswith("/gathering/") else "/regional" if path.startswith("/regional/") else "/dashboard"
     query = urlencode({
         "error": f"A ação não foi concluída. Consulte o log e informe a referência {diagnostic_id}.",
@@ -132,7 +139,12 @@ async def protect_desktop_loopback(request: Request, call_next):
                 action=action, route=request.url.path, diagnostic_id=diagnostic_id,
                 status_code=status_code, outcome=outcome,
             )
-            if status_code >= 400:
+            is_regional_supply_quote = (
+                request.url.path.startswith("/regional/")
+                and request.url.path.endswith("/supply-quote")
+                and response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "application/json"
+            )
+            if status_code >= 400 and not is_regional_supply_quote:
                 response = RedirectResponse(_diagnostic_error_redirect(request.url.path, diagnostic_id), status_code=303)
         response.headers["X-GIM-Diagnostic-ID"] = diagnostic_id
     else:

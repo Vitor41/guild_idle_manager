@@ -88,8 +88,8 @@ def build_guide_catalog(db) -> dict[str, object]:
                 building = raw.get("required_building")
                 if building and building[0] and building[1]:
                     reqs.append(f"{building[0]} nível {building[1]}+")
-                if raw.get("min_dock_level", 1) > 1:
-                    reqs.append(f"Docas nível {raw['min_dock_level']}+")
+                if raw["type"] == "docks_possible_offer":
+                    reqs.append(f"Catálogo das Docas nível {raw.get('min_dock_level', 1)}+")
                 if raw["type"] == "gathering":
                     level_range = raw.get("guild_level_range") or [raw.get("guild_level", 1), raw.get("guild_level", 1)]
                     level_text = str(level_range[0]) if level_range[0] == level_range[1] else f"{level_range[0]}–{level_range[1]}"
@@ -102,9 +102,14 @@ def build_guide_catalog(db) -> dict[str, object]:
                     reqs.append("3 Carnes + 2 Ervas; 5 segundos por unidade")
                 if raw.get("condition"):
                     reqs.append(clean_generated_name(raw["condition"]))
+                minimum_guild_level = None
+                if raw["type"] == "gathering":
+                    level_range = raw.get("guild_level_range") or [raw.get("guild_level", 1)]
+                    minimum_guild_level = min(int(level) for level in level_range)
                 sources.append({
                     "type": raw["type"], "filter_key": source_filter, "label": label,
                     "name": clean_generated_name(name),
+                    "minimum_guild_level": minimum_guild_level,
                     "recommendation": recommendation,
                     "requirement": "; ".join(reqs) if reqs else "sem requisito adicional registrado",
                     "chance": _chance_text(raw), "quantity": _quantity_text(raw, item["item_type"]),

@@ -22,7 +22,10 @@ function mountDetails({ mobile = false } = {}) {
   const panel = makeElement();
   const slot = makeElement();
   let currentTriggers = [trigger];
-  const document = { activeElement: {}, querySelectorAll: () => currentTriggers };
+  const document = {
+    activeElement: {},
+    querySelectorAll: (selector) => selector === "[data-equipment-swap]" ? [] : currentTriggers,
+  };
   trigger.dataset = {};
   trigger.attributes = new Map();
   trigger.setAttribute = (key, value) => trigger.attributes.set(key, value);
@@ -50,7 +53,9 @@ function mountDetails({ mobile = false } = {}) {
     clearTimeout() {},
   };
   vm.runInNewContext(source, { document, window });
-  const main = { querySelectorAll: () => currentTriggers };
+  const main = {
+    querySelectorAll: (selector) => selector === "[data-equipment-swap]" ? [] : currentTriggers,
+  };
   const addDynamicTrigger = () => {
     const dynamicTrigger = makeElement();
     const dynamicPanel = makeElement();
