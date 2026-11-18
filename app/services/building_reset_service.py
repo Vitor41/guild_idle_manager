@@ -457,14 +457,12 @@ def get_building_reset_preview(db: Session, guild_id: int) -> dict[str, Any]:
     for pending in refund["pending_materials"]:
         resource = str(pending["resource"])
         label = material_labels.get(resource, resource)
+        quantity = int(pending["quantity"])
         blockers.append({
             "code": "legacy_estimate_catalog_missing",
-            "label": (
-                f"Estimativa de {label} pendente ({int(pending['quantity'])} unidades): "
-                "o material Comum não está no catálogo. Atualize ou restaure o catálogo antes do reset."
-            ),
+            "label": f"Reset indisponível: {label} Comum ausente do catálogo. Estimativa preservada: {quantity} unidades.",
             "count": 0,
-            "href": "/updates",
+            "href": None,
             "items": [pending],
         })
     if crystal_cost and balances["crystals"] < crystal_cost:

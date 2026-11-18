@@ -91,7 +91,13 @@
               <h3 id="building-reset-blockers-title">Pendências que bloqueiam o reset</h3>
               <ul class="building-reset-blockers">
                 {% for blocker in reset_preview.blockers %}
-                  <li><a href="{{ blocker.href }}">{{ blocker.label }}{% if blocker.count %} ({{ blocker.count }}){% endif %}</a></li>
+                    <li>
+                      {% if blocker.href %}
+                        <a href="{{ blocker.href }}">{{ blocker.label }}{% if blocker.count %} ({{ blocker.count }}){% endif %}</a>
+                      {% else %}
+                        <span>{{ blocker.label }}{% if blocker.count %} ({{ blocker.count }}){% endif %}</span>
+                      {% endif %}
+                    </li>
                 {% endfor %}
               </ul>
             </section>

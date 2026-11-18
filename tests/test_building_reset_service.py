@@ -507,6 +507,14 @@ class BuildingResetServiceTests(unittest.TestCase):
         warehouse = self._building("warehouse")
         warehouse.level = 1
         item = self._material_templates("wood", 1)[0]
+        common_materials = list(self.db.scalars(select(ItemTemplate).where(
+            ItemTemplate.item_type == "material",
+            ItemTemplate.material_family.in_(("wood", "ore")),
+            ItemTemplate.rarity.ilike("common"),
+        )))
+        self.assertTrue(common_materials)
+        for material in common_materials:
+            material.rarity = "uncommon"
         now = datetime.now(timezone.utc)
         self.db.add(MarketSale(
             guild_id=self.guild.id, item_template_id=item.id, quantity=1, unit_value=1,
@@ -537,8 +545,19 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertIn("Você recebe", html)
         self.assertIn("Capacidade após o reset", html)
         self.assertIn("estoque e reservas após a cobrança e os reembolsos", html)
-        self.assertIn('href="/market"', html)
-        self.assertIn("Vendas em andamento", html)
+        reset_dialog = html.split('<dialog class="building-reset-dialog"', 1)[1].split("</dialog>", 1)[0]
+        self.assertIn('href="/market"', reset_dialog)
+        self.assertIn("Vendas em andamento", reset_dialog)
+        pending_materials = get_building_reset_preview(self.db, self.guild.id)["refund"]["pending_materials"]
+        material_labels = {"wood": "Madeira", "ore": "Minério"}
+        for pending in pending_materials:
+            label = material_labels[pending["resource"]]
+            expected = (
+                f"Reset indisponível: {label} Comum ausente do catálogo. "
+                f"Estimativa preservada: {pending['quantity']} unidades."
+            )
+            self.assertIn(f"<span>{expected}</span>", reset_dialog)
+        self.assertNotIn('href="/updates"', reset_dialog)
         self.assertIn('data-reset-cancel autofocus', html)
         self.assertIn('aria-live="polite" data-reset-status', html)
         self.assertEqual(self.db.scalar(select(func.count(GuildBuildingReset.id))), 0)
@@ -566,6 +585,9 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertEqual(stale_html.count(stale_message), 1)
         self.assertNotIn(stale_message, stale_html.split('<dialog class="building-reset-dialog"', 1)[0])
 
+        for material in common_materials:
+            material.rarity = "common"
+        self.db.commit()
         sale = self.db.scalar(select(MarketSale).where(MarketSale.guild_id == self.guild.id))
         sale.status = "completed"
         self.db.commit()
