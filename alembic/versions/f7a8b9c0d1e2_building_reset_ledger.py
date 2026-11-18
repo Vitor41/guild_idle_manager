@@ -166,6 +166,7 @@ def upgrade() -> None:
                 crystals = _scaled_cost(building["base_upgrade_crystals_cost"], to_level)
             material_rows = []
             reserve_estimate = 0
+            pending_resources: list[str] = []
             for resource, quantity in (("wood", wood), ("ore", ore), ("crystals", crystals)):
                 if quantity <= 0:
                     continue
@@ -176,10 +177,14 @@ def upgrade() -> None:
                     reserve_estimate = quantity
                     continue
                 if template_id is None:
-                    raise RuntimeError(
-                        f"Não há material comum da família {resource} para congelar os investimentos legados. "
-                        "A campanha foi preservada; disponibilize o catálogo comum e tente a migração novamente."
-                    )
+                    material_rows.append({
+                        "item_template_id": None,
+                        "quantity": quantity,
+                        "resource": resource,
+                        "pending_common_template": True,
+                    })
+                    pending_resources.append(resource)
+                    continue
                 material_rows.append({"item_template_id": template_id, "quantity": quantity, "resource": resource})
             estimate_basis = LEGACY_ESTIMATE_BASIS
             if reserve_estimate:
@@ -187,6 +192,11 @@ def upgrade() -> None:
                     "Estimativa congelada na migração: tabela oficial de custos e multiplicador por nível; "
                     "madeira e minério usam materiais comuns de menor nível; Cristais são estimados como reserva "
                     "por não haver material comum de Cristal no catálogo da campanha. Não é histórico comprovado."
+                )
+            if pending_resources:
+                estimate_basis += (
+                    " Quantidades estimadas de " + ", ".join(pending_resources) +
+                    " preservadas pendentes; serão associadas ao material comum após a atualização do catálogo."
                 )
             connection.execute(investments.insert().values(
                 transaction_id=str(uuid4()),

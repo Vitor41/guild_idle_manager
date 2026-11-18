@@ -56,10 +56,100 @@ from app.routes.tavern_routes import _get_apprentice_preview
 
 # Keep these expectations aligned with `alembic heads`, the schema target
 # applied by campaign creation and upgrades.
-CURRENT_ALEMBIC_HEAD = "f7a8b9c0d1e2"
+CURRENT_ALEMBIC_HEAD = "e9f8a7b6c5d4"
 
 
 class CampaignServiceTests(unittest.TestCase):
+    def test_legacy_building_reset_migration_allows_open_without_common_material_catalog(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            campaign = campaigns.create_campaign("Taverna sem catálogo comum", "Guilda antiga")
+            try:
+                with closing(sqlite3.connect(campaign.database_path)) as connection:
+                    guild_id = connection.execute(
+                        "SELECT id FROM guilds WHERE campaign_id = ?", (campaign.campaign_id,),
+                    ).fetchone()[0]
+                    connection.execute(
+                        "UPDATE guilds SET level = 10 WHERE id = ?", (guild_id,),
+                    )
+                    tavern_template_id = connection.execute(
+                        "SELECT id FROM building_templates WHERE effect_type = 'tavern'",
+                    ).fetchone()[0]
+                    now_text = datetime.now(timezone.utc).isoformat()
+                    connection.execute(
+                        "INSERT INTO guild_buildings "
+                        "(guild_id, building_template_id, level, created_at, updated_at) "
+                        "VALUES (?, ?, 2, ?, ?)",
+                        (guild_id, tavern_template_id, now_text, now_text),
+                    )
+                    connection.execute(
+                        "UPDATE item_templates SET rarity = 'uncommon' "
+                        "WHERE item_type = 'material' AND rarity = 'common' "
+                        "AND material_family IN ('wood', 'ore', 'stone')",
+                    )
+                    connection.commit()
+
+                config = campaigns._alembic_config(campaign.database_path)
+                command.downgrade(config, "0a1b2c3d4e5f")
+                migration = campaigns._ensure_schema(campaign.database_path, campaign.campaign_id)
+                self.assertIsNotNone(migration)
+                with closing(sqlite3.connect(campaign.database_path)) as connection:
+                    rows = connection.execute(
+                        "SELECT to_level, materials_json FROM guild_building_investments "
+                        "WHERE guild_id = ? AND effect_type = 'tavern' AND to_level = 2",
+                        (guild_id,),
+                    ).fetchall()
+                    self.assertEqual(len(rows), 1)
+                    materials = json.loads(rows[0][1])
+                    pending = {
+                        item["resource"]: item["quantity"]
+                        for item in materials
+                        if item.get("pending_common_template")
+                    }
+                    self.assertEqual(pending, {"wood": 50, "ore": 10})
+                    self.assertEqual(
+                        connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
+                        CURRENT_ALEMBIC_HEAD,
+                    )
+
+                campaigns.activate_campaign_with_migration(
+                    campaign.campaign_id, mark_active=False, prepare_content=False,
+                )
+                from app.services.building_reset_service import get_building_reset_preview
+
+                with SessionLocal() as db:
+                    preview = get_building_reset_preview(db, guild_id)
+                    self.assertFalse(preview["can_confirm"])
+                    self.assertEqual(
+                        [blocker["code"] for blocker in preview["blockers"]],
+                        ["legacy_estimate_catalog_missing"] * 2,
+                    )
+                    self.assertEqual(
+                        preview["refund"]["pending_materials"],
+                        [{"resource": "ore", "quantity": 10}, {"resource": "wood", "quantity": 50}],
+                    )
+                    for family in ("ore", "wood"):
+                        common = db.scalar(select(ItemTemplate).where(
+                            ItemTemplate.item_type == "material",
+                            ItemTemplate.material_family == family,
+                        ).order_by(ItemTemplate.id).limit(1))
+                        self.assertIsNotNone(common)
+                        common.rarity = "common"
+                    db.flush()
+                    resolved_preview = get_building_reset_preview(db, guild_id)
+                    self.assertFalse(resolved_preview["refund"]["pending_materials"])
+                    self.assertEqual(
+                        sum(item["quantity"] for item in resolved_preview["refund"]["items"]),
+                        60,
+                    )
+                    self.assertTrue(resolved_preview["can_confirm"])
+                    self.assertFalse(any(
+                        blocker["code"] == "legacy_estimate_catalog_missing"
+                        for blocker in resolved_preview["blockers"]
+                    ))
+            finally:
+                configure_database("sqlite:///:memory:")
+
     def test_desktop_home_without_campaign_uses_asgi_and_omits_session_expiry(self):
         script = r'''
 import asyncio

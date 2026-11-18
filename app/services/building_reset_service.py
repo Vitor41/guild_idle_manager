@@ -136,6 +136,7 @@ def _lowest_common_material(db: Session, resource: str) -> ItemTemplate:
 def _estimate_material_rows(db: Session, costs: dict[str, int]) -> tuple[list[dict[str, Any]], int, str]:
     rows: list[dict[str, Any]] = []
     reserve_estimate = 0
+    pending_resources: list[str] = []
     basis = LEGACY_ESTIMATE_BASIS
     for resource in ("wood", "ore", "crystals"):
         quantity = max(0, int(costs.get(resource, 0)))
@@ -144,7 +145,15 @@ def _estimate_material_rows(db: Session, costs: dict[str, int]) -> tuple[list[di
                 template = _lowest_common_material(db, resource)
             except BuildingResetError:
                 if resource != "crystals":
-                    raise
+                    rows.append({
+                        "item_template_id": None,
+                        "item_name": None,
+                        "quantity": quantity,
+                        "resource": resource,
+                        "pending_common_template": True,
+                    })
+                    pending_resources.append(resource)
+                    continue
                 reserve_estimate = quantity
                 basis = (
                     "Estimativa congelada: tabela oficial por nível; madeira e minério usam materiais comuns "
@@ -158,6 +167,11 @@ def _estimate_material_rows(db: Session, costs: dict[str, int]) -> tuple[list[di
                 "quantity": quantity,
                 "resource": resource,
             })
+    if pending_resources:
+        basis += (
+            " Quantidades estimadas de " + ", ".join(pending_resources) +
+            " preservadas pendentes; serão associadas ao material comum quando o catálogo estiver disponível."
+        )
     return rows, reserve_estimate, basis
 
 
@@ -318,7 +332,37 @@ def _investment_refund(
     estimated_reserve = 0
     exact_reserve = 0
     items: dict[tuple[int, bool], dict[str, Any]] = {}
+    pending_materials: dict[str, int] = {}
     estimate_bases: set[str] = set()
+
+    def add_material(item: dict[str, Any], estimated: bool) -> None:
+        quantity = max(0, int(item.get("quantity", 0)))
+        if quantity <= 0:
+            return
+        item_id = item.get("item_template_id")
+        item_name = item.get("item_name")
+        if item_id is None:
+            resource = str(item.get("resource") or "")
+            if not item.get("pending_common_template") or resource not in RESOURCE_MATERIAL_FAMILIES:
+                raise BuildingResetError(
+                    "O registro de reembolso contém um material legado sem identidade válida. O reset foi bloqueado."
+                )
+            try:
+                template = _lowest_common_material(db, resource)
+            except BuildingResetError:
+                pending_materials[resource] = pending_materials.get(resource, 0) + quantity
+                return
+            item_id = template.id
+            item_name = template.name
+        item_id = int(item_id)
+        key = (item_id, estimated)
+        entry = items.setdefault(key, {
+            "item_template_id": item_id, "quantity": 0, "estimated": estimated,
+        })
+        entry["quantity"] += quantity
+        if item_name:
+            entry["item_name"] = str(item_name)
+
     for row in investments:
         if row.refunded_by_reset_id is not None:
             continue
@@ -332,26 +376,20 @@ def _investment_refund(
             exact_gold += max(0, int(row.gold_debited))
             exact_reserve += max(0, int(row.crystal_reserve_debited))
         for item in (row.materials_json or []):
-            item_id = int(item["item_template_id"])
-            key = (item_id, estimated)
-            entry = items.setdefault(key, {"item_template_id": item_id, "quantity": 0, "estimated": estimated})
-            entry["quantity"] += max(0, int(item["quantity"]))
+            add_material(item, estimated)
     for row in missing_estimates:
         if row.get("estimate_basis"):
             estimate_bases.add(str(row["estimate_basis"]))
         estimated_gold += max(0, int(row["gold_debited"]))
         estimated_reserve += max(0, int(row["crystal_reserve_debited"]))
         for item in row["materials_json"]:
-            item_id = int(item["item_template_id"])
-            key = (item_id, True)
-            entry = items.setdefault(key, {"item_template_id": item_id, "quantity": 0, "estimated": True})
-            entry["quantity"] += max(0, int(item["quantity"]))
+            add_material(item, True)
     names = {
         int(row.id): str(row.name)
         for row in db.scalars(select(ItemTemplate).where(ItemTemplate.id.in_({key[0] for key in items})))
     } if items else {}
     item_rows = [
-        {**value, "item_name": names.get(value["item_template_id"], "Material sem nome")}
+        {**value, "item_name": value.get("item_name") or names.get(value["item_template_id"], "Material sem nome")}
         for _, value in sorted(items.items(), key=lambda pair: (names.get(pair[0][0], ""), pair[0][1]))
         if value["quantity"] > 0
     ]
@@ -359,11 +397,16 @@ def _investment_refund(
         "gold": {"exact": exact_gold, "estimated": estimated_gold},
         "crystal_reserve": {"exact": exact_reserve, "estimated": estimated_reserve},
         "items": item_rows,
+        "pending_materials": [
+            {"resource": resource, "quantity": quantity}
+            for resource, quantity in sorted(pending_materials.items())
+        ],
         "estimate_basis": " ".join(sorted(estimate_bases)) or None,
         "has_estimated": bool(
             any(row.estimated for row in investments if row.refunded_by_reset_id is None)
             or missing_estimates
         ),
+        "has_unresolved_materials": bool(pending_materials),
     }
 
 
@@ -410,6 +453,20 @@ def get_building_reset_preview(db: Session, guild_id: int) -> dict[str, Any]:
         blockers.append({"code": "no_buildings_to_reset", "label": "Não há construções acima do nível 0", "count": 0, "href": "/buildings", "items": []})
     if eligibility_message:
         blockers.append({"code": "guild_level", "label": eligibility_message, "count": 1, "href": "/guild/progress", "items": []})
+    material_labels = {"wood": "Madeira", "ore": "Minério"}
+    for pending in refund["pending_materials"]:
+        resource = str(pending["resource"])
+        label = material_labels.get(resource, resource)
+        blockers.append({
+            "code": "legacy_estimate_catalog_missing",
+            "label": (
+                f"Estimativa de {label} pendente ({int(pending['quantity'])} unidades): "
+                "o material Comum não está no catálogo. Atualize ou restaure o catálogo antes do reset."
+            ),
+            "count": 0,
+            "href": "/updates",
+            "items": [pending],
+        })
     if crystal_cost and balances["crystals"] < crystal_cost:
         blockers.append({
             "code": "insufficient_crystals", "label": f"Cristais insuficientes: {balances['crystals']} disponíveis de {crystal_cost}",
@@ -468,6 +525,7 @@ def get_building_reset_preview(db: Session, guild_id: int) -> dict[str, Any]:
             {key: value for key, value in row.items() if key not in {"transaction_id", "created_at"}}
             for row in missing_estimates
         ],
+        "refund": refund,
         "blockers": blockers,
     }
     can_confirm = not blockers
