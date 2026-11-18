@@ -9,7 +9,7 @@
 
 A primeira execução integrada continua sendo `FAILED (failures=10, errors=11, skipped=4)` em 383 testes. Depois das correções, cada uma das **21 ocorrências** registradas foi repetida em seu grupo direcionado e passou. A suíte integrada completa não foi repetida; portanto, este relatório não a declara aprovada. A triagem original, com nomes, stacks e hashes dos logs de origem, permanece em [candidate_010_initial_failures_2026-11-18.md](candidate_010_initial_failures_2026-11-18.md), SHA-256 `668F353AFE3B256F703FF5237101D1D4D82EB0CCC00A437CBA4A47D4BB67A316`.
 
-Os retestes usaram `C:\Users\vitor\Guild Idle Manager\.venv\Scripts\python.exe`, dependências de `.venv-desktop\Lib\site-packages` e `TEMP`, `TMP` e `LOCALAPPDATA` fictícios sob `C:\Users\vitor\Guild Idle Manager\.candidate-010-validation-retest\final-2026-11-18`, fora de `App GIM`. Nenhum save real, perfil normal, build de distribuição ou instalador foi usado.
+Os retestes locais desta matriz usaram `C:\Users\vitor\Guild Idle Manager\.venv\Scripts\python.exe`, dependências de `.venv-desktop\Lib\site-packages` e `TEMP`, `TMP` e `LOCALAPPDATA` fictícios sob `C:\Users\vitor\Guild Idle Manager\.candidate-010-validation-retest\final-2026-11-18`, fora de `App GIM`. Nenhum save real, perfil normal, build de distribuição ou instalador foi usado nesses retestes. O build e a verificação de pacote ocorreram depois, no workflow remoto de release descrito abaixo.
 
 ## Retestes das 21 ocorrências iniciais
 
@@ -36,11 +36,23 @@ O log A1 inclui duas mensagens `ERROR [gim.requests]` emitidas durante os casos 
 
 ## Revisão cumulativa independente
 
-O CR aprovou tecnicamente a candidata cumulativa `67305d057ff2aeb37b5e44cf1d69fd0cb82c0df1`, revisada desde a base `14631be0efd62e7a03a1e67562afc81edf421a64`, sem achados bloqueantes. A bateria independente repetiu 20 testes e passou, incluindo smoke HTTP completo, Guia, coleta/mercado e viabilidade pública CPU. O parecer não declara a suíte completa de 383 testes aprovada.
+O CR aprovou tecnicamente a candidata cumulativa `67305d057ff2aeb37b5e44cf1d69fd0cb82c0df1`, revisada desde a base `14631be0efd62e7a03a1e67562afc81edf421a64`, sem achados bloqueantes. A bateria independente repetiu 20 testes e passou, incluindo smoke HTTP completo, Guia, coleta/mercado e viabilidade pública CPU. O parecer foi estendido ao HEAD documental `3ce042d76c849b38eabf0f8b748796cc3705091e`. O CR não declara a suíte completa de 383 testes aprovada.
+
+## Publicação DEV-v0.10.0
+
+- PR #23 foi mesclado em `2026-11-18T07:00:31Z`; merge SHA `22a2843be78352c23bfea6c01c0465ec244e8d4f`, com árvore igual ao candidato revisado `3ce042d76c849b38eabf0f8b748796cc3705091e`.
+- Tag `DEV-v0.10.0`; workflow `44255649467` (`Publicar release DEV assinada`) concluiu `success`. Preparação, empacotamento, verificação em perfil temporário isolado, assinatura/verificação do manifesto e publicação passaram.
+- O log do workflow registra os gates próprios do pacote como aprovados: SQLite/campanha em perfil temporário, entrada do launcher empacotado e verificação do SHA-256 do Setup. Eles não equivalem à repetição da suíte local de 383 testes nem identificam nominalmente seus quatro skips.
+- Release: [Guild Idle Manager DEV-v0.10.0](https://github.com/Vitor41/guild_idle_manager/releases/tag/DEV-v0.10.0), publicado como prerelease em `2026-11-18T07:05:16Z`.
+- Assets e digests SHA-256 informados pelo release GitHub:
+  - `GuildIdleManager-DEV-Setup.exe`: 69.193.728 bytes; `55c46019398a9391fdd35fea3c48cef3859a687393fb9b0582c870c5633f6f52`.
+  - `gim-release.json`: 249 bytes; `34c07c49bb5e67bc7bd342ebc7e5b5bf53f771402a27b6eb0e1742f3f365d6ac`.
+  - `gim-release.json.sig`: 88 bytes; `66c885f980c4a94f297c3de560bdba09e94aa35fd63f4e2e17c50c660f947bb4`.
+- O verificador publicado e a verificação independente do download confirmaram a assinatura Ed25519 e o mesmo SHA-256 do Setup, além da versão `0.10.0 DEV` e mínimo `0.3.1`. Essas verificações não equivalem a abrir o Setup: nenhum Setup foi executado ou instalado localmente, e nenhum save real foi usado.
 
 ## Limites restantes
 
 - O resultado integrado inicial permanece vermelho no histórico. Só as 21 ocorrências afetadas foram repetidas; não houve nova execução dos 383 testes como uma suíte única.
 - Os quatro skips da execução inicial continuam sem identificação nominal. A triagem inicial contém os motivos candidatos, sem os tratar como comprovados.
-- Não foram feitos build de distribuição, instalação nem smoke de janela nativa. Esses gates não fazem parte dos retestes acima.
+- O build foi feito pelo workflow de release; não houve instalação local nem smoke de janela nativa. A verificação do pacote foi executada pelo workflow em perfil temporário isolado.
 - O código do jogo e os testes deste relatório correspondem ao SHA `45467f0e1fccd3a70915ff325b459db1dd5e67d6`; o commit que versiona este relatório apenas acrescenta evidências e documentação.
