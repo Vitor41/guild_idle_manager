@@ -32,7 +32,11 @@ from app.services.achievement_service import get_codex_context
 from app.services.guild_service import get_current_guild_context
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 from app.services.mission_service import MissionError, start_mission
-from app.services.regional_cycle_service import get_current_player_regional_guild, get_regional_board
+from app.services.regional_cycle_service import (
+    PUBLIC_REGIONAL_OFFER_TYPES,
+    get_current_player_regional_guild,
+    get_regional_board,
+)
 from app.services.regional_event_service import (
     attach_event_activity,
     event_history_summary,
@@ -85,6 +89,8 @@ def _regional_offer_rebellion_access(db, campaign, guild_id: int, offer: Regiona
     """Return (event, reason); home offers need no rebellion, external offers do."""
     from app.services.regional_cycle_service import get_current_player_regional_guild
 
+    if offer.offer_type not in PUBLIC_REGIONAL_OFFER_TYPES:
+        return None, "Oferta indisponível."
     is_home_offer = offer.region_code == _regional_home_code(campaign)
     current = now.replace(tzinfo=timezone.utc) if now.tzinfo is None else now.astimezone(timezone.utc)
     expire_due_events(db, campaign.campaign_id, current)
@@ -534,6 +540,7 @@ async def regional_supply_quote(
     offer = db.scalar(select(RegionalOffer).where(
         RegionalOffer.id == offer_id,
         RegionalOffer.campaign_id == campaign.campaign_id,
+        RegionalOffer.offer_type.in_(PUBLIC_REGIONAL_OFFER_TYPES),
         RegionalOffer.status.in_(("available", "supply_preparing")),
     ))
     if offer is None:
@@ -702,6 +709,7 @@ def regional_index(
             rebellion_offers = list(db.scalars(select(RegionalOffer).where(
                 RegionalOffer.cycle_id == board["cycle"].id,
                 RegionalOffer.region_code == rebellion.region_code,
+                RegionalOffer.offer_type.in_(PUBLIC_REGIONAL_OFFER_TYPES),
                 RegionalOffer.status.in_(("available", "supply_preparing")),
             ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
             rebellion_offers = [
@@ -834,6 +842,7 @@ async def start_offer(
     offer = db.scalar(select(RegionalOffer).where(
         RegionalOffer.id == offer_id,
         RegionalOffer.campaign_id == campaign.campaign_id,
+        RegionalOffer.offer_type.in_(PUBLIC_REGIONAL_OFFER_TYPES),
         RegionalOffer.status.in_(("available", "supply_preparing")),
     ))
     if offer is None:
@@ -1011,6 +1020,7 @@ async def prepare_regional_offer_supply(
     offer = db.scalar(select(RegionalOffer).where(
         RegionalOffer.id == offer_id,
         RegionalOffer.campaign_id == campaign.campaign_id,
+        RegionalOffer.offer_type.in_(PUBLIC_REGIONAL_OFFER_TYPES),
         RegionalOffer.status == "available",
     ).with_for_update())
     if offer is None:

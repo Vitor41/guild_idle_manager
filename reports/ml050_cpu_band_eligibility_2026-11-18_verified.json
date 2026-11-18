@@ -1,0 +1,1513 @@
+{
+  "card": "ML-050",
+  "scope": "32 deterministic one-cycle real-planner scenarios after ML-050 internal fallback; a single synthetic campaign DB is reused and every case is rolled back",
+  "internal_fallback_enabled": true,
+  "player_levels": [
+    14,
+    15,
+    24,
+    25,
+    29,
+    30,
+    49,
+    50
+  ],
+  "cpu_guild_levels": [
+    1,
+    2,
+    3,
+    5
+  ],
+  "cpu_examples": {
+    "1": {
+      "profile": "new",
+      "stage": 1
+    },
+    "2": {
+      "profile": "medium",
+      "stage": 1
+    },
+    "3": {
+      "profile": "medium",
+      "stage": 3
+    },
+    "5": {
+      "profile": "strong",
+      "stage": 5
+    }
+  },
+  "rows": [
+    {
+      "player_guild_level": 14,
+      "player_band": [
+        5,
+        20
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 2,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 8,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 2,
+      "public_actions_started": 2,
+      "actions_by_type": {
+        "contract": 2,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 14,
+      "player_band": [
+        5,
+        20
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 2,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 5,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 5,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 5,
+      "public_actions_started": 5,
+      "actions_by_type": {
+        "contract": 5,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 14,
+      "player_band": [
+        5,
+        20
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 3,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 2,
+      "public_actions_started": 2,
+      "actions_by_type": {
+        "contract": 2,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 14,
+      "player_band": [
+        5,
+        20
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 6,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 10,
+      "public_actions_started": 10,
+      "actions_by_type": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 15,
+      "player_band": [
+        10,
+        25
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 15,
+      "player_band": [
+        10,
+        25
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 2,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 3,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 7,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 3,
+      "public_actions_started": 3,
+      "actions_by_type": {
+        "contract": 3,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 15,
+      "player_band": [
+        10,
+        25
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 4,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 5,
+      "public_actions_started": 5,
+      "actions_by_type": {
+        "contract": 5,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 15,
+      "player_band": [
+        10,
+        25
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 7,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 10,
+      "public_actions_started": 10,
+      "actions_by_type": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 24,
+      "player_band": [
+        15,
+        30
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 24,
+      "player_band": [
+        15,
+        30
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 2,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 1,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 9,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 1,
+      "public_actions_started": 1,
+      "actions_by_type": {
+        "contract": 1,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 24,
+      "player_band": [
+        15,
+        30
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 4,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 7,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 3,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 3,
+      "public_actions_started": 3,
+      "actions_by_type": {
+        "contract": 3,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 24,
+      "player_band": [
+        15,
+        30
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 7,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 10,
+      "public_actions_started": 10,
+      "actions_by_type": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 25,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 2,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 25,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 2,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 2,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 25,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 3,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 2,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 8,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 1,
+      "public_actions_started": 1,
+      "actions_by_type": {
+        "contract": 1,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 25,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 8,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 10,
+      "public_actions_started": 10,
+      "actions_by_type": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 29,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 2,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 29,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 2,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 2,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 29,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 3,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 2,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 8,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 1,
+      "public_actions_started": 1,
+      "actions_by_type": {
+        "contract": 1,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 29,
+      "player_band": [
+        20,
+        35
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 8,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 10,
+      "public_actions_started": 10,
+      "actions_by_type": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 30,
+      "player_band": [
+        25,
+        40
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 2,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 30,
+      "player_band": [
+        25,
+        40
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 2,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 2,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 30,
+      "player_band": [
+        25,
+        40
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 3,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 30,
+      "player_band": [
+        25,
+        40
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 9,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 0,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 10,
+      "public_actions_started": 10,
+      "actions_by_type": {
+        "contract": 10,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 49,
+      "player_band": [
+        40,
+        55
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 49,
+      "player_band": [
+        40,
+        55
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 2,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 49,
+      "player_band": [
+        40,
+        55
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 3,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 49,
+      "player_band": [
+        40,
+        55
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 5,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 1,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 9,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 1,
+      "public_actions_started": 1,
+      "actions_by_type": {
+        "contract": 1,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 50,
+      "player_band": [
+        45,
+        60
+      ],
+      "cpu_profile": "new",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 1,
+      "cpu_guild_level_final": 1,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 1,
+      "active_cpu_mercenaries_final": 1,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 0
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 50,
+      "player_band": [
+        45,
+        60
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "vale-fronteira",
+      "cpu_guild_level": 2,
+      "cpu_guild_level_final": 3,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 1
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 0
+      },
+      "internal_contract_candidates_considered": 0,
+      "internal_contract_candidates_eligible": 0,
+      "internal_actions_started": 0,
+      "actions_started": 1,
+      "public_actions_started": 1,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 1
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 50,
+      "player_band": [
+        45,
+        60
+      ],
+      "cpu_profile": "medium",
+      "cpu_region": "costa-brumas",
+      "cpu_guild_level": 3,
+      "cpu_guild_level_final": 3,
+      "cpu_archetype": "security",
+      "active_cpu_mercenaries_initial": 3,
+      "active_cpu_mercenaries_final": 3,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    },
+    {
+      "player_guild_level": 50,
+      "player_band": [
+        45,
+        60
+      ],
+      "cpu_profile": "strong",
+      "cpu_region": "picos-norte",
+      "cpu_guild_level": 5,
+      "cpu_guild_level_final": 5,
+      "cpu_archetype": "expansion",
+      "active_cpu_mercenaries_initial": 5,
+      "active_cpu_mercenaries_final": 5,
+      "planner_considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "considered_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "eligible_offers": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "guild_level_blocked_offers": {
+        "contract": 10,
+        "dungeon": 3,
+        "boss": 1
+      },
+      "internal_contract_candidates_considered": 1,
+      "internal_contract_candidates_eligible": 1,
+      "internal_actions_started": 1,
+      "actions_started": 1,
+      "public_actions_started": 0,
+      "actions_by_type": {
+        "contract": 0,
+        "dungeon": 0,
+        "boss": 0
+      },
+      "zero_action_reason": null,
+      "cycle_seed": "d4dbd13af341bb8621d25ec1f32c7ed6debba68bd59491555a3c2db8f693ca95"
+    }
+  ]
+}

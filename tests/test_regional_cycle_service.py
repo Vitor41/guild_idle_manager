@@ -2413,12 +2413,26 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         RegionalCpuCyclePlan.campaign_id == info.campaign_id,
                     ))
                     self.assertGreater(plans_after_retry, 0)
-                    self.assertEqual(db.scalar(select(func.sum(RegionalCpuCyclePlan.actions)).where(
-                        RegionalCpuCyclePlan.campaign_id == info.campaign_id,
-                    )), db.scalar(select(func.count(RegionalOffer.id)).where(
+                    completed_public_offers = db.scalar(select(func.count(RegionalOffer.id)).where(
                         RegionalOffer.cycle_id == cycle_zero.id,
                         RegionalOffer.status == "cpu_completed",
+                    ))
+                    cycle_plans = list(db.scalars(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.campaign_id == info.campaign_id,
                     )))
+                    internal_actions = sum(
+                        bool(decision.get("internal_contract"))
+                        for plan in cycle_plans
+                        for decision in json.loads(plan.decisions_json or "[]")
+                        if isinstance(decision, dict)
+                    )
+                    self.assertGreater(internal_actions, 0)
+                    self.assertEqual(
+                        db.scalar(select(func.sum(RegionalCpuCyclePlan.actions)).where(
+                            RegionalCpuCyclePlan.campaign_id == info.campaign_id,
+                        )) - internal_actions,
+                        completed_public_offers,
+                    )
                     self.assertEqual(db.scalar(select(func.count(RegionalOffer.id)).where(
                         RegionalOffer.cycle_id == cycle_zero.id,
                         RegionalOffer.status == "available",

@@ -51,6 +51,8 @@ LEGACY_VIGILIA_RULES_VERSION = "vigilia-v2"
 VIGILIA_V6_RULES_VERSION = "vigilia-v6"
 VIGILIA_RULES_VERSION = "vigilia-v7"
 TARGETED_PRESSURE_RULES_VERSIONS = frozenset({VIGILIA_V6_RULES_VERSION, VIGILIA_RULES_VERSION})
+CPU_INTERNAL_CONTRACT_TYPE = "cpu_internal"
+PUBLIC_REGIONAL_OFFER_TYPES = ("contract", "dungeon", "boss")
 RIVAL_CALM_RULES_VERSIONS = frozenset({"vigilia-v3", "vigilia-v4", "vigilia-v5", "vigilia-v6", "vigilia-v7"})
 CYCLE_SECONDS = 6 * 60 * 60
 RANKS = ("E", "D", "C", "B", "A", "S")
@@ -842,7 +844,10 @@ def _add_offer(
     if isinstance(template, MissionTemplate):
         mission_id, dungeon_id = template.id, None
         fallback_power = max(1, int(template.recommended_power or 0))
-        if offer_type == "contract" and template.mission_type not in {"gathering", "long_idle"}:
+        if (
+            offer_type in {"contract", CPU_INTERNAL_CONTRACT_TYPE}
+            and template.mission_type not in {"gathering", "long_idle"}
+        ):
             recommended_power = recommended_regional_contract_power(
                 template.recommended_level,
                 rank,
@@ -1311,6 +1316,129 @@ def _cpu_offer_party(
     return (earliest[0], earliest[2]) if earliest is not None else None
 
 
+def _cpu_internal_contract_candidate(
+    template: MissionTemplate,
+    rank: str,
+    failure_risk: int,
+) -> SimpleNamespace:
+    fallback_power = max(1, int(template.recommended_power or 0))
+    return SimpleNamespace(
+        id=-int(template.id),
+        offer_type="contract",
+        internal_contract_candidate=True,
+        status="available",
+        rank=rank,
+        mission_template_id=template.id,
+        dungeon_template_id=None,
+        name_snapshot=template.name,
+        description_snapshot=template.description or "",
+        level_band_snapshot=template.level_band,
+        recommended_level_snapshot=max(1, int(template.recommended_level or 1)),
+        recommended_power_snapshot=recommended_regional_contract_power(
+            template.recommended_level,
+            rank,
+            template.max_party_size,
+            fallback_power=fallback_power,
+        ),
+        min_party_size_snapshot=max(1, int(template.min_party_size or 1)),
+        max_party_size_snapshot=max(1, int(template.max_party_size or 1)),
+        required_guild_level_snapshot=max(1, int(template.required_guild_level or 1)),
+        duration_seconds_snapshot=max(1, int(template.duration_seconds)),
+        required_min_mercenary_level_snapshot=max(1, int(template.required_min_mercenary_level or 1)),
+        required_total_power_snapshot=0,
+        required_class_code_snapshot=None,
+        required_tank_count_snapshot=0,
+        required_support_count_snapshot=0,
+        required_damage_count_snapshot=0,
+        required_equipment_tier_snapshot=0,
+        gold_reward_snapshot=max(0, int(template.base_gold_reward)),
+        xp_reward_snapshot=max(0, int(template.base_xp_reward)),
+        success_chance_snapshot=max(5, min(95, int(template.base_success_chance))),
+        cpu_failure_risk_snapshot=max(0, min(CPU_FAILURE_RISK_CAP_PP, int(failure_risk))),
+    )
+
+
+def _cpu_internal_contract_copy(offer: RegionalOffer, state: RegionalGuildState) -> SimpleNamespace:
+    values = {column.key: getattr(offer, column.key) for column in RegionalOffer.__table__.columns}
+    values.update({
+        "id": -(1_000_000_000_000 + int(offer.id) * 1_000_000 + int(state.id)),
+        "offer_type": "contract",
+        "status": "available",
+        "reserved_by_guild_state_id": None,
+        "claimed_at_utc": None,
+        "resolved_at_utc": None,
+        "internal_contract": True,
+    })
+    return SimpleNamespace(**values)
+
+
+def _cpu_internal_contract_for_guild(
+    db: Session,
+    campaign_id: str,
+    cycle: RegionalCycle,
+    region: RegionalRegionState,
+    state: RegionalGuildState,
+    roster: list[RegionalCpuMercenary],
+    busy_until: dict[int, datetime],
+    cycle_end: datetime,
+    class_roles: dict[str, str],
+    *,
+    v7_rules: bool,
+) -> SimpleNamespace | None:
+    existing = db.scalar(select(RegionalOffer).where(
+        RegionalOffer.cycle_id == cycle.id,
+        RegionalOffer.region_code == region.region_code,
+        RegionalOffer.offer_type == CPU_INTERNAL_CONTRACT_TYPE,
+        RegionalOffer.slot == 1,
+    ))
+    if existing is not None:
+        if existing.status != CPU_INTERNAL_CONTRACT_TYPE or existing.mission_template_id is None:
+            return None
+        return _cpu_internal_contract_copy(existing, state)
+    if not roster or not state.active:
+        return None
+
+    selection_rng = _rng(
+        campaign_id, cycle.cycle_number, region.region_code, cycle.rules_version,
+        "cpu-internal-contract",
+    )
+    rank_weights = json.loads(cycle.rank_weights_json or "{}").get("contract", {})
+    rank = _roll_rank(selection_rng, rank_weights or dict(zip(RANKS, BASE_RANK_WEIGHTS)))
+    failure_risk = cpu_failure_risk_for_region(region.threat, region.security)
+    roster_level = max((int(member.level or 1) for member in roster), default=1)
+    templates = _contract_candidates(db, state.level, roster_level)
+    feasible_templates: list[MissionTemplate] = []
+    for template in templates:
+        if int(state.level or 1) < max(1, int(template.required_guild_level or 1)):
+            continue
+        candidate = _cpu_internal_contract_candidate(template, rank, failure_risk)
+        party_choice = _cpu_offer_party(
+            candidate, state, roster, busy_until, cycle_end, class_roles,
+            include_synergy_power=v7_rules,
+            require_equipment_for_each_member=v7_rules,
+            optimize_cpu_value=v7_rules,
+        )
+        if party_choice is None:
+            continue
+        start_at, _party = party_choice
+        if start_at + timedelta(seconds=candidate.duration_seconds_snapshot) > cycle_end:
+            continue
+        feasible_templates.append(template)
+    if not feasible_templates:
+        return None
+
+    feasible_templates.sort(key=lambda template: (_template_rank_order(template), template.id))
+    template = selection_rng.choice(feasible_templates)
+    offer = _add_offer(
+        db, campaign_id, cycle, region.region_code, CPU_INTERNAL_CONTRACT_TYPE, 1,
+        template, rank, failure_risk,
+    )
+    offer.status = CPU_INTERNAL_CONTRACT_TYPE
+    db.add(offer)
+    db.flush()
+    return _cpu_internal_contract_copy(offer, state)
+
+
 def _cpu_offer_preference(
     offer: RegionalOffer,
     archetype: str,
@@ -1412,6 +1540,7 @@ def _cpu_plan_for_guild_v6(
     all_offers = list(db.scalars(select(RegionalOffer).where(
         RegionalOffer.cycle_id == cycle.id,
         RegionalOffer.region_code == region.region_code,
+        RegionalOffer.offer_type.in_(PUBLIC_REGIONAL_OFFER_TYPES),
     ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
     portal = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign_id,
@@ -1493,24 +1622,16 @@ def _cpu_plan_for_guild_v6(
     threat_delta = security_delta = 0.0
     rank_sum = 0
     eligible_actions = 0
+    initial_public_viability_checked = False
+    initially_blocked_from_public = False
+    public_action_started = False
+    internal_offer_copy: SimpleNamespace | None = None
 
-    while True:
-        if state.archetype == "exploration":
-            preferred_types = ("portal", "dungeon", "boss", "contract")
-        else:
-            preferred_types = ("contract", "dungeon", "boss", "portal")
-        candidates = [offer for offer in all_offers if offer.status == "available"]
-        if portal_offer is not None and portal_offer.status == "available":
-            candidates.append(portal_offer)
-        if state.archetype == "security":
-            defensive = [offer for offer in candidates if any(
-                token in (offer.name_snapshot + " " + offer.description_snapshot).casefold()
-                for token in ("patrulha", "vigia", "guarda", "defesa", "ameaça")
-            )]
-            if defensive:
-                candidates = defensive
-
-        feasible: list[tuple[tuple[int, int, datetime, int, int, int], RegionalOffer, list[RegionalCpuMercenary]]] = []
+    def feasible_entries(
+        candidates: list[RegionalOffer],
+        preferred_types: tuple[str, ...],
+    ) -> tuple[list[tuple[tuple, RegionalOffer, list[RegionalCpuMercenary]]], bool]:
+        feasible: list[tuple[tuple, RegionalOffer, list[RegionalCpuMercenary]]] = []
         any_eligible = False
         for offer in candidates:
             party_choice = _cpu_offer_party(
@@ -1545,12 +1666,54 @@ def _cpu_plan_for_guild_v6(
                                    if offer.offer_type in preferred_types else len(preferred_types))
                 sort_key = (start_at, preference, type_preference, offer.id)
             feasible.append((sort_key, offer, party))
+        return feasible, any_eligible
+
+    while True:
+        if state.archetype == "exploration":
+            preferred_types = ("portal", "dungeon", "boss", "contract")
+        else:
+            preferred_types = ("contract", "dungeon", "boss", "portal")
+        available_public_candidates = [offer for offer in all_offers if offer.status == "available"]
+        if portal_offer is not None and portal_offer.status == "available":
+            available_public_candidates.append(portal_offer)
+        if not initial_public_viability_checked:
+            public_feasible, _public_eligible = feasible_entries(
+                available_public_candidates, preferred_types,
+            )
+            initially_blocked_from_public = not public_feasible
+            initial_public_viability_checked = True
+            if initially_blocked_from_public:
+                internal_offer_copy = _cpu_internal_contract_for_guild(
+                    db, campaign_id, cycle, region, state, roster, busy_until,
+                    cycle_end, class_roles, v7_rules=v7_rules,
+                )
+
+        candidates = list(available_public_candidates)
+        if state.archetype == "security":
+            defensive = [offer for offer in candidates if any(
+                token in (offer.name_snapshot + " " + offer.description_snapshot).casefold()
+                for token in ("patrulha", "vigia", "guarda", "defesa", "ameaça")
+            )]
+            if defensive:
+                candidates = defensive
+
+        feasible, any_eligible = feasible_entries(candidates, preferred_types)
+        if (
+            not feasible
+            and initially_blocked_from_public
+            and not public_action_started
+            and internal_offer_copy is not None
+            and internal_offer_copy.status == "available"
+        ):
+            feasible, internal_eligible = feasible_entries([internal_offer_copy], preferred_types)
+            any_eligible = any_eligible or internal_eligible
         if any_eligible:
             eligible_actions += 1
         if not feasible:
             break
         feasible.sort(key=lambda entry: entry[0])
         (_key, offer, party) = feasible[0]
+        is_internal_contract = bool(getattr(offer, "internal_contract", False))
         start_at = max(busy_until[member.id] for member in party)
         end_at = start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot))
         for member in party:
@@ -1559,9 +1722,12 @@ def _cpu_plan_for_guild_v6(
             offer.status = "cpu_completed"
         else:
             offer.status = "cpu_completed"
-            offer.reserved_by_guild_state_id = state.id
-            offer.claimed_at_utc = start_at
-            offer.resolved_at_utc = end_at
+            if not is_internal_contract:
+                offer.reserved_by_guild_state_id = state.id
+                offer.claimed_at_utc = start_at
+                offer.resolved_at_utc = end_at
+        if not is_internal_contract:
+            public_action_started = True
         party_power = sum(_cpu_member_power(member) for member in party)
         class_bonus = min(8, sum(CLASS_SUCCESS_BONUS.get(member.class_code, 0) for member in party))
         chance = max(5, min(95, offer.success_chance_snapshot
@@ -1572,7 +1738,7 @@ def _cpu_plan_for_guild_v6(
         rank_sum += rank_value
         reward_gold = offer.gold_reward_snapshot if success else 0
         reward_xp = offer.xp_reward_snapshot if success else max(0, offer.xp_reward_snapshot // 4)
-        decisions.append({
+        decision = {
             "action": len(decisions) + 1,
             "type": "event" if offer.offer_type == "portal" else (
                 "exploration" if offer.offer_type in {"dungeon", "boss"} else state.archetype
@@ -1587,7 +1753,10 @@ def _cpu_plan_for_guild_v6(
             "started_at_utc": start_at.isoformat(),
             "resolved_at_utc": end_at.isoformat(),
             "success_chance": chance,
-        })
+        }
+        if is_internal_contract:
+            decision["internal_contract"] = True
+        decisions.append(decision)
         outcomes.append({
             "action": len(decisions),
             "offer_id": offer.id,
@@ -2048,6 +2217,7 @@ def get_regional_board(
     offer_rows = list(db.scalars(select(RegionalOffer).where(
         RegionalOffer.cycle_id == active_cycle.id,
         RegionalOffer.region_code == home_code,
+        RegionalOffer.offer_type.in_(PUBLIC_REGIONAL_OFFER_TYPES),
     ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
     offers = {"contract": [], "dungeon": [], "boss": []}
     for offer in offer_rows:

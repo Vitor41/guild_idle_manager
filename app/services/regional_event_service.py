@@ -875,7 +875,9 @@ def record_cpu_event_activity(
     if decisions:
         eligible_decisions = []
         for decision in decisions:
-            started_value = decision.get("started_at_utc") if isinstance(decision, dict) else None
+            if not isinstance(decision, dict) or decision.get("internal_contract"):
+                continue
+            started_value = decision.get("started_at_utc")
             if not started_value:
                 continue
             started_at = _utc(datetime.fromisoformat(started_value))

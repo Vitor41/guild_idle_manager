@@ -44,8 +44,15 @@ class RegionalRouteAccessTests(unittest.TestCase):
                 )
                 db.add(player_state)
                 db.flush()
-                home_offer = SimpleNamespace(region_code=home_code)
-                external_offer = SimpleNamespace(region_code=external_code)
+                home_offer = SimpleNamespace(region_code=home_code, offer_type="contract")
+                external_offer = SimpleNamespace(region_code=external_code, offer_type="contract")
+                internal_offer = SimpleNamespace(region_code=home_code, offer_type="cpu_internal")
+
+                access_event, reason = _regional_offer_rebellion_access(
+                    db, campaign, guild.id, internal_offer, now,
+                )
+                self.assertIsNone(access_event)
+                self.assertEqual(reason, "Oferta indisponível.")
 
                 access_event, reason = _regional_offer_rebellion_access(
                     db, campaign, guild.id, home_offer, now,
