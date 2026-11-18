@@ -18,6 +18,10 @@ from app.services.salvage_service import _select_salvage_material
 from app.services.achievement_service import record_guild_stat
 
 
+COLECIONADOR_ONLY_MATERIALS = {"material_essence_4_020", "material_relic_2_002"}
+COLECIONADOR_MERCHANT_SLUG = "mercante_011"
+
+
 class DockError(ValueError):
     pass
 
@@ -80,7 +84,17 @@ def create_dock_rotation(db: Session, guild: Guild, dock_level: int) -> DockRota
         rotation_merchant = DockRotationMerchant(dock_rotation_id=rotation.id, merchant_template_id=merchant.id, slot=slot)
         db.add(rotation_merchant)
         db.flush()
-        pool = [offer for offer in global_pool if offer.item_template_id not in used_item_ids]
+        pool = [
+            offer for offer in global_pool
+            if offer.item_template_id not in used_item_ids
+            and (
+                offer.item_template.slug not in COLECIONADOR_ONLY_MATERIALS
+                or (
+                    merchant.slug == COLECIONADOR_MERCHANT_SLUG
+                    and offer.merchant_template_id == merchant.id
+                )
+            )
+        ]
         amount = max(1, slots_total // len(selected) + (1 if slot <= slots_total % len(selected) else 0))
         if pool:
             selected_offers = []

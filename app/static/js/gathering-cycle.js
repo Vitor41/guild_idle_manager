@@ -63,21 +63,32 @@
       page.querySelectorAll("[data-gathering-family-count]").forEach((counter) => {
         counter.textContent = String(state.inventory_by_family[counter.dataset.gatheringFamilyCount] || 0);
       });
-      page.querySelectorAll("[data-gathering-cycle]").forEach((cycle) => {
-        const family = cycle.dataset.gatheringFamily;
+      page.querySelectorAll("[data-gathering-card]").forEach((card) => {
+        if (card.dataset.gatheringAssigned !== "true") return;
+        const family = card.dataset.gatheringCard;
         const assignment = state.assignments[family];
         if (!assignment) {
           window.location.reload();
           return;
         }
-        const status = cycle.closest("[data-gathering-card]")?.querySelector("[data-gathering-status]");
-        if (assignment.capacity_paused) {
-          cycle.hidden = true;
+        const cycle = card.querySelector("[data-gathering-cycle]");
+        const status = card.querySelector("[data-gathering-status]");
+        const catalogWarning = card.querySelector("[data-gathering-catalog-warning]");
+        const capacityHelp = card.querySelector("[data-gathering-capacity-help]");
+        if (catalogWarning) catalogWarning.hidden = !assignment.catalog_unavailable;
+        if (assignment.catalog_unavailable) {
+          if (cycle) cycle.hidden = true;
+          if (capacityHelp) capacityHelp.hidden = true;
+          if (status) status.textContent = `Indisponível · catálogo · ${assignment.worker}`;
+        } else if (assignment.capacity_paused) {
+          if (cycle) cycle.hidden = true;
+          if (capacityHelp) capacityHelp.hidden = false;
           if (status) status.textContent = `Pausada · Armazém cheio · ${assignment.worker}`;
         } else {
-          cycle.hidden = false;
+          if (cycle) cycle.hidden = false;
+          if (capacityHelp) capacityHelp.hidden = true;
           if (status) status.textContent = `Em produção · ${assignment.worker}`;
-          cycleUpdaters.get(cycle)?.(assignment.progress_seconds);
+          if (cycle) cycleUpdaters.get(cycle)?.(assignment.progress_seconds);
         }
       });
     } catch (_error) {

@@ -183,7 +183,7 @@ class LotBMaterialProgressionTests(unittest.TestCase):
         self.assertEqual(freeze_legacy_assignment_targets(self.db), 0)
         self.assertEqual(assignment.target_item_template_id, raw.id)
 
-    def test_common_cutover_credits_old_cycles_and_keeps_fraction_and_inventory_identity(self):
+    def test_common_cutover_discards_old_elapsed_and_keeps_fraction_and_inventory_identity(self):
         rows = _material_rows()
         self.db.add_all(ItemTemplate(**row) for row in rows)
         guild = Guild(name="Limite transacional", level=350)
@@ -230,23 +230,49 @@ class LotBMaterialProgressionTests(unittest.TestCase):
         ore_common = self.db.scalar(select(ItemTemplate).where(ItemTemplate.slug == "material_ore_2_002"))
         self.assertEqual(migrated, 2)
         self.assertEqual(completed_cycles.target_item_template_id, wood_common.id)
-        self.assertEqual(completed_cycles.cycle_count, 6)
-        self.assertEqual(completed_cycles.progress_seconds, 0)
-        self.assertEqual(completed_cycles.quantity_collected, 9)
+        self.assertEqual(completed_cycles.cycle_count, 4)
+        self.assertEqual(completed_cycles.progress_seconds, 30)
+        self.assertEqual(completed_cycles.quantity_collected, 7)
+        self.assertEqual(completed_cycles.checkpoint_at_utc, cutoff)
         self.assertEqual(partial_cycle.target_item_template_id, ore_common.id)
         self.assertEqual(partial_cycle.cycle_count, 9)
-        self.assertEqual(partial_cycle.progress_seconds, 35)
+        self.assertEqual(partial_cycle.progress_seconds, 15)
         self.assertEqual(partial_cycle.quantity_collected, 6)
+        self.assertEqual(partial_cycle.checkpoint_at_utc, cutoff)
         self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
             GuildInventoryItem.guild_id == guild.id,
             GuildInventoryItem.item_template_id == wood_rare.id,
-        )), 7)
+        )), 5)
         self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
             GuildInventoryItem.guild_id == guild.id,
             GuildInventoryItem.item_template_id == wood_common.id,
         )), None)
         self.assertEqual(migrate_assignments_to_common_targets(self.db, now=cutoff), 0)
-        self.assertEqual(completed_cycles.cycle_count, 6)
+        self.assertEqual(completed_cycles.cycle_count, 4)
+
+        at_cutover = advance_assignment(self.db, guild, completed_cycles, now=cutoff)
+        self.assertEqual(at_cutover["cycles"], 0)
+        self.assertEqual(completed_cycles.cycle_count, 4)
+        self.assertEqual(completed_cycles.quantity_collected, 7)
+        after_30_seconds = advance_assignment(
+            self.db, guild, completed_cycles, now=cutoff + timedelta(seconds=30),
+        )
+        self.assertEqual(after_30_seconds["cycles"], 1)
+        self.assertEqual(completed_cycles.cycle_count, 5)
+        self.assertEqual(completed_cycles.quantity_collected, 8)
+        self.assertEqual(self.db.scalar(select(GuildInventoryItem.quantity).where(
+            GuildInventoryItem.guild_id == guild.id,
+            GuildInventoryItem.item_template_id == wood_common.id,
+        )), 1)
+
+        at_ore_cutover = advance_assignment(self.db, guild, partial_cycle, now=cutoff)
+        self.assertEqual(at_ore_cutover["cycles"], 0)
+        self.assertEqual(partial_cycle.cycle_count, 9)
+        after_45_seconds = advance_assignment(
+            self.db, guild, partial_cycle, now=cutoff + timedelta(seconds=45),
+        )
+        self.assertEqual(after_45_seconds["cycles"], 1)
+        self.assertEqual(partial_cycle.cycle_count, 10)
 
 
 class LotBMarketTests(unittest.TestCase):

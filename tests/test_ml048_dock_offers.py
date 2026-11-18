@@ -1,9 +1,9 @@
 import json
-import random
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -49,23 +49,34 @@ class ML048DockOfferTests(unittest.TestCase):
 
     @staticmethod
     def _rotation_containing(db, guild, dock_level: int, item_template_id: int):
-        for seed in range(10_000):
-            random.seed(seed)
+        collector = db.scalar(select(MerchantTemplate).where(
+            MerchantTemplate.slug == "mercante_011",
+        ))
+        if collector is None:
+            raise AssertionError("O Colecionador aprovado não está semeado.")
+
+        def choose_offer(population, weights, k):
+            target = next((offer for offer in population if offer.item_template_id == item_template_id), None)
+            return [target or population[0]]
+
+        # Keep rotation creation, merchant scoping, prices and stock production
+        # real while making this possible-but-not-guaranteed offer reproducible.
+        with patch("app.services.dock_service.sample", return_value=[collector]), patch(
+            "app.services.dock_service.choices", side_effect=choose_offer,
+        ):
             rotation = create_dock_rotation(db, guild, dock_level)
-            offer = db.scalar(select(DockOffer).join(
-                DockRotationMerchant,
-                DockRotationMerchant.id == DockOffer.dock_rotation_merchant_id,
-            ).where(
-                DockOffer.item_template_id == item_template_id,
-                DockRotationMerchant.dock_rotation_id == rotation.id,
-            ))
-            if offer is not None:
-                return seed, rotation, offer
-            db.delete(rotation)
-            db.commit()
-        raise AssertionError(
-            f"Nenhuma seed real gerou a oferta {item_template_id} nas Docas nível {dock_level}."
-        )
+        offer = db.scalar(select(DockOffer).join(
+            DockRotationMerchant,
+            DockRotationMerchant.id == DockOffer.dock_rotation_merchant_id,
+        ).where(
+            DockOffer.item_template_id == item_template_id,
+            DockRotationMerchant.dock_rotation_id == rotation.id,
+        ))
+        if offer is None:
+            raise AssertionError(
+                f"A oferta elegível {item_template_id} não foi gerada pelo Colecionador."
+            )
+        return 0, rotation, offer
 
     def test_approved_gap_material_offers_spawn_at_their_gates_and_purchase_exact_templates(self):
         with Session(self.engine) as db:
@@ -133,6 +144,44 @@ class ML048DockOfferTests(unittest.TestCase):
                 GuildInventoryItem.guild_id == guild.id,
                 ItemTemplate.slug == "material_essence_4_020",
             )), 1)
+
+    def test_stale_active_gap_offers_never_appear_under_other_merchants(self):
+        with Session(self.engine) as db:
+            run_massive_content_seed(db)
+            collector = db.scalar(select(MerchantTemplate).where(
+                MerchantTemplate.slug == "mercante_011",
+            ))
+            other_merchant = db.scalar(select(MerchantTemplate).where(
+                MerchantTemplate.slug == "mercante_002",
+            ))
+            self.assertIsNotNone(collector)
+            self.assertIsNotNone(other_merchant)
+            for slug, price, minimum in (
+                ("material_relic_2_002", 32, 1),
+                ("material_essence_4_020", 148, 3),
+            ):
+                item = db.scalar(select(ItemTemplate).where(ItemTemplate.slug == slug))
+                stale_offer = MerchantOfferTemplate(
+                    merchant_template_id=other_merchant.id, item_template_id=item.id,
+                    base_price=price, min_stock=5, max_stock=30, min_dock_level=minimum,
+                    weight=110, is_active=True,
+                )
+                db.add(stale_offer)
+            guild = Guild(name="Rotação exclusiva ML-048", level=1)
+            db.add(guild)
+            db.flush()
+
+            # Force a real rotation containing only a non-Colecionador merchant.
+            with patch("app.services.dock_service.sample", return_value=[other_merchant]):
+                rotation = create_dock_rotation(db, guild, 3)
+
+            emitted_slugs = set(db.scalars(select(ItemTemplate.slug).join(
+                DockOffer, DockOffer.item_template_id == ItemTemplate.id,
+            ).join(
+                DockRotationMerchant,
+                DockRotationMerchant.id == DockOffer.dock_rotation_merchant_id,
+            ).where(DockRotationMerchant.dock_rotation_id == rotation.id)))
+            self.assertFalse({"material_relic_2_002", "material_essence_4_020"} & emitted_slugs)
 
     def test_v6_campaign_upgrade_adds_future_dock_sources_and_preserves_live_snapshot(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -428,6 +477,88 @@ class ML048DockOfferTests(unittest.TestCase):
                         "item_slug": "material_essence_4_020",
                         "message": "Oferta das Docas ignorada porque o material está ausente ou inativo.",
                     }, report["warnings"])
+            finally:
+                engine.dispose()
+
+    def test_v6_upgrade_opens_when_canonical_gathering_material_is_inactive(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Coleta pausada por catálogo")
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            checkpoint = datetime(2026, 11, 17, 11, 0, tzinfo=timezone.utc)
+            try:
+                with factory() as db:
+                    guild = db.scalar(select(Guild).where(Guild.campaign_id == created.campaign_id))
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    common_wood = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_wood_1_001",
+                    ))
+                    rare_wood = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_wood_1_025",
+                    ))
+                    worker = db.scalar(select(Mercenary).where(Mercenary.guild_id == guild.id))
+                    self.assertIsNotNone(common_wood)
+                    self.assertIsNotNone(rare_wood)
+                    if worker is None:
+                        apprentice = db.scalar(select(MercenaryClass).where(
+                            MercenaryClass.code == "apprentice",
+                        ))
+                        worker = Mercenary(
+                            guild_id=guild.id, class_id=apprentice.id, name="Coletor legado",
+                            level=1, status="gathering", rarity="common", hire_cost=0,
+                            power=5, vitality=5, agility=5, intelligence=5, luck=5,
+                        )
+                        db.add(worker)
+                        db.flush()
+                    common_wood.is_active = False
+                    rare_wood.is_active = True
+                    worker.status = "gathering"
+                    assignment = GatheringAssignment(
+                        guild_id=guild.id, mercenary_id=worker.id,
+                        target_item_template_id=rare_wood.id, resource_family="wood", node_code="forest",
+                        progress_seconds=30, cycle_count=4, target_quantity=100,
+                        quantity_collected=7, extra_chance=0, rng_seed=17,
+                        started_at_utc=checkpoint - timedelta(minutes=5), checkpoint_at_utc=checkpoint,
+                    )
+                    db.add_all([
+                        assignment,
+                        GuildInventoryItem(guild_id=guild.id, item_template_id=rare_wood.id, quantity=5),
+                    ])
+                    db.execute(delete(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    ))
+                    metadata.content_version = PACK_VERSION - 1
+                    db.commit()
+
+                upgraded, _migration = campaigns.activate_campaign_with_migration(
+                    created.campaign_id, mark_active=False, prepare_content=True,
+                )
+                self.assertEqual(upgraded.content_version, PACK_VERSION)
+
+                with factory() as db:
+                    guild = db.scalar(select(Guild).where(Guild.campaign_id == created.campaign_id))
+                    assignment = db.scalar(select(GatheringAssignment).where(
+                        GatheringAssignment.guild_id == guild.id,
+                        GatheringAssignment.resource_family == "wood",
+                    ))
+                    common_wood = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_wood_1_001",
+                    ))
+                    rare_wood = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_wood_1_025",
+                    ))
+                    self.assertFalse(common_wood.is_active)
+                    self.assertTrue(rare_wood.is_active)
+                    self.assertEqual(assignment.target_item_template_id, rare_wood.id)
+                    self.assertEqual(as_utc(assignment.checkpoint_at_utc), checkpoint)
+                    self.assertEqual((assignment.progress_seconds, assignment.cycle_count), (30, 4))
+                    self.assertEqual(assignment.quantity_collected, 7)
+                    self.assertEqual(db.scalar(select(GuildInventoryItem.quantity).where(
+                        GuildInventoryItem.guild_id == guild.id,
+                        GuildInventoryItem.item_template_id == rare_wood.id,
+                    )), 5)
             finally:
                 engine.dispose()
 

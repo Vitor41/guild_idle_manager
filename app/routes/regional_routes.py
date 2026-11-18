@@ -579,6 +579,10 @@ def regional_index(
     )
     db.commit()
     assignments = list_assignments(db, guild.id)
+    for assignment in assignments:
+        assignment.catalog_unavailable = bool(
+            advancement.get(assignment.resource_family, {}).get("catalog_missing")
+        )
     achievement_context = get_codex_context(db, guild, True)
     reports = []
     for history_row in board["latest_history"]:

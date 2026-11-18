@@ -50,6 +50,7 @@ def gathering_live_status(
             assignment.resource_family: {
                 "progress_seconds": assignment.progress_seconds,
                 "capacity_paused": assignment.capacity_paused,
+                "catalog_unavailable": bool(advancement.get(assignment.resource_family, {}).get("catalog_missing")),
                 "worker": assignment.mercenary.name,
                 "target_item_template_id": assignment.target_item_template_id,
                 "target_item_name": assignment.target_item_template.name if assignment.target_item_template else None,
@@ -58,7 +59,11 @@ def gathering_live_status(
             for assignment in assignments
         },
         "advanced": {
-            family: {"cycles": result.get("cycles", 0), "stored": result.get("stored", 0)}
+            family: {
+                "cycles": result.get("cycles", 0),
+                "stored": result.get("stored", 0),
+                "catalog_unavailable": bool(result.get("catalog_missing")),
+            }
             for family, result in advancement.items()
         },
     })
@@ -94,6 +99,10 @@ def gathering_index(
     )
     db.commit()
     assignments = list_assignments(db, guild.id)
+    catalog_unavailable = {
+        family: bool(advancement.get(family, {}).get("catalog_missing"))
+        for family in FAMILY_LABELS
+    }
     material_previews = {
         family: preview_material_for_family(db, family, guild.level)
         for family in FAMILY_LABELS
@@ -116,6 +125,7 @@ def gathering_index(
             "guild": guild,
             "resources": resources,
             "assignments": assignments,
+            "catalog_unavailable": catalog_unavailable,
             "material_previews": material_previews,
             "workers": [worker for worker in workers if worker.id not in assigned_ids and worker.status == "available"],
             "family_labels": FAMILY_LABELS,
@@ -127,7 +137,6 @@ def gathering_index(
             "error": request.query_params.get("error"),
             "diagnostic_id": request.query_params.get("diagnostic"),
             "message": request.query_params.get("message"),
-            "catalog_errors": [FAMILY_LABELS[family] for family, result in advancement.items() if result.get("catalog_missing")],
         },
     )
 
@@ -182,5 +191,11 @@ def gathering_release(
         db.rollback()
         _log_gathering(request, "release_rejected", f"assignment_id={assignment_id} reason={exc}", 400)
         return RedirectResponse(f"/gathering?error={quote(str(exc))}", status_code=303)
-    message = f"Trabalhador liberado. Coleta encerrada: {summary['stored']} unidade(s) armazenada(s)."
+    if summary.get("released_without_credit"):
+        message = (
+            "Trabalhador liberado. A coleta indisponível foi encerrada sem material; o progresso parcial "
+            "foi descartado e o inventário já armazenado foi mantido."
+        )
+    else:
+        message = f"Trabalhador liberado. Coleta encerrada: {summary['stored']} unidade(s) armazenada(s)."
     return RedirectResponse(f"/gathering?message={quote(message)}", status_code=303)

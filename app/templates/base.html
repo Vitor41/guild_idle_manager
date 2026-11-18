@@ -191,7 +191,7 @@
             <h3>Produção por tarefa</h3>
             <ul class="offline-gathering-list">
               {% for family, result in offline.gathering.items() %}
-                <li><strong>{{ {'wood': 'Madeira', 'ore': 'Minério', 'leather': 'Couro', 'meat': 'Carne', 'herb': 'Ervas'}.get(family, family) }}</strong><span>{{ result.cycles }} ciclos{% if result.extra_chance %} · +{{ result.extra_chance }}% de chance extra{% endif %} · {{ result.stored }} guardadas{% if result.discarded %} · {{ result.discarded }} excedente descartado{% endif %}</span></li>
+                <li><strong>{{ {'wood': 'Madeira', 'ore': 'Minério', 'leather': 'Couro', 'meat': 'Carne', 'herb': 'Ervas'}.get(family, family) }}</strong><span>{% if result.catalog_missing %}Pausada: material comum indisponível no catálogo; nenhum ciclo ou item foi concedido.{% else %}{{ result.cycles }} ciclos{% if result.extra_chance %} · +{{ result.extra_chance }}% de chance extra{% endif %} · {{ result.stored }} guardadas{% if result.discarded %} · {{ result.discarded }} excedente descartado{% endif %}{% endif %}</span></li>
               {% endfor %}
             </ul>
           {% endif %}
