@@ -28,9 +28,16 @@ from app.models.regional import (
     RegionalWorldState,
 )
 from app.services.regional_event_service import (
+    EVENT_RULES_VERSION,
+    LEGACY_REBELLION_CHANCE,
+    PORTAL_CHANCE_CAP,
+    PORTAL_LOW_THREAT_CHANCE,
+    PORTAL_MAX_CHANCE,
+    PORTAL_BASE_CHANCE,
     PORTAL_TTL,
     REBELLION_CHANCE,
     REBELLION_TTL,
+    _portal_spawn_chance,
     _resolve_rebellion_summary,
     active_rebellion,
     evaluate_open_rebellion,
@@ -43,9 +50,9 @@ from app.services.regional_event_service import (
     record_cpu_event_activity,
     resolve_portal_participant,
 )
-from app.services.regional_cycle_service import REGIONS, regional_outcome_impact
+from app.services.regional_cycle_service import REGIONS, VIGILIA_RULES_VERSION, regional_outcome_impact
 from app.services.regional_cycle_service import record_player_offer_result
-from scripts.balance.simulate_regional_event_incidence import portal_roll, rebellion_roll
+from scripts.balance.simulate_regional_event_incidence import portal_chance, portal_roll, rebellion_roll
 
 
 def _as_utc(value):
@@ -220,6 +227,157 @@ class RegionalEventServiceTests(unittest.TestCase):
                     RegionalEvent.event_type == "portal",
                 )), 4)
 
+    def test_portal_chance_keeps_high_threat_curve_and_adds_low_threat_base(self):
+        self.assertEqual(PORTAL_LOW_THREAT_CHANCE, 0.04)
+        self.assertEqual(PORTAL_BASE_CHANCE, 0.05)
+        self.assertEqual(PORTAL_MAX_CHANCE, 0.25)
+        self.assertEqual(PORTAL_CHANCE_CAP, 0.30)
+        self.assertEqual(_portal_spawn_chance(0), 0.04)
+        self.assertEqual(_portal_spawn_chance(69.99), 0.04)
+        self.assertEqual(_portal_spawn_chance(69.99, 2), 0.06)
+        self.assertEqual(_portal_spawn_chance(70), 0.05)
+        self.assertAlmostEqual(_portal_spawn_chance(85), 0.15)
+        self.assertEqual(_portal_spawn_chance(100), 0.25)
+        self.assertEqual(_portal_spawn_chance(100, 10), 0.30)
+        self.assertEqual(_portal_spawn_chance(69.99, 100), 0.30)
+
+    def test_current_rules_combine_low_threat_portal_and_rebellion_without_changing_pressure(self):
+        class FixedRng:
+            def __init__(self, roll):
+                self.roll = roll
+
+            def random(self):
+                return self.roll
+
+            def randrange(self, _stop):
+                return 0
+
+        with SessionLocal() as db:
+            campaign = db.get(CampaignMetadata, self.campaign_id)
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id, cycle_number=40,
+                starts_at_utc=self.now, ends_at_utc=self.now + timedelta(hours=6),
+                seed="combined-regional-events", rules_version=VIGILIA_RULES_VERSION,
+            )
+            low_portal_region = RegionalRegionState(
+                campaign_id=self.campaign_id, region_code="a-low-portal", region_name="Portal baixo",
+                security=50, threat=69.99,
+            )
+            rebellion_region = RegionalRegionState(
+                campaign_id=self.campaign_id, region_code="b-rebellion", region_name="Rebelião",
+                security=25, threat=85,
+            )
+            boss = DungeonTemplate(
+                name="Chefe introdutório", description="Portal integrado",
+                content_type="boss", level_band="1-20", recommended_level=1,
+                required_guild_level=1, biome="portal", difficulty="legendary",
+                duration_seconds=3600, base_gold_reward=0, base_xp_reward=0,
+                base_success_chance=50, is_active=True,
+            )
+            db.add_all([cycle, low_portal_region, rebellion_region, boss])
+            db.flush()
+            before = {
+                region.region_code: (region.threat, region.security)
+                for region in (low_portal_region, rebellion_region)
+            }
+            portal_rolls = iter((0.039, 0.99))
+            with patch(
+                "app.services.regional_event_service._rng",
+                side_effect=lambda *_parts: FixedRng(next(portal_rolls)),
+            ), patch(
+                "app.services.regional_event_service.build_portal_loot_snapshot",
+                return_value={"entries": [{"item_template_id": 1}]},
+            ):
+                create_cycle_portals(
+                    db, self.campaign_id, cycle, [low_portal_region, rebellion_region],
+                )
+            portal_events = list(db.scalars(select(RegionalEvent).where(
+                RegionalEvent.campaign_id == self.campaign_id,
+                RegionalEvent.event_type == "portal",
+            )))
+            self.assertEqual([event.region_code for event in portal_events], ["a-low-portal"])
+            self.assertEqual(portal_events[0].rules_version, EVENT_RULES_VERSION)
+            self.assertEqual(json.loads(portal_events[0].summary_json)["chance"], 0.04)
+
+            with patch(
+                "app.services.regional_event_service._rng",
+                return_value=FixedRng(0.049),
+            ):
+                rebellion = evaluate_open_rebellion(
+                    db, campaign, cycle, guild_id=999, now=self.now,
+                )
+            self.assertIsNotNone(rebellion)
+            self.assertEqual(rebellion.region_code, "b-rebellion")
+            self.assertEqual(rebellion.rules_version, EVENT_RULES_VERSION)
+            self.assertEqual(
+                json.loads(rebellion.summary_json)["chance_per_eligible_region_cycle"],
+                REBELLION_CHANCE,
+            )
+            self.assertEqual(REBELLION_CHANCE, 0.05)
+            self.assertEqual(
+                {region.region_code: (region.threat, region.security)
+                 for region in (low_portal_region, rebellion_region)},
+                before,
+            )
+
+    def test_v7_materialized_cycle_keeps_previous_event_chances(self):
+        class FixedRng:
+            def __init__(self, roll):
+                self.roll = roll
+
+            def random(self):
+                return self.roll
+
+            def randrange(self, _stop):
+                return 0
+
+        with SessionLocal() as db:
+            campaign = db.get(CampaignMetadata, self.campaign_id)
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id, cycle_number=41,
+                starts_at_utc=self.now, ends_at_utc=self.now + timedelta(hours=6),
+                seed="old-event-rules", rules_version="vigilia-v7",
+            )
+            low_region = RegionalRegionState(
+                campaign_id=self.campaign_id, region_code="old-low", region_name="Antiga",
+                security=25, threat=69.99,
+            )
+            eligible_region = RegionalRegionState(
+                campaign_id=self.campaign_id, region_code="old-eligible", region_name="Antiga elegível",
+                security=25, threat=85,
+            )
+            boss = DungeonTemplate(
+                name="Chefe antigo", description="Portal de ciclo anterior",
+                content_type="boss", level_band="21-50", recommended_level=30,
+                required_guild_level=1, biome="portal", difficulty="legendary",
+                duration_seconds=3600, base_gold_reward=0, base_xp_reward=0,
+                base_success_chance=50, is_active=True,
+            )
+            db.add_all([cycle, low_region, eligible_region, boss])
+            db.flush()
+            with patch(
+                "app.services.regional_event_service._rng",
+                return_value=FixedRng(0.0),
+            ):
+                create_cycle_portals(db, self.campaign_id, cycle, [low_region])
+            self.assertEqual(db.scalar(select(func.count()).select_from(RegionalEvent).where(
+                RegionalEvent.campaign_id == self.campaign_id,
+                RegionalEvent.event_type == "portal",
+            )), 0)
+            with patch(
+                "app.services.regional_event_service._rng",
+                return_value=FixedRng(LEGACY_REBELLION_CHANCE - 0.0001),
+            ):
+                rebellion = evaluate_open_rebellion(
+                    db, campaign, cycle, guild_id=999, now=self.now,
+                )
+            self.assertIsNotNone(rebellion)
+            self.assertEqual(rebellion.rules_version, "regional-events-v4")
+            self.assertEqual(
+                json.loads(rebellion.summary_json)["chance_per_eligible_region_cycle"],
+                LEGACY_REBELLION_CHANCE,
+            )
+
     def test_incidence_audit_portal_roll_matches_production_seeded_service(self):
         from app.services.regional_cycle_service import REGIONS
 
@@ -227,7 +385,7 @@ class RegionalEventServiceTests(unittest.TestCase):
             cycle = RegionalCycle(
                 campaign_id=self.campaign_id, cycle_number=27,
                 starts_at_utc=self.now, ends_at_utc=self.now + timedelta(hours=6),
-                seed="portal-audit-parity", rules_version="vigilia-v7",
+                seed="portal-audit-parity", rules_version=VIGILIA_RULES_VERSION,
             )
             regions = [RegionalRegionState(
                 campaign_id=self.campaign_id, region_code=code, region_name=name,
@@ -260,7 +418,7 @@ class RegionalEventServiceTests(unittest.TestCase):
                 RegionalEvent.trigger_cycle_number == cycle.cycle_number,
             ).order_by(RegionalEvent.region_code)))
             self.assertEqual(actual, expected)
-            self.assertFalse(portal_roll(self.campaign_id, cycle.cycle_number, "below", 69.99))
+            self.assertEqual(portal_chance(69.99), 0.04)
 
     def test_rebellion_generation_rolls_only_eligible_regions_once_per_cycle(self):
         with SessionLocal() as db:
@@ -268,7 +426,7 @@ class RegionalEventServiceTests(unittest.TestCase):
             cycle = RegionalCycle(
                 campaign_id=self.campaign_id, cycle_number=7,
                 starts_at_utc=self.now, ends_at_utc=self.now + timedelta(hours=6),
-                seed="rebellion-generation", rules_version="vigilia-v2",
+                seed="rebellion-generation", rules_version=VIGILIA_RULES_VERSION,
             )
             eligible = RegionalRegionState(
                 campaign_id=self.campaign_id, region_code="a-eligible", region_name="Elegível",

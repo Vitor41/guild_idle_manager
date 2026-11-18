@@ -22,15 +22,13 @@ if str(ROOT) not in sys.path:
 from app.services.regional_cycle_service import REGIONS, _rng, _seed_text
 from app.services.regional_event_service import (
     EVENT_RULES_VERSION,
-    PORTAL_BASE_CHANCE,
-    PORTAL_MAX_CHANCE,
-    PORTAL_MIN_THREAT,
     PORTAL_TTL,
     REBELLION_CHANCE,
     REBELLION_MAX_SECURITY,
     REBELLION_MIN_THREAT,
     REBELLION_PRIORITY,
     REBELLION_TTL,
+    _portal_spawn_chance,
 )
 from scripts.balance.funded_progression_simulation import wilson_interval_95
 
@@ -45,13 +43,10 @@ PORTAL_THREAT_PROFILES = {"threat_70": 70.0, "threat_85": 85.0, "threat_100": 10
 
 
 def portal_chance(threat: float) -> float:
-    return min(PORTAL_MAX_CHANCE,
-               PORTAL_BASE_CHANCE + (float(threat) - PORTAL_MIN_THREAT) * (0.20 / 30.0))
+    return _portal_spawn_chance(threat)
 
 
 def portal_roll(campaign_id: str, cycle_number: int, region_code: str, threat: float) -> bool:
-    if threat < PORTAL_MIN_THREAT:
-        return False
     seed = _seed_text(campaign_id, cycle_number, region_code, EVENT_RULES_VERSION, "portal")
     return _rng(seed).random() < portal_chance(threat)
 
