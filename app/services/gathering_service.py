@@ -127,8 +127,7 @@ def freeze_legacy_assignment_targets(db: Session) -> int:
 
 
 def migrate_assignments_to_common_targets(db: Session, *, now: datetime | None = None) -> int:
-    """Cut existing gathering jobs over after crediting work up to one transaction boundary."""
-    cutoff = _utc(now or datetime.now(timezone.utc))
+    """Retarget legacy gathering jobs without granting or resetting progress."""
     migrated = 0
     assignments = list(db.scalars(
         select(GatheringAssignment).order_by(GatheringAssignment.id)
@@ -146,28 +145,10 @@ def migrate_assignments_to_common_targets(db: Session, *, now: datetime | None =
         if assignment.target_item_template_id == common.id:
             continue
 
-        # A target-less legacy job has no safe identity to credit. Preserve its
-        # fractional progress and cycle counter, then start the common target at
-        # the cutoff instead of granting output retroactively.
-        if assignment.target_item_template_id is None:
-            legacy = _legacy_material_template(db, assignment.resource_family, guild.level)
-            if legacy is None:
-                assignment.checkpoint_at_utc = cutoff
-            else:
-                assignment.target_item_template = legacy
-                assignment.target_item_template_id = legacy.id
-                db.add(assignment)
-
-        if assignment.target_item_template_id is not None:
-            credited = advance_assignment(
-                db, guild, assignment, now=cutoff, max_seconds=OFFLINE_CAP_SECONDS,
-            )
-            if credited.get("completed"):
-                continue
-
+        # Save migration only changes the future target. ClockGuard remains the
+        # sole authority for online/offline production and checkpoint movement.
         assignment.target_item_template = common
         assignment.target_item_template_id = common.id
-        assignment.checkpoint_at_utc = cutoff
         db.add(assignment)
         migrated += 1
     if migrated:

@@ -578,10 +578,22 @@ def run_massive_content_seed(
     if offer_merchant is None:
         raise ValueError("Não há mercante ativo no nível inicial das Docas para cadastrar as ofertas aprovadas.")
 
+    unavailable_dock_offers = []
     for slug, config in gap_offer_requirements.items():
-        item = catalog_by_slug.get(slug)
+        item = catalog_by_slug.get(slug) or db.scalar(select(ItemTemplate).where(ItemTemplate.slug == slug))
         if item is None or not item.is_active:
-            raise ValueError(f"Material de lacuna ausente ou inativo no catálogo: {slug}.")
+            if item is not None:
+                for existing in db.scalars(select(MerchantOfferTemplate).where(
+                    MerchantOfferTemplate.item_template_id == item.id,
+                )):
+                    existing.is_active = False
+                    db.add(existing)
+            unavailable_dock_offers.append({
+                "code": "docks_offer_item_unavailable",
+                "item_slug": slug,
+                "message": "Oferta das Docas ignorada porque o material está ausente ou inativo.",
+            })
+            continue
         existing_rows = list(db.scalars(select(MerchantOfferTemplate).where(
             MerchantOfferTemplate.item_template_id == item.id,
         )))
@@ -618,6 +630,7 @@ def run_massive_content_seed(
         "gathering_missions": sum(1 for mission in mission_ids if mission.mission_type == "gathering"),
         "dungeons": sum(1 for dungeon in dungeon_ids if dungeon.content_type == "dungeon"),
         "bosses": sum(1 for dungeon in dungeon_ids if dungeon.content_type == "boss"),
+        "warnings": unavailable_dock_offers,
         "professions": len(PROFESSIONS), "merchants": len(merchants), "dock_offers": len(existing_offer_pairs), "errors": [],
     }
     db.add(ContentSeedRun(pack_key=PACK_KEY, version=PACK_VERSION, report_json=json.dumps(report, ensure_ascii=False), applied_at=datetime.now(timezone.utc)))

@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from app.database.connection import Base, create_database_engine
 from app.models import BuildingTemplate, Guild, GuildBuilding, GuildInventoryItem, GuildResources, ItemTemplate, Mercenary, MercenaryClass
 from app.models.gathering import GatheringAssignment
-from app.services.gathering_service import advance_assignment, assign_worker
+from app.services.gathering_service import (
+    advance_assignment,
+    assign_worker,
+    migrate_assignments_to_common_targets,
+)
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 
 
@@ -105,6 +109,46 @@ class GatheringServiceTests(unittest.TestCase):
         self.assertEqual(result["cycles"], 0)
         self.assertEqual(assignment.cycle_count, 0)
         self.assertEqual(assignment.checkpoint_at_utc, self.start)
+
+    def test_target_migration_preserves_progress_and_never_credits_before_clock_guard(self):
+        legacy_wood = ItemTemplate(
+            slug="material_wood_1_025", name="Madeira antiga", description="",
+            item_type="material", rarity="common", material_family="wood",
+            item_level=25, level_band="21-40", tier=2,
+        )
+        self.db.add(legacy_wood)
+        self.db.flush()
+        checkpoint = self.start - timedelta(seconds=120)
+        assignment = GatheringAssignment(
+            guild_id=self.guild.id, mercenary_id=self.worker.id,
+            target_item_template_id=legacy_wood.id, resource_family="wood",
+            node_code="forest", progress_seconds=37, cycle_count=9,
+            target_quantity=20, quantity_collected=4, extra_chance=20,
+            rng_seed=123, started_at_utc=self.start - timedelta(hours=2),
+            checkpoint_at_utc=checkpoint,
+        )
+        old_inventory = GuildInventoryItem(
+            guild_id=self.guild.id, item_template_id=legacy_wood.id, quantity=7,
+        )
+        self.db.add_all([assignment, old_inventory])
+        self.db.flush()
+
+        migrated = migrate_assignments_to_common_targets(
+            self.db, now=self.start + timedelta(hours=8),
+        )
+
+        self.assertEqual(migrated, 1)
+        self.assertEqual(assignment.target_item_template_id, self.wood.id)
+        self.assertEqual(assignment.progress_seconds, 37)
+        self.assertEqual(assignment.cycle_count, 9)
+        self.assertEqual(assignment.target_quantity, 20)
+        self.assertEqual(assignment.quantity_collected, 4)
+        self.assertEqual(assignment.checkpoint_at_utc, checkpoint)
+        self.assertEqual(old_inventory.quantity, 7)
+        self.assertIsNone(self.db.scalar(select(GuildInventoryItem.id).where(
+            GuildInventoryItem.guild_id == self.guild.id,
+            GuildInventoryItem.item_template_id == self.wood.id,
+        )))
 
     def test_max_seconds_caps_24h_elapsed_and_advances_checkpoint(self):
         assignment = assign_worker(self.db, self.guild, self.worker.id, "wood", now=self.start)

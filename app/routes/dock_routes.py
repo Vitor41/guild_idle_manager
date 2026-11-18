@@ -11,6 +11,7 @@ from app.models.user import User
 from app.services.dock_service import DockError, buy_dock_offer, get_docks_context
 from app.services.guild_service import get_current_guild_context
 from app.services.display_service import clean_generated_name, rarity_label
+from app.services.icon_service import get_item_icon_path
 
 
 MERCHANT_TYPE_LABELS = {
@@ -38,6 +39,12 @@ def docks_index(request: Request, db: DbSession, current_user: User | None = Dep
     except DockError as exc:
         dock_context = {"dock_level": 0, "rotation": None, "offer_slots": 0, "now": None}
         error = str(exc)
+    rotation = dock_context.get("rotation")
+    dock_context["offer_icon_paths"] = {
+        offer.id: get_item_icon_path(offer.item_template)
+        for visit in rotation.merchants
+        for offer in visit.offers
+    } if rotation is not None else {}
     return templates.TemplateResponse(request=request, name="docks/index.html", context={
         "current_user": current_user, "guild": guild, "resources": resources,
         "message": request.query_params.get("message"), "error": error,

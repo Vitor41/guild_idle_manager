@@ -70,8 +70,12 @@ def create_dock_rotation(db: Session, guild: Guild, dock_level: int) -> DockRota
     db.flush()
     slots_total = _offer_count(dock_level)
     used_item_ids: set[int] = set()
-    global_pool = list(db.scalars(select(MerchantOfferTemplate).options(joinedload(MerchantOfferTemplate.item_template)).where(
-        MerchantOfferTemplate.is_active.is_(True), MerchantOfferTemplate.min_dock_level <= catalog_level)))
+    global_pool = list(db.scalars(select(MerchantOfferTemplate).join(
+        ItemTemplate, ItemTemplate.id == MerchantOfferTemplate.item_template_id,
+    ).options(joinedload(MerchantOfferTemplate.item_template)).where(
+        MerchantOfferTemplate.is_active.is_(True), ItemTemplate.is_active.is_(True),
+        MerchantOfferTemplate.min_dock_level <= catalog_level,
+    )))
     for slot, merchant in enumerate(selected, start=1):
         rotation_merchant = DockRotationMerchant(dock_rotation_id=rotation.id, merchant_template_id=merchant.id, slot=slot)
         db.add(rotation_merchant)

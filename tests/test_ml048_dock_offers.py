@@ -1,3 +1,4 @@
+import json
 import random
 import tempfile
 import unittest
@@ -368,6 +369,65 @@ class ML048DockOfferTests(unittest.TestCase):
                     count_before_retry = db.query(MerchantOfferTemplate).count()
                     run_massive_content_seed(db)
                     self.assertEqual(db.query(MerchantOfferTemplate).count(), count_before_retry)
+            finally:
+                engine.dispose()
+
+    def test_v6_upgrade_skips_inactive_gap_offer_without_blocking_campaign_open(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            created = campaigns.create_campaign("Oferta inativa nas Docas")
+            engine = create_database_engine(f"sqlite:///{created.database_path.as_posix()}")
+            factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+            try:
+                with factory() as db:
+                    metadata = db.get(CampaignMetadata, created.campaign_id)
+                    essence = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_essence_4_020",
+                    ))
+                    relic = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_relic_2_002",
+                    ))
+                    self.assertIsNotNone(essence)
+                    self.assertIsNotNone(relic)
+                    essence.is_active = False
+                    metadata.content_version = PACK_VERSION - 1
+                    db.execute(delete(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    ))
+                    db.commit()
+
+                upgraded, _migration = campaigns.activate_campaign_with_migration(
+                    created.campaign_id, mark_active=False, prepare_content=True,
+                )
+                self.assertEqual(upgraded.content_version, PACK_VERSION)
+
+                with factory() as db:
+                    essence = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_essence_4_020",
+                    ))
+                    relic = db.scalar(select(ItemTemplate).where(
+                        ItemTemplate.slug == "material_relic_2_002",
+                    ))
+                    self.assertFalse(essence.is_active)
+                    self.assertEqual(db.scalar(select(MerchantOfferTemplate.id).where(
+                        MerchantOfferTemplate.item_template_id == essence.id,
+                        MerchantOfferTemplate.is_active.is_(True),
+                    )), None)
+                    self.assertTrue(db.scalar(select(MerchantOfferTemplate.id).where(
+                        MerchantOfferTemplate.item_template_id == relic.id,
+                        MerchantOfferTemplate.is_active.is_(True),
+                    )))
+                    marker = db.scalar(select(ContentSeedRun).where(
+                        ContentSeedRun.pack_key == PACK_KEY,
+                        ContentSeedRun.version == PACK_VERSION,
+                    ))
+                    report = json.loads(marker.report_json)
+                    self.assertIn({
+                        "code": "docks_offer_item_unavailable",
+                        "item_slug": "material_essence_4_020",
+                        "message": "Oferta das Docas ignorada porque o material está ausente ou inativo.",
+                    }, report["warnings"])
             finally:
                 engine.dispose()
 
