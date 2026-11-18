@@ -75,6 +75,21 @@
         const status = card.querySelector("[data-gathering-status]");
         const catalogWarning = card.querySelector("[data-gathering-catalog-warning]");
         const capacityHelp = card.querySelector("[data-gathering-capacity-help]");
+        const targetLabel = card.querySelector("[data-gathering-target-label]");
+        const targetValue = card.querySelector("[data-gathering-target-value]");
+        if (targetLabel) {
+          targetLabel.textContent = assignment.catalog_unavailable
+            ? "Alvo salvo (indisponível):"
+            : "Alvo desta designação:";
+        }
+        if (targetValue && assignment.target_item_name) {
+          const rarityLabels = {
+            common: "Comum", uncommon: "Incomum", rare: "Raro", epic: "Épico",
+            legendary: "Lendário", mythic: "Mítico",
+          };
+          const rarity = rarityLabels[assignment.target_item_rarity] || assignment.target_item_rarity;
+          targetValue.textContent = `${assignment.target_item_name} · ${rarity}`;
+        }
         if (catalogWarning) catalogWarning.hidden = !assignment.catalog_unavailable;
         if (assignment.catalog_unavailable) {
           if (cycle) cycle.hidden = true;

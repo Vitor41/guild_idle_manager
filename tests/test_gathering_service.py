@@ -218,11 +218,62 @@ class GatheringServiceTests(unittest.TestCase):
         resumed = advance_assignment(
             self.db, self.guild, assignment, now=blocked_at + timedelta(hours=2, minutes=1),
         )
-        self.assertEqual(resumed["cycles"], 1)
+        self.assertEqual(resumed["cycles"], 0)
+        self.assertFalse(assignment.catalog_paused)
+        resumed_at = blocked_at + timedelta(hours=2, minutes=1)
+        self.assertEqual(assignment.checkpoint_at_utc, resumed_at)
         self.assertEqual(assignment.target_item_template_id, self.wood.id)
+        self.assertEqual(assignment.cycle_count, 4)
+        self.assertEqual(assignment.quantity_collected, 7)
+        later = advance_assignment(
+            self.db, self.guild, assignment, now=resumed_at + timedelta(seconds=30),
+        )
+        self.assertEqual(later["cycles"], 1)
         self.assertEqual(assignment.cycle_count, 5)
         self.assertEqual(assignment.quantity_collected, 8)
         self.assertEqual(old_inventory.quantity, 5)
+
+    def test_catalog_pause_marker_survives_reload_and_same_target_resumes_without_backpay(self):
+        assignment = GatheringAssignment(
+            guild_id=self.guild.id, mercenary_id=self.worker.id, target_item_template_id=self.wood.id,
+            resource_family="wood", node_code="forest", progress_seconds=30, cycle_count=4,
+            rng_seed=17, started_at_utc=self.start, checkpoint_at_utc=self.start,
+        )
+        self.db.add(assignment)
+        self.db.flush()
+        self.wood.is_active = False
+        self.db.flush()
+
+        blocked_at = self.start + timedelta(minutes=1)
+        blocked = advance_assignment(self.db, self.guild, assignment, now=blocked_at)
+        self.assertTrue(blocked["catalog_missing"])
+        self.assertTrue(assignment.catalog_paused)
+        assignment_id = assignment.id
+        guild_id = self.guild.id
+        wood_id = self.wood.id
+        self.db.commit()
+        self.db.close()
+        self.db = Session(self.engine, autoflush=False, expire_on_commit=False)
+        self.guild = self.db.get(Guild, guild_id)
+        self.wood = self.db.get(ItemTemplate, wood_id)
+
+        # The catalog returns two hours later, with no observation during the gap.
+        self.wood.is_active = True
+        self.db.commit()
+        assignment = self.db.get(GatheringAssignment, assignment_id)
+        self.assertIsNotNone(assignment)
+        self.assertTrue(assignment.catalog_paused)
+        resumed_at = blocked_at + timedelta(hours=2)
+        resumed = advance_assignment(self.db, self.guild, assignment, now=resumed_at)
+        self.assertEqual(resumed["cycles"], 0)
+        self.assertFalse(assignment.catalog_paused)
+        self.assertEqual(assignment.checkpoint_at_utc, resumed_at)
+        self.assertEqual(assignment.progress_seconds, 30)
+        self.assertEqual(assignment.cycle_count, 4)
+
+        later = advance_assignment(self.db, self.guild, assignment, now=resumed_at + timedelta(seconds=30))
+        self.assertEqual(later["cycles"], 1)
+        self.assertEqual(assignment.cycle_count, 5)
 
     def test_release_unavailable_assignment_frees_worker_without_material_credit(self):
         rare_wood = ItemTemplate(

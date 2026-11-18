@@ -249,12 +249,24 @@ def advance_assignment(
     if max_seconds is not None:
         elapsed = min(elapsed, max(0, max_seconds))
     template = _material_template(db, assignment.resource_family, guild.level)
-    if template is not None and assignment.target_item_template_id != template.id:
-        # A legacy target is never paid after the cutover. If the canonical
-        # common target exists, switch to it and let this normal clock advance
-        # account for elapsed production exactly once.
+    target_changed = template is not None and assignment.target_item_template_id != template.id
+    catalog_resumed = template is not None and assignment.catalog_paused
+    if target_changed:
+        # A legacy target is never paid after the cutover. Resume the canonical
+        # target at this observation without crediting time since the last
+        # blocked observation.
         assignment.target_item_template = template
         assignment.target_item_template_id = template.id
+        assignment.catalog_paused = False
+        assignment.checkpoint_at_utc = timestamp
+        elapsed = 0
+        db.add(assignment)
+    elif catalog_resumed:
+        # The canonical target may itself have been inactive. The marker
+        # survives reloads so the blocked interval cannot be credited later.
+        assignment.catalog_paused = False
+        assignment.checkpoint_at_utc = timestamp
+        elapsed = 0
         db.add(assignment)
     produced = 0
     stored = 0
@@ -269,6 +281,7 @@ def advance_assignment(
         # cannot turn blocked online/offline time into a backlog of rewards.
         checkpoint = _utc(assignment.checkpoint_at_utc)
         assignment.checkpoint_at_utc = max(checkpoint, timestamp)
+        assignment.catalog_paused = True
         db.add(assignment)
         return {
             "cycles": 0,
