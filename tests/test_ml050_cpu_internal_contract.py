@@ -27,7 +27,7 @@ from app.services.regional_event_service import record_cpu_event_activity
 
 
 class CpuInternalContractTests(unittest.TestCase):
-    def test_blocked_cpus_reuse_one_hidden_contract_without_mutating_snapshot(self):
+    def test_weakest_blocked_cpu_selects_shared_contract_before_strong_cpu_plans(self):
         campaigns = None
         info = None
         with tempfile.TemporaryDirectory(
@@ -54,9 +54,14 @@ class CpuInternalContractTests(unittest.TestCase):
                         RegionalGuildState.campaign_id == info.campaign_id,
                         RegionalGuildState.region_code == home_code,
                         RegionalGuildState.guild_id.is_(None),
-                        RegionalGuildState.profile == "new",
                     ).order_by(RegionalGuildState.id)))
-                    self.assertGreaterEqual(len(cpu_states), 2)
+                    strong_cpu = next(state for state in cpu_states if state.profile == "strong")
+                    weak_cpu = next(state for state in cpu_states if state.profile == "new")
+                    strong_cpu.level = 30
+                    weak_cpu.level = 1
+                    for state in cpu_states:
+                        state.active = state.id in {strong_cpu.id, weak_cpu.id}
+                    db.flush()
                     for offer in db.scalars(select(RegionalOffer).where(
                         RegionalOffer.cycle_id == cycle.id,
                         RegionalOffer.region_code == home_code,
@@ -65,19 +70,25 @@ class CpuInternalContractTests(unittest.TestCase):
                         offer.required_guild_level_snapshot = 999
                     db.flush()
 
+                    strong_cpu_id, weak_cpu_id = strong_cpu.id, weak_cpu.id
                     retry_point = db.begin_nested()
-                    first_plan = regional_cycle_service._cpu_plan_for_guild_v6(
-                        db, info.campaign_id, cycle, region, cpu_states[0],
-                    )[0]
-                    first_decisions = json.loads(first_plan.decisions_json)
-                    self.assertEqual(len(first_decisions), 1, first_decisions)
-                    self.assertTrue(first_decisions[0].get("internal_contract"), first_decisions)
+                    prepared_starts = regional_cycle_service._prepare_cpu_region_cycle_start(
+                        db, info.campaign_id, cycle, region, [strong_cpu, weak_cpu],
+                    )
                     first_internal = db.scalar(select(RegionalOffer).where(
                         RegionalOffer.cycle_id == cycle.id,
                         RegionalOffer.region_code == home_code,
                         RegionalOffer.offer_type == "cpu_internal",
                     ))
                     self.assertIsNotNone(first_internal)
+                    self.assertEqual(first_internal.required_guild_level_snapshot, 1)
+                    first_plan = regional_cycle_service._cpu_plan_for_guild_v6(
+                        db, info.campaign_id, cycle, region, strong_cpu,
+                        prepared_start=prepared_starts[strong_cpu.id],
+                    )[0]
+                    first_decisions = json.loads(first_plan.decisions_json)
+                    self.assertEqual(len(first_decisions), 1, first_decisions)
+                    self.assertTrue(first_decisions[0].get("internal_contract"), first_decisions)
                     first_snapshot_signature = (
                         first_internal.status,
                         first_internal.mission_template_id,
@@ -91,6 +102,14 @@ class CpuInternalContractTests(unittest.TestCase):
                         key: value for key, value in first_decisions[0].items()
                         if key != "offer_id"
                     }
+                    weak_plan = regional_cycle_service._cpu_plan_for_guild_v6(
+                        db, info.campaign_id, cycle, region, weak_cpu,
+                        prepared_start=prepared_starts[weak_cpu.id],
+                    )[0]
+                    weak_decisions = json.loads(weak_plan.decisions_json)
+                    self.assertEqual(len(weak_decisions), 1, weak_decisions)
+                    self.assertTrue(weak_decisions[0].get("internal_contract"), weak_decisions)
+                    self.assertNotEqual(first_decisions[0]["offer_id"], weak_decisions[0]["offer_id"])
                     retry_point.rollback()
                     db.expunge_all()
 
@@ -104,14 +123,15 @@ class CpuInternalContractTests(unittest.TestCase):
                         RegionalRegionState.campaign_id == info.campaign_id,
                         RegionalRegionState.region_code == home_code,
                     ))
-                    cpu_states = list(db.scalars(select(RegionalGuildState).where(
-                        RegionalGuildState.campaign_id == info.campaign_id,
-                        RegionalGuildState.region_code == home_code,
-                        RegionalGuildState.guild_id.is_(None),
-                        RegionalGuildState.profile == "new",
-                    ).order_by(RegionalGuildState.id)))
+                    strong_cpu = db.get(RegionalGuildState, strong_cpu_id)
+                    weak_cpu = db.get(RegionalGuildState, weak_cpu_id)
+                    cpu_states = [strong_cpu, weak_cpu]
+                    prepared_starts = regional_cycle_service._prepare_cpu_region_cycle_start(
+                        db, info.campaign_id, cycle, region, cpu_states,
+                    )
                     replay_plan = regional_cycle_service._cpu_plan_for_guild_v6(
-                        db, info.campaign_id, cycle, region, cpu_states[0],
+                        db, info.campaign_id, cycle, region, strong_cpu,
+                        prepared_start=prepared_starts[strong_cpu.id],
                     )[0]
                     replay_decisions = json.loads(replay_plan.decisions_json)
                     self.assertEqual(len(replay_decisions), 1, replay_decisions)
@@ -152,7 +172,8 @@ class CpuInternalContractTests(unittest.TestCase):
                     self.assertIsNone(stored.reserved_by_guild_state_id)
 
                     second_plan = regional_cycle_service._cpu_plan_for_guild_v6(
-                        db, info.campaign_id, cycle, region, cpu_states[1],
+                        db, info.campaign_id, cycle, region, weak_cpu,
+                        prepared_start=prepared_starts[weak_cpu.id],
                     )[0]
                     second_decisions = json.loads(second_plan.decisions_json)
                     self.assertEqual(len(second_decisions), 1, second_decisions)
@@ -215,6 +236,13 @@ class CpuInternalContractTests(unittest.TestCase):
                         RegionalGuildState.guild_id.is_(None),
                         RegionalGuildState.profile == "strong",
                     ))
+                    other_cpus = list(db.scalars(select(RegionalGuildState).where(
+                        RegionalGuildState.campaign_id == info.campaign_id,
+                        RegionalGuildState.region_code == home_code,
+                        RegionalGuildState.guild_id.is_(None),
+                    )))
+                    for state in other_cpus:
+                        state.active = state.id == strong_cpu.id
                     offers = list(db.scalars(select(RegionalOffer).where(
                         RegionalOffer.cycle_id == cycle.id,
                         RegionalOffer.region_code == home_code,
@@ -227,8 +255,12 @@ class CpuInternalContractTests(unittest.TestCase):
                     public_offer.duration_seconds_snapshot = 60
                     db.flush()
 
+                    prepared_starts = regional_cycle_service._prepare_cpu_region_cycle_start(
+                        db, info.campaign_id, cycle, region, [strong_cpu],
+                    )
                     plan = regional_cycle_service._cpu_plan_for_guild_v6(
                         db, info.campaign_id, cycle, region, strong_cpu,
+                        prepared_start=prepared_starts[strong_cpu.id],
                     )[0]
                     decisions = json.loads(plan.decisions_json)
                     self.assertEqual(len(decisions), 1, decisions)
@@ -242,6 +274,74 @@ class CpuInternalContractTests(unittest.TestCase):
             finally:
                 if campaigns is not None and info is not None:
                     campaigns.close_active_campaign(info.campaign_id)
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
+    def test_previously_materialized_v6_v7_cycles_keep_legacy_cpu_rules(self):
+        with tempfile.TemporaryDirectory(
+            prefix="ml050-cpu-legacy-version-", dir=Path(__file__).resolve().parents[1],
+        ) as temp_dir:
+            campaigns = CampaignService(Path(temp_dir) / "saves")
+            try:
+                for version in (
+                    regional_cycle_service.VIGILIA_V6_RULES_VERSION,
+                    regional_cycle_service.VIGILIA_V7_RULES_VERSION,
+                ):
+                    info = campaigns.create_campaign(f"Ciclo {version}", "Guilda Versão")
+                    campaigns.activate_campaign(info.campaign_id)
+                    with SessionLocal() as db:
+                        campaign = db.get(CampaignMetadata, info.campaign_id)
+                        guild, _resources = get_current_guild_context(db, info.campaign_id)
+                        cycle = advance_regional_world(
+                            db, campaign, guild, campaign.created_at_utc,
+                        )
+                        self.assertEqual(cycle.rules_version, regional_cycle_service.VIGILIA_RULES_VERSION)
+                        cycle.rules_version = version
+                        db.flush()
+                        same_cycle = advance_regional_world(
+                            db, campaign, guild, campaign.created_at_utc,
+                        )
+                        self.assertEqual(same_cycle.id, cycle.id)
+                        self.assertEqual(same_cycle.rules_version, version)
+                        home_code = next(
+                            code for code, name in regional_cycle_service.REGIONS
+                            if name == campaign.home_region
+                        )
+                        region = db.scalar(select(RegionalRegionState).where(
+                            RegionalRegionState.campaign_id == info.campaign_id,
+                            RegionalRegionState.region_code == home_code,
+                        ))
+                        cpus = list(db.scalars(select(RegionalGuildState).where(
+                            RegionalGuildState.campaign_id == info.campaign_id,
+                            RegionalGuildState.region_code == home_code,
+                            RegionalGuildState.guild_id.is_(None),
+                        )))
+                        strong_cpu = next(state for state in cpus if state.profile == "strong")
+                        for state in cpus:
+                            state.active = state.id == strong_cpu.id
+                        for offer in db.scalars(select(RegionalOffer).where(
+                            RegionalOffer.cycle_id == cycle.id,
+                            RegionalOffer.region_code == home_code,
+                            RegionalOffer.offer_type.in_(regional_cycle_service.PUBLIC_REGIONAL_OFFER_TYPES),
+                        )):
+                            offer.required_guild_level_snapshot = 999
+                        db.flush()
+
+                        prepared = regional_cycle_service._prepare_cpu_region_cycle_start(
+                            db, info.campaign_id, cycle, region, [strong_cpu],
+                        )
+                        self.assertEqual(prepared, {})
+                        plan = regional_cycle_service._cpu_plan_for_guild(
+                            db, info.campaign_id, cycle, region, strong_cpu,
+                        )[0]
+                        self.assertEqual(plan.actions, 0)
+                        self.assertEqual(db.scalar(select(func.count(RegionalOffer.id)).where(
+                            RegionalOffer.cycle_id == cycle.id,
+                            RegionalOffer.region_code == home_code,
+                            RegionalOffer.offer_type == "cpu_internal",
+                        )), 0)
+                    campaigns.close_active_campaign(info.campaign_id)
+            finally:
                 configure_database("sqlite:///:memory:")
                 gc.collect()
 
@@ -274,6 +374,13 @@ class CpuInternalContractTests(unittest.TestCase):
                         RegionalGuildState.guild_id.is_(None),
                         RegionalGuildState.profile == "new",
                     ))
+                    all_cpus = list(db.scalars(select(RegionalGuildState).where(
+                        RegionalGuildState.campaign_id == info.campaign_id,
+                        RegionalGuildState.region_code == home_code,
+                        RegionalGuildState.guild_id.is_(None),
+                    )))
+                    for state in all_cpus:
+                        state.active = state.id == rosterless_cpu.id
                     roster = list(db.scalars(select(RegionalCpuMercenary).where(
                         RegionalCpuMercenary.guild_state_id == rosterless_cpu.id,
                     )))
@@ -287,8 +394,12 @@ class CpuInternalContractTests(unittest.TestCase):
                         offer.required_guild_level_snapshot = 999
                     db.flush()
 
+                    prepared_starts = regional_cycle_service._prepare_cpu_region_cycle_start(
+                        db, info.campaign_id, cycle, region, [rosterless_cpu],
+                    )
                     no_roster_plan = regional_cycle_service._cpu_plan_for_guild_v6(
                         db, info.campaign_id, cycle, region, rosterless_cpu,
+                        prepared_start=prepared_starts[rosterless_cpu.id],
                     )[0]
                     self.assertEqual(no_roster_plan.actions, 0)
                     self.assertEqual(db.scalar(select(func.count(RegionalOffer.id)).where(
@@ -320,8 +431,13 @@ class CpuInternalContractTests(unittest.TestCase):
                         RegionalGuildState.guild_id.is_(None),
                         RegionalGuildState.profile == "medium",
                     ))
+                    eligible_cpu.active = True
+                    prepared_starts = regional_cycle_service._prepare_cpu_region_cycle_start(
+                        db, info.campaign_id, cycle, region, [eligible_cpu],
+                    )
                     internal_plan = regional_cycle_service._cpu_plan_for_guild_v6(
                         db, info.campaign_id, cycle, region, eligible_cpu,
+                        prepared_start=prepared_starts[eligible_cpu.id],
                     )[0]
                     self.assertTrue(any(
                         row.get("internal_contract")

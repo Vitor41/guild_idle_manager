@@ -2426,7 +2426,10 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         for decision in json.loads(plan.decisions_json or "[]")
                         if isinstance(decision, dict)
                     )
-                    self.assertGreater(internal_actions, 0)
+                    # The cycle-start region preflight found public work for every
+                    # active CPU cohort in this retry fixture; exhaustion later in
+                    # the sequential plans must not create a retroactive fallback.
+                    self.assertEqual(internal_actions, 0)
                     self.assertEqual(
                         db.scalar(select(func.sum(RegionalCpuCyclePlan.actions)).where(
                             RegionalCpuCyclePlan.campaign_id == info.campaign_id,

@@ -25,6 +25,8 @@ from app.models.regional import (
 from app.services.building_balance_service import scouts_values
 from app.services.regional_cycle_service import (
     REGIONS,
+    VIGILIA_RULES_VERSION,
+    VIGILIA_V7_RULES_VERSION,
     _rng,
     _seed_text,
     get_current_player_regional_guild,
@@ -90,7 +92,9 @@ def _utc(value: datetime) -> datetime:
 
 
 def _event_rules_version_for_cycle(cycle: RegionalCycle) -> str:
-    return EVENT_RULES_VERSION if cycle.rules_version == "vigilia-v7" else LEGACY_EVENT_RULES_VERSION
+    return EVENT_RULES_VERSION if cycle.rules_version in {
+        VIGILIA_V7_RULES_VERSION, VIGILIA_RULES_VERSION,
+    } else LEGACY_EVENT_RULES_VERSION
 
 
 def _summary(event: RegionalEvent) -> dict[str, object]:
@@ -795,7 +799,9 @@ def record_cpu_event_activity(
         ))
         if participant_exists is None:
             rng = _rng(portal.seed, plan.seed, "cpu-portal-entry")
-            if cycle.rules_version in {"vigilia-v5", "vigilia-v6", "vigilia-v7"}:
+            if cycle.rules_version in {
+                "vigilia-v5", "vigilia-v6", VIGILIA_V7_RULES_VERSION, VIGILIA_RULES_VERSION,
+            }:
                 decisions = json.loads(plan.decisions_json or "[]")
                 outcomes = json.loads(plan.outcomes_json or "[]")
                 outcome_by_offer = {item.get("offer_id"): item for item in outcomes}
