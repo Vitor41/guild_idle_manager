@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -96,9 +96,34 @@ class RegionalCycle(Base):
     player_level_snapshot: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     player_power_snapshot: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rank_weights_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    portal_spawn_rules_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     processed_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class RegionalPortalSpawnState(Base):
+    __tablename__ = "regional_portal_spawn_state"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "region_code", name="uq_portal_spawn_campaign_region"),
+        CheckConstraint("failure_stacks >= 0", name="ck_portal_spawn_failure_stacks_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(
+        ForeignKey("campaign_metadata.campaign_id"), nullable=False, index=True
+    )
+    region_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    failure_stacks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_evaluated_cycle_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_portal_spawned_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cooldown_until_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rules_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    last_result: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
 
 class RegionalCpuMercenary(Base):

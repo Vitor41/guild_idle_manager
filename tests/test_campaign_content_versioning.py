@@ -35,6 +35,7 @@ from app.services.economy_pricing_service import equipment_base_sell_value
 from app.services.class_change_service import get_class_change_page_context
 from app.services.gathering_service import advance_assignment, assign_worker
 from app.services.regional_cycle_service import CYCLE_SECONDS, get_regional_board
+from app.services.portal_spawn_rules import CURRENT_PORTAL_SPAWN_RULES_VERSION
 
 
 class CampaignContentVersioningTests(unittest.TestCase):
@@ -90,6 +91,10 @@ class CampaignContentVersioningTests(unittest.TestCase):
                     board = get_regional_board(db, metadata, guild, metadata.created_at_utc + timedelta(minutes=1))
                     self.assertEqual(metadata.content_version, PACK_VERSION)
                     self.assertEqual(board["cycle"].content_version, PACK_VERSION)
+                    self.assertEqual(
+                        board["cycle"].portal_spawn_rules_version,
+                        CURRENT_PORTAL_SPAWN_RULES_VERSION,
+                    )
             finally:
                 campaigns.close_active_campaign(campaign.campaign_id)
 

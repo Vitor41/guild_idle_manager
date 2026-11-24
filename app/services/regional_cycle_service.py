@@ -45,6 +45,7 @@ from app.services.equipment_service import get_mercenary_attribute_summary
 from app.models.content import ProfessionTemplate
 from app.services.mission_power_service import recommended_regional_contract_power
 from app.services.tavern_service import get_discounted_hire_cost, get_tavern_apprentice_chances, next_apprentice_cost
+from app.services.portal_spawn_rules import CURRENT_PORTAL_SPAWN_RULES_VERSION
 
 
 LEGACY_VIGILIA_RULES_VERSION = "vigilia-v2"
@@ -950,6 +951,7 @@ def _materialize_cycle(
         player_level_snapshot=level,
         player_power_snapshot=power,
         rank_weights_json=json.dumps(weight_payload, ensure_ascii=False, sort_keys=True),
+        portal_spawn_rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
         status="open",
     )
     db.add(cycle)

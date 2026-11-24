@@ -20,9 +20,11 @@ from app.models.regional import (
     RegionalEventActivity,
     RegionalEventParticipant,
     RegionalGuildState,
+    RegionalPortalSpawnState,
     RegionalRegionState,
 )
 from app.services.building_balance_service import scouts_values
+from app.services.portal_spawn_rules import get_portal_spawn_rules
 from app.services.regional_cycle_service import (
     REGIONS,
     VIGILIA_RULES_VERSION,
@@ -423,6 +425,9 @@ def _create_cycle_portals_locked(
 ) -> None:
     cycle_end = _utc(cycle.ends_at_utc)
     expire_due_events(db, campaign_id, cycle_end)
+    if cycle.portal_spawn_rules_version is not None:
+        _create_versioned_cycle_portals_locked(db, campaign_id, cycle, regions, cycle_end)
+        return
     event_rules_version = _event_rules_version_for_cycle(cycle)
     stage_eligible = event_rules_version in {V7_EVENT_RULES_VERSION, EVENT_RULES_VERSION}
     # New rules add the introductory boss and gate portal bosses by the
@@ -524,6 +529,206 @@ def _create_cycle_portals_locked(
                 "portal_loot": loot_snapshot,
             }, ensure_ascii=False, sort_keys=True),
         ))
+    db.flush()
+
+
+def _versioned_portal_boss_pool(
+    db: Session,
+    cycle: RegionalCycle,
+) -> tuple[list[DungeonTemplate], bool]:
+    """Return the exact active, stage-eligible bosses with at least one loot band."""
+    event_rules_version = _event_rules_version_for_cycle(cycle)
+    stage_eligible = event_rules_version in {V7_EVENT_RULES_VERSION, EVENT_RULES_VERSION}
+    boss_query = select(DungeonTemplate).where(
+        DungeonTemplate.is_active.is_(True),
+        DungeonTemplate.content_type == "boss",
+    )
+    if stage_eligible:
+        stage_level = max(1, int(cycle.player_level_snapshot or 1))
+        boss_query = boss_query.where(
+            DungeonTemplate.required_guild_level <= stage_level,
+            or_(
+                DungeonTemplate.biome == "portal",
+                (DungeonTemplate.level_band == "1-20") & (DungeonTemplate.recommended_level <= 1),
+            ),
+        )
+    else:
+        boss_query = boss_query.where(DungeonTemplate.biome == "portal")
+    portal_bosses = list(db.scalars(boss_query.order_by(
+        DungeonTemplate.recommended_level, DungeonTemplate.id,
+    )))
+
+    # build_portal_loot_snapshot emits an entry exactly when this level band
+    # has at least one active rare, epic, or legendary equipment template.
+    valid_loot_bands = set(db.scalars(select(ItemTemplate.level_band).where(
+        ItemTemplate.is_active.is_(True),
+        ItemTemplate.item_type == "equipment",
+        ItemTemplate.rarity.in_(tuple(PORTAL_LOOT_CHANCE_BY_RARITY)),
+        ItemTemplate.level_band.is_not(None),
+    ).distinct()))
+    portal_bosses = [boss for boss in portal_bosses if boss.level_band in valid_loot_bands]
+    return portal_bosses, stage_eligible
+
+
+def _create_versioned_cycle_portals_locked(
+    db: Session,
+    campaign_id: str,
+    cycle: RegionalCycle,
+    regions: list[RegionalRegionState],
+    cycle_end: datetime,
+) -> None:
+    """Evaluate the versioned portal policy, leaving unmarked cycles legacy."""
+    rules = get_portal_spawn_rules(cycle.portal_spawn_rules_version)
+    if rules is None:
+        return
+    event_rules_version = _event_rules_version_for_cycle(cycle)
+    portal_bosses, stage_eligible = _versioned_portal_boss_pool(db, cycle)
+
+    for region in sorted(regions, key=lambda row: row.region_code):
+        state = db.scalar(select(RegionalPortalSpawnState).where(
+            RegionalPortalSpawnState.campaign_id == campaign_id,
+            RegionalPortalSpawnState.region_code == region.region_code,
+        ))
+        if state is None:
+            previous_portal = db.scalar(select(RegionalEvent).where(
+                RegionalEvent.campaign_id == campaign_id,
+                RegionalEvent.event_type == "portal",
+                RegionalEvent.region_code == region.region_code,
+                RegionalEvent.created_at_utc <= cycle_end,
+            ).order_by(RegionalEvent.created_at_utc.desc(), RegionalEvent.id.desc()).limit(1))
+            previous_origin = (
+                _utc(previous_portal.created_at_utc) if previous_portal is not None else None
+            )
+            state = RegionalPortalSpawnState(
+                campaign_id=campaign_id,
+                region_code=region.region_code,
+                failure_stacks=0,
+                last_portal_spawned_at_utc=previous_origin,
+                cooldown_until_utc=(
+                    previous_origin + timedelta(seconds=rules.cooldown_seconds)
+                    if previous_origin is not None else None
+                ),
+                rules_version=rules.version,
+                created_at_utc=cycle_end,
+                updated_at_utc=cycle_end,
+            )
+            db.add(state)
+        elif state.rules_version != rules.version:
+            state.failure_stacks = min(max(0, int(state.failure_stacks)), rules.max_stack())
+            state.rules_version = rules.version
+
+        if (state.last_evaluated_cycle_number is not None
+                and state.last_evaluated_cycle_number >= cycle.cycle_number):
+            continue
+
+        same_cycle_event = db.scalar(select(RegionalEvent.id).where(
+            RegionalEvent.campaign_id == campaign_id,
+            RegionalEvent.event_type == "portal",
+            RegionalEvent.region_code == region.region_code,
+            RegionalEvent.trigger_cycle_number == cycle.cycle_number,
+        ).limit(1))
+        if same_cycle_event is not None:
+            state.last_evaluated_cycle_number = cycle.cycle_number
+            state.last_result = "event_already_exists"
+            state.updated_at_utc = cycle_end
+            continue
+
+        active_event = db.scalar(select(RegionalEvent.id).where(
+            RegionalEvent.campaign_id == campaign_id,
+            RegionalEvent.event_type == "portal",
+            RegionalEvent.region_code == region.region_code,
+            RegionalEvent.status.in_(("active", "in_progress")),
+            RegionalEvent.created_at_utc <= cycle_end,
+        ).limit(1))
+        if active_event is not None:
+            result = "active_portal"
+        elif state.cooldown_until_utc is not None and cycle_end < _utc(state.cooldown_until_utc):
+            result = "cooldown"
+        elif not portal_bosses:
+            result = "content_unavailable"
+        else:
+            player_state = db.scalar(select(RegionalGuildState).where(
+                RegionalGuildState.campaign_id == campaign_id,
+                RegionalGuildState.region_code == region.region_code,
+                RegionalGuildState.guild_id.is_not(None),
+            ).limit(1))
+            scouts_level = 0
+            if player_state is not None and player_state.guild_id is not None:
+                scouts_level = int(db.scalar(select(GuildBuilding.level).join(
+                    BuildingTemplate, BuildingTemplate.id == GuildBuilding.building_template_id,
+                ).where(
+                    GuildBuilding.guild_id == player_state.guild_id,
+                    BuildingTemplate.effect_type == "scouts",
+                )) or 0)
+            detection_bonus_pp = int(
+                scouts_values(scouts_level)["portal_detection_bonus_percentage_points"]
+            )
+            base_chance_pp, explorer_bonus_pp, chance_pp = rules.chance_percentages(
+                state.failure_stacks, detection_bonus_pp,
+            )
+            seed = _seed_text(
+                campaign_id, cycle.cycle_number, region.region_code, rules.version, "portal",
+            )
+            if _rng(seed, "chance").random() * 100.0 >= chance_pp:
+                state.failure_stacks = min(rules.max_stack(), int(state.failure_stacks) + 1)
+                result = "rolled_failure"
+            else:
+                template = portal_bosses[_rng(seed, "boss").randrange(len(portal_bosses))]
+                loot_snapshot = build_portal_loot_snapshot(
+                    db,
+                    template,
+                    _seed_text(seed, "loot", template.id),
+                )
+                if not loot_snapshot["entries"]:
+                    # Content may be edited concurrently by an administrator.
+                    # Do not turn an invalidated pool into a failure or success.
+                    result = "content_unavailable"
+                else:
+                    db.add(RegionalEvent(
+                        campaign_id=campaign_id,
+                        event_type="portal",
+                        region_code=region.region_code,
+                        trigger_cycle_number=cycle.cycle_number,
+                        rules_version=event_rules_version,
+                        seed=seed,
+                        status="active",
+                        dungeon_template_id=template.id,
+                        created_at_utc=cycle_end,
+                        expires_at_utc=cycle_end + timedelta(hours=rules.entry_window_hours),
+                        summary_json=json.dumps({
+                            "portal_spawn_rules_version": rules.version,
+                            "chance_percent": chance_pp,
+                            "base_chance_percent": base_chance_pp,
+                            "explorer_detection_bonus_pp": explorer_bonus_pp,
+                            "failure_stacks_before_roll": int(state.failure_stacks),
+                            "failure_stacks_after_roll": 0,
+                            "cooldown_hours": rules.cooldown_hours,
+                            "entry_window_hours": rules.entry_window_hours,
+                            "deadline_policy": "continues_offline",
+                            "threat_snapshot": round(region.threat, 4),
+                            "content_policy": (
+                                "active_stage_eligible_portal_or_introductory_boss"
+                                if stage_eligible else "active_portal_biome_boss_template"
+                            ),
+                            "progression_stage_level_snapshot": (
+                                max(1, int(cycle.player_level_snapshot or 1)) if stage_eligible else None
+                            ),
+                            "portal_boss": {
+                                "version": PORTAL_BOSS_SNAPSHOT_VERSION if stage_eligible else "portal-boss-v1",
+                                "template": build_portal_boss_snapshot(template),
+                            },
+                            "portal_loot": loot_snapshot,
+                        }, ensure_ascii=False, sort_keys=True),
+                    ))
+                    state.failure_stacks = 0
+                    state.last_portal_spawned_at_utc = cycle_end
+                    state.cooldown_until_utc = cycle_end + timedelta(seconds=rules.cooldown_seconds)
+                    result = "spawned"
+
+        state.last_evaluated_cycle_number = cycle.cycle_number
+        state.last_result = result
+        state.updated_at_utc = cycle_end
+        db.add(state)
     db.flush()
 
 
