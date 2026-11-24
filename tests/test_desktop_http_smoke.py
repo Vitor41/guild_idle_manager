@@ -602,7 +602,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert "na ordem de registro do inventário".encode("utf-8") in body
             assert "retorno é sorteado por unidade entre 1 e 3 materiais".encode("utf-8") in body
         assert b'data-drop-preview' in rendered_pages["/regional"]
-        assert "Chance-base por item/entrada".encode("utf-8") in rendered_pages["/regional"]
+        assert "Drops · chance base".encode("utf-8") in rendered_pages["/regional"]
         assert b"class-requirement-card" in rendered_pages["/class-change"]
         assert b"Requisitos por etapa" in rendered_pages["/class-change"]
         assert "Navegar entre regiões".encode("utf-8") in rendered_pages[regional_outcome_path]
@@ -1760,10 +1760,11 @@ with tempfile.TemporaryDirectory() as data_dir:
             re.S,
         )
         assert portal_preview_card and b"Loot do portal" in portal_preview_card.group(0), portal_detail_body[:4000]
-        assert b"Chance da faixa exclusiva" in portal_preview_card.group(0)
-        assert b"Qtd. base:" in portal_preview_card.group(0)
+        assert b"\xc3\xb3s sucesso" in portal_preview_card.group(0)
+        assert b"\xc3\x971" in portal_preview_card.group(0)
+        assert b"Qtd. base:" not in portal_preview_card.group(0)
+        assert b"Como funcionam os drops" in portal_preview_card.group(0)
         assert b"multiplicador" not in portal_preview_card.group(0).lower()
-        assert b"% chance" in portal_preview_card.group(0)
         status, location, portal_start_body = request(
             f"/regional/events/{portal_event_id}/portals/start", method="POST",
             body=f"mercenary_ids={portal_mercenary_id}",

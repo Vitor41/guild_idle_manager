@@ -445,23 +445,7 @@ def get_dungeons_page_context(
         drop_preview = build_drop_preview(getattr(template, "item_drops", None))
         template.drop_preview_available = drop_preview["available"]
         template.visible_drops = drop_preview["drops"]
-        modifiers = ["habilidades da equipe", "Exploradores"]
-        active_entries = getattr(template, "item_drops", None) or []
-        if any(
-            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
-            for entry in active_entries
-        ):
-            modifiers.append("Ferreiro para equipamentos")
-        template.drop_modifier_note = (
-            "Chance-base por item/entrada; rola somente após sucesso. Pode variar com "
-            + ", ".join(modifiers) + "."
-        )
-        if template.visible_drops:
-            template.drop_modifier_note += (
-                " Quantidade exibida como base; o multiplicador escolhido e bônus aplicáveis alteram o total (ex.: em 2x, 1–2 vira 2–4 antes dos bônus)."
-                if max_run_multiplier > 1
-                else " Quantidade exibida como base; bônus aplicáveis podem alterar o total."
-            )
+        template.drop_chance_basis = drop_preview["chance_basis"]
         template.synergy_bonus_max = min(6, sum(2 for amount in (
             template.required_tank_count, template.required_support_count, template.required_damage_count
         ) if amount > 0))

@@ -378,38 +378,29 @@ def _annotate_offer_drop_preview(db, offer: RegionalOffer) -> None:
     if offer.offer_type == "contract":
         template = db.get(MissionTemplate, offer.mission_template_id) if offer.mission_template_id else None
         active_entries = getattr(template, "item_drops", None) if template is not None else None
-        drop_note = "Chance-base por item/entrada; rola somente após sucesso. Pode variar com habilidades da equipe"
-        if template is not None and template.mission_type == "gathering":
-            drop_note += ", profissão na coleta"
-        if active_entries and any(
-            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
-            for entry in active_entries
-        ):
-            drop_note += ", Ferreiro para equipamentos"
     else:
         template = db.get(DungeonTemplate, offer.dungeon_template_id) if offer.dungeon_template_id else None
         active_entries = getattr(template, "item_drops", None) if template is not None else None
-        drop_note = "Chance-base por item/entrada; rola somente após sucesso. Pode variar com habilidades da equipe e Exploradores"
-        if active_entries and any(
-            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
-            for entry in active_entries
-        ):
-            drop_note += ", Ferreiro para equipamentos"
     preview = build_drop_preview(active_entries)
     offer.drop_preview_available = preview["available"]
     offer.visible_drops = preview["drops"]
-    offer.drop_modifier_note = drop_note + "."
+    offer.drop_chance_basis = preview["chance_basis"]
 
 
 def _portal_drop_preview(db, summary: dict[str, object]) -> dict[str, object]:
     table = summary.get("portal_loot")
-    if not isinstance(table, dict) or not isinstance(table.get("entries"), list) or not table["entries"]:
-        return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+    if (
+        not isinstance(table, dict)
+        or table.get("roll_model") != "one_100_point_roll;exclusive_rarity_bands;no_guaranteed_equipment"
+        or not isinstance(table.get("entries"), list)
+        or not table["entries"]
+    ):
+        return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
     drops = []
     try:
         for entry in table["entries"]:
             if not isinstance(entry, dict):
-                return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+                return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
             item_id = int(entry.get("item_template_id", 0))
             chance = int(entry.get("chance_percent", -1))
             quantity = int(entry.get("quantity", 0))
@@ -423,24 +414,24 @@ def _portal_drop_preview(db, summary: dict[str, object]) -> dict[str, object]:
                 or not getattr(item, "name", None) or not getattr(item, "rarity", None)
                 or not 0 <= chance <= 100 or quantity < 1
             ):
-                return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+                return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
             drops.append({
                 "display_name": clean_generated_name(item.name),
                 "rarity_class": str(item.rarity).lower(),
                 "rarity_label": rarity_label(item.rarity),
                 "icon_path": get_item_icon_path(item),
                 "chance_percent": chance,
-                "chance_label": "chance",
+                "chance_label": "após sucesso",
                 "min_quantity": quantity,
                 "max_quantity": quantity,
                 "quantity_unit": "instância(s)",
             })
     except (AttributeError, TypeError, ValueError):
-        return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+        return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
     return {
         "drop_preview_available": True,
         "visible_drops": drops,
-        "drop_modifier_note": "Chance da faixa exclusiva; rolagem somente após sucesso. O portal não garante equipamento.",
+        "drop_chance_basis": "conditional",
     }
 
 

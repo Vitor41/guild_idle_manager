@@ -98,7 +98,7 @@
                     <strong>Bônus de construções</strong>
                     <span>Contrato: ouro e XP +{{ building_bonuses.contract_reward_bonus_percent }}%</span><span>Equip. +{{ building_bonuses.equipment_drop_bonus_percent }} p.p.</span><span>+{{ building_bonuses.material_quantity_bonus }} materiais principais</span><span>Máx. {{ building_bonuses.max_run_multiplier }}x</span>
                   </div>
-                  {{ drop_preview(mission.visible_drops, mission.drop_preview_available, mission.drop_modifier_note) }}
+                  {{ drop_preview(mission.visible_drops, mission.drop_preview_available, mission.drop_chance_basis) }}
                 </div>
               </div>
               <form class="party-form" method="post" action="/missions/start">

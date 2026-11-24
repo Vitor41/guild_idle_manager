@@ -101,7 +101,7 @@
                 {% if dungeon.content_type == 'boss' %}<p class="boss-risk-warning"><strong>Desafio de Chefe:</strong> risco superior e foco em raridades altas; não é a melhor rota para ouro ou XP básico.</p>{% endif %}
                 <div class="mission-card-info-footer">
                   <div class="bonus-box"><strong>Bônus de construções</strong><span>XP +{{ building_bonuses.xp_bonus_percent }}%</span><span>Equip. +{{ building_bonuses.equipment_drop_bonus_percent }} p.p.</span><span>+{{ building_bonuses.material_quantity_bonus }} materiais principais</span><span>Máx. {{ building_bonuses.max_run_multiplier }}x</span></div>
-                  {{ drop_preview(dungeon.visible_drops, dungeon.drop_preview_available, dungeon.drop_modifier_note) }}
+                  {{ drop_preview(dungeon.visible_drops, dungeon.drop_preview_available, dungeon.drop_chance_basis) }}
                 </div>
               </div>
               <form class="party-form" method="post" action="/dungeons/start" data-supply-quote-url="/dungeons/supply-quote">

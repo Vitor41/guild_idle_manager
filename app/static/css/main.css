@@ -1519,15 +1519,24 @@ textarea {
 .mission-card-info-footer .bonus-box { align-content: start; margin-top: 0; }
 .loot-preview { min-width: 0; padding-top: 12px; border-top: 1px solid rgba(233, 198, 116, 0.14); }
 .loot-preview > strong { display: block; margin-bottom: 7px; color: var(--gold-2); font-size: .82rem; text-transform: uppercase; }
-.loot-preview-list { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 3px; }
-.loot-preview-item { display: grid; grid-template-columns: 28px minmax(105px, 1fr); align-items: center; gap: 6px; flex: 0 0 auto; max-width: 210px; padding: 6px 8px; border: 1px solid var(--rarity-color, var(--border)); border-radius: 7px; background: rgba(0,0,0,.18); color: var(--parchment); font-size: .78rem; line-height: 1.2; }
-.loot-preview-item small { display: block; margin-top: 2px; color: var(--muted); font-size: .72rem; }
-.loot-preview-icon, .loot-preview-icon img { display: grid; place-items: center; width: 26px; height: 26px; object-fit: contain; }
+.loot-preview-list { display: grid; gap: 0; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.loot-preview-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) minmax(3.5rem, auto) minmax(6rem, auto); align-items: center; gap: 8px; min-width: 0; padding: 6px 0; border-bottom: 1px solid rgba(233, 198, 116, 0.1); color: var(--parchment); font-size: .78rem; line-height: 1.2; }
+.loot-preview-identity { display: grid; gap: 2px; min-width: 0; }
+.loot-preview-identity strong { overflow-wrap: anywhere; font-weight: 650; }
+.loot-preview-rarity { width: fit-content; border: 0; color: var(--rarity-color, var(--muted)); font-size: .7rem; }
+.loot-preview-chance, .loot-preview-quantity { display: flex; flex-direction: column; align-items: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 700; }
+.loot-preview-item small { display: block; margin-top: 2px; color: var(--muted); font-size: .7rem; font-weight: 400; }
+.loot-preview-icon, .loot-preview-icon img { display: grid; place-items: center; width: 32px; height: 32px; object-fit: contain; }
 .loot-preview-more { margin-top: 6px; }
-.loot-preview-more summary { width: fit-content; min-height: 36px; padding: 8px 10px; border: 1px solid rgba(233, 198, 116, .2); border-radius: 6px; color: var(--gold-2); cursor: pointer; font-size: .78rem; }
-.loot-preview-more .loot-preview-list { margin-top: 7px; }
-.loot-preview-note { display: block; margin-top: 5px; color: var(--muted); font-size: .72rem; line-height: 1.35; }
+.loot-preview-more summary { display: inline-grid; place-items: center; min-width: 36px; min-height: 36px; padding: 6px 10px; border: 1px solid rgba(233, 198, 116, .2); border-radius: 6px; color: var(--gold-2); cursor: pointer; font-size: .78rem; }
+.loot-preview-more__collapse, .loot-preview-more[open] .loot-preview-more__expand { display: none; }
+.loot-preview-more[open] .loot-preview-more__collapse { display: inline; }
+.loot-preview-more summary:focus-visible, .loot-preview-help:focus-visible { outline: 3px solid var(--gold-soft); outline-offset: 3px; }
+.loot-preview-list--additional { margin-top: 7px; }
+.loot-preview-help { display: inline-block; margin-top: 8px; color: var(--muted); font-size: .75rem; text-underline-offset: 2px; }
+.loot-preview-help:hover, .loot-preview-help:focus-visible { color: var(--gold-soft); }
 .loot-preview-state { margin: 0; color: var(--muted); font-size: .8rem; }
+.guide-drop-rules { max-width: 86ch; margin: 0 0 16px; color: var(--parchment-soft); line-height: 1.65; }
 .locked-content-card { opacity: .76; border-color: rgba(210,168,74,.48); }
 
 .bonus-box {
@@ -2654,6 +2663,16 @@ html { scroll-behavior: smooth; }
   .catalog-toolbar { grid-template-columns: 1fr; }
   .mission-card-info-footer { grid-template-columns: 1fr; }
   .salvage-preview { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .loot-preview-item { grid-template-columns: 32px minmax(0, 1fr) auto auto; }
+  .loot-preview-identity { grid-column: 2 / 5; }
+  .loot-preview-chance { grid-column: 2 / 3; justify-self: start; align-items: flex-start; }
+  .loot-preview-quantity { grid-column: 3 / 5; }
+}
+@media (max-width: 380px) {
+  .loot-preview-item { grid-template-columns: 32px minmax(0, 1fr); }
+  .loot-preview-chance, .loot-preview-quantity { grid-column: 2 / 3; justify-self: start; align-items: flex-start; }
 }
 @media (max-width: 360px) { .mission-history-kpis { grid-template-columns: 1fr; } }
 .desktop-clock-warning { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #c6a25c; color: #f0d99f; background: #302719; }

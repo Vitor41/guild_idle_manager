@@ -16,7 +16,7 @@ def build_drop_preview(entries: Iterable[object] | None) -> dict[str, object]:
     so the UI never presents partial or stale loot as confirmed.
     """
     if entries is None:
-        return {"available": False, "drops": []}
+        return {"available": False, "drops": [], "chance_basis": None}
 
     normalized: list[dict[str, object]] = []
     try:
@@ -30,7 +30,7 @@ def build_drop_preview(entries: Iterable[object] | None) -> dict[str, object]:
             try:
                 chance_value, minimum_value, maximum_value = int(chance), int(minimum), int(maximum)
             except (TypeError, ValueError):
-                return {"available": False, "drops": []}
+                return {"available": False, "drops": [], "chance_basis": None}
             if (
                 item is None
                 or not getattr(item, "is_active", False)
@@ -40,19 +40,18 @@ def build_drop_preview(entries: Iterable[object] | None) -> dict[str, object]:
                 or minimum_value < 1
                 or maximum_value < minimum_value
             ):
-                return {"available": False, "drops": []}
+                return {"available": False, "drops": [], "chance_basis": None}
             normalized.append({
                 "display_name": clean_generated_name(item.name),
                 "rarity_class": str(item.rarity).lower(),
                 "rarity_label": rarity_label(item.rarity),
                 "icon_path": get_item_icon_path(item),
                 "chance_percent": chance_value,
-                "chance_label": "base",
                 "min_quantity": minimum_value,
                 "max_quantity": maximum_value,
                 "quantity_unit": "instância(s)" if item.item_type == "equipment" else "unidade(s)",
             })
     except (TypeError, AttributeError, ValueError):
-        return {"available": False, "drops": []}
+        return {"available": False, "drops": [], "chance_basis": None}
 
-    return {"available": True, "drops": normalized}
+    return {"available": True, "drops": normalized, "chance_basis": "base"}

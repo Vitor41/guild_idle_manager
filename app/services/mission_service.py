@@ -328,25 +328,7 @@ def get_missions_page_context(
         drop_preview = build_drop_preview(getattr(mission, "item_drops", None))
         mission.drop_preview_available = drop_preview["available"]
         mission.visible_drops = drop_preview["drops"]
-        modifiers = ["habilidades da equipe"]
-        if mission.mission_type == "gathering":
-            modifiers.append("profissão para o material principal")
-        active_entries = getattr(mission, "item_drops", None) or []
-        if any(
-            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
-            for entry in active_entries
-        ):
-            modifiers.append("Ferreiro para equipamentos")
-        mission.drop_modifier_note = (
-            "Chance-base por item/entrada; rola somente após sucesso. Pode variar com "
-            + ", ".join(modifiers) + "."
-        )
-        if mission.visible_drops:
-            mission.drop_modifier_note += (
-                " Quantidade exibida como base; bônus aplicáveis podem alterar o total."
-                if mission.is_long_idle or max_run_multiplier <= 1
-                else " Quantidade exibida como base; o multiplicador escolhido e bônus aplicáveis alteram o total (ex.: em 2x, 1–2 vira 2–4 antes dos bônus)."
-            )
+        mission.drop_chance_basis = drop_preview["chance_basis"]
     mission_mercenaries = {
         mission.id: available_mercenaries
         for mission in mission_templates

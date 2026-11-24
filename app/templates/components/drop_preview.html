@@ -1,34 +1,33 @@
-{% macro drop_preview(drops, available, modifier_note, title="Drops possíveis") -%}
-  <div class="loot-preview" data-drop-preview>
-    <strong>{{ title }}</strong>
+{% macro drop_preview(drops, available, chance_basis, title="") -%}
+  <section class="loot-preview" data-drop-preview data-chance-basis="{{ chance_basis or 'unavailable' }}">
+    <strong>{{ title or ("Drops · chance base" if available and drops and chance_basis == "base" else "Drops") }}</strong>
     {% if not available %}
-      <p class="subtle-note loot-preview-state">Informações de drops indisponíveis</p>
+      <p class="subtle-note loot-preview-state">Drops não registrados</p>
     {% elif drops %}
       {% set visible_drops = drops[:3] %}
-      <div class="loot-preview-list" role="list">
-        {% for drop in visible_drops %}
-          <span class="loot-preview-item rarity-{{ drop.rarity_class }}" role="listitem" title="{{ drop.rarity_label }}">
-            <span class="loot-preview-icon" aria-hidden="true">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span>
-            <span>{{ drop.display_name }}<small>{{ drop.rarity_label }} · {{ drop.chance_percent }}% {{ drop.chance_label|default("base") }} · Qtd. base: {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}–{{ drop.max_quantity }}{% endif %} {{ drop.quantity_unit }}</small></span>
-          </span>
-        {% endfor %}
-      </div>
+      <ul class="loot-preview-list" aria-label="Drops possíveis">
+        {% for drop in visible_drops %}{{ drop_preview_item(drop, chance_basis) }}{% endfor %}
+      </ul>
       {% if drops|length > 3 %}
         <details class="loot-preview-more">
-          <summary>Ver todos os {{ drops|length }} drops</summary>
-          <div class="loot-preview-list" role="list">
-            {% for drop in drops[3:] %}
-              <span class="loot-preview-item rarity-{{ drop.rarity_class }}" role="listitem" title="{{ drop.rarity_label }}">
-                <span class="loot-preview-icon" aria-hidden="true">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span>
-                <span>{{ drop.display_name }}<small>{{ drop.rarity_label }} · {{ drop.chance_percent }}% {{ drop.chance_label|default("base") }} · Qtd. base: {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}–{{ drop.max_quantity }}{% endif %} {{ drop.quantity_unit }}</small></span>
-              </span>
-            {% endfor %}
-          </div>
+          <summary><span class="loot-preview-more__expand">Ver todos ({{ drops|length }})</span><span class="loot-preview-more__collapse">Recolher drops</span></summary>
+          <ul class="loot-preview-list loot-preview-list--additional" aria-label="Demais drops possíveis">
+            {% for drop in drops[3:] %}{{ drop_preview_item(drop, chance_basis) }}{% endfor %}
+          </ul>
         </details>
       {% endif %}
-      <small class="loot-preview-note">{{ modifier_note }}</small>
     {% else %}
-      <p class="subtle-note loot-preview-state">Apenas recompensas-base</p>
+      <p class="subtle-note loot-preview-state">Somente recompensa fixa</p>
     {% endif %}
-  </div>
+    <a class="loot-preview-help" href="/guide#economia">Como funcionam os drops</a>
+  </section>
+{%- endmacro %}
+
+{% macro drop_preview_item(drop, chance_basis) -%}
+  <li class="loot-preview-item">
+    <span class="loot-preview-icon" aria-hidden="true">{% if drop.icon_path %}<img src="{{ url_for('static', path=drop.icon_path) }}" alt="">{% else %}◇{% endif %}</span>
+    <span class="loot-preview-identity"><strong>{{ drop.display_name }}</strong><small class="loot-preview-rarity rarity-{{ drop.rarity_class }}">{{ drop.rarity_label }}</small></span>
+    <span class="loot-preview-chance" aria-label="Chance{% if chance_basis == 'base' %} base{% elif chance_basis == 'conditional' %} condicional{% endif %}: {{ drop.chance_percent }}%{% if drop.chance_label %} {{ drop.chance_label }}{% endif %}">{{ drop.chance_percent }}%{% if drop.chance_label %}<small>{{ drop.chance_label }}</small>{% endif %}</span>
+    <span class="loot-preview-quantity" aria-label="Quantidade: {{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %} a {{ drop.max_quantity }}{% endif %} {{ drop.quantity_unit }}">×{{ drop.min_quantity }}{% if drop.max_quantity != drop.min_quantity %}–{{ drop.max_quantity }}{% endif %}<small>{{ drop.quantity_unit }}</small></span>
+  </li>
 {%- endmacro %}
