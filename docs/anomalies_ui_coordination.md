@@ -23,10 +23,18 @@ O usuário autorizou abrir o jogo e navegar por toda a plataforma no save real p
 
 ## Estado inicial
 
+### Decisão de conteúdo e participação CPU
+
+Pré-flight CR no baseline confirmou que, em quatro templates do pool nos estágios 50/100, três são inviáveis para todas as CPUs recém-semeadas; exigem equipamento que o modelo atual não obtém. Essa amostra não mede CPUs evoluídas. Na ML-055, não criar um sistema novo de equipamento NPC nem relaxar requisitos: escolher conteúdo ativo com loot que pelo menos um ator real nativo tenha capacidade de cumprir. Na região natal, manter o teto de progressão do jogador e considerar a união de capacidades jogador/CPU; não excluir desafio viável para o jogador só por ser inviável para a CPU. Em regiões externas, usar a progressão das próprias guildas CPU, não a guilda do jogador como teto global. A ocupação momentânea não define capacidade potencial de conteúdo; disponibilidade real define o agendamento.
+
+Nas novas regras, remover o pré-sorteio de 25% de entrada CPU e priorizar a avaliação de portal viável, mantendo uma entrada por guilda/evento e combate real. Persistir motivos objetivos de não participação. Portais podem terminar depois do fechamento da Vigília/janela se iniciados no prazo, sem antecipar resultados/XP e com equipe ocupada até a conclusão real. Equivalência visita/ausência/retry é requisito. A ausência de encontro viável bloqueia geração com diagnóstico, sem consumir falha do stack. Implementação desta decisão pertence a ML-055, em SHA separado da fórmula de ML-054.
+
 | Frente | Estado | Próximo gate |
 | --- | --- | --- |
-| ML-054 | Baseline 32/32; desenho aprovado | Configuração central versionada, marcador nullable por ciclo e estado único campanha/região; primeiro SHA testado pendente |
-| ML-053 | Auditoria real em andamento | Instalação localizada após autorização de leitura; campanha aberta pela DA. Inventário completo e lotes ainda pendentes |
-| ML-052/055 | Direção visual aprovada pela coordenação | `docs/art_direction/ML052_ML055_VISUAL_SPEC.md`; componentes compactos, rota `/regional/events` e estados verificáveis. Não equivale a auditoria concluída |
-| Lotes derivados | A definir após auditoria | No máximo dois, implementados nesta branch |
+| ML-054 | Núcleo aprovado pelo CR: `4999670`; evidência `faefcd2` | 45 testes independentes, migração/legado/retry e oito casos da simulação reproduzidos. Integração ML-055 pendente; sem publicação. +5 p.p. nas cinco regiões é sensibilidade, não campanha real; janela perdida depende de presença ilustrativa |
+| ML-053 | Levantamento real realizado; validação da implementação pendente | 36 achados/oportunidades e 62 evidências privadas locais; cobertura e lacunas em `reports/ml053_coverage_checkpoint_2026-11-24.md` |
+| ML-052 | Implementada e aprovada tecnicamente pelo CR: `897fde9` | 35 testes independentes, incluindo smoke integrado; DA está validando visualmente. Sem aceite manual ou publicação |
+| ML-055 | Arquitetura aprovada pela coordenação; execução autorizada | `docs/art_direction/ML052_ML055_VISUAL_SPEC.md`; central `/regional/events`, participação CPU elegível e resolução tardia idempotente. Desenvolvimento inicia após checkpoint documental |
+| ML-056 | Escopo aprovado pela coordenação | Estados, requisitos e decisões visuais; IDs Fxx e aceite detalhados no artefato |
+| ML-057 | Escopo aprovado pela coordenação | Composição, navegação e consultas; fecha o segundo e último lote derivado |
 | Publicação | Não iniciada | Todos os itens entregues e CR/DA aprovados |
