@@ -2,7 +2,7 @@ import gc
 import json
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -30,6 +30,7 @@ from app.models.regional import (
     RegionalEventParticipant,
     RegionalGuildState,
     RegionalOffer,
+    RegionalRegionState,
     RegionalRunOutcome,
     RegionalWorldState,
 )
@@ -42,6 +43,7 @@ from app.services.regional_cycle_service import (
     CYCLE_SECONDS,
     LEGACY_VIGILIA_RULES_VERSION,
     RANKS,
+    VIGILIA_V9_EVENT_RULES_VERSION,
     advance_regional_world,
     cpu_initial_profile_values,
     cpu_roster_cap,
@@ -54,6 +56,242 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
+    def test_v9_portal_catchup_matches_7_12_14_hour_visits_and_reserves_party(self):
+        fixed_campaign_id = UUID("00000000-0000-4000-8000-000000000091")
+
+        def run_scenario(later_visits):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                try:
+                    configure_database("sqlite:///:memory:")
+                    campaigns = CampaignService(Path(temp_dir) / "saves")
+                    with patch("app.services.campaign_service.uuid4", return_value=fixed_campaign_id):
+                        info = campaigns.create_campaign("Portal catch-up", "Guilda de teste")
+                    campaigns.activate_campaign(info.campaign_id)
+                    with SessionLocal() as db:
+                        campaign = db.get(CampaignMetadata, info.campaign_id)
+                        campaign.created_at_utc = datetime(2026, 11, 1, tzinfo=timezone.utc)
+                        db.flush()
+                        guild, _resources = get_current_guild_context(db, info.campaign_id)
+                        start = regional_cycle_service._utc(campaign.created_at_utc)
+                        advance_regional_world(db, campaign, guild, start)
+                        with patch("app.services.regional_event_service.create_cycle_portals"):
+                            advance_regional_world(
+                                db, campaign, guild, start + timedelta(hours=6),
+                            )
+
+                        home_code = next(
+                            code for code, name in regional_cycle_service.REGIONS
+                            if name == campaign.home_region
+                        )
+                        event = RegionalEvent(
+                            campaign_id=info.campaign_id,
+                            event_type="portal",
+                            region_code=home_code,
+                            trigger_cycle_number=0,
+                            rules_version=VIGILIA_V9_EVENT_RULES_VERSION,
+                            seed="catchup-v9-portal-seed",
+                            status="active",
+                            created_at_utc=start + timedelta(hours=6),
+                            expires_at_utc=start + timedelta(hours=9),
+                            summary_json=json.dumps({"portal_boss": {
+                                "version": "portal-boss-v1",
+                                "template": {
+                                    "id": 9191,
+                                    "name": "Chefe de teste",
+                                    "duration_seconds": 10 * 3600,
+                                    "base_success_chance": 65,
+                                    "min_party_size": 1,
+                                    "max_party_size": 1,
+                                    "required_guild_level": 1,
+                                    "required_min_mercenary_level": 1,
+                                    "required_total_power": 0,
+                                    "required_class_code": None,
+                                    "required_tank_count": 0,
+                                    "required_support_count": 0,
+                                    "required_damage_count": 0,
+                                    "required_equipment_tier": 0,
+                                },
+                            }}),
+                        )
+                        db.add(event)
+                        db.commit()
+
+                        for visit_hour in later_visits:
+                            advance_regional_world(
+                                db, campaign, guild, start + timedelta(hours=visit_hour),
+                            )
+                            if visit_hour in {12, 14}:
+                                pending_activities = list(db.scalars(select(RegionalEventActivity).where(
+                                    RegionalEventActivity.event_id == event.id,
+                                    RegionalEventActivity.source_type == "cpu_portal",
+                                    RegionalEventActivity.status == "in_progress",
+                                ).order_by(RegionalEventActivity.guild_state_id)))
+                                self.assertTrue(pending_activities)
+                                for pending in pending_activities:
+                                    self.assertEqual(
+                                        regional_cycle_service._utc(pending.started_at_utc),
+                                        start + timedelta(hours=7),
+                                    )
+                                    self.assertEqual(
+                                        regional_cycle_service._utc(pending.due_at_utc),
+                                        start + timedelta(hours=17),
+                                    )
+                                if visit_hour == 14:
+                                    region = db.scalar(select(RegionalRegionState).where(
+                                        RegionalRegionState.campaign_id == info.campaign_id,
+                                        RegionalRegionState.region_code == home_code,
+                                    ))
+                                    prior_snapshot = db.scalar(
+                                        select(RegionalCycleRegion)
+                                        .join(RegionalCycle, RegionalCycle.id == RegionalCycleRegion.cycle_id)
+                                        .where(
+                                            RegionalCycle.campaign_id == info.campaign_id,
+                                            RegionalCycle.cycle_number == 1,
+                                            RegionalCycleRegion.region_code == home_code,
+                                        )
+                                    )
+                                    self.assertEqual(region.security, prior_snapshot.security_after)
+                                    self.assertEqual(region.threat, prior_snapshot.threat_after)
+
+                        activities = list(db.scalars(select(RegionalEventActivity).where(
+                            RegionalEventActivity.event_id == event.id,
+                            RegionalEventActivity.source_type == "cpu_portal",
+                            RegionalEventActivity.status == "resolved",
+                        ).order_by(RegionalEventActivity.guild_state_id)))
+                        self.assertTrue(activities)
+                        participants = list(db.scalars(select(RegionalEventParticipant).where(
+                            RegionalEventParticipant.event_id == event.id,
+                        ).order_by(RegionalEventParticipant.guild_state_id)))
+                        self.assertEqual(
+                            [row.guild_state_id for row in activities],
+                            [row.guild_state_id for row in participants],
+                        )
+                        self.assertEqual(len({row.guild_state_id for row in activities}), len(activities))
+                        for activity, participant in zip(activities, participants):
+                            self.assertEqual(
+                                regional_cycle_service._utc(activity.due_at_utc),
+                                start + timedelta(hours=17),
+                            )
+                            self.assertEqual(activity.resolved_at_utc, activity.due_at_utc)
+                            self.assertEqual(participant.status, "resolved")
+                            self.assertIsNotNone(participant.success)
+
+                        next_cycle = db.scalar(select(RegionalCycle).where(
+                            RegionalCycle.campaign_id == info.campaign_id,
+                            RegionalCycle.cycle_number == 2,
+                        ))
+                        for activity in activities:
+                            later_plan = db.scalar(select(RegionalCpuCyclePlan).where(
+                                RegionalCpuCyclePlan.cycle_id == next_cycle.id,
+                                RegionalCpuCyclePlan.guild_state_id == activity.guild_state_id,
+                            ))
+                            if later_plan is not None:
+                                portal_ids = set(json.loads(activity.snapshot_json)["mercenary_ids"])
+                                for decision in json.loads(later_plan.decisions_json or "[]"):
+                                    if portal_ids.intersection(decision.get("mercenary_ids", [])):
+                                        self.assertGreaterEqual(
+                                            regional_cycle_service._utc(datetime.fromisoformat(
+                                                decision["started_at_utc"]
+                                            )),
+                                            regional_cycle_service._utc(activity.due_at_utc),
+                                        )
+
+                        plans = list(db.execute(
+                            select(RegionalCpuCyclePlan, RegionalCycle)
+                            .join(RegionalCycle, RegionalCycle.id == RegionalCpuCyclePlan.cycle_id)
+                            .where(RegionalCpuCyclePlan.campaign_id == info.campaign_id)
+                            .order_by(RegionalCycle.cycle_number, RegionalCpuCyclePlan.guild_state_id)
+                        ))
+                        plan_snapshot = [(
+                            cycle.cycle_number, plan.guild_state_id, plan.seed,
+                            plan.roster_snapshot_json,
+                            plan.resources_before_json, plan.resources_after_json,
+                            plan.decisions_json, plan.outcomes_json,
+                        ) for plan, cycle in plans]
+                        origin_cycle_ids = {
+                            db.get(RegionalCpuCyclePlan, activity.source_run_id).cycle_id
+                            for activity in activities
+                        }
+                        history_rows = list(db.execute(
+                            select(RegionalCycleRegion, RegionalCycle)
+                            .join(RegionalCycle, RegionalCycle.id == RegionalCycleRegion.cycle_id)
+                            .where(
+                                RegionalCycleRegion.cycle_id.in_(origin_cycle_ids),
+                                RegionalCycleRegion.region_code == event.region_code,
+                            )
+                            .order_by(RegionalCycle.cycle_number)
+                        ))
+                        history_snapshot = []
+                        for history, origin_cycle in history_rows:
+                            summary = json.loads(history.summary_json)
+                            activity_summary = summary["cpu_activity"]
+                            origin_plans = list(db.scalars(
+                                select(RegionalCpuCyclePlan)
+                                .join(RegionalGuildState,
+                                      RegionalGuildState.id == RegionalCpuCyclePlan.guild_state_id)
+                                .where(
+                                    RegionalCpuCyclePlan.cycle_id == origin_cycle.id,
+                                    RegionalGuildState.region_code == event.region_code,
+                                )
+                            ))
+                            self.assertEqual(
+                                activity_summary["started"],
+                                sum(plan.started_actions for plan in origin_plans),
+                            )
+                            self.assertEqual(
+                                activity_summary["resolved"],
+                                sum(plan.resolved_actions for plan in origin_plans),
+                            )
+                            self.assertEqual(
+                                activity_summary["pending"],
+                                activity_summary["started"] - activity_summary["resolved"],
+                            )
+                            self.assertEqual(
+                                summary["successes"], sum(plan.successes for plan in origin_plans),
+                            )
+                            self.assertEqual(
+                                summary["failures"], sum(plan.failures for plan in origin_plans),
+                            )
+                            history_snapshot.append((origin_cycle.cycle_number, history.summary_json))
+                        resource_snapshot = list(db.execute(select(
+                            RegionalCpuResource.guild_state_id,
+                            RegionalCpuResource.resource_code,
+                            RegionalCpuResource.amount,
+                        ).where(
+                            RegionalCpuResource.campaign_id == info.campaign_id,
+                        ).order_by(
+                            RegionalCpuResource.guild_state_id,
+                            RegionalCpuResource.resource_code,
+                        )))
+                        region = db.scalar(select(RegionalRegionState).where(
+                            RegionalRegionState.campaign_id == info.campaign_id,
+                            RegionalRegionState.region_code == home_code,
+                        ))
+                        result = (
+                            event.id, event.status, event.summary_json,
+                            tuple((activity.guild_state_id, activity.source_run_id,
+                                   activity.status, activity.snapshot_json,
+                                   participant.status, participant.success)
+                                  for activity, participant in zip(activities, participants)),
+                            round(region.security, 4), round(region.threat, 4),
+                            plan_snapshot, history_snapshot, resource_snapshot,
+                        )
+                        before_retry = (region.security, region.threat, event.summary_json)
+                        advance_regional_world(
+                            db, campaign, guild, start + timedelta(hours=18),
+                        )
+                        self.assertEqual(
+                            (region.security, region.threat, event.summary_json), before_retry,
+                        )
+                        return result
+                finally:
+                    configure_database("sqlite:///:memory:")
+                    gc.collect()
+
+        incremental = run_scenario([7, 12, 14, 18])
+        batch = run_scenario([18])
+        self.assertEqual(incremental, batch)
+
     def test_contract_candidates_follow_guild_bands_and_keep_100_plus_ceiling(self):
         from random import Random
 
@@ -1232,10 +1470,22 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         eligible = sum(plan.eligible_actions for plan in plans)
                         started = sum(plan.started_actions for plan in plans)
                         resolved = sum(plan.resolved_actions for plan in plans)
+                        pending_portal_actions = db.scalar(
+                            select(func.count(func.distinct(RegionalEventActivity.source_run_id)))
+                            .join(RegionalCpuCyclePlan,
+                                  RegionalCpuCyclePlan.id == RegionalEventActivity.source_run_id)
+                            .join(RegionalCycle, RegionalCycle.id == RegionalCpuCyclePlan.cycle_id)
+                            .where(
+                                RegionalCpuCyclePlan.campaign_id == first.campaign_id,
+                                RegionalCycle.cycle_number < horizon,
+                                RegionalEventActivity.source_type == "cpu_portal",
+                                RegionalEventActivity.status == "in_progress",
+                            )
+                        )
                         self.assertGreaterEqual(planned, eligible)
                         self.assertGreaterEqual(eligible, started)
                         self.assertEqual(started, actions)
-                        self.assertEqual(resolved, actions)
+                        self.assertEqual(resolved + pending_portal_actions, actions)
                         self.assertGreaterEqual(started / max(1, eligible), 0.70)
                         by_profile = {}
                         by_region = {}
@@ -1312,6 +1562,63 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                         self.assertGreater(by_profile["strong"]["success_rate"], 0)
                         self.assertGreater(by_profile["medium"]["success_rate"], 0)
                         self.assertGreater(by_profile["new"]["success_rate"], 0)
+
+                    all_plans = list(db.scalars(select(RegionalCpuCyclePlan).where(
+                        RegionalCpuCyclePlan.campaign_id == first.campaign_id,
+                    )))
+                    pending_portal_activities = list(db.scalars(select(RegionalEventActivity).join(
+                        RegionalEvent, RegionalEvent.id == RegionalEventActivity.event_id,
+                    ).where(
+                        RegionalEventActivity.source_type == "cpu_portal",
+                        RegionalEventActivity.status == "in_progress",
+                        RegionalEvent.campaign_id == first.campaign_id,
+                    )))
+                    pending_by_plan = {row.source_run_id: row for row in pending_portal_activities}
+                    self.assertTrue(all(
+                        regional_cycle_service._utc(row.due_at_utc) > regional_cycle_service._utc(now)
+                        for row in pending_portal_activities
+                    ), "an overdue CPU portal activity must be resolved during catch-up")
+                    self.assertEqual(db.execute(
+                        select(RegionalEventActivity.event_id, RegionalEventActivity.guild_state_id)
+                        .join(RegionalEvent, RegionalEvent.id == RegionalEventActivity.event_id)
+                        .where(
+                            RegionalEvent.campaign_id == first.campaign_id,
+                            RegionalEventActivity.source_type == "cpu_portal",
+                            RegionalEventActivity.status.in_(("in_progress", "resolved")),
+                        )
+                        .group_by(RegionalEventActivity.event_id, RegionalEventActivity.guild_state_id)
+                        .having(func.count(RegionalEventActivity.id) > 1)
+                    ).all(), [], "a guild can have at most one started or resolved entry per event")
+                    plans_by_id = {plan.id: plan for plan in all_plans}
+                    for plan in all_plans:
+                        decisions = json.loads(plan.decisions_json or "[]")
+                        outcomes = json.loads(plan.outcomes_json or "[]")
+                        self.assertEqual(len(decisions), plan.actions)
+                        self.assertEqual(len(outcomes), plan.resolved_actions)
+                        self.assertLessEqual(plan.resolved_actions, plan.started_actions)
+                        self.assertEqual(
+                            plan.resolved_actions + int(plan.id in pending_by_plan),
+                            plan.started_actions,
+                        )
+                        portal_outcomes = [row for row in outcomes if row.get("event_id") is not None]
+                        self.assertLessEqual(len(portal_outcomes), 1)
+
+                    resolved_portal_activities = list(db.scalars(select(RegionalEventActivity).join(
+                        RegionalEvent, RegionalEvent.id == RegionalEventActivity.event_id,
+                    ).where(
+                        RegionalEventActivity.source_type == "cpu_portal",
+                        RegionalEventActivity.status == "resolved",
+                        RegionalEvent.campaign_id == first.campaign_id,
+                    )))
+                    for activity in resolved_portal_activities:
+                        plan = plans_by_id[activity.source_run_id]
+                        event_outcomes = [row for row in json.loads(plan.outcomes_json or "[]")
+                                          if row.get("event_id") == activity.event_id]
+                        self.assertEqual(len(event_outcomes), 1)
+                        self.assertEqual(
+                            event_outcomes[0]["success"],
+                            bool(activity.successes),
+                        )
 
                     contracts = list(db.scalars(select(RegionalOffer).where(
                         RegionalOffer.campaign_id == first.campaign_id,
@@ -2085,7 +2392,11 @@ class RegionalCycleSimulationTests(unittest.TestCase):
                     )):
                         activity = json.loads(region_cycle.summary_json)["cpu_activity"]
                         pressure = json.loads(region_cycle.summary_json)["gradual_pressure"]
-                        self.assertEqual(activity["started"], activity["resolved"])
+                        self.assertEqual(
+                            activity["started"],
+                            activity["resolved"] + activity["pending"],
+                        )
+                        self.assertGreaterEqual(activity["pending"], 0)
                         self.assertLessEqual(activity["started"], activity["eligible"])
                         self.assertLessEqual(activity["eligible"], activity["planned"])
                         self.assertGreater(activity["started"], 0)

@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from sqlalchemy import delete, func, select
 
-from app.database.connection import Base, SessionLocal, configure_database, get_engine
+from app.database.connection import Base, SessionLocal, configure_database, create_database_engine, get_engine
 from app.models.campaign import CampaignMetadata
 from app.models.dungeon import DungeonTemplate
 from app.models.guild import Guild
@@ -22,6 +22,7 @@ from app.models.regional import (
     RegionalEventActivity,
     RegionalEventParticipant,
     RegionalGuildState,
+    RegionalPortalSpawnState,
     RegionalOffer,
     RegionalRegionState,
     RegionalRunOutcome,
@@ -49,10 +50,20 @@ from app.services.regional_event_service import (
     record_event_activity_result,
     record_cpu_event_activity,
     resolve_portal_participant,
+    resolve_due_cpu_portal_activities,
 )
-from app.services.regional_cycle_service import REGIONS, VIGILIA_RULES_VERSION, regional_outcome_impact
+from app.services.regional_cycle_service import (
+    CPU_INTERNAL_CONTRACT_RULES_VERSION,
+    REGIONS,
+    VIGILIA_RULES_VERSION,
+    VIGILIA_V9_EVENT_RULES_VERSION,
+    _cpu_portal_offer_for_guild,
+    regional_outcome_impact,
+)
+from app.services.portal_spawn_rules import CURRENT_PORTAL_SPAWN_RULES_VERSION
 from app.services.regional_cycle_service import record_player_offer_result
 from scripts.balance.simulate_regional_event_incidence import portal_chance, portal_roll, rebellion_roll
+from sqlalchemy.orm import Session
 
 
 def _as_utc(value):
@@ -1467,6 +1478,485 @@ class RegionalEventServiceTests(unittest.TestCase):
             self.assertEqual(event.status, "active")
             expire_due_events(db, self.campaign_id, self.now + timedelta(hours=13))
             self.assertEqual(event.status, "resolved")
+
+    def test_v9_cpu_portal_waits_until_frozen_due_time_and_applies_effect_once(self):
+        with SessionLocal() as db:
+            region = RegionalRegionState(
+                campaign_id=self.campaign_id,
+                region_code="vale-fronteira",
+                region_name="Vale da Fronteira",
+                security=50,
+                threat=80,
+            )
+            cpu_state = RegionalGuildState(
+                campaign_id=self.campaign_id,
+                region_code=region.region_code,
+                slot=1,
+                guild_id=None,
+                name="CPU do portal",
+                profile="strong",
+                archetype="exploration",
+            )
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=2,
+                starts_at_utc=self.now,
+                ends_at_utc=self.now + timedelta(hours=6),
+                seed="v9-cycle-seed",
+                rules_version=VIGILIA_RULES_VERSION,
+            )
+            due_at = self.now + timedelta(hours=5)
+            event = RegionalEvent(
+                campaign_id=self.campaign_id,
+                event_type="portal",
+                region_code=region.region_code,
+                trigger_cycle_number=1,
+                rules_version=VIGILIA_V9_EVENT_RULES_VERSION,
+                seed="v9-portal-seed",
+                status="active",
+                created_at_utc=self.now,
+                expires_at_utc=self.now + timedelta(hours=3),
+                summary_json=json.dumps({"portal_boss": {"template": {"id": 7}}}),
+            )
+            db.add_all([region, cpu_state, event])
+            db.flush()
+            db.commit()
+            plan = SimpleNamespace(
+                id=9601,
+                seed="v9-cpu-plan-seed",
+                guild_state_id=cpu_state.id,
+                actions=1,
+                successes=0,
+                failures=0,
+                decisions_json=json.dumps([{
+                    "offer_id": -event.id,
+                    "offer_type": "portal",
+                    "event_id": event.id,
+                    "started_at_utc": (self.now + timedelta(hours=1)).isoformat(),
+                    "resolved_at_utc": due_at.isoformat(),
+                    "pending_cpu_resolution": True,
+                    "event_rules_version": VIGILIA_V9_EVENT_RULES_VERSION,
+                    "result_success_snapshot": True,
+                    "success_chance": 76,
+                    "mercenary_ids": [301, 302],
+                    "party_snapshot": [{"id": 301, "slot": 1}, {"id": 302, "slot": 2}],
+                }]),
+                outcomes_json="[]",
+                event_diagnostics_json=json.dumps({
+                    "event_id": event.id,
+                    "event_rules_version": VIGILIA_V9_EVENT_RULES_VERSION,
+                    "reason_code": "started_pending_resolution",
+                }),
+            )
+            record_cpu_event_activity(db, self.campaign_id, cycle, region.region_code, plan)
+            db.flush()
+            db.rollback()
+            # A rolled-back scheduler attempt must be retryable without
+            # leaving either an entry or a regional effect behind.
+            record_cpu_event_activity(db, self.campaign_id, cycle, region.region_code, plan)
+            db.commit()
+            participant = db.scalar(select(RegionalEventParticipant).where(
+                RegionalEventParticipant.event_id == event.id,
+                RegionalEventParticipant.guild_state_id == cpu_state.id,
+            ))
+            activity = db.scalar(select(RegionalEventActivity).where(
+                RegionalEventActivity.event_id == event.id,
+                RegionalEventActivity.source_type == "cpu_portal",
+                RegionalEventActivity.source_run_id == plan.id,
+            ))
+            self.assertEqual(participant.status, "participating")
+            self.assertIsNone(participant.success)
+            self.assertEqual(activity.status, "in_progress")
+            self.assertEqual(json.loads(activity.snapshot_json)["mercenary_ids"], [301, 302])
+            self.assertEqual(region.security, 50)
+            self.assertEqual(region.threat, 80)
+
+            expire_due_events(db, self.campaign_id, event.expires_at_utc)
+            self.assertEqual(event.status, "in_progress")
+            self.assertEqual(resolve_due_cpu_portal_activities(
+                db, self.campaign_id, due_at - timedelta(seconds=1),
+            ), {})
+            self.assertEqual(activity.status, "in_progress")
+            effects = resolve_due_cpu_portal_activities(db, self.campaign_id, due_at)
+            self.assertEqual(activity.status, "resolved")
+            self.assertTrue(participant.success)
+            self.assertEqual(activity.successes, 1)
+            self.assertEqual(activity.failures, 0)
+            self.assertEqual(activity.resolved_at_utc, due_at)
+            self.assertEqual(effects[region.region_code], (
+                regional_outcome_impact("C"), -regional_outcome_impact("C"),
+            ))
+            after_resolution = (region.security, region.threat)
+            self.assertEqual(resolve_due_cpu_portal_activities(db, self.campaign_id, due_at), {})
+            self.assertEqual((region.security, region.threat), after_resolution)
+            self.assertEqual(event.status, "resolved")
+
+    def test_v9_cpu_portal_entry_skips_legacy_quarter_roll(self):
+        with SessionLocal() as db:
+            region = RegionalRegionState(
+                campaign_id=self.campaign_id,
+                region_code="vale-fronteira",
+                region_name="Vale da Fronteira",
+            )
+            cpu_state = RegionalGuildState(
+                campaign_id=self.campaign_id,
+                region_code=region.region_code,
+                slot=1,
+                guild_id=None,
+                name="CPU sem pré-sorteio",
+                profile="strong",
+                archetype="exploration",
+            )
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=8,
+                starts_at_utc=self.now,
+                ends_at_utc=self.now + timedelta(hours=6),
+                seed="v9-no-quarter-roll",
+                rules_version=VIGILIA_RULES_VERSION,
+            )
+            portal = RegionalEvent(
+                campaign_id=self.campaign_id,
+                event_type="portal",
+                region_code=region.region_code,
+                trigger_cycle_number=7,
+                rules_version=VIGILIA_V9_EVENT_RULES_VERSION,
+                seed="v9-no-quarter-roll-portal",
+                status="active",
+                created_at_utc=self.now,
+                expires_at_utc=self.now + timedelta(hours=3),
+                summary_json=json.dumps({"portal_boss": {"template": {
+                    "id": 123, "name": "Chefe compatível", "duration_seconds": 3600,
+                    "base_success_chance": 50, "min_party_size": 1,
+                    "max_party_size": 1, "required_guild_level": 1,
+                    "required_min_mercenary_level": 1, "required_total_power": 0,
+                }}}),
+            )
+            db.add_all([region, cpu_state, cycle, portal])
+            db.flush()
+
+            with patch(
+                "app.services.regional_cycle_service._rng",
+                side_effect=AssertionError("v9 must not use the legacy 25% entry roll"),
+            ):
+                offer = _cpu_portal_offer_for_guild(
+                    db, self.campaign_id, cycle, region, cpu_state, "stable-plan-seed",
+                    current_rules=True, cycle_start=self.now,
+                )
+            self.assertIsNotNone(offer)
+            self.assertTrue(offer.pending_cpu_resolution)
+            self.assertTrue(offer.enforce_min_mercenary_level)
+
+            portal.rules_version = "regional-events-v5"
+            cycle.rules_version = CPU_INTERNAL_CONTRACT_RULES_VERSION
+            with patch("app.services.regional_cycle_service._rng") as rng_factory:
+                rng_factory.return_value.random.return_value = 0.99
+                legacy_offer = _cpu_portal_offer_for_guild(
+                    db, self.campaign_id, cycle, region, cpu_state, "legacy-plan-seed",
+                    current_rules=True, cycle_start=self.now,
+                )
+            self.assertIsNone(legacy_offer)
+            rng_factory.assert_called_once()
+
+    def test_concurrent_v9_cpu_portal_attempts_record_one_guild_entry(self):
+        campaign_id = str(uuid4())
+        with tempfile.TemporaryDirectory() as temp_dir:
+            engine = create_database_engine(
+                f"sqlite:///{(Path(temp_dir) / 'concurrent-cpu-portal.db').resolve().as_posix()}",
+            )
+            Base.metadata.create_all(engine)
+            try:
+                with Session(engine) as db:
+                    db.add(CampaignMetadata(
+                        campaign_id=campaign_id,
+                        campaign_name="Portal concorrente",
+                        created_at_utc=self.now,
+                    ))
+                    region = RegionalRegionState(
+                        campaign_id=campaign_id,
+                        region_code="vale-fronteira",
+                        region_name="Vale da Fronteira",
+                    )
+                    cpu_state = RegionalGuildState(
+                        campaign_id=campaign_id,
+                        region_code=region.region_code,
+                        slot=1,
+                        guild_id=None,
+                        name="CPU concorrente",
+                        profile="strong",
+                        archetype="exploration",
+                    )
+                    portal = RegionalEvent(
+                        campaign_id=campaign_id,
+                        event_type="portal",
+                        region_code=region.region_code,
+                        trigger_cycle_number=1,
+                        rules_version=VIGILIA_V9_EVENT_RULES_VERSION,
+                        seed="concurrent-v9-portal",
+                        status="active",
+                        created_at_utc=self.now,
+                        expires_at_utc=self.now + timedelta(hours=3),
+                        summary_json="{}",
+                    )
+                    db.add_all([region, cpu_state, portal])
+                    db.commit()
+                    guild_state_id = cpu_state.id
+                    event_id = portal.id
+
+                cycle = SimpleNamespace(
+                    starts_at_utc=self.now,
+                    ends_at_utc=self.now + timedelta(hours=6),
+                    rules_version=VIGILIA_RULES_VERSION,
+                )
+
+                def make_plan(plan_id):
+                    return SimpleNamespace(
+                        id=plan_id,
+                        seed=f"concurrent-plan-{plan_id}",
+                        guild_state_id=guild_state_id,
+                        actions=1,
+                        successes=0,
+                        failures=0,
+                        decisions_json=json.dumps([{
+                            "offer_type": "portal",
+                            "event_id": event_id,
+                            "pending_cpu_resolution": True,
+                            "started_at_utc": (self.now + timedelta(hours=1)).isoformat(),
+                            "resolved_at_utc": (self.now + timedelta(hours=2)).isoformat(),
+                            "result_success_snapshot": True,
+                            "mercenary_ids": [1],
+                            "party_snapshot": [{"id": 1, "slot": 1}],
+                        }]),
+                        event_diagnostics_json="{}",
+                    )
+
+                barrier = Barrier(2)
+
+                def record(plan_id):
+                    with Session(engine) as db:
+                        barrier.wait(timeout=5)
+                        record_cpu_event_activity(
+                            db, campaign_id, cycle, "vale-fronteira", make_plan(plan_id),
+                        )
+                        db.commit()
+
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    list(executor.map(record, (9701, 9702)))
+
+                with Session(engine) as db:
+                    participants = list(db.scalars(select(RegionalEventParticipant).where(
+                        RegionalEventParticipant.event_id == event_id,
+                        RegionalEventParticipant.guild_state_id == guild_state_id,
+                    )))
+                    activities = list(db.scalars(select(RegionalEventActivity).where(
+                        RegionalEventActivity.event_id == event_id,
+                        RegionalEventActivity.source_type == "cpu_portal",
+                    )))
+                    self.assertEqual(len(participants), 1)
+                    self.assertEqual(participants[0].status, "participating")
+                    self.assertEqual(sum(row.status == "in_progress" for row in activities), 1)
+                    self.assertEqual(sum(row.status == "not_started" for row in activities), 1)
+            finally:
+                engine.dispose()
+
+    def test_v9_portal_without_a_viable_native_guild_does_not_consume_failure_stack(self):
+        with SessionLocal() as db:
+            remote_code = next(code for code, _name in REGIONS if code != REGIONS[0][0])
+            region_name = next(name for code, name in REGIONS if code == remote_code)
+            region = RegionalRegionState(
+                campaign_id=self.campaign_id,
+                region_code=remote_code,
+                region_name=region_name,
+                security=40,
+                threat=90,
+            )
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=11,
+                starts_at_utc=self.now,
+                ends_at_utc=self.now + timedelta(hours=6),
+                seed="v9-no-native-content",
+                rules_version=VIGILIA_RULES_VERSION,
+                player_level_snapshot=1,
+                portal_spawn_rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
+            )
+            boss = DungeonTemplate(
+                name="Chefe sem equipe nativa",
+                description="Requer uma equipe inexistente nesta região.",
+                content_type="boss",
+                level_band="1-20",
+                recommended_level=1,
+                biome="portal",
+                difficulty="legendary",
+                duration_seconds=3600,
+                base_gold_reward=10,
+                base_xp_reward=10,
+                base_success_chance=50,
+                min_party_size=1,
+                max_party_size=1,
+                required_guild_level=1,
+                required_min_mercenary_level=99,
+                is_active=True,
+            )
+            loot = ItemTemplate(
+                name="Equipamento válido do portal",
+                description="Mantém a tabela de loot elegível.",
+                item_type="equipment",
+                rarity="rare",
+                level_band="1-20",
+                equipment_slot="main_hand",
+                required_level=1,
+                tier=1,
+                base_sell_value=1,
+                rng_bonus_min=1,
+                rng_bonus_max=2,
+                is_active=True,
+            )
+            db.add_all([region, cycle, boss, loot])
+            db.flush()
+
+            create_cycle_portals(db, self.campaign_id, cycle, [region])
+
+            portal_state = db.scalar(select(RegionalPortalSpawnState).where(
+                RegionalPortalSpawnState.campaign_id == self.campaign_id,
+                RegionalPortalSpawnState.region_code == remote_code,
+            ))
+            self.assertIsNotNone(portal_state)
+            self.assertEqual(portal_state.last_result, "no_eligible_content")
+            self.assertEqual(portal_state.failure_stacks, 0)
+            self.assertEqual(portal_state.last_evaluated_cycle_number, cycle.cycle_number)
+            self.assertIsNone(db.scalar(select(RegionalEvent.id).where(
+                RegionalEvent.campaign_id == self.campaign_id,
+                RegionalEvent.event_type == "portal",
+                RegionalEvent.region_code == remote_code,
+            )))
+
+    def test_v9_cpu_portal_persists_no_entry_reason_without_actions(self):
+        with SessionLocal() as db:
+            cpu_state = RegionalGuildState(
+                campaign_id=self.campaign_id,
+                region_code="vale-fronteira",
+                slot=1,
+                guild_id=None,
+                name="CPU bloqueada",
+                profile="new",
+                archetype="contracts",
+            )
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=4,
+                starts_at_utc=self.now,
+                ends_at_utc=self.now + timedelta(hours=6),
+                seed="v9-empty-cycle",
+                rules_version=VIGILIA_RULES_VERSION,
+            )
+            event = RegionalEvent(
+                campaign_id=self.campaign_id,
+                event_type="portal",
+                region_code=cpu_state.region_code,
+                trigger_cycle_number=3,
+                rules_version=VIGILIA_V9_EVENT_RULES_VERSION,
+                seed="v9-empty-portal",
+                status="active",
+                created_at_utc=self.now,
+                expires_at_utc=self.now + timedelta(hours=3),
+                summary_json="{}",
+            )
+            db.add_all([cpu_state, event])
+            db.flush()
+            plan = SimpleNamespace(
+                id=9602,
+                seed="v9-no-action-plan",
+                guild_state_id=cpu_state.id,
+                actions=0,
+                successes=0,
+                failures=0,
+                decisions_json="[]",
+                outcomes_json="[]",
+                event_diagnostics_json=json.dumps({
+                    "event_id": event.id,
+                    "event_rules_version": VIGILIA_V9_EVENT_RULES_VERSION,
+                    "reason_code": "no_party_meets_portal_requirements",
+                    "detail": "Nenhum grupo CPU local atende aos requisitos.",
+                }),
+            )
+            record_cpu_event_activity(db, self.campaign_id, cycle, event.region_code, plan)
+            activity = db.scalar(select(RegionalEventActivity).where(
+                RegionalEventActivity.event_id == event.id,
+                RegionalEventActivity.source_type == "cpu_portal",
+                RegionalEventActivity.source_run_id == plan.id,
+            ))
+            self.assertIsNone(db.scalar(select(RegionalEventParticipant.id).where(
+                RegionalEventParticipant.event_id == event.id,
+                RegionalEventParticipant.guild_state_id == cpu_state.id,
+            )))
+            self.assertEqual(activity.status, "not_started")
+            self.assertEqual(activity.reason_code, "no_party_meets_portal_requirements")
+            self.assertIn("requisitos", activity.reason_detail)
+
+    def test_v8_cycle_keeps_v5_portal_activity_immediate(self):
+        with SessionLocal() as db:
+            region = RegionalRegionState(
+                campaign_id=self.campaign_id,
+                region_code="vale-fronteira",
+                region_name="Vale da Fronteira",
+            )
+            cpu_state = RegionalGuildState(
+                campaign_id=self.campaign_id,
+                region_code=region.region_code,
+                slot=1,
+                guild_id=None,
+                name="CPU legado",
+                profile="strong",
+                archetype="exploration",
+            )
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=5,
+                starts_at_utc=self.now,
+                ends_at_utc=self.now + timedelta(hours=6),
+                seed="v8-legacy-cycle",
+                rules_version=CPU_INTERNAL_CONTRACT_RULES_VERSION,
+            )
+            event = RegionalEvent(
+                campaign_id=self.campaign_id,
+                event_type="portal",
+                region_code=region.region_code,
+                trigger_cycle_number=4,
+                rules_version="regional-events-v5",
+                seed="v8-legacy-portal",
+                status="active",
+                created_at_utc=self.now,
+                expires_at_utc=self.now + timedelta(hours=3),
+                summary_json="{}",
+            )
+            db.add_all([region, cpu_state, event])
+            db.flush()
+            planned_end = self.now + timedelta(hours=2)
+            plan = SimpleNamespace(
+                id=9603,
+                seed="v8-legacy-plan",
+                guild_state_id=cpu_state.id,
+                actions=1,
+                successes=1,
+                failures=0,
+                decisions_json=json.dumps([{
+                    "offer_id": -event.id,
+                    "offer_type": "portal",
+                    "event_id": event.id,
+                    "started_at_utc": (self.now + timedelta(hours=1)).isoformat(),
+                    "resolved_at_utc": planned_end.isoformat(),
+                }]),
+                outcomes_json=json.dumps([{"offer_id": -event.id, "success": True}]),
+            )
+            record_cpu_event_activity(db, self.campaign_id, cycle, region.region_code, plan)
+            activity = db.scalar(select(RegionalEventActivity).where(
+                RegionalEventActivity.event_id == event.id,
+                RegionalEventActivity.source_type == "cpu_portal",
+                RegionalEventActivity.source_run_id == plan.id,
+            ))
+            self.assertEqual(activity.status, "resolved")
+            self.assertIsNone(activity.due_at_utc)
 
 
 if __name__ == "__main__":

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from itertools import combinations
 import json
 from threading import Lock
+from types import SimpleNamespace
 
 from sqlalchemy import event as sqlalchemy_event, or_, select
 from sqlalchemy.orm import Session as SqlAlchemySession
@@ -13,12 +15,17 @@ from sqlalchemy.orm import Session
 from app.models.campaign import CampaignMetadata
 from app.models.building import BuildingTemplate, GuildBuilding
 from app.models.dungeon import DungeonTemplate
+from app.models.guild import Guild
 from app.models.item import ItemTemplate
+from app.models.mercenary import Mercenary, MercenaryClass
 from app.models.regional import (
     RegionalCycle,
+    RegionalCycleRegion,
     RegionalEvent,
     RegionalEventActivity,
     RegionalEventParticipant,
+    RegionalCpuCyclePlan,
+    RegionalCpuMercenary,
     RegionalGuildState,
     RegionalPortalSpawnState,
     RegionalRegionState,
@@ -26,9 +33,12 @@ from app.models.regional import (
 from app.services.building_balance_service import scouts_values
 from app.services.portal_spawn_rules import get_portal_spawn_rules
 from app.services.regional_cycle_service import (
+    CPU_INTERNAL_CONTRACT_RULES_VERSION,
     REGIONS,
     VIGILIA_RULES_VERSION,
     VIGILIA_V7_RULES_VERSION,
+    VIGILIA_V9_RULES_VERSION,
+    _cpu_offer_party,
     _rng,
     _seed_text,
     get_current_player_regional_guild,
@@ -36,7 +46,9 @@ from app.services.regional_cycle_service import (
 )
 
 
-EVENT_RULES_VERSION = "regional-events-v5"
+V8_EVENT_RULES_VERSION = "regional-events-v5"
+V9_EVENT_RULES_VERSION = "regional-events-v6"
+EVENT_RULES_VERSION = V9_EVENT_RULES_VERSION
 V7_EVENT_RULES_VERSION = "regional-events-v4"
 LEGACY_EVENT_RULES_VERSION = "regional-events-v3"
 PORTAL_LOOT_VERSION = "portal-loot-v1"
@@ -100,6 +112,8 @@ def _utc(value: datetime) -> datetime:
 def _event_rules_version_for_cycle(cycle: RegionalCycle) -> str:
     if cycle.rules_version == VIGILIA_RULES_VERSION:
         return EVENT_RULES_VERSION
+    if cycle.rules_version == CPU_INTERNAL_CONTRACT_RULES_VERSION:
+        return V8_EVENT_RULES_VERSION
     if cycle.rules_version == VIGILIA_V7_RULES_VERSION:
         return V7_EVENT_RULES_VERSION
     return LEGACY_EVENT_RULES_VERSION
@@ -429,7 +443,9 @@ def _create_cycle_portals_locked(
         _create_versioned_cycle_portals_locked(db, campaign_id, cycle, regions, cycle_end)
         return
     event_rules_version = _event_rules_version_for_cycle(cycle)
-    stage_eligible = event_rules_version in {V7_EVENT_RULES_VERSION, EVENT_RULES_VERSION}
+    stage_eligible = event_rules_version in {
+        V7_EVENT_RULES_VERSION, V8_EVENT_RULES_VERSION, V9_EVENT_RULES_VERSION,
+    }
     # New rules add the introductory boss and gate portal bosses by the
     # campaign stage. Older cycles retain their original portal-biome pool.
     boss_query = select(DungeonTemplate).where(
@@ -454,7 +470,7 @@ def _create_cycle_portals_locked(
         return
     for region in sorted(regions, key=lambda row: row.region_code):
         if (region.threat < PORTAL_MIN_THREAT
-                and event_rules_version != EVENT_RULES_VERSION):
+                and event_rules_version not in {V8_EVENT_RULES_VERSION, V9_EVENT_RULES_VERSION}):
             continue
         active_id = db.scalar(select(RegionalEvent.id).where(
             RegionalEvent.campaign_id == campaign_id,
@@ -535,16 +551,20 @@ def _create_cycle_portals_locked(
 def _versioned_portal_boss_pool(
     db: Session,
     cycle: RegionalCycle,
+    *,
+    stage_level: int | None = None,
 ) -> tuple[list[DungeonTemplate], bool]:
     """Return the exact active, stage-eligible bosses with at least one loot band."""
     event_rules_version = _event_rules_version_for_cycle(cycle)
-    stage_eligible = event_rules_version in {V7_EVENT_RULES_VERSION, EVENT_RULES_VERSION}
+    stage_eligible = event_rules_version in {
+        V7_EVENT_RULES_VERSION, V8_EVENT_RULES_VERSION, V9_EVENT_RULES_VERSION,
+    }
     boss_query = select(DungeonTemplate).where(
         DungeonTemplate.is_active.is_(True),
         DungeonTemplate.content_type == "boss",
     )
     if stage_eligible:
-        stage_level = max(1, int(cycle.player_level_snapshot or 1))
+        stage_level = max(1, int(stage_level or cycle.player_level_snapshot or 1))
         boss_query = boss_query.where(
             DungeonTemplate.required_guild_level <= stage_level,
             or_(
@@ -570,6 +590,153 @@ def _versioned_portal_boss_pool(
     return portal_bosses, stage_eligible
 
 
+def _cpu_portal_candidate_offer(template: DungeonTemplate) -> SimpleNamespace:
+    return SimpleNamespace(
+        offer_type="portal",
+        required_guild_level_snapshot=max(1, int(template.required_guild_level or 1)),
+        min_party_size_snapshot=max(1, int(template.min_party_size or 1)),
+        max_party_size_snapshot=max(1, int(template.max_party_size or 1)),
+        required_min_mercenary_level_snapshot=max(1, int(template.required_min_mercenary_level or 1)),
+        required_class_code_snapshot=template.required_class_code,
+        required_total_power_snapshot=max(0, int(template.required_total_power or 0)),
+        required_tank_count_snapshot=max(0, int(template.required_tank_count or 0)),
+        required_support_count_snapshot=max(0, int(template.required_support_count or 0)),
+        required_damage_count_snapshot=max(0, int(template.required_damage_count or 0)),
+        required_equipment_tier_snapshot=max(0, int(template.required_equipment_tier or 0)),
+        duration_seconds_snapshot=max(1, int(template.duration_seconds or 1)),
+        recommended_power_snapshot=max(1, int(template.required_total_power or 0)),
+        success_chance_snapshot=max(5, min(95, int(template.base_success_chance or 50))),
+        cpu_failure_risk_snapshot=0,
+    )
+
+
+def _cpu_can_complete_portal_boss(
+    state: RegionalGuildState,
+    roster: list[RegionalCpuMercenary],
+    class_roles: dict[str, str],
+    template: DungeonTemplate,
+    at: datetime,
+) -> bool:
+    if not state.active or state.guild_id is not None:
+        return False
+    offer = _cpu_portal_candidate_offer(template)
+    available_at = {member.id: at for member in roster}
+    return _cpu_offer_party(
+        offer,
+        state,
+        roster,
+        available_at,
+        at + timedelta(days=365),
+        class_roles,
+        include_synergy_power=True,
+        require_equipment_for_each_member=True,
+        enforce_min_mercenary_level=True,
+    ) is not None
+
+
+def _player_can_complete_portal_boss(
+    db: Session,
+    guild: Guild,
+    template: DungeonTemplate,
+) -> bool:
+    if max(1, int(guild.level or 1)) < max(1, int(template.required_guild_level or 1)):
+        return False
+    roster = list(db.scalars(select(Mercenary).where(
+        Mercenary.guild_id == guild.id,
+        Mercenary.status != "dismissed",
+    ).order_by(Mercenary.id)))
+    minimum = max(1, int(template.min_party_size or 1))
+    maximum = max(minimum, int(template.max_party_size or minimum))
+    if len(roster) < minimum:
+        return False
+    from app.services.dungeon_service import (
+        validate_advanced_party_requirements,
+        validate_dungeon_requirements,
+    )
+
+    try:
+        validate_dungeon_requirements(db, guild, template)
+    except ValueError:
+        return False
+    minimum_member_level = max(1, int(template.required_min_mercenary_level or 1))
+    for size in range(minimum, min(maximum, len(roster)) + 1):
+        for party in combinations(roster, size):
+            if any(int(member.level or 1) < minimum_member_level for member in party):
+                continue
+            try:
+                validate_advanced_party_requirements(db, guild, template, party)
+            except ValueError:
+                continue
+            return True
+    return False
+
+
+def _region_portal_progression_level(
+    db: Session,
+    cycle: RegionalCycle,
+    region_code: str,
+    home_code: str,
+) -> int:
+    if region_code == home_code:
+        return max(1, int(cycle.player_level_snapshot or 1))
+    cpu_levels = list(db.scalars(select(RegionalGuildState.level).where(
+        RegionalGuildState.campaign_id == cycle.campaign_id,
+        RegionalGuildState.region_code == region_code,
+        RegionalGuildState.guild_id.is_(None),
+        RegionalGuildState.active.is_(True),
+    )))
+    return max([1, *(max(1, int(level or 1)) for level in cpu_levels)])
+
+
+def _native_portal_boss_pool(
+    db: Session,
+    cycle: RegionalCycle,
+    region_code: str,
+    home_code: str,
+    stage_level: int,
+    candidates: list[DungeonTemplate],
+) -> list[DungeonTemplate]:
+    cpu_states = list(db.scalars(select(RegionalGuildState).where(
+        RegionalGuildState.campaign_id == cycle.campaign_id,
+        RegionalGuildState.region_code == region_code,
+        RegionalGuildState.guild_id.is_(None),
+        RegionalGuildState.active.is_(True),
+    ).order_by(RegionalGuildState.slot)))
+    roster_by_state = {
+        state.id: list(db.scalars(select(RegionalCpuMercenary).where(
+            RegionalCpuMercenary.guild_state_id == state.id,
+            RegionalCpuMercenary.active.is_(True),
+        ).order_by(RegionalCpuMercenary.slot)))
+        for state in cpu_states
+    }
+    class_roles = {
+        code: role for code, role in db.execute(select(
+            MercenaryClass.code, MercenaryClass.role_type,
+        ).where(MercenaryClass.code.is_not(None))) if code
+    }
+    player_guild = None
+    if region_code == home_code:
+        player_state = db.scalar(select(RegionalGuildState).where(
+            RegionalGuildState.campaign_id == cycle.campaign_id,
+            RegionalGuildState.region_code == region_code,
+            RegionalGuildState.guild_id.is_not(None),
+        ).limit(1))
+        if player_state is not None and player_state.guild_id is not None:
+            player_guild = db.get(Guild, player_state.guild_id)
+
+    viable = []
+    probe_at = _utc(cycle.ends_at_utc)
+    for template in candidates:
+        if player_guild is not None and _player_can_complete_portal_boss(db, player_guild, template):
+            viable.append(template)
+            continue
+        if any(_cpu_can_complete_portal_boss(
+            state, roster_by_state[state.id], class_roles, template, probe_at,
+        ) for state in cpu_states):
+            viable.append(template)
+    return viable
+
+
 def _create_versioned_cycle_portals_locked(
     db: Session,
     campaign_id: str,
@@ -582,9 +749,30 @@ def _create_versioned_cycle_portals_locked(
     if rules is None:
         return
     event_rules_version = _event_rules_version_for_cycle(cycle)
-    portal_bosses, stage_eligible = _versioned_portal_boss_pool(db, cycle)
+    campaign = db.get(CampaignMetadata, campaign_id)
+    home_code = (
+        next((code for code, name in REGIONS if campaign and name == campaign.home_region), REGIONS[0][0])
+    )
+    legacy_portal_bosses, legacy_stage_eligible = (
+        _versioned_portal_boss_pool(db, cycle)
+        if event_rules_version != V9_EVENT_RULES_VERSION else ([], True)
+    )
 
     for region in sorted(regions, key=lambda row: row.region_code):
+        stage_level = (
+            _region_portal_progression_level(db, cycle, region.region_code, home_code)
+            if event_rules_version == V9_EVENT_RULES_VERSION
+            else max(1, int(cycle.player_level_snapshot or 1))
+        )
+        if event_rules_version == V9_EVENT_RULES_VERSION:
+            region_candidates, stage_eligible = _versioned_portal_boss_pool(
+                db, cycle, stage_level=stage_level,
+            )
+            portal_bosses = _native_portal_boss_pool(
+                db, cycle, region.region_code, home_code, stage_level, region_candidates,
+            )
+        else:
+            portal_bosses, stage_eligible = legacy_portal_bosses, legacy_stage_eligible
         state = db.scalar(select(RegionalPortalSpawnState).where(
             RegionalPortalSpawnState.campaign_id == campaign_id,
             RegionalPortalSpawnState.region_code == region.region_code,
@@ -645,7 +833,11 @@ def _create_versioned_cycle_portals_locked(
         elif state.cooldown_until_utc is not None and cycle_end < _utc(state.cooldown_until_utc):
             result = "cooldown"
         elif not portal_bosses:
-            result = "content_unavailable"
+            result = (
+                "no_eligible_content"
+                if event_rules_version == V9_EVENT_RULES_VERSION
+                else "content_unavailable"
+            )
         else:
             player_state = db.scalar(select(RegionalGuildState).where(
                 RegionalGuildState.campaign_id == campaign_id,
@@ -711,7 +903,10 @@ def _create_versioned_cycle_portals_locked(
                                 if stage_eligible else "active_portal_biome_boss_template"
                             ),
                             "progression_stage_level_snapshot": (
-                                max(1, int(cycle.player_level_snapshot or 1)) if stage_eligible else None
+                                stage_level if stage_eligible else None
+                            ),
+                            "content_eligibility_version": (
+                                "native-party-v1" if event_rules_version == V9_EVENT_RULES_VERSION else None
                             ),
                             "portal_boss": {
                                 "version": PORTAL_BOSS_SNAPSHOT_VERSION if stage_eligible else "portal-boss-v1",
@@ -754,13 +949,15 @@ def _evaluate_open_rebellion_locked(
     current = _utc(now)
     expire_due_events(db, campaign.campaign_id, current)
     event_rules_version = _event_rules_version_for_cycle(cycle)
-    current_rebellion_rules = event_rules_version in {V7_EVENT_RULES_VERSION, EVENT_RULES_VERSION}
+    current_rebellion_rules = event_rules_version in {
+        V7_EVENT_RULES_VERSION, V8_EVENT_RULES_VERSION, V9_EVENT_RULES_VERSION,
+    }
     rebellion_cooldown = (
         REBELLION_REGION_ROLL_COOLDOWN_CYCLES if current_rebellion_rules
         else LEGACY_REBELLION_REGION_ROLL_COOLDOWN_CYCLES
     )
     rebellion_chance = (
-        REBELLION_CHANCE if event_rules_version == EVENT_RULES_VERSION
+        REBELLION_CHANCE if event_rules_version in {V8_EVENT_RULES_VERSION, V9_EVENT_RULES_VERSION}
         else LEGACY_REBELLION_CHANCE
     )
     active = db.scalar(select(RegionalEvent).where(
@@ -999,12 +1196,14 @@ def record_cpu_event_activity(
     region_code: str,
     plan,
 ) -> tuple[float, float]:
-    if plan.actions <= 0:
-        return 0.0, 0.0
     portal_security_delta = 0.0
     portal_threat_delta = 0.0
     cycle_end = _utc(cycle.ends_at_utc)
     cycle_start = _utc(cycle.starts_at_utc)
+    if cycle.rules_version == VIGILIA_V9_RULES_VERSION:
+        # Acquire before the first read so concurrent schedulers cannot both
+        # observe an unused guild/event entry from an older database snapshot.
+        _hold_campaign_event_lock(db, campaign_id)
     portal = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign_id,
         RegionalEvent.event_type == "portal",
@@ -1013,7 +1212,102 @@ def record_cpu_event_activity(
         RegionalEvent.created_at_utc <= cycle_start,
         RegionalEvent.expires_at_utc > cycle_start,
     ).order_by(RegionalEvent.id.desc()).limit(1))
-    if portal is not None:
+    new_cpu_portal_rules = bool(
+        portal is not None
+        and cycle.rules_version == VIGILIA_V9_RULES_VERSION
+        and portal.rules_version == V9_EVENT_RULES_VERSION
+    )
+    if portal is not None and new_cpu_portal_rules:
+        _hold_campaign_event_lock(db, campaign_id)
+        existing_activity = db.scalar(select(RegionalEventActivity).where(
+            RegionalEventActivity.source_type == "cpu_portal",
+            RegionalEventActivity.source_run_id == plan.id,
+        ))
+        if existing_activity is None:
+            try:
+                decisions = json.loads(plan.decisions_json or "[]")
+                diagnostics = json.loads(plan.event_diagnostics_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                decisions, diagnostics = [], {}
+            if not isinstance(decisions, list):
+                decisions = []
+            if not isinstance(diagnostics, dict):
+                diagnostics = {}
+            portal_run = next((row for row in decisions if (
+                isinstance(row, dict)
+                and row.get("offer_type") == "portal"
+                and row.get("event_id") == portal.id
+                and row.get("pending_cpu_resolution") is True
+            )), None)
+            participant = db.scalar(select(RegionalEventParticipant).where(
+                RegionalEventParticipant.event_id == portal.id,
+                RegionalEventParticipant.guild_state_id == plan.guild_state_id,
+            ))
+            if (portal_run is not None and participant is None
+                    and portal_run.get("started_at_utc") and portal_run.get("resolved_at_utc")
+                    and isinstance(portal_run.get("result_success_snapshot"), bool)):
+                started_at = _utc(datetime.fromisoformat(portal_run["started_at_utc"]))
+                due_at = _utc(datetime.fromisoformat(portal_run["resolved_at_utc"]))
+                if started_at >= _utc(portal.expires_at_utc):
+                    reason_code = "entry_window_closed_before_start"
+                    reason_detail = "A equipe ficou disponível depois do prazo de entrada do portal."
+                else:
+                    participant = RegionalEventParticipant(
+                        event_id=portal.id,
+                        guild_state_id=plan.guild_state_id,
+                        status="participating",
+                    )
+                    snapshot = {
+                        "version": "cpu-portal-resolution-v1",
+                        "cycle_rules_version": cycle.rules_version,
+                        "event_rules_version": portal.rules_version,
+                        "seed": plan.seed,
+                        "event_seed": portal.seed,
+                        "success": portal_run["result_success_snapshot"],
+                        "success_chance": int(portal_run.get("success_chance") or 0),
+                        "mercenary_ids": [int(value) for value in portal_run.get("mercenary_ids", [])],
+                        "party": portal_run.get("party_snapshot", []),
+                        "portal_boss": _summary(portal).get("portal_boss", {}),
+                        "started_at_utc": started_at.isoformat(),
+                        "due_at_utc": due_at.isoformat(),
+                    }
+                    activity = RegionalEventActivity(
+                        event_id=portal.id,
+                        guild_state_id=plan.guild_state_id,
+                        source_type="cpu_portal",
+                        source_run_id=plan.id,
+                        status="in_progress",
+                        contribution=0,
+                        started_at_utc=started_at,
+                        due_at_utc=due_at,
+                        snapshot_json=json.dumps(snapshot, ensure_ascii=False, sort_keys=True),
+                    )
+                    db.add_all([participant, activity])
+                    db.flush()
+                    reason_code = None
+                    reason_detail = None
+            elif participant is not None:
+                reason_code = "entry_already_used"
+                reason_detail = "Esta guilda já registrou uma entrada neste portal."
+            elif portal_run is not None:
+                reason_code = "invalid_start_snapshot"
+                reason_detail = "O plano não contém um snapshot completo da equipe e do prazo."
+            else:
+                reason_code = str(diagnostics.get("reason_code") or "no_eligible_portal_action")
+                reason_detail = str(diagnostics.get("detail") or "Nenhuma equipe iniciou o portal dentro do prazo.")
+
+            if reason_code:
+                db.add(RegionalEventActivity(
+                    event_id=portal.id,
+                    guild_state_id=plan.guild_state_id,
+                    source_type="cpu_portal",
+                    source_run_id=plan.id,
+                    status="not_started",
+                    reason_code=reason_code[:40],
+                    reason_detail=reason_detail[:255],
+                ))
+                db.flush()
+    elif portal is not None and plan.actions > 0:
         participant_exists = db.scalar(select(RegionalEventParticipant.id).where(
             RegionalEventParticipant.event_id == portal.id,
             RegionalEventParticipant.guild_state_id == plan.guild_state_id,
@@ -1021,7 +1315,8 @@ def record_cpu_event_activity(
         if participant_exists is None:
             rng = _rng(portal.seed, plan.seed, "cpu-portal-entry")
             if cycle.rules_version in {
-                "vigilia-v5", "vigilia-v6", VIGILIA_V7_RULES_VERSION, VIGILIA_RULES_VERSION,
+                "vigilia-v5", "vigilia-v6", VIGILIA_V7_RULES_VERSION,
+                CPU_INTERNAL_CONTRACT_RULES_VERSION, VIGILIA_RULES_VERSION,
             }:
                 decisions = json.loads(plan.decisions_json or "[]")
                 outcomes = json.loads(plan.outcomes_json or "[]")
@@ -1072,6 +1367,9 @@ def record_cpu_event_activity(
                 portal_security_delta = impact if success else -impact
                 portal_threat_delta = -impact if success else impact
                 db.flush()
+
+    if plan.actions <= 0:
+        return portal_security_delta, portal_threat_delta
 
     event = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign_id,
@@ -1204,6 +1502,159 @@ def resolve_portal_participant(
     if event.status == "in_progress" or current >= _utc(event.expires_at_utc):
         _finalize_portal_event_when_ready(db, event, current)
     db.flush()
+
+
+def resolve_due_cpu_portal_activities(
+    db: Session,
+    campaign_id: str,
+    now: datetime,
+    *,
+    region_code: str | None = None,
+) -> dict[str, tuple[float, float]]:
+    """Resolve frozen CPU portal runs due by ``now`` once, in timestamp order."""
+    current = _utc(now)
+    query = select(RegionalEventActivity).join(
+        RegionalEvent, RegionalEvent.id == RegionalEventActivity.event_id,
+    ).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEvent.event_type == "portal",
+        RegionalEventActivity.source_type == "cpu_portal",
+        RegionalEventActivity.status == "in_progress",
+        RegionalEventActivity.due_at_utc.is_not(None),
+        RegionalEventActivity.due_at_utc <= current,
+    )
+    if region_code is not None:
+        query = query.where(RegionalEvent.region_code == region_code)
+    activities = list(db.scalars(query.order_by(
+        RegionalEventActivity.due_at_utc, RegionalEventActivity.id,
+    )))
+    if not activities:
+        return {}
+
+    _hold_campaign_event_lock(db, campaign_id)
+    effects: dict[str, tuple[float, float]] = {}
+    for activity in activities:
+        if activity.status != "in_progress":
+            continue
+        event = db.get(RegionalEvent, activity.event_id)
+        participant = db.scalar(select(RegionalEventParticipant).where(
+            RegionalEventParticipant.event_id == activity.event_id,
+            RegionalEventParticipant.guild_state_id == activity.guild_state_id,
+        ))
+        region = db.scalar(select(RegionalRegionState).where(
+            RegionalRegionState.campaign_id == campaign_id,
+            RegionalRegionState.region_code == (event.region_code if event else ""),
+        ))
+        if event is None or participant is None or region is None:
+            raise ValueError("A atividade CPU pendente perdeu seu evento, participante ou região.")
+        try:
+            snapshot = json.loads(activity.snapshot_json or "{}")
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("O snapshot da atividade CPU pendente está inválido.") from exc
+        if (not isinstance(snapshot, dict)
+                or snapshot.get("version") != "cpu-portal-resolution-v1"
+                or snapshot.get("event_rules_version") != V9_EVENT_RULES_VERSION
+                or snapshot.get("cycle_rules_version") != VIGILIA_V9_RULES_VERSION
+                or not isinstance(snapshot.get("success"), bool)):
+            raise ValueError("O snapshot da atividade CPU pendente não corresponde às regras v9.")
+
+        due_at = _utc(activity.due_at_utc)
+        success = bool(snapshot["success"])
+        activity.status = "resolved"
+        activity.successes = 1 if success else 0
+        activity.failures = 0 if success else 1
+        activity.contribution = 3 if success else 1
+        activity.resolved_at_utc = due_at
+        db.add(activity)
+        db.flush()
+
+        if participant.status != "resolved":
+            before_security, before_threat = float(region.security), float(region.threat)
+            resolve_portal_participant(db, activity, success, due_at)
+            delta = (
+                round(float(region.security) - before_security, 4),
+                round(float(region.threat) - before_threat, 4),
+            )
+            old = effects.get(event.region_code, (0.0, 0.0))
+            effects[event.region_code] = (old[0] + delta[0], old[1] + delta[1])
+        plan = db.get(RegionalCpuCyclePlan, activity.source_run_id)
+        if plan is not None and plan.guild_state_id == activity.guild_state_id:
+            try:
+                decisions = json.loads(plan.decisions_json or "[]")
+                outcomes = json.loads(plan.outcomes_json or "[]")
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ValueError("O plano da atividade CPU pendente está inválido.") from exc
+            portal_decision = next((row for row in decisions if (
+                isinstance(row, dict)
+                and row.get("event_id") == event.id
+                and row.get("pending_cpu_resolution") is True
+            )), None) if isinstance(decisions, list) else None
+            if portal_decision is None or not isinstance(outcomes, list):
+                raise ValueError("O plano da atividade CPU pendente perdeu sua decisão congelada.")
+            offer_id = portal_decision.get("offer_id")
+            if not any(
+                isinstance(row, dict)
+                and row.get("offer_id") == offer_id
+                and row.get("event_id") == event.id
+                for row in outcomes
+            ):
+                outcomes.append({
+                    "offer_id": offer_id,
+                    "event_id": event.id,
+                    "rank": "C",
+                    "success": success,
+                    "gold": 0,
+                    "xp": 0,
+                    "contribution": 3 if success else 1,
+                })
+                plan.outcomes_json = json.dumps(outcomes, ensure_ascii=False, sort_keys=True)
+                plan.successes = int(plan.successes or 0) + int(success)
+                plan.failures = int(plan.failures or 0) + int(not success)
+                resolved_before = max(0, int(plan.resolved_actions or 0))
+                resolved_limit = max(0, int(plan.started_actions or plan.actions or 0))
+                if resolved_before >= resolved_limit:
+                    raise ValueError("O plano da atividade CPU não tem uma entrada pendente para resolver.")
+                plan.resolved_actions = min(resolved_limit, resolved_before + 1)
+                db.add(plan)
+
+                cycle_summary = db.scalar(select(RegionalCycleRegion).where(
+                    RegionalCycleRegion.cycle_id == plan.cycle_id,
+                    RegionalCycleRegion.region_code == event.region_code,
+                ))
+                if cycle_summary is not None:
+                    try:
+                        summary = json.loads(cycle_summary.summary_json or "{}")
+                    except (TypeError, json.JSONDecodeError) as exc:
+                        raise ValueError("O resumo regional do ciclo está inválido.") from exc
+                    cpu_activity = summary.get("cpu_activity") if isinstance(summary, dict) else None
+                    if not isinstance(cpu_activity, dict):
+                        raise ValueError("O resumo regional perdeu as métricas de atividade CPU.")
+                    started = max(0, int(cpu_activity.get("started", 0)))
+                    resolved = max(0, int(cpu_activity.get("resolved", 0)))
+                    pending = int(cpu_activity.get("pending", started - resolved))
+                    if pending <= 0 or resolved >= started:
+                        raise ValueError("O resumo regional não contém a atividade CPU pendente.")
+                    cpu_activity["resolved"] = resolved + 1
+                    cpu_activity["pending"] = pending - 1
+                    summary["successes"] = int(summary.get("successes", 0)) + int(success)
+                    summary["failures"] = int(summary.get("failures", 0)) + int(not success)
+                    cycle_summary.cpu_successes = int(cycle_summary.cpu_successes or 0) + int(success)
+                    cycle_summary.cpu_failures = int(cycle_summary.cpu_failures or 0) + int(not success)
+                    cycle_summary.summary_json = json.dumps(
+                        summary, ensure_ascii=False, sort_keys=True,
+                    )
+                    db.add(cycle_summary)
+                db.flush()
+        elif participant.success is not None:
+            # Repair a partially completed legacy transaction without applying
+            # its regional effect a second time.
+            activity.successes = 1 if participant.success else 0
+            activity.failures = 0 if participant.success else 1
+            activity.contribution = participant.contribution
+            activity.resolved_at_utc = participant.resolved_at_utc or due_at
+            db.add(activity)
+            db.flush()
+    return effects
 
 
 def event_history_for_campaign(db: Session, campaign_id: str, limit: int = 12) -> list[RegionalEvent]:
