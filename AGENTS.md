@@ -65,3 +65,9 @@ Sem branch/hash imutáveis e evidência dos testes, a tarefa não está pronta p
 - Não criar migrações, compensações, conversões ou regras econômicas complexas apenas para igualar campanhas antigas às novas. Um rebalanceamento pode valer somente para campanhas novas se preservar a integridade e o acesso funcional das existentes; documentar o alcance no handoff e no Guia quando relevante.
 - Regras de compatibilidade explicitamente aprovadas para uma entrega continuam válidas. Não apagar trabalho ou dados nem retirar garantias específicas sem evidência de necessidade e decisão de coordenação.
 - Quando o usuário delegar decisões de produto à conversa principal, o DEV encaminha dúvidas de regra a ela primeiro e continua o trabalho independente. Não abrir perguntas ao usuário apenas para repetir uma decisão já delegada. Aprovações de segurança, permissões reais e escolhas pessoais indispensáveis continuam com o usuário; se uma ferramenta aguardar resposta humana obrigatória, informar o bloqueio concreto.
+
+## Autorização específica de auditoria visual - 2026-11-24
+
+- Para ML-053 no pacote `feature/anomalies-ui-audit`, o usuário autorizou a DA a abrir o jogo instalado e navegar no save real por toda a plataforma. Essa exceção autoriza somente navegação e observação visual, não testes de mutação ou edição do save. A atualização temporal normal causada pelo próprio jogo deve ser distinguida de ações iniciadas pelo agente.
+- Não iniciar/coletar atividades, gastar, recrutar, equipar, resetar, restaurar/importar campanha ou alterar o relógio no save real. Estados que exijam ações devem ser inspecionados em perfis sintéticos ou cópias descartáveis autorizadas, sem modificar o original.
+- Coordenar um único operador de interface por vez; manter capturas privadas locais e registrar a cobertura sem publicar dados do save. Consolidar a auditoria em no máximo dois lotes implementáveis na mesma branch; a coordenação aprova o escopo antes da execução pelo DEV.
