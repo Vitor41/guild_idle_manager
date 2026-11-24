@@ -1528,12 +1528,12 @@ textarea {
 .loot-preview-item small { display: block; margin-top: 2px; color: var(--muted); font-size: .7rem; font-weight: 400; }
 .loot-preview-icon, .loot-preview-icon img { display: grid; place-items: center; width: 32px; height: 32px; object-fit: contain; }
 .loot-preview-more { margin-top: 6px; }
-.loot-preview-more summary { display: inline-grid; place-items: center; min-width: 36px; min-height: 36px; padding: 6px 10px; border: 1px solid rgba(233, 198, 116, .2); border-radius: 6px; color: var(--gold-2); cursor: pointer; font-size: .78rem; }
+.loot-preview-more summary { display: inline-grid; place-items: center; min-width: 40px; min-height: 40px; padding: 6px 10px; border: 1px solid rgba(233, 198, 116, .2); border-radius: 6px; color: var(--gold-2); cursor: pointer; font-size: .78rem; }
 .loot-preview-more__collapse, .loot-preview-more[open] .loot-preview-more__expand { display: none; }
 .loot-preview-more[open] .loot-preview-more__collapse { display: inline; }
 .loot-preview-more summary:focus-visible, .loot-preview-help:focus-visible { outline: 3px solid var(--gold-soft); outline-offset: 3px; }
 .loot-preview-list--additional { margin-top: 7px; }
-.loot-preview-help { display: inline-block; margin-top: 8px; color: var(--muted); font-size: .75rem; text-underline-offset: 2px; }
+.loot-preview-help { display: inline-flex; align-items: center; min-height: 40px; margin-top: 8px; color: var(--muted); font-size: .75rem; text-underline-offset: 2px; }
 .loot-preview-help:hover, .loot-preview-help:focus-visible { color: var(--gold-soft); }
 .loot-preview-state { margin: 0; color: var(--muted); font-size: .8rem; }
 .guide-drop-rules { max-width: 86ch; margin: 0 0 16px; color: var(--parchment-soft); line-height: 1.65; }
