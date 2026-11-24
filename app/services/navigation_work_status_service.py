@@ -4,13 +4,21 @@ from datetime import datetime, timezone
 from sqlalchemy import case, func, literal, select, union_all
 from sqlalchemy.orm import Session
 
+from app.models.campaign import CampaignMetadata
 from app.models.class_change import ClassChangeRun
 from app.models.content import ProfessionTraining
 from app.models.dungeon import DungeonRun
 from app.models.gathering import GatheringAssignment
 from app.models.market import MarketSale
 from app.models.mission import MissionRun
-from app.models.regional import RegionalGuildState, RegionalOffer
+from app.models.regional import (
+    RegionalEvent,
+    RegionalEventActivity,
+    RegionalEventParticipant,
+    RegionalGuildState,
+    RegionalOffer,
+)
+from app.services.regional_cycle_service import REGIONS
 from app.models.salvage import GuildSalvageJob
 from app.models.workshop import SupplyWorkshopJob
 
@@ -25,6 +33,7 @@ MENU_LABELS = {
     "class_change": "Troca de Classe",
     "professions": "Profissões",
     "regional": "Vigília Regional",
+    "regional_events": "Eventos Regionais",
 }
 
 READY_LABELS = {
@@ -36,6 +45,7 @@ READY_LABELS = {
     "class_change": ("troca pronta para concluir", "trocas prontas para concluir"),
     "professions": ("treinamento pronto para concluir", "treinamentos prontos para concluir"),
     "regional": ("preparação pronta para iniciar", "preparações prontas para iniciar"),
+    "regional_events": ("evento pronto para ação", "eventos prontos para ação"),
 }
 
 
@@ -92,6 +102,56 @@ def _regional_preparation_row(campaign_id: str, guild_id: int, now: datetime):
     )
 
 
+def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
+    home_code = case(
+        *[(CampaignMetadata.home_region == name, code) for code, name in REGIONS],
+        else_=REGIONS[0][0],
+    )
+    player_state_id = select(RegionalGuildState.id).where(
+        RegionalGuildState.campaign_id == CampaignMetadata.campaign_id,
+        RegionalGuildState.guild_id == guild_id,
+    ).scalar_subquery()
+    ready_portals = select(func.count(RegionalEvent.id)).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEvent.event_type == "portal",
+        RegionalEvent.region_code == home_code,
+        RegionalEvent.status == "active",
+        RegionalEvent.expires_at_utc > now,
+        ~select(RegionalEventParticipant.id).where(
+            RegionalEventParticipant.event_id == RegionalEvent.id,
+            RegionalEventParticipant.guild_state_id == player_state_id,
+        ).exists(),
+    ).scalar_subquery()
+    ready_rebellions = select(func.count(RegionalEvent.id)).join(
+        RegionalEventParticipant,
+        RegionalEventParticipant.event_id == RegionalEvent.id,
+    ).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEvent.event_type == "rebellion",
+        RegionalEvent.status == "active",
+        RegionalEvent.expires_at_utc > now,
+        RegionalEventParticipant.guild_state_id == player_state_id,
+        RegionalEventParticipant.status.in_(("invited", "accepted", "participating")),
+    ).scalar_subquery()
+    active_events = select(func.count(func.distinct(RegionalEventActivity.event_id))).join(
+        RegionalEvent,
+        RegionalEvent.id == RegionalEventActivity.event_id,
+    ).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEventActivity.guild_state_id == player_state_id,
+        RegionalEventActivity.status == "in_progress",
+        RegionalEvent.status.in_(("active", "in_progress")),
+    ).scalar_subquery()
+    ready = ready_portals + ready_rebellions
+    return select(
+        literal("regional_events").label("menu"),
+        func.coalesce(active_events, 0).label("active"),
+        func.coalesce(ready, 0).label("ready"),
+    ).select_from(CampaignMetadata).where(
+        CampaignMetadata.campaign_id == campaign_id,
+    )
+
+
 def _accessible_status(menu: str, active_count: int, ready_count: int) -> str:
     name = MENU_LABELS[menu]
     parts: list[str] = []
@@ -124,6 +184,7 @@ def get_navigation_work_status(
     ]
     if campaign_id:
         rows.append(_regional_preparation_row(campaign_id, guild_id, timestamp))
+        rows.append(_regional_event_row(campaign_id, guild_id, timestamp))
 
     work = union_all(*rows).subquery()
     result: dict[str, dict[str, int | str]] = {}

@@ -437,9 +437,9 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert "RuntimeError: Falha de consulta da tela de atividades" in desktop_trace
         rendered_pages = {}
         regional_outcome_path = f"/regional/regions/{regional_outcome_region_code}"
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", regional_outcome_path, "/codex", "/guide", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", "/regional/events", regional_outcome_path, "/codex", "/guide", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
         for path in page_paths:
-            if path in {"/dashboard", "/regional"}:
+            if path in {"/dashboard", "/regional", "/regional/events"}:
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
                     status, _location, body = request(path)
             else:
@@ -447,6 +447,11 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert status == 200, (path, status, body[:400])
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
+        central_events_page = rendered_pages["/regional/events"]
+        assert b'id="regional-portals"' in central_events_page
+        assert b'id="regional-rebellions"' in central_events_page
+        assert b'id="regional-event-history"' in central_events_page
+        assert b'data-nav-work-menu="regional_events"' in central_events_page
         equipment_detail_page = rendered_pages[f"/mercenaries/{mercenary_id}"]
         assert b"data-equipment-details-trigger" in equipment_detail_page
         assert b"role=\"region\" aria-label=\"Detalhes de" in equipment_detail_page

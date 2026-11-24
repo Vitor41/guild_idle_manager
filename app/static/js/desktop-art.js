@@ -26,7 +26,9 @@
   ];
 
   function routeMatches(route, path) {
-    return route === path || (route !== "/dashboard" && path.startsWith(`${route}/`));
+    return route === path || (
+      route !== "/dashboard" && route !== "/regional" && path.startsWith(`${route}/`)
+    );
   }
 
   function makeImage(url, className) {

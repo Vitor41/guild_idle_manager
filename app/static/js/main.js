@@ -829,7 +829,7 @@ document.addEventListener("click", async (event) => {
 });
 
 window.addEventListener("pageshow", () => {
-  if (document.body.dataset.route !== "/regional" || window.location.hash) return;
+  if (!new Set(["/regional", "/regional/events"]).has(document.body.dataset.route) || window.location.hash) return;
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
 });
 

@@ -22,6 +22,9 @@ from app.models import (
     ProfessionTemplate,
     ProfessionTraining,
     RegionalCycle,
+    RegionalEvent,
+    RegionalEventActivity,
+    RegionalEventParticipant,
     RegionalGuildState,
     RegionalOffer,
     SupplyWorkshopJob,
@@ -254,6 +257,48 @@ class NavigationWorkStatusTests(unittest.TestCase):
         self.assertEqual(result["regional"]["active"], 1)
         self.assertEqual(result["regional"]["ready"], 1)
         self.assertEqual(result["regional"]["state"], "ready")
+
+    def test_regional_event_indicator_is_campaign_scoped_and_read_only(self):
+        campaign = self.db.get(CampaignMetadata, "campaign-a")
+        campaign.home_region = "Vale da Fronteira"
+        state = RegionalGuildState(
+            campaign_id="campaign-a", region_code="vale-fronteira", slot=0,
+            guild_id=self.guild.id, name=self.guild.name, profile="player", archetype="player",
+        )
+        portal = RegionalEvent(
+            campaign_id="campaign-a", event_type="portal", region_code="vale-fronteira",
+            trigger_cycle_number=10, rules_version="regional-events-v6", seed="portal-ready",
+            status="active", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=1),
+        )
+        rebellion = RegionalEvent(
+            campaign_id="campaign-a", event_type="rebellion", region_code="bosque-ambar",
+            trigger_cycle_number=10, rules_version="regional-events-v6", seed="rebellion-ready",
+            status="active", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=1),
+        )
+        self.db.add_all([state, portal, rebellion])
+        self.db.flush()
+        participant = RegionalEventParticipant(
+            event_id=rebellion.id, guild_state_id=state.id, status="invited",
+        )
+        active_event = RegionalEventActivity(
+            event_id=rebellion.id, guild_state_id=state.id, source_type="dungeon",
+            source_run_id=7001, status="in_progress",
+        )
+        self.db.add_all([participant, active_event])
+        self.db.flush()
+
+        before = (state.id, portal.status, rebellion.status, participant.status, active_event.status)
+        result = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )
+
+        self.assertEqual(result["regional_events"]["ready"], 2)
+        self.assertEqual(result["regional_events"]["active"], 1)
+        self.assertEqual(result["regional_events"]["state"], "ready")
+        self.assertEqual(
+            (state.id, portal.status, rebellion.status, participant.status, active_event.status),
+            before,
+        )
 
 
 if __name__ == "__main__":
