@@ -157,7 +157,7 @@
               </section>
               <form method="post" action="/mercenaries/{{ mercenary.id }}/unequip">
                 <input type="hidden" name="item_instance_id" value="{{ equipped.id }}">
-                <button type="submit">Remover</button>
+                <button class="secondary-button danger-button equipment-slot__remove" type="submit">Remover</button>
               </form>
             {% else %}
               <span class="slot-icon" data-desktop-item-slot="{{ slot_key }}" data-desktop-item-group="" data-desktop-item-family=""><span aria-hidden="true">{{ slot_icons.get(slot_key, '◇') }}</span></span>

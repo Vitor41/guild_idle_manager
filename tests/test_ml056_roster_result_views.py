@@ -28,6 +28,7 @@ class ML056RosterResultViewTests(unittest.TestCase):
         self.assertIn('class="mercenary-attribute-table"', template)
         self.assertIn('<th scope="row"', template)
         self.assertIn('class="mercenary-attribute-table__mobile-label"', template)
+        self.assertIn('class="secondary-button danger-button equipment-slot__remove" type="submit">Remover</button>', template)
         self.assertIn("table.mercenary-attribute-table { width: 100%; min-width: 0; table-layout: fixed; }", css)
         self.assertIn("@media (max-width: 480px)", css)
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", css)
