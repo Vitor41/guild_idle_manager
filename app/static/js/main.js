@@ -835,9 +835,51 @@ function initializeGameGuideForContent(parsedDocument, currentMain) {
     window.initializeGameGuide(guideRoot);
     return;
   }
-  const utilitySrc = parsedDocument.querySelector('script[src*="/js/guide-utils.js"]')?.getAttribute("src");
-  const guideSrc = parsedDocument.querySelector('script[src*="/js/guide.js"]')?.getAttribute("src");
-  if (!utilitySrc || !guideSrc) return;
+  const showRecoverableError = () => {
+    const catalog = guideRoot.querySelector("#equipamentos-materiais");
+    const status = catalog?.querySelector("[data-guide-catalog-status]");
+    const error = catalog?.querySelector("[data-guide-catalog-error]");
+    if (!error) return;
+    if (status) status.textContent = "";
+    error.hidden = false;
+    error.setAttribute("role", "alert");
+    const message = error.querySelector("p");
+    if (message) message.textContent = "Não foi possível iniciar os recursos do Guia. Saia e abra o Guia novamente para tentar.";
+    const retry = error.querySelector("[data-guide-catalog-retry]");
+    if (retry && retry.dataset.guideAssetRetryBound !== "true") {
+      retry.dataset.guideAssetRetryBound = "true";
+      retry.addEventListener("click", () => {
+        if (document.querySelector(".game-guide") !== guideRoot) return;
+        guideAssetLoadPromise = null;
+        error.hidden = true;
+        initializeGameGuideForContent(parsedDocument, currentMain);
+      });
+    }
+  };
+  const scriptSrcFor = (expectedPath) => {
+    for (const script of parsedDocument.querySelectorAll("script[src]")) {
+      const rawSrc = script.getAttribute("src");
+      if (!rawSrc) continue;
+      let candidate;
+      try {
+        candidate = new URL(rawSrc, window.location.origin);
+      } catch {
+        continue;
+      }
+      if ((candidate.protocol !== "http:" && candidate.protocol !== "https:")
+          || candidate.origin !== window.location.origin
+          || candidate.username || candidate.password
+          || candidate.pathname !== expectedPath || candidate.hash) continue;
+      return candidate.href;
+    }
+    return null;
+  };
+  const utilitySrc = scriptSrcFor("/static/js/guide-utils.js");
+  const guideSrc = scriptSrcFor("/static/js/guide.js");
+  if (!utilitySrc || !guideSrc) {
+    showRecoverableError();
+    return;
+  }
   const loadScript = (src) => new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = src;
@@ -855,7 +897,10 @@ function initializeGameGuideForContent(parsedDocument, currentMain) {
     if (document.querySelector(".game-guide") === guideRoot) {
       window.initializeGameGuide?.(guideRoot);
     }
-  }).catch((error) => console.error("Não foi possível inicializar o Guia após a navegação.", error));
+  }).catch((error) => {
+    if (document.querySelector(".game-guide") === guideRoot) showRecoverableError();
+    console.error("Não foi possível inicializar o Guia após a navegação.", error);
+  });
 }
 
 function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
