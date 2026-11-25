@@ -25,6 +25,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   const scrollCalls = [];
   const focusCalls = [];
   const resetInitializerCalls = [];
+  const updateCheckInitializerCalls = [];
   const noticeSyncCalls = [];
   let clickHandlerCallback;
   const incomingMain = { innerHTML: "fresh regional page" };
@@ -82,6 +83,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   window.location.assign = (url) => window.locationAssignCalls.push(url);
   const stubs = [
     "initializeGameGuideForContent", "initializeEquipmentDetails", "initializeMarketEstimates", "initializeGatheringCycles",
+    "initializeUpdateChecks",
     "updateGenericCountdowns", "initializeSalvagePreviews",
     "restoreGameFormState", "initializeRegionalSupply", "initializeRegionalComparison", "refreshResourceTotals", "initializeHeaderPopovers",
     "showActionToast", "refreshNavigationWorkIndicators",
@@ -97,7 +99,9 @@ test("async navigation keeps a requested portal fragment through a redirect and 
       requestedCalls.push({ url: String(url), options });
       return { ok: true, url: redirectedUrl, text: async () => "redirected html" };
     },
-    ...Object.fromEntries(stubs.map((name) => [name, () => {}])),
+    ...Object.fromEntries(stubs.map((name) => [name, (root) => {
+      if (name === "initializeUpdateChecks") updateCheckInitializerCalls.push(root);
+    }])),
     syncRegionalEventNoticeDialogs(...args) { noticeSyncCalls.push(args); },
   });
 
@@ -135,6 +139,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   assert.equal(regionalMenuLink.getAttribute("aria-current"), "page");
   assert.equal(eventsMenuLink.getAttribute("aria-current"), null);
   assert.deepEqual(resetInitializerCalls, [currentMain]);
+  assert.deepEqual(updateCheckInitializerCalls, [currentMain]);
 });
 
 test("async navigation marks Events active separately from the Vigília", () => {

@@ -123,5 +123,5 @@ test("equipment details initialize after partial navigation and remain idempoten
   dynamic.trigger.dispatch("click");
   assert.equal(dynamic.panel.hidden, false);
   assert.equal(dynamic.trigger.attributes.get("aria-expanded"), "true");
-  assert.match(mainSource, /currentMain\.innerHTML = incomingMain\.innerHTML;\s*window\.initializeEquipmentDetails\?\.\(currentMain\);/);
+  assert.match(mainSource, /currentMain\.innerHTML = incomingMain\.innerHTML;\s*initializeUpdateChecks\(currentMain\);\s*initializeGameGuideForContent\(parsedDocument, currentMain\);\s*window\.initializeEquipmentDetails\?\.\(currentMain\);/);
 });
