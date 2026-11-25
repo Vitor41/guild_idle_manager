@@ -17,6 +17,7 @@ class Ml057RemainingViewTests(unittest.TestCase):
             "app/templates/base.html",
             "app/templates/components/regional_offer_actions.html",
             "app/templates/regional/index.html",
+            "app/templates/gathering/index.html",
             "app/templates/regional/detail.html",
             "app/templates/classes/index.html",
             "app/templates/tiers/index.html",
@@ -146,6 +147,52 @@ class Ml057RemainingViewTests(unittest.TestCase):
         self.assertIn('{% from "components/regional_offer_actions.html" import offer_team_fieldset with context %}', page)
         self.assertIn('aria-labelledby="map-title"', page)
         self.assertIn('<summary id="map-title">Estado das cinco regiões</summary>', page)
+
+    def test_gathering_summary_uses_only_designated_families_and_matches_pause_states(self):
+        regional = self.read("app/templates/regional/index.html")
+        route = self.read("app/routes/regional_routes.py")
+        gathering = self.read("app/templates/gathering/index.html")
+        css = self.read("app/static/css/desktop-evolution.css")
+        self.assertIn("{% for assignment in assignments %}", regional)
+        self.assertIn("node_labels.get(family, 'Posto de coleta')", regional)
+        self.assertIn("family_labels.get(family, 'Material')", regional)
+        self.assertNotIn("('wood', 'Madeira', 'Bosque'), ('ore', 'Minério', 'Pedreira')", regional)
+        self.assertIn("\"family_labels\": FAMILY_LABELS", route)
+        self.assertIn("\"node_labels\": NODE_LABELS", route)
+        self.assertIn("evolution-status--paused", regional)
+        self.assertIn("Progresso preservado:", regional)
+        self.assertIn("evolution-status--paused", gathering)
+        self.assertIn("Armazém cheio", gathering)
+        self.assertIn(".evolution-status--paused {", css)
+        self.assertIn('aria-label="Armazém: {{ used }} de {{ capacity }}"', gathering)
+
+    def test_regional_gathering_summary_renders_all_designated_families_and_pauses_without_timer(self):
+        from types import SimpleNamespace
+
+        page = self.read("app/templates/regional/index.html")
+        start = page.index('<div class="evolution-task-list">')
+        end = page.index("\n      </div>", start)
+        snippet = page[start:end + len("\n      </div>")]
+        environment = Environment(autoescape=True)
+        assignment = SimpleNamespace(
+            resource_family="essence",
+            catalog_unavailable=False,
+            capacity_paused=True,
+            mercenary=SimpleNamespace(name="Equipe sintética"),
+            extra_chance=0,
+            progress_seconds=24,
+            cycle_count=3,
+        )
+        rendered = environment.from_string(snippet).render(
+            assignments=[assignment],
+            family_labels={"essence": "Essências"},
+            node_labels={"essence": "Veios arcanos"},
+        )
+        self.assertIn("Essências", rendered)
+        self.assertIn("Veios arcanos", rendered)
+        self.assertIn("Pausada · Armazém cheio", rendered)
+        self.assertIn("Progresso preservado: 24 de 60 s", rendered)
+        self.assertNotIn("Próximo ciclo em", rendered)
 
     def test_prepared_activity_separates_team_and_reinforcements_with_real_class_icons(self):
         component = self.read("app/templates/components/regional_offer_actions.html")

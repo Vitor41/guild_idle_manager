@@ -18,7 +18,8 @@
     {% if message %}<p class="form-success" role="status">{{ message }}</p>{% endif %}
     <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">
       <div><span>Armazém compartilhado</span><strong data-gathering-warehouse-label>{{ "{:,.0f}".format(used).replace(",", ".") }} / {{ "{:,.0f}".format(capacity).replace(",", ".") }}</strong></div>
-      <progress max="{{ capacity }}" value="{{ [used, capacity]|min }}" data-gathering-warehouse-progress>{{ used }} de {{ capacity }}</progress>
+      <progress max="{{ capacity }}" value="{{ [used, capacity]|min }}" data-gathering-warehouse-progress aria-label="Armazém: {{ used }} de {{ capacity }}">{{ used }} de {{ capacity }}</progress>
+      {% if capacity > 0 and used >= capacity %}<p class="gathering-capacity-state evolution-status evolution-status--paused" role="status">Armazém cheio</p>{% endif %}
       <p>Equipamentos únicos não ocupam espaço. A produção excedente é descartada quando cada ciclo termina.</p>
     </section>
 
@@ -39,11 +40,11 @@
               <p class="form-error gathering-catalog-warning" data-gathering-catalog-warning role="alert" hidden>Esta coleta está pausada porque o material comum não está disponível. Nenhum ciclo ou item será concedido durante a pausa. Liberar o trabalhador encerra a coleta sem material e descarta o progresso parcial.</p>
             {% endif %}
             {% if catalog_unavailable.get(family) %}
-              <p class="gathering-status" role="status" data-gathering-status>Indisponível · catálogo · <strong>{{ assignment.mercenary.name }}</strong></p>
+              <p class="gathering-status evolution-status evolution-status--muted" role="status" data-gathering-status>Indisponível · catálogo · <strong>{{ assignment.mercenary.name }}</strong></p>
             {% elif assignment.capacity_paused %}
-              <p class="gathering-status" role="status" data-gathering-status>Pausada · Armazém cheio · <strong>{{ assignment.mercenary.name }}</strong></p>
+              <p class="gathering-status evolution-status evolution-status--paused" role="status" data-gathering-status>Pausada · Armazém cheio · <strong>{{ assignment.mercenary.name }}</strong></p>
             {% else %}
-              <p class="gathering-status" data-gathering-status>Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
+              <p class="gathering-status evolution-status evolution-status--active" data-gathering-status>Em produção · <strong>{{ assignment.mercenary.name }}</strong></p>
             {% endif %}
             <div data-gathering-capacity-help{% if not assignment.capacity_paused or catalog_unavailable.get(family) %} hidden{% endif %}>
               <p>Libere espaço no Armazém para retomar a produção. O tempo em pausa não acumula ciclos.</p>
@@ -60,7 +61,7 @@
               <button class="secondary-button" type="submit">Liberar trabalhador</button>
             </form>
           {% else %}
-            <p class="gathering-status">Posto disponível</p>
+            <p class="gathering-status evolution-status evolution-status--muted">Posto disponível</p>
             {% if material_previews.get(family) %}<div class="gathering-target" role="group" aria-label="Material disponível para nova designação">
               <span class="asset-placeholder item-icon-frame" aria-hidden="true" data-desktop-item-group="{{ material_previews[family].icon_group or family }}" data-desktop-item-family="{{ material_previews[family].material_family or family }}">◇</span>
               <p><strong>Próximo alvo disponível:</strong> {{ material_previews[family].name }} · {{ material_previews[family].rarity_label }}<small>Desbloqueio: nível de guilda {{ material_previews[family].required_level }}.</small></p>

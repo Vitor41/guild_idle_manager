@@ -32,6 +32,7 @@
 .evolution-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .evolution-status--active { color: var(--e-blue); border-color: #496b79; background: #1d333c; }
 .evolution-status--warning { color: var(--e-red); border-color: #78544c; background: #3a2927; }
+.evolution-status--paused { color: #f0c46e; border-color: #79633d; background: #382f21; }
 .evolution-status--ready { color: var(--e-green); border-color: #4c7056; background: #21382b; }
 .evolution-status--muted { color: #bdc8c4; border-color: #53605c; background: #2c3331; }
 .evolution-button { display: inline-flex; justify-content: center; align-items: center; min-height: 42px; padding: 9px 15px; border: 1px solid transparent; border-radius: 6px; font-weight: 750; text-decoration: none; cursor: pointer; }

@@ -29,7 +29,7 @@ from app.models.regional import (
 from app.models.regional import RegionalCycle
 from app.models.user import User
 from app.services.dungeon_service import DungeonError, start_dungeon
-from app.services.gathering_service import advance_all_assignments, list_assignments
+from app.services.gathering_service import advance_all_assignments, list_assignments, FAMILY_LABELS, NODE_LABELS
 from app.services.achievement_service import get_codex_context
 from app.services.guild_service import get_current_guild_context
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
@@ -981,6 +981,8 @@ def regional_index(
             "selected_start_supply": request.query_params.get("selected_supply") == "1",
             "message": request.query_params.get("message"),
             "assignments": assignments,
+            "family_labels": FAMILY_LABELS,
+            "node_labels": NODE_LABELS,
             "reports": reports,
             "rebellion_participant": rebellion_participant,
             "rebellion_invite_expired": rebellion_invite_expired,
