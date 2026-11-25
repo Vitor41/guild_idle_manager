@@ -26,6 +26,7 @@ from app.models.regional import (
     RegionalEventParticipant,
     RegionalCpuCyclePlan,
     RegionalCpuMercenary,
+    RegionalCpuResource,
     RegionalGuildState,
     RegionalPortalSpawnState,
     RegionalRegionState,
@@ -737,6 +738,109 @@ def _native_portal_boss_pool(
     return viable
 
 
+def portal_spawn_status_for_region(
+    db: Session,
+    campaign: CampaignMetadata,
+    cycle: RegionalCycle | None,
+    region_code: str,
+    now: datetime,
+) -> dict[str, object]:
+    """Read the authoritative next-roll inputs without evaluating or mutating them."""
+    rules = get_portal_spawn_rules(
+        getattr(cycle, "portal_spawn_rules_version", None) if cycle is not None else None,
+    )
+    if cycle is None or rules is None:
+        return {
+            "available": False,
+            "unavailable_label": "Dados da próxima tentativa ainda não estão registrados.",
+        }
+
+    state = db.scalar(select(RegionalPortalSpawnState).where(
+        RegionalPortalSpawnState.campaign_id == campaign.campaign_id,
+        RegionalPortalSpawnState.region_code == region_code,
+    ))
+    if state is None:
+        return {
+            "available": False,
+            "unavailable_label": "Dados da próxima tentativa ainda não estão registrados.",
+        }
+
+    current = _utc(now)
+    home_code = next(
+        (code for code, name in REGIONS if name == campaign.home_region), REGIONS[0][0],
+    )
+    event_rules_version = _event_rules_version_for_cycle(cycle)
+    if event_rules_version == V9_EVENT_RULES_VERSION:
+        stage_level = _region_portal_progression_level(db, cycle, region_code, home_code)
+        candidates, _stage_eligible = _versioned_portal_boss_pool(
+            db, cycle, stage_level=stage_level,
+        )
+        portal_bosses = _native_portal_boss_pool(
+            db, cycle, region_code, home_code, stage_level, candidates,
+        )
+    else:
+        portal_bosses, _stage_eligible = _versioned_portal_boss_pool(db, cycle)
+    if not portal_bosses:
+        return {
+            "available": False,
+            "reason_code": "no_eligible_content",
+            "unavailable_label": "Sem conteúdo elegível para a próxima tentativa.",
+        }
+
+    active_portal = db.scalar(select(RegionalEvent.id).where(
+        RegionalEvent.campaign_id == campaign.campaign_id,
+        RegionalEvent.event_type == "portal",
+        RegionalEvent.region_code == region_code,
+        RegionalEvent.status.in_(("active", "in_progress")),
+        RegionalEvent.expires_at_utc > current,
+    ).limit(1))
+    cooldown_until = _utc(state.cooldown_until_utc) if state.cooldown_until_utc else None
+    cooldown_active = cooldown_until is not None and current < cooldown_until
+    player_state = db.scalar(select(RegionalGuildState).where(
+        RegionalGuildState.campaign_id == campaign.campaign_id,
+        RegionalGuildState.region_code == region_code,
+        RegionalGuildState.guild_id.is_not(None),
+    ).limit(1))
+    scouts_level = 0
+    if player_state is not None and player_state.guild_id is not None:
+        scouts_level = int(db.scalar(select(GuildBuilding.level).join(
+            BuildingTemplate, BuildingTemplate.id == GuildBuilding.building_template_id,
+        ).where(
+            GuildBuilding.guild_id == player_state.guild_id,
+            BuildingTemplate.effect_type == "scouts",
+        )) or 0)
+    explorer_bonus_pp = scouts_values(scouts_level)["portal_detection_bonus_percentage_points"]
+    failure_stacks = min(rules.max_stack(), max(0, int(state.failure_stacks or 0)))
+    base_chance_pp, explorer_bonus_pp, effective_chance_pp = rules.chance_percentages(
+        failure_stacks, explorer_bonus_pp,
+    )
+    if active_portal is not None:
+        next_attempt_label = "Há um portal ativo; a próxima tentativa aguarda uma Vigília elegível."
+    elif cooldown_active:
+        next_attempt_label = "Nova tentativa após o cooldown, em uma Vigília elegível."
+    else:
+        next_attempt_label = "Chance calculada para a próxima Vigília elegível."
+
+    return {
+        "available": True,
+        "reason_code": "active_portal" if active_portal is not None else "cooldown" if cooldown_active else "eligible_next_cycle",
+        "next_attempt_label": next_attempt_label,
+        "failure_stacks": failure_stacks,
+        "maximum_failure_stacks": rules.max_stack(),
+        "failure_bonus_pp": max(0, base_chance_pp - rules.base_chance_pp),
+        "base_chance_pp": rules.base_chance_pp,
+        "base_chance_after_failures_pp": base_chance_pp,
+        "explorer_bonus_pp": explorer_bonus_pp,
+        "effective_chance_pp": effective_chance_pp,
+        "failure_cap_reached": failure_stacks >= rules.max_stack(),
+        "cooldown_until_iso": cooldown_until.isoformat() if cooldown_active else None,
+        "cooldown_until_label": (
+            cooldown_until.strftime("%d/%m/%Y às %H:%M UTC") if cooldown_active else None
+        ),
+        "last_evaluated_cycle_number": state.last_evaluated_cycle_number,
+    }
+
+
 def _create_versioned_cycle_portals_locked(
     db: Session,
     campaign_id: str,
@@ -1257,8 +1361,13 @@ def record_cpu_event_activity(
                         guild_state_id=plan.guild_state_id,
                         status="participating",
                     )
+                    planner_effects = portal_run.get("planner_effects_snapshot")
                     snapshot = {
-                        "version": "cpu-portal-resolution-v1",
+                        "version": (
+                            "cpu-portal-resolution-v2"
+                            if isinstance(planner_effects, dict)
+                            else "cpu-portal-resolution-v1"
+                        ),
                         "cycle_rules_version": cycle.rules_version,
                         "event_rules_version": portal.rules_version,
                         "seed": plan.seed,
@@ -1267,6 +1376,7 @@ def record_cpu_event_activity(
                         "success_chance": int(portal_run.get("success_chance") or 0),
                         "mercenary_ids": [int(value) for value in portal_run.get("mercenary_ids", [])],
                         "party": portal_run.get("party_snapshot", []),
+                        "planner_effects": planner_effects,
                         "portal_boss": _summary(portal).get("portal_boss", {}),
                         "started_at_utc": started_at.isoformat(),
                         "due_at_utc": due_at.isoformat(),
@@ -1504,6 +1614,75 @@ def resolve_portal_participant(
     db.flush()
 
 
+def _apply_cpu_portal_planner_effects(
+    db: Session,
+    guild_state_id: int,
+    region_code: str,
+    planner_effects: dict[str, object],
+) -> tuple[int, int]:
+    """Apply the frozen non-event effects of one completed CPU portal run."""
+    state = db.get(RegionalGuildState, guild_state_id)
+    if state is None:
+        raise ValueError("A guilda CPU do portal não existe mais.")
+
+    success = planner_effects.get("success")
+    rank_value = planner_effects.get("rank_value")
+    int_fields = (
+        "gold_earned", "xp_earned", "gold_resource_delta", "xp_resource_delta",
+        "profession_resource_delta",
+    )
+    if (not isinstance(success, bool)
+            or type(rank_value) is not int or not 1 <= rank_value <= 6
+            or any(type(planner_effects.get(key)) is not int or planner_effects[key] < 0
+                   for key in int_fields)):
+        raise ValueError("O snapshot dos efeitos do planejador CPU está inválido.")
+    profession_code = planner_effects.get("profession_resource_code")
+    profession_delta = int(planner_effects["profession_resource_delta"])
+    if profession_delta and (not isinstance(profession_code, str) or not profession_code):
+        raise ValueError("O snapshot da recompensa de profissão está inválido.")
+
+    if success:
+        state.influence = min(100, int(state.influence or 0) + rank_value)
+        state.reputation = min(100, int(state.reputation or 0) + rank_value)
+    else:
+        state.influence = min(100, int(state.influence or 0) + 1)
+        state.reputation = max(0, int(state.reputation or 0) - max(1, rank_value // 2))
+    db.add(state)
+
+    resource_deltas = {
+        "gold": int(planner_effects["gold_resource_delta"]),
+        "xp": int(planner_effects["xp_resource_delta"]),
+    }
+    if profession_delta:
+        resource_deltas[str(profession_code)] = profession_delta
+    for resource_code, delta in resource_deltas.items():
+        if not delta:
+            continue
+        resource = db.scalar(select(RegionalCpuResource).where(
+            RegionalCpuResource.guild_state_id == guild_state_id,
+            RegionalCpuResource.resource_code == resource_code,
+        ))
+        if resource is None:
+            raise ValueError("Uma recompensa congelada perdeu seu recurso CPU.")
+        resource.amount = min(int(resource.capacity), int(resource.amount) + delta)
+        db.add(resource)
+
+    region = db.scalar(select(RegionalRegionState).where(
+        RegionalRegionState.campaign_id == state.campaign_id,
+        RegionalRegionState.region_code == region_code,
+    ))
+    if region is None:
+        raise ValueError("A região do portal CPU não existe mais.")
+    guild_influences = list(db.scalars(select(RegionalGuildState.influence).where(
+        RegionalGuildState.campaign_id == state.campaign_id,
+        RegionalGuildState.region_code == region_code,
+    )))
+    region.influence = max(0, min(100, round(sum(guild_influences) / max(1, len(guild_influences)))))
+    db.add(region)
+    db.flush()
+    return int(planner_effects["gold_earned"]), int(planner_effects["xp_earned"])
+
+
 def resolve_due_cpu_portal_activities(
     db: Session,
     campaign_id: str,
@@ -1513,6 +1692,7 @@ def resolve_due_cpu_portal_activities(
 ) -> dict[str, tuple[float, float]]:
     """Resolve frozen CPU portal runs due by ``now`` once, in timestamp order."""
     current = _utc(now)
+    _hold_campaign_event_lock(db, campaign_id)
     query = select(RegionalEventActivity).join(
         RegionalEvent, RegionalEvent.id == RegionalEventActivity.event_id,
     ).where(
@@ -1530,8 +1710,6 @@ def resolve_due_cpu_portal_activities(
     )))
     if not activities:
         return {}
-
-    _hold_campaign_event_lock(db, campaign_id)
     effects: dict[str, tuple[float, float]] = {}
     for activity in activities:
         if activity.status != "in_progress":
@@ -1551,12 +1729,18 @@ def resolve_due_cpu_portal_activities(
             snapshot = json.loads(activity.snapshot_json or "{}")
         except (TypeError, json.JSONDecodeError) as exc:
             raise ValueError("O snapshot da atividade CPU pendente está inválido.") from exc
+        snapshot_version = snapshot.get("version") if isinstance(snapshot, dict) else None
+        planner_effects = snapshot.get("planner_effects") if isinstance(snapshot, dict) else None
         if (not isinstance(snapshot, dict)
-                or snapshot.get("version") != "cpu-portal-resolution-v1"
+                or snapshot_version not in {"cpu-portal-resolution-v1", "cpu-portal-resolution-v2"}
                 or snapshot.get("event_rules_version") != V9_EVENT_RULES_VERSION
                 or snapshot.get("cycle_rules_version") != VIGILIA_V9_RULES_VERSION
                 or not isinstance(snapshot.get("success"), bool)):
             raise ValueError("O snapshot da atividade CPU pendente não corresponde às regras v9.")
+        if (snapshot_version == "cpu-portal-resolution-v2"
+                and (not isinstance(planner_effects, dict)
+                     or planner_effects.get("success") is not snapshot["success"])):
+            raise ValueError("O snapshot dos efeitos do planejador CPU está inválido.")
 
         due_at = _utc(activity.due_at_utc)
         success = bool(snapshot["success"])
@@ -1570,7 +1754,22 @@ def resolve_due_cpu_portal_activities(
 
         if participant.status != "resolved":
             before_security, before_threat = float(region.security), float(region.threat)
-            resolve_portal_participant(db, activity, success, due_at)
+            if snapshot_version == "cpu-portal-resolution-v1":
+                # The old candidate applied planner effects eagerly. Preserve
+                # those persisted values and finish only its event ledger.
+                participant.status = "resolved"
+                participant.success = success
+                participant.contribution = 3 if success else 1
+                participant.resolved_at_utc = due_at
+                db.add(participant)
+                if event.status == "in_progress" or due_at >= _utc(event.expires_at_utc):
+                    _finalize_portal_event_when_ready(db, event, due_at)
+                db.flush()
+            else:
+                resolve_portal_participant(db, activity, success, due_at)
+                _apply_cpu_portal_planner_effects(
+                    db, activity.guild_state_id, event.region_code, planner_effects,
+                )
             delta = (
                 round(float(region.security) - before_security, 4),
                 round(float(region.threat) - before_threat, 4),
@@ -1598,18 +1797,28 @@ def resolve_due_cpu_portal_activities(
                 and row.get("event_id") == event.id
                 for row in outcomes
             ):
+                if snapshot_version == "cpu-portal-resolution-v2":
+                    gold_earned = int(planner_effects.get("gold_earned", 0))
+                    xp_earned = int(planner_effects.get("xp_earned", 0))
+                    contribution = int(planner_effects.get("rank_value", 3))
+                else:
+                    gold_earned = xp_earned = 0
+                    contribution = 3 if success else 1
                 outcomes.append({
                     "offer_id": offer_id,
                     "event_id": event.id,
                     "rank": "C",
                     "success": success,
-                    "gold": 0,
-                    "xp": 0,
-                    "contribution": 3 if success else 1,
+                    "gold": gold_earned,
+                    "xp": xp_earned,
+                    "contribution": contribution,
                 })
                 plan.outcomes_json = json.dumps(outcomes, ensure_ascii=False, sort_keys=True)
-                plan.successes = int(plan.successes or 0) + int(success)
-                plan.failures = int(plan.failures or 0) + int(not success)
+                if snapshot_version == "cpu-portal-resolution-v2":
+                    plan.successes = int(plan.successes or 0) + int(success)
+                    plan.failures = int(plan.failures or 0) + int(not success)
+                    plan.gold_earned = int(plan.gold_earned or 0) + gold_earned
+                    plan.xp_earned = int(plan.xp_earned or 0) + xp_earned
                 resolved_before = max(0, int(plan.resolved_actions or 0))
                 resolved_limit = max(0, int(plan.started_actions or plan.actions or 0))
                 if resolved_before >= resolved_limit:
@@ -1636,10 +1845,15 @@ def resolve_due_cpu_portal_activities(
                         raise ValueError("O resumo regional não contém a atividade CPU pendente.")
                     cpu_activity["resolved"] = resolved + 1
                     cpu_activity["pending"] = pending - 1
-                    summary["successes"] = int(summary.get("successes", 0)) + int(success)
-                    summary["failures"] = int(summary.get("failures", 0)) + int(not success)
-                    cycle_summary.cpu_successes = int(cycle_summary.cpu_successes or 0) + int(success)
-                    cycle_summary.cpu_failures = int(cycle_summary.cpu_failures or 0) + int(not success)
+                    if snapshot_version == "cpu-portal-resolution-v2":
+                        summary["successes"] = int(summary.get("successes", 0)) + int(success)
+                        summary["failures"] = int(summary.get("failures", 0)) + int(not success)
+                        cycle_summary.cpu_successes = int(cycle_summary.cpu_successes or 0) + int(success)
+                        cycle_summary.cpu_failures = int(cycle_summary.cpu_failures or 0) + int(not success)
+                        cycle_summary.cpu_gold_earned = (
+                            int(cycle_summary.cpu_gold_earned or 0) + gold_earned
+                        )
+                        cycle_summary.cpu_xp_earned = int(cycle_summary.cpu_xp_earned or 0) + xp_earned
                     cycle_summary.summary_json = json.dumps(
                         summary, ensure_ascii=False, sort_keys=True,
                     )

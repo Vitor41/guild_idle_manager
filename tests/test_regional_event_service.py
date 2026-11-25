@@ -13,9 +13,11 @@ from sqlalchemy import delete, func, select
 
 from app.database.connection import Base, SessionLocal, configure_database, create_database_engine, get_engine
 from app.models.campaign import CampaignMetadata
+from app.models.building import BuildingTemplate, GuildBuilding
 from app.models.dungeon import DungeonTemplate
 from app.models.guild import Guild
 from app.models.item import ItemTemplate
+from app.models.mercenary import Mercenary, MercenaryClass
 from app.models.regional import (
     RegionalCycle,
     RegionalEvent,
@@ -51,6 +53,7 @@ from app.services.regional_event_service import (
     record_cpu_event_activity,
     resolve_portal_participant,
     resolve_due_cpu_portal_activities,
+    portal_spawn_status_for_region,
 )
 from app.services.regional_cycle_service import (
     CPU_INTERNAL_CONTRACT_RULES_VERSION,
@@ -251,6 +254,102 @@ class RegionalEventServiceTests(unittest.TestCase):
         self.assertEqual(_portal_spawn_chance(100), 0.25)
         self.assertEqual(_portal_spawn_chance(100, 10), 0.30)
         self.assertEqual(_portal_spawn_chance(69.99, 100), 0.30)
+
+    def test_portal_spawn_status_uses_authoritative_chance_and_separates_content_from_cooldown(self):
+        with SessionLocal() as db:
+            campaign = db.get(CampaignMetadata, self.campaign_id)
+            campaign.home_region = "Vale da Fronteira"
+            home_code = "vale-fronteira"
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=5,
+                starts_at_utc=self.now,
+                ends_at_utc=self.now + timedelta(hours=6),
+                seed="portal-status-checkpoint",
+                rules_version=VIGILIA_RULES_VERSION,
+                player_level_snapshot=1,
+                portal_spawn_rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
+            )
+            state = RegionalPortalSpawnState(
+                campaign_id=self.campaign_id,
+                region_code=home_code,
+                failure_stacks=12,
+                last_evaluated_cycle_number=4,
+                cooldown_until_utc=self.now + timedelta(hours=1),
+                rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
+                last_result="rolled_failure",
+                created_at_utc=self.now,
+                updated_at_utc=self.now,
+            )
+            guild = Guild(campaign_id=self.campaign_id, name="Guilda elegível", level=1)
+            player_state = db.get(RegionalGuildState, self.guild_state_id)
+            player_state.region_code = home_code
+            db.add_all([cycle, state, guild])
+            db.flush()
+            player_state.guild_id = guild.id
+
+            no_content = portal_spawn_status_for_region(
+                db, campaign, cycle, home_code, self.now,
+            )
+            self.assertFalse(no_content["available"])
+            self.assertEqual(no_content["reason_code"], "no_eligible_content")
+
+            mercenary_class = MercenaryClass(
+                name="Explorador portal QA", code="portal-status-qa", description="",
+                role_type="damage", base_power=1, base_vitality=1, base_agility=1,
+                base_intelligence=1, base_luck=1,
+            )
+            boss = DungeonTemplate(
+                name="Chefe elegível portal status", description="",
+                content_type="boss", level_band="1-20", recommended_level=1,
+                biome="portal", difficulty="normal", duration_seconds=3600,
+                base_gold_reward=10, base_xp_reward=10, base_success_chance=50,
+                min_party_size=1, max_party_size=1, required_guild_level=1,
+                required_min_mercenary_level=1, is_active=True,
+            )
+            loot = ItemTemplate(
+                name="Loot elegível portal status", description="", item_type="equipment",
+                rarity="rare", level_band="1-20", equipment_slot="main_hand",
+                required_level=1, tier=1, base_sell_value=1, rng_bonus_min=1,
+                rng_bonus_max=2, is_active=True,
+            )
+            scouts = BuildingTemplate(
+                name="Scouts portal status QA", description="", effect_type="scouts",
+            )
+            db.add_all([mercenary_class, boss, loot, scouts])
+            db.flush()
+            db.add_all([
+                Mercenary(
+                    guild_id=guild.id, class_id=mercenary_class.id,
+                    name="Membro elegível", level=1, power=1, vitality=1,
+                    agility=1, intelligence=1, luck=1, status="available",
+                ),
+                GuildBuilding(guild_id=guild.id, building_template_id=scouts.id, level=100),
+            ])
+            db.flush()
+
+            before = (state.failure_stacks, state.cooldown_until_utc, state.last_evaluated_cycle_number)
+            during_cooldown = portal_spawn_status_for_region(
+                db, campaign, cycle, home_code, self.now,
+            )
+            self.assertTrue(during_cooldown["available"], during_cooldown)
+            self.assertEqual(during_cooldown["reason_code"], "cooldown")
+            self.assertEqual(during_cooldown["failure_stacks"], 12)
+            self.assertEqual(during_cooldown["failure_bonus_pp"], 12)
+            self.assertEqual(during_cooldown["base_chance_after_failures_pp"], 20)
+            self.assertEqual(during_cooldown["explorer_bonus_pp"], 5)
+            self.assertEqual(during_cooldown["effective_chance_pp"], 25)
+            self.assertTrue(during_cooldown["failure_cap_reached"])
+
+            after_cooldown = portal_spawn_status_for_region(
+                db, campaign, cycle, home_code, state.cooldown_until_utc,
+            )
+            self.assertEqual(after_cooldown["reason_code"], "eligible_next_cycle")
+            self.assertEqual(after_cooldown["effective_chance_pp"], 25)
+            self.assertEqual(
+                (state.failure_stacks, state.cooldown_until_utc, state.last_evaluated_cycle_number),
+                before,
+            )
 
     def test_current_rules_combine_low_threat_portal_and_rebellion_without_changing_pressure(self):
         class FixedRng:
@@ -1534,6 +1633,16 @@ class RegionalEventServiceTests(unittest.TestCase):
                     "pending_cpu_resolution": True,
                     "event_rules_version": VIGILIA_V9_EVENT_RULES_VERSION,
                     "result_success_snapshot": True,
+                    "planner_effects_snapshot": {
+                        "success": True,
+                        "rank_value": 3,
+                        "gold_earned": 0,
+                        "xp_earned": 0,
+                        "gold_resource_delta": 0,
+                        "xp_resource_delta": 0,
+                        "profession_resource_code": None,
+                        "profession_resource_delta": 0,
+                    },
                     "success_chance": 76,
                     "mercenary_ids": [301, 302],
                     "party_snapshot": [{"id": 301, "slot": 1}, {"id": 302, "slot": 2}],
@@ -1564,9 +1673,11 @@ class RegionalEventServiceTests(unittest.TestCase):
             self.assertEqual(participant.status, "participating")
             self.assertIsNone(participant.success)
             self.assertEqual(activity.status, "in_progress")
+            self.assertEqual(json.loads(activity.snapshot_json)["version"], "cpu-portal-resolution-v2")
             self.assertEqual(json.loads(activity.snapshot_json)["mercenary_ids"], [301, 302])
             self.assertEqual(region.security, 50)
             self.assertEqual(region.threat, 80)
+            self.assertEqual((cpu_state.influence, cpu_state.reputation), (0, 0))
 
             expire_due_events(db, self.campaign_id, event.expires_at_utc)
             self.assertEqual(event.status, "in_progress")
@@ -1580,6 +1691,7 @@ class RegionalEventServiceTests(unittest.TestCase):
             self.assertEqual(activity.successes, 1)
             self.assertEqual(activity.failures, 0)
             self.assertEqual(activity.resolved_at_utc, due_at)
+            self.assertEqual((cpu_state.influence, cpu_state.reputation), (3, 3))
             self.assertEqual(effects[region.region_code], (
                 regional_outcome_impact("C"), -regional_outcome_impact("C"),
             ))

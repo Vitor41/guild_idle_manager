@@ -56,6 +56,30 @@ from app.routes.regional_routes import regional_index, templates as regional_tem
 
 
 class RegionalCycleSimulationTests(unittest.TestCase):
+    def test_cpu_busy_until_keeps_the_longer_priority_or_portal_reservation(self):
+        cycle_start = datetime(2026, 11, 1, tzinfo=timezone.utc)
+        priority_end = cycle_start + timedelta(hours=1)
+        roster = [SimpleNamespace(id=value) for value in (101, 102, 103, 104)]
+        reservations = {
+            101: cycle_start + timedelta(minutes=30),
+            102: priority_end,
+            103: cycle_start + timedelta(minutes=90),
+            104: cycle_start + timedelta(hours=2),
+        }
+        with patch.object(
+            regional_cycle_service,
+            "_cpu_pending_portal_reservations",
+            return_value=reservations,
+        ):
+            busy_until = regional_cycle_service._cpu_busy_until_for_roster(
+                None, 7, roster, cycle_start, priority_end,
+            )
+
+        self.assertEqual(busy_until[101], priority_end)
+        self.assertEqual(busy_until[102], priority_end)
+        self.assertEqual(busy_until[103], cycle_start + timedelta(minutes=90))
+        self.assertEqual(busy_until[104], cycle_start + timedelta(hours=2))
+
     def test_v9_portal_catchup_matches_7_12_14_hour_visits_and_reserves_party(self):
         fixed_campaign_id = UUID("00000000-0000-4000-8000-000000000091")
 
@@ -291,6 +315,253 @@ class RegionalCycleSimulationTests(unittest.TestCase):
         incremental = run_scenario([7, 12, 14, 18])
         batch = run_scenario([18])
         self.assertEqual(incremental, batch)
+
+    def test_v9_public_planner_defers_portal_effects_until_due_for_success_and_failure(self):
+        def run_case(success: bool) -> None:
+            configure_database("sqlite:///:memory:")
+            campaigns = None
+            info = None
+            try:
+                temp_dir = tempfile.TemporaryDirectory()
+                try:
+                    campaigns = CampaignService(Path(temp_dir.name) / "saves")
+                    fixed_id = UUID("00000000-0000-4000-8000-000000000091")
+                    with patch("app.services.campaign_service.uuid4", return_value=fixed_id):
+                        info = campaigns.create_campaign("CPU portal effects", "Guilda de teste")
+                    campaigns.activate_campaign(info.campaign_id)
+                    with SessionLocal() as db:
+                        from app.services.regional_event_service import (
+                            V9_EVENT_RULES_VERSION,
+                            build_portal_boss_snapshot,
+                        )
+
+                        campaign = db.get(CampaignMetadata, info.campaign_id)
+                        guild, _resources = get_current_guild_context(db, info.campaign_id)
+                        start = datetime(2026, 11, 1, tzinfo=timezone.utc)
+                        campaign.created_at_utc = start
+                        db.flush()
+                        advance_regional_world(db, campaign, guild, start)
+                        cycle = db.scalar(select(RegionalCycle).where(
+                            RegionalCycle.campaign_id == info.campaign_id,
+                            RegionalCycle.cycle_number == 0,
+                        ))
+                        home_code = next(
+                            code for code, name in regional_cycle_service.REGIONS
+                            if name == campaign.home_region
+                        )
+                        cpu = db.scalar(select(RegionalGuildState).where(
+                            RegionalGuildState.campaign_id == info.campaign_id,
+                            RegionalGuildState.region_code == home_code,
+                            RegionalGuildState.profile == "strong",
+                        ))
+                        for other_cpu in db.scalars(select(RegionalGuildState).where(
+                            RegionalGuildState.campaign_id == info.campaign_id,
+                            RegionalGuildState.guild_id.is_(None),
+                        )):
+                            if other_cpu.id != cpu.id:
+                                other_cpu.active = False
+                        cpu.archetype = "exploration"
+                        cpu_baseline = (cpu.influence, cpu.reputation)
+                        cpu_resources = {
+                            row.resource_code: row for row in db.scalars(select(RegionalCpuResource).where(
+                                RegionalCpuResource.guild_state_id == cpu.id,
+                            ))
+                        }
+                        cpu_resources["gold"].amount = 0  # Avoid unrelated cycle-start hiring.
+                        resource_baseline = {
+                            code: row.amount for code, row in cpu_resources.items()
+                        }
+                        roster = list(db.scalars(select(RegionalCpuMercenary).where(
+                            RegionalCpuMercenary.guild_state_id == cpu.id,
+                            RegionalCpuMercenary.active.is_(True),
+                        )))
+                        self.assertTrue(roster)
+                        for member in roster:
+                            member.profession_code = "woodcutter"
+                        wood_before = cpu_resources["wood"].amount
+
+                        template = DungeonTemplate(
+                            name="Chefe CPU diferido", description="Portal de teste",
+                            content_type="boss", level_band="1-20", recommended_level=1,
+                            biome="portal", difficulty="normal", duration_seconds=10 * 3600,
+                            base_gold_reward=500, base_xp_reward=500, base_success_chance=65,
+                            min_party_size=1, max_party_size=5, required_guild_level=1,
+                            required_min_mercenary_level=1, required_total_power=0,
+                            required_tank_count=0, required_support_count=0,
+                            required_damage_count=0, required_equipment_tier=0, is_active=True,
+                        )
+                        db.add(template)
+                        db.flush()
+                        portal = RegionalEvent(
+                            campaign_id=info.campaign_id,
+                            event_type="portal",
+                            region_code=home_code,
+                            trigger_cycle_number=0,
+                            rules_version=V9_EVENT_RULES_VERSION,
+                            seed=f"public-planner-{success}",
+                            status="active",
+                            dungeon_template_id=template.id,
+                            created_at_utc=start,
+                            expires_at_utc=start + timedelta(hours=3),
+                            summary_json=json.dumps({
+                                "portal_boss": {"template": build_portal_boss_snapshot(template)},
+                            }, sort_keys=True),
+                        )
+                        db.add(portal)
+                        for offer in db.scalars(select(RegionalOffer).where(
+                            RegionalOffer.cycle_id == cycle.id,
+                            RegionalOffer.region_code == home_code,
+                        )):
+                            offer.status = "cpu_completed"
+                        db.flush()
+                        plan_seed = regional_cycle_service._seed_text(
+                            info.campaign_id, cycle.cycle_number, cpu.id,
+                            cycle.rules_version, "cpu-plan",
+                        )
+                        original_rng = regional_cycle_service._rng
+
+                        class ForcedOutcomeRng:
+                            def randint(self, low, high):
+                                return low if success else high
+
+                        def controlled_rng(*parts):
+                            if parts == (plan_seed,):
+                                return ForcedOutcomeRng()
+                            return original_rng(*parts)
+
+                        with patch.object(regional_cycle_service, "_rng", side_effect=controlled_rng):
+                            with patch("app.services.regional_event_service.create_cycle_portals"):
+                                advance_regional_world(
+                                    db, campaign, guild, start + timedelta(hours=6),
+                                )
+
+                        plan = db.scalar(select(RegionalCpuCyclePlan).where(
+                            RegionalCpuCyclePlan.cycle_id == cycle.id,
+                            RegionalCpuCyclePlan.guild_state_id == cpu.id,
+                        ))
+                        decision = next(row for row in json.loads(plan.decisions_json)
+                                        if row.get("offer_type") == "portal")
+                        self.assertEqual(decision["result_success_snapshot"], success)
+                        self.assertEqual(plan.started_actions, 1)
+                        self.assertEqual(plan.resolved_actions, 0)
+                        self.assertEqual((plan.successes, plan.failures), (0, 0))
+                        self.assertEqual(json.loads(plan.outcomes_json), [])
+                        self.assertEqual((cpu.influence, cpu.reputation), cpu_baseline)
+                        self.assertEqual(
+                            {code: row.amount for code, row in cpu_resources.items()},
+                            resource_baseline,
+                        )
+                        self.assertEqual(cpu_resources["wood"].amount, wood_before)
+
+                        region = db.scalar(select(RegionalRegionState).where(
+                            RegionalRegionState.campaign_id == info.campaign_id,
+                            RegionalRegionState.region_code == home_code,
+                        ))
+                        cycle_region = db.scalar(select(RegionalCycleRegion).where(
+                            RegionalCycleRegion.cycle_id == cycle.id,
+                            RegionalCycleRegion.region_code == home_code,
+                        ))
+                        pending_state = (
+                            cpu.influence, cpu.reputation, cpu_resources["wood"].amount,
+                            cpu_resources["gold"].amount, cpu_resources["xp"].amount,
+                            region.security, region.threat, region.influence,
+                            plan.successes, plan.failures, plan.resolved_actions,
+                            plan.gold_earned, plan.xp_earned,
+                            plan.outcomes_json,
+                        )
+                        self.assertEqual(region.security, cycle_region.security_after)
+                        self.assertEqual(region.threat, cycle_region.threat_after)
+                        self.assertEqual(region.influence, cycle_region.influence_after)
+
+                        with patch("app.services.regional_event_service.create_cycle_portals"):
+                            advance_regional_world(
+                                db, campaign, guild, start + timedelta(hours=9),
+                            )
+                        self.assertEqual((
+                            cpu.influence, cpu.reputation, cpu_resources["wood"].amount,
+                            cpu_resources["gold"].amount, cpu_resources["xp"].amount,
+                            region.security, region.threat, region.influence,
+                            plan.successes, plan.failures, plan.resolved_actions,
+                            plan.gold_earned, plan.xp_earned,
+                            plan.outcomes_json,
+                        ), pending_state)
+                        activity = db.scalar(select(RegionalEventActivity).where(
+                            RegionalEventActivity.event_id == portal.id,
+                            RegionalEventActivity.guild_state_id == cpu.id,
+                            RegionalEventActivity.source_type == "cpu_portal",
+                        ))
+                        self.assertEqual(activity.status, "in_progress")
+                        self.assertEqual(
+                            regional_cycle_service._utc(activity.due_at_utc),
+                            start + timedelta(hours=11),
+                        )
+
+                        with patch("app.services.regional_event_service.create_cycle_portals"):
+                            advance_regional_world(
+                                db, campaign, guild, start + timedelta(hours=11),
+                            )
+                        impact = regional_cycle_service.regional_outcome_impact("C")
+                        self.assertEqual(activity.status, "resolved")
+                        self.assertEqual(activity.successes, int(success))
+                        self.assertEqual(activity.failures, int(not success))
+                        self.assertEqual(plan.resolved_actions, 1)
+                        self.assertEqual((plan.successes, plan.failures), (int(success), int(not success)))
+                        self.assertEqual(len(json.loads(plan.outcomes_json)), 1)
+                        effects_snapshot = decision["planner_effects_snapshot"]
+                        for resource_code in ("gold", "xp"):
+                            resource = cpu_resources[resource_code]
+                            self.assertEqual(
+                                resource.amount,
+                                min(resource.capacity, resource_baseline[resource_code]
+                                    + effects_snapshot[f"{resource_code}_resource_delta"]),
+                            )
+                        expected_influence = min(100, cpu_baseline[0] + (3 if success else 1))
+                        expected_reputation = (
+                            min(100, cpu_baseline[1] + 3) if success
+                            else max(0, cpu_baseline[1] - 1)
+                        )
+                        self.assertEqual((cpu.influence, cpu.reputation),
+                                         (expected_influence, expected_reputation))
+                        self.assertEqual(
+                            cpu_resources["wood"].amount,
+                            wood_before + int(success),
+                        )
+                        self.assertEqual(
+                            (region.security, region.threat),
+                            (cycle_region.security_after + (impact if success else -impact),
+                             cycle_region.threat_after + (-impact if success else impact)),
+                        )
+                        resolved_state = (
+                            cpu.influence, cpu.reputation, cpu_resources["wood"].amount,
+                            cpu_resources["gold"].amount, cpu_resources["xp"].amount,
+                            region.security, region.threat, region.influence,
+                            plan.successes, plan.failures, plan.resolved_actions,
+                            plan.gold_earned, plan.xp_earned,
+                            plan.outcomes_json, activity.status, activity.resolved_at_utc,
+                        )
+                        with patch("app.services.regional_event_service.create_cycle_portals"):
+                            advance_regional_world(
+                                db, campaign, guild, start + timedelta(hours=11),
+                            )
+                        self.assertEqual((
+                            cpu.influence, cpu.reputation, cpu_resources["wood"].amount,
+                            cpu_resources["gold"].amount, cpu_resources["xp"].amount,
+                            region.security, region.threat, region.influence,
+                            plan.successes, plan.failures, plan.resolved_actions,
+                            plan.gold_earned, plan.xp_earned,
+                            plan.outcomes_json, activity.status, activity.resolved_at_utc,
+                        ), resolved_state)
+                finally:
+                    if campaigns is not None and info is not None:
+                        campaigns.close_active_campaign(info.campaign_id)
+                    temp_dir.cleanup()
+            finally:
+                configure_database("sqlite:///:memory:")
+                gc.collect()
+
+        for expected_success in (True, False):
+            with self.subTest(success=expected_success):
+                run_case(expected_success)
 
     def test_contract_candidates_follow_guild_bands_and_keep_100_plus_ceiling(self):
         from random import Random

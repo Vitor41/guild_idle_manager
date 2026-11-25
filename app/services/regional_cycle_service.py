@@ -1562,6 +1562,26 @@ def _cpu_pending_portal_reservations(
     return reservations
 
 
+def _cpu_busy_until_for_roster(
+    db: Session,
+    guild_state_id: int,
+    roster: list[RegionalCpuMercenary],
+    cycle_start: datetime,
+    player_priority_ends_at: datetime,
+) -> dict[int, datetime]:
+    """Merge the cycle priority floor with every persisted party reservation."""
+    start = _utc(cycle_start)
+    priority_end = _utc(player_priority_ends_at)
+    busy_until = {member.id: priority_end for member in roster}
+    for member_id, reservation_end in _cpu_pending_portal_reservations(
+        db, guild_state_id, start,
+    ).items():
+        busy_until[member_id] = max(
+            busy_until.get(member_id, start), _utc(reservation_end),
+        )
+    return busy_until
+
+
 def _cpu_internal_contract_for_guild(
     db: Session,
     campaign_id: str,
@@ -1705,8 +1725,9 @@ def _prepare_cpu_region_cycle_start(
         roster = start_state["roster"]
         if not state.active or not roster:
             continue
-        busy_until = {member.id: player_priority_ends_at for member in roster}
-        busy_until.update(_cpu_pending_portal_reservations(db, state.id, cycle_start))
+        busy_until = _cpu_busy_until_for_roster(
+            db, state.id, roster, cycle_start, player_priority_ends_at,
+        )
         plan_seed = _seed_text(campaign_id, cycle.cycle_number, state.id, cycle.rules_version, "cpu-plan")
         portal_offer = _cpu_portal_offer_for_guild(
             db, campaign_id, cycle, region, state, plan_seed,
@@ -1847,8 +1868,9 @@ def _cpu_plan_for_guild_v6(
     rng = _rng(plan_seed)
     cycle_start, cycle_end = _utc(cycle.starts_at_utc), _utc(cycle.ends_at_utc)
     player_priority_ends_at = cycle_start + timedelta(hours=1)
-    busy_until = {member.id: player_priority_ends_at for member in roster}
-    busy_until.update(_cpu_pending_portal_reservations(db, state.id, cycle_start))
+    busy_until = _cpu_busy_until_for_roster(
+        db, state.id, roster, cycle_start, player_priority_ends_at,
+    )
     all_offers = list(db.scalars(select(RegionalOffer).where(
         RegionalOffer.cycle_id == cycle.id,
         RegionalOffer.region_code == region.region_code,
@@ -2032,6 +2054,33 @@ def _cpu_plan_for_guild_v6(
             decision["pending_cpu_resolution"] = True
             decision["result_success_snapshot"] = success
             decision["event_rules_version"] = VIGILIA_V9_EVENT_RULES_VERSION
+            member = party[0]
+            family = profession_family.get(member.profession_code or "")
+            material_resource_code = PROFESSION_RESOURCE_CODES.get(
+                member.profession_code or "", family or "",
+            )
+            reward_xp_on_failure = max(0, offer.xp_reward_snapshot // 4)
+            decision["planner_effects_snapshot"] = {
+                "success": success,
+                "rank_value": rank_value,
+                "gold_earned": reward_gold if success else 0,
+                "xp_earned": reward_xp * len(party) if success else 0,
+                "gold_resource_delta": (
+                    reward_gold if success and resource_by_code.get("gold") is not None else 0
+                ),
+                "xp_resource_delta": (
+                    (reward_xp if success else reward_xp_on_failure) * len(party)
+                    if resource_by_code.get("xp") is not None else 0
+                ),
+                "profession_resource_code": (
+                    material_resource_code
+                    if success and resource_by_code.get(material_resource_code) is not None
+                    else None
+                ),
+                "profession_resource_delta": (
+                    1 if success and resource_by_code.get(material_resource_code) is not None else 0
+                ),
+            }
             decision["party_snapshot"] = [
                 {
                     "id": member.id,
@@ -2058,7 +2107,11 @@ def _cpu_plan_for_guild_v6(
                 "xp": reward_xp,
                 "contribution": rank_value,
             })
-        if offer.offer_type == "portal" and not pending_portal:
+        if pending_portal:
+            # The frozen result is not an outcome yet. The resolver applies all
+            # economic, guild, and regional effects at the activity's due time.
+            pass
+        elif offer.offer_type == "portal":
             if portal_offer is not None:
                 portal_offer.status = "cpu_completed"
             successes += int(success)
