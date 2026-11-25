@@ -20,13 +20,20 @@
       </dl>
     </section>
     <section class="panel table-panel">
-      <div class="section-heading"><div><h2>Receitas da oficina</h2><p class="note">A seleção muda a cada {{ rotation.duration_hours }} horas. Evolua o Ferreiro para ampliar opções e encontrar projetos mais raros.</p><p class="note">O total de ouro mostrado em cada receita é o valor cobrado ao fabricar. Ele pode subir quando insumos disponíveis nas Docas ou por desmontagem deixariam a revenda do resultado lucrativa. Ofertas e nível das Docas podem alterar esse total; o valor da receita é sempre o exato débito, mesmo se você já tiver os materiais.</p></div></div>
+      <div class="section-heading"><div><h2>Receitas da oficina</h2><p class="note">A seleção muda a cada {{ rotation.duration_hours }} horas. Evolua o Ferreiro para ampliar opções e encontrar projetos mais raros.</p><details class="blacksmith-cost-details"><summary>Sobre o custo</summary><p>O total de ouro mostrado em cada receita é o valor cobrado ao fabricar. Ele pode subir quando insumos disponíveis nas Docas ou por desmontagem deixariam a revenda do resultado lucrativa. Ofertas e nível das Docas podem alterar esse total; o valor da receita é sempre o exato débito, mesmo se você já tiver os materiais.</p></details></div></div>
       {% if recipes %}<div class="craft-grid">{% for recipe in recipes %}
         <article class="craft-card rarity-{{ recipe.output_item_template.rarity }} tier-border-{{ recipe.output_item_template.tier }}">
           <div class="mercenary-head"><div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ recipe.output_item_template.icon_group or '' }}" data-desktop-item-slot="{{ recipe.output_item_template.equipment_slot or '' }}" data-desktop-item-family="{{ recipe.output_item_template.material_family or '' }}">{% if recipe.icon_path %}<img class="asset-icon" src="{{ url_for('static', path=recipe.icon_path) }}" alt="">{% else %}&#9874;{% endif %}</div><div><h3>{{ recipe.name }}</h3><p class="note">{{ recipe.description }}</p></div></div>
-          <div class="badge-row"><span class="rarity-badge rarity-{{ recipe.output_item_template.rarity }}">{{ rarity_label(recipe.output_item_template.rarity) }}</span><span class="tag">Ferreiro {{ recipe.required_blacksmith_level }}+</span><span class="tag">Total ao fabricar: {{ recipe.effective_gold_cost }} ouro</span></div>
-          <ul class="material-list">{% for status in recipe.material_status %}<li class="{% if status.owned < status.material.quantity %}missing{% endif %}">{{ status.display_name }}: {{ status.owned }}/{{ status.material.quantity }}</li>{% endfor %}</ul>
-          <form method="post" action="/blacksmith/craft" data-confirm-title="Fabricar item?" data-confirm-message="Os materiais e o ouro serão consumidos." data-confirm-key="craft_item"><input type="hidden" name="recipe_id" value="{{ recipe.id }}"><button>Fabricar</button></form>
+          <div class="badge-row"><span class="rarity-badge rarity-{{ recipe.output_item_template.rarity }}">{{ rarity_label(recipe.output_item_template.rarity) }}</span><span class="tag">Ferreiro {{ recipe.required_blacksmith_level }}+</span></div>
+          {% set availability = namespace(materials_ready=true) %}
+          <ul class="material-list">{% for status in recipe.material_status %}{% set missing = status.material.quantity - status.owned %}{% if missing > 0 %}{% set availability.materials_ready = false %}{% endif %}<li class="{% if missing > 0 %}missing{% endif %}"><span>{{ status.display_name }}</span><span class="material-list__quantity">{{ status.owned }}/{{ status.material.quantity }}{% if missing > 0 %} · faltam {{ missing }}{% endif %}</span></li>{% endfor %}</ul>
+          <form class="blacksmith-craft-action" method="post" action="/blacksmith/craft" data-confirm-title="Fabricar item?" data-confirm-message="Os materiais e o ouro serão consumidos." data-confirm-key="craft_item">
+            <input type="hidden" name="recipe_id" value="{{ recipe.id }}">
+            <p class="blacksmith-craft-action__total">Total ao fabricar: <strong>{{ recipe.effective_gold_cost }} ouro</strong></p>
+            <button {% if not availability.materials_ready or not resources or resources.gold < recipe.effective_gold_cost %}disabled{% endif %}>Fabricar</button>
+            {% if not availability.materials_ready %}<p class="note blacksmith-blocked-reason" role="status">Faltam os materiais indicados acima.</p>{% endif %}
+            {% if not resources %}<p class="note blacksmith-blocked-reason" role="status">Saldo de ouro não informado; confira os recursos antes de fabricar.</p>{% elif resources.gold < recipe.effective_gold_cost %}<p class="note blacksmith-blocked-reason" role="status">Faltam {{ recipe.effective_gold_cost - resources.gold }} ouro para fabricar.</p>{% endif %}
+          </form>
         </article>
       {% endfor %}</div>{% else %}<p class="note">Nenhuma receita compatível foi encontrada nesta rotação.</p>{% endif %}
     </section>
@@ -41,7 +48,7 @@
             {% elif slot.job %}
               <div class="salvage-active-item">
                 <div class="asset-placeholder item-icon-frame" data-desktop-item-group="{{ slot.job.item_template.icon_group or '' }}" data-desktop-item-slot="{{ slot.job.item_template.equipment_slot or '' }}" data-desktop-item-family="{{ slot.job.item_template.material_family or '' }}">{% if slot.job.icon_path %}<img class="asset-icon" src="{{ url_for('static', path=slot.job.icon_path) }}" alt="">{% else %}&#9874;{% endif %}</div>
-                <div><strong>{{ slot.job.quantity }}x {{ slot.job.item_display_name }}</strong><p class="note">Resultado: {{ slot.job.material_display_name }} · 1–3 por item</p></div>
+                <div class="salvage-active-item__details"><div class="salvage-item-return"><strong>{{ slot.job.quantity }}x {{ slot.job.item_display_name }}</strong><span aria-hidden="true">→</span><span>{{ slot.job.material_display_name }} · 1–3 por item</span></div></div>
               </div>
               <dl class="inline-stats"><div><dt>Custo pago</dt><dd>{{ slot.job.gold_cost }}</dd></div><div><dt>Tempo</dt><dd data-ends-at="{{ slot.job.ends_at_iso }}">Calculando...</dd></div></dl>
               <form method="post" action="/blacksmith/salvage/collect"><input type="hidden" name="job_id" value="{{ slot.job.id }}"><button data-ends-at="{{ slot.job.ends_at_iso }}" {% if not slot.job.ready_for_loot %}disabled{% endif %}>Coletar materiais</button></form>
@@ -59,7 +66,7 @@
           </article>
         {% endfor %}
       </div>
-      {% if salvage_history %}<div class="salvage-history"><h3>Serviços recentes</h3><div class="badge-row">{% for job in salvage_history %}<span class="tag">{{ job.quantity }}x {{ job.item_display_name }} → {{ job.result_quantity }}x {{ job.material_display_name }}</span>{% endfor %}</div></div>{% endif %}
+      {% if salvage_history %}<div class="salvage-history"><h3>Serviços recentes</h3><ul class="salvage-history-list">{% for job in salvage_history %}<li><strong>{{ job.quantity }}x {{ job.item_display_name }}</strong><span aria-hidden="true">→</span><span>{{ job.result_quantity }}x {{ job.material_display_name }}</span></li>{% endfor %}</ul></div>{% endif %}
     </section>
     {% if blacksmith_level < refine_unlock_level %}
       <section class="panel empty-state progression-lock-state"><span class="empty-state__icon">◇</span><h2>Refino ainda bloqueado</h2><p>Evolua o Ferreiro para o nível {{ refine_unlock_level }} para aprimorar equipamentos existentes.</p></section>

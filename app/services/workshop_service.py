@@ -112,13 +112,24 @@ def get_supply_workshop_context(db: Session, guild: Guild, *, now: datetime | No
         due_job and due_job.status == "in_progress" and _utc(due_job.ends_at) <= now
     )
     input_max = min(stock["meat"] // MEAT_PER_KIT, stock["herb"] // HERBS_PER_KIT)
+    materials_available = input_max > 0
+    material_shortfalls = {
+        "meat": max(0, MEAT_PER_KIT - stock["meat"]),
+        "herb": max(0, HERBS_PER_KIT - stock["herb"]),
+    }
     # A batch consumes five slots and reserves one output slot per kit.
     if usage > capacity:
         input_max = min(input_max, max(0, (usage - capacity) // 4))
     can_start = bool(meats and herbs and input_max > 0 and job is None)
+    warehouse_limited = bool(materials_available and input_max < 1 and job is None)
     return {"meat_item": meats[0] if meats else None, "herb_item": herbs[0] if herbs else None,
             "kit_item": kit, "stock": stock, "max_batch": input_max,
             "can_craft": can_start, "job": job, "seconds_per_kit": SECONDS_PER_KIT,
+            "requirements": {"meat": MEAT_PER_KIT, "herb": HERBS_PER_KIT},
+            "material_shortfalls": material_shortfalls,
+            "materials_available": materials_available,
+            "warehouse_usage": usage, "warehouse_capacity": capacity,
+            "warehouse_limited": warehouse_limited,
             "completed_job": due_job if due_job and due_job.status == "completed" else None,
             "completion_blocked": completion_blocked}
 

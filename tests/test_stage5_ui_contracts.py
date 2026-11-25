@@ -234,7 +234,7 @@ class Stage5UiContractTests(unittest.TestCase):
         submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
         self.assertNotIn('form.submit()', submit_catch)
         self.assertRegex(base, r"main\.css.*?\?v=20\d{6}-\d+")
-        self.assertIn("?v=20261110-1", base)
+        self.assertIn("/js/equipment-details.js') }}?v=20261125-1", base)
 
     def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
         gathering = self.read("app/templates/gathering/index.html")
@@ -315,11 +315,35 @@ class Stage5UiContractTests(unittest.TestCase):
         blacksmith = self.read("app/templates/blacksmith/index.html")
         guide = self.read("app/templates/guide/index.html")
         service = self.read("app/services/crafting_service.py")
-        self.assertIn("Total ao fabricar: {{ recipe.effective_gold_cost }} ouro", blacksmith)
+        css = self.read("app/static/css/main.css")
+        self.assertIn("Total ao fabricar: <strong>{{ recipe.effective_gold_cost }} ouro</strong>", blacksmith)
         self.assertIn("o valor da receita é sempre o exato débito", blacksmith)
+        self.assertIn('class="blacksmith-craft-action"', blacksmith)
+        self.assertIn("availability.materials_ready", blacksmith)
+        self.assertIn('class="blacksmith-cost-details"', blacksmith)
+        self.assertIn('class="salvage-history-list"', blacksmith)
+        self.assertIn('class="salvage-item-return"', blacksmith)
+        locked_slot = css.split(".salvage-slot-card.is-locked {", 1)[1].split("}", 1)[0]
+        self.assertIn("min-height: 0", locked_slot)
+        self.assertNotIn("opacity:", locked_slot)
         self.assertIn("total de ouro de cada receita aparece na oficina", guide)
         self.assertIn("recipe.effective_gold_cost = _effective_recipe_gold_cost", service)
         self.assertIn("resources.gold -= gold_cost", service)
+
+    def test_workshop_presentation_uses_service_requirements_and_distinguishes_capacity(self):
+        workshop = self.read("app/templates/workshops/index.html")
+        service = self.read("app/services/workshop_service.py")
+        css = self.read("app/static/css/main.css")
+
+        self.assertIn("{{ requirements.meat }} Carnes + {{ requirements.herb }} Ervas", workshop)
+        self.assertIn("data-meat-per-kit=\"{{ requirements.meat }}\"", workshop)
+        self.assertIn("data-herbs-per-kit=\"{{ requirements.herb }}\"", workshop)
+        self.assertIn("{{ material_shortfalls.meat }}", workshop)
+        self.assertIn("{{ warehouse_usage }}/{{ warehouse_capacity }}", workshop)
+        self.assertIn('class="evolution-status evolution-status--paused"', workshop)
+        self.assertIn('class="workshop-batch-form"', workshop)
+        self.assertIn('"warehouse_limited": warehouse_limited', service)
+        self.assertIn(".workshop-blocked-reason", css)
 
     def test_market_max_explains_stock_and_slots_without_a_rolling_quota(self):
         template = self.read("app/templates/market/index.html")

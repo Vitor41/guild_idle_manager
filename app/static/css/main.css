@@ -2228,6 +2228,21 @@ textarea {
 .skill-rank { float: right; color: var(--gold); font-weight: 900; }
 .material-list { padding-left: 20px; color: var(--muted); line-height: 1.7; }
 .material-list .missing { color: #ff9c8f; }
+.material-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.material-list__quantity { color: var(--parchment-soft); font-variant-numeric: tabular-nums; }
+.blacksmith-cost-details { margin-top: 8px; }
+.blacksmith-cost-details > summary { display: flex; align-items: center; min-height: 40px; color: var(--gold-2); cursor: pointer; }
+.blacksmith-cost-details > summary:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
+.blacksmith-craft-action { display: grid; justify-items: start; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(233,198,116,.16); }
+.blacksmith-craft-action__total { margin: 0; color: var(--parchment-soft); }
+.blacksmith-craft-action > button { min-height: 40px; }
+.blacksmith-blocked-reason { margin: 0; color: var(--gold-2); }
+.workshop-batch-form { display: grid; align-items: start; justify-items: start; gap: 8px; max-width: 520px; }
+.workshop-batch-form > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+.workshop-batch-form input[type="number"] { width: min(180px, 100%); }
+.workshop-batch-form > button { min-height: 40px; }
+.workshop-blocked-reason { margin: 0; padding: 10px 12px; border-left: 3px solid var(--gold-2); background: rgba(240,203,114,.07); }
+.workshop-shortfalls { margin: 5px 0 0; padding-left: 20px; }
 .progress-track { height: 10px; overflow: hidden; border-radius: 5px; background: rgba(0,0,0,.35); }
 .progress-track span { display: block; height: 100%; background: linear-gradient(90deg, #7cae5f, var(--gold)); }
 .achievement-card.unlocked { border-color: #6ea85a; }
@@ -2664,7 +2679,7 @@ html { scroll-behavior: smooth; }
 .guide-list { display: grid; gap: 10px; margin: 0; padding-left: 22px; color: var(--muted); }
 .salvage-slot-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .salvage-slot-card { display: grid; align-content: start; gap: 14px; min-height: 300px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(12,9,7,.42); }
-.salvage-slot-card.is-locked { opacity: .62; }
+.salvage-slot-card.is-locked { align-self: start; min-height: 0; border-style: dashed; background: rgba(12,9,7,.24); }
 .salvage-slot-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .salvage-slot-head h3 { margin: 4px 0 0; }
 .salvage-form { display: grid; gap: 12px; }
@@ -2674,7 +2689,15 @@ html { scroll-behavior: smooth; }
 .salvage-preview strong { color: var(--parchment); font-size: .88rem; }
 .salvage-active-item { display: flex; align-items: center; gap: 12px; }
 .salvage-active-item .item-icon-frame { flex: 0 0 54px; width: 54px; height: 54px; }
+.salvage-active-item__details { min-width: 0; flex: 1 1 auto; }
+.salvage-item-return { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
+.salvage-item-return > :first-child, .salvage-item-return > :last-child { min-width: 0; overflow-wrap: anywhere; }
+.salvage-item-return > span[aria-hidden="true"] { color: var(--gold-2); font-weight: 800; }
 .salvage-history { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.salvage-history-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.salvage-history-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid rgba(233,198,116,.14); border-radius: 8px; }
+.salvage-history-list li > :first-child, .salvage-history-list li > :last-child { min-width: 0; overflow-wrap: anywhere; }
+.salvage-history-list li > span[aria-hidden="true"] { color: var(--gold-2); font-weight: 800; }
 
 @media (max-width: 1180px) {
   .dashboard-grid-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
