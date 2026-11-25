@@ -622,6 +622,61 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertIn("Você recebe", result_html)
         self.assertEqual(self._building("warehouse").level, 0)
 
+    def test_progress_and_buildings_routes_share_building_benefits_and_max_level_presentation(self):
+        from app.routes.building_routes import buildings_index
+        from app.routes.progress_routes import guild_progress
+        from app.services.building_balance_service import get_building_benefit
+
+        warehouse = self._building("warehouse")
+        warehouse.level = 10
+        maximum_building = self._building("blacksmith")
+        maximum_building.level = maximum_building.building_template.max_level
+        self.db.commit()
+
+        user = SimpleNamespace(
+            id=1, username="progress-view-test", is_admin=False,
+            confirmation_preferences="{}", home_region=None,
+        )
+        app = FastAPI()
+        app.state.app_mode = "web"
+        app.mount("/static", StaticFiles(directory=Path(__file__).resolve().parents[1] / "app/static"), name="static")
+
+        def request(path: str) -> Request:
+            return Request({
+                "type": "http", "http_version": "1.1", "method": "GET", "scheme": "http",
+                "path": path, "raw_path": path.encode("ascii"), "root_path": "",
+                "query_string": b"", "headers": [], "client": ("testclient", 123),
+                "server": ("testserver", 80), "app": app,
+            })
+
+        with patch(
+            "app.routes.building_routes.get_current_guild_context",
+            return_value=(self.guild, self.resources),
+        ):
+            buildings_html = buildings_index(request("/buildings"), self.db, user).body.decode("utf-8")
+        with patch(
+            "app.routes.progress_routes.get_current_guild_context",
+            return_value=(self.guild, self.resources),
+        ):
+            progress_html = guild_progress(request("/guild/progress"), self.db, user).body.decode("utf-8")
+
+        warehouse_benefit = get_building_benefit("warehouse", warehouse.level)
+        self.assertIsNotNone(warehouse_benefit["next_milestone_level"])
+        self.assertIn(f"Próximo marco: nível {warehouse_benefit['next_milestone_level']}", progress_html)
+        self.assertIn("<dt>Nível</dt><dd>10 /", progress_html)
+        for line in (*warehouse_benefit["current"], *warehouse_benefit["next"]):
+            self.assertIn(line, buildings_html)
+            self.assertIn(line, progress_html)
+
+        maximum_benefit = get_building_benefit(
+            maximum_building.building_template.effect_type,
+            maximum_building.level,
+        )
+        self.assertIsNone(maximum_benefit["next_milestone_level"])
+        self.assertIn("Nível máximo atingido", progress_html)
+        self.assertIn("Não há próxima evolução.", progress_html)
+        self.assertNotIn("None", progress_html)
+
     def test_reset_status_is_read_only_and_scoped_to_current_guild(self):
         from app.routes.building_routes import building_reset_status
 
