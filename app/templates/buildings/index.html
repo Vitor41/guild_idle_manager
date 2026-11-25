@@ -143,6 +143,7 @@
               <p class="note">{{ building.building_template.description }}</p>
               <dl class="building-facts">
                 <div><dt>Nível</dt><dd>{{ building.level }} / {{ building.building_template.max_level }}</dd></div>
+                <div><dt>Requisito base</dt><dd>Guilda nível {{ building.building_template.required_guild_level }}</dd></div>
                 <div><dt>Próximo requisito</dt><dd>{% if building.level >= building.building_template.max_level %}Nível máximo atingido{% else %}Guilda nível {{ building.next_required_guild_level }}{% endif %}</dd></div>
               </dl>
               <section class="building-cost-section" aria-label="Custo para o próximo nível">

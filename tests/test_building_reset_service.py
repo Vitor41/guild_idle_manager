@@ -629,6 +629,7 @@ class BuildingResetServiceTests(unittest.TestCase):
 
         warehouse = self._building("warehouse")
         warehouse.level = 10
+        warehouse.building_template.required_guild_level = 23
         maximum_building = self._building("blacksmith")
         maximum_building.level = maximum_building.building_template.max_level
         self.db.commit()
@@ -664,6 +665,8 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertIsNotNone(warehouse_benefit["next_milestone_level"])
         self.assertIn(f"Próximo marco: nível {warehouse_benefit['next_milestone_level']}", progress_html)
         self.assertIn("<dt>Nível</dt><dd>10 /", progress_html)
+        for html in (buildings_html, progress_html):
+            self.assertIn("<dt>Requisito base</dt><dd>Guilda nível 23</dd>", html)
         for line in (*warehouse_benefit["current"], *warehouse_benefit["next"]):
             self.assertIn(line, buildings_html)
             self.assertIn(line, progress_html)

@@ -45,6 +45,7 @@
             <h3>{{ building.building_template.name }}</h3>
             <dl class="building-facts">
               <div><dt>Nível</dt><dd>{{ building.level }} / {{ building.building_template.max_level }}</dd></div>
+              <div><dt>Requisito base</dt><dd>Guilda nível {{ building.building_template.required_guild_level }}</dd></div>
               <div><dt>Status</dt><dd>{{ 'Ativa' if building.level > 0 else 'Não construída' }}</dd></div>
             </dl>
             <div class="building-benefits">
