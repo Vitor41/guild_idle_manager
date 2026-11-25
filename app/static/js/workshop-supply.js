@@ -1,8 +1,16 @@
 (() => {
+  const parseTimestamp = (value) => {
+    const raw = value || "";
+    const shared = window.parseUtcTimestamp?.(raw);
+    if (Number.isFinite(shared)) return shared;
+    return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+  };
+
   function updateProgress(root = document) {
     root.querySelectorAll("[data-workshop-progress]").forEach((bar) => {
-      const start = Date.parse(bar.dataset.startsAt || "");
-      const end = Date.parse(bar.dataset.endsAt || "");
+      const start = parseTimestamp(bar.dataset.startsAt);
+      const end = parseTimestamp(bar.dataset.endsAt);
+      if (!Number.isFinite(start) || !Number.isFinite(end)) return;
       const span = Math.max(1, end - start);
       const percent = Math.max(0, Math.min(100, ((Date.now() - start) / span) * 100));
       bar.value = percent;

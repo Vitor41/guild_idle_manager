@@ -39,18 +39,48 @@ function makeWorkshopForm({ value = "1", maximum = "5", serverDisabled = false }
   return { form, input, estimate, submit, maxButton };
 }
 
-function loadWorkshop(document) {
+function loadWorkshop(document, { now = Date.now(), parseUtcTimestamp } = {}) {
   const intervals = [];
+  const FixedDate = class extends Date { static now() { return now; } };
   const context = vm.createContext({
     document,
     window: {
+      parseUtcTimestamp: parseUtcTimestamp || ((raw) => Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw || "") ? raw : `${raw || ""}Z`)),
       setInterval(callback, milliseconds) { intervals.push({ callback, milliseconds }); return intervals.length; },
     },
+    Date: FixedDate,
     Event: class { constructor(type, options = {}) { this.type = type; Object.assign(this, options); } },
   });
   vm.runInContext(workshopSource, context, { filename: "workshop-supply.js" });
   return { initialize: context.window.initializeWorkshopSupplyControls, intervals };
 }
+
+test("workshop progress treats timestamps without an offset as UTC in the Sao Paulo timezone", () => {
+  const bars = [
+    { dataset: { startsAt: "2026-11-25T12:00:00", endsAt: "2026-11-25T18:00:00Z" }, value: 0, textContent: "" },
+    { dataset: { startsAt: "2026-11-25T12:00:00-03:00", endsAt: "2026-11-25T18:00:00-03:00" }, value: 0, textContent: "" },
+  ];
+  const now = Date.parse("2026-11-25T15:00:00Z");
+  let parsedCount = 0;
+  const document = {
+    querySelectorAll(selector) {
+      if (selector === ".workshop-batch-form") return [];
+      if (selector === "[data-workshop-progress]") return bars;
+      return [];
+    },
+  };
+  loadWorkshop(document, {
+    now,
+    parseUtcTimestamp(raw) {
+      parsedCount += 1;
+      return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw || "") ? raw : `${raw || ""}Z`);
+    },
+  });
+
+  assert.equal(bars[0].value, 50, "a naive UTC timestamp must not be reinterpreted as local UTC-3");
+  assert.equal(bars[1].value, 0, "an explicitly offset timestamp is interpreted as its absolute instant");
+  assert.ok(parsedCount >= 4, "the shared UTC timestamp parser is used for both endpoints");
+});
 
 test("workshop controls initialize after direct and partial navigation and reject invalid quantities", () => {
   const first = makeWorkshopForm();
@@ -115,6 +145,7 @@ test("market MAX uses delegated click handling for forms inserted by partial nav
 test("the in-scope page controls have explicit direct and partial initialization paths", () => {
   assert.doesNotMatch(workshopTemplate, /<script(?:\s|>)/i, "workshop behavior is not embedded in replaceable page HTML");
   assert.match(baseTemplate, /\/js\/workshop-supply\.js/);
+  assert.match(workshopSource, /window\.parseUtcTimestamp\?\.\(raw\)/);
   assert.match(baseTemplate, /\/js\/market-max\.js/);
   assert.match(mainSource, /window\.initializeWorkshopSupplyControls\?\.\(currentMain\)/);
   assert.match(mainSource, /initializeMarketEstimates\(currentMain\)/);

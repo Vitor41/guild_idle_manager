@@ -34,6 +34,12 @@ ITEM_TYPE_LABELS = {
     "equipment": "Equipamento",
 }
 
+_GENERATED_EQUIPMENT_DESCRIPTION = re.compile(
+    r"Equipamento (?:comum|incomum|raro|épico|lendário|mítico) indicado para progressão "
+    r"entre os níveis (\d+) e (\d+)\."
+)
+_GENERATED_EQUIPMENT_RARITIES = {"common", "uncommon", "rare", "epic", "legendary", "mythic"}
+
 ATTRIBUTE_LABELS = {
     "power": "FOR",
     "vitality": "VIT",
@@ -84,6 +90,28 @@ CLASS_LABELS = {
 
 def rarity_label(rarity: str | None) -> str:
     return RARITY_LABELS.get(rarity or "", rarity or "-")
+
+
+def canonical_generated_equipment_description(
+    description: str | None,
+    rarity: str | None,
+    level_band: str | None,
+) -> str | None:
+    """Correct only the known generated equipment sentence for the current template."""
+    if rarity not in _GENERATED_EQUIPMENT_RARITIES:
+        return description
+    band_match = re.fullmatch(r"(\d+)-(\d+)", level_band or "")
+    description_match = _GENERATED_EQUIPMENT_DESCRIPTION.fullmatch(description or "")
+    if (
+        band_match is None
+        or description_match is None
+        or description_match.groups() != band_match.groups()
+    ):
+        return description
+    return (
+        f"Equipamento {rarity_label(rarity).lower()} indicado para progressão "
+        f"entre os níveis {band_match.group(1)} e {band_match.group(2)}."
+    )
 
 
 def clean_generated_name(name: str) -> str:

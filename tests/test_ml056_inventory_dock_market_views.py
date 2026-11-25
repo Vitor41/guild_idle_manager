@@ -37,12 +37,14 @@ class InventoryDockMarketViewTests(unittest.TestCase):
         self.assertIn('data-dock-buy-form data-unit-price="{{ offer.unit_price }}"', template)
         self.assertIn("data-dock-total role=\"status\" aria-live=\"polite\"", template)
         self.assertIn("get_equipment_slot_label(offer.item_template.equipment_slot)", template)
+        self.assertIn("canonical_generated_equipment_description(offer.item_template.description", template)
         self.assertIn("<strong>{{ label }}</strong><span>+{{ value }} base</span>", template)
         details = template.split('<section class="equipment-details" id="{{ details_id }}"', 1)[1].split("</section>", 1)[0]
         self.assertNotIn("<form", details)
         self.assertIn("data-equipment-details-trigger", template)
         self.assertIn('action="/docks/offers/{{ offer.id }}/buy"', template)
         self.assertIn('"get_equipment_slot_label": get_equipment_slot_label', route)
+        self.assertIn('"canonical_generated_equipment_description": canonical_generated_equipment_description', route)
         self.assertIn("initializeDockPurchaseEstimates(currentMain);", main)
         self.assertIn("data-dock-quantity", main)
 

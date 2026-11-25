@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select, cast, String
@@ -18,7 +17,10 @@ from app.repositories.achievement_repository import (
     get_guild_stat, list_active_achievements, list_codex_entries, list_codex_unlocks,
 )
 from app.models.regional import RegionalEvent, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRunOutcome
-from app.services.display_service import annotate_mercenary_display, clean_generated_name, rarity_label
+from app.services.display_service import (
+    annotate_mercenary_display, canonical_generated_equipment_description,
+    clean_generated_name, rarity_label,
+)
 from app.services.guild_progression_service import add_guild_xp
 from app.services.icon_service import get_class_icon_path, get_item_icon_path
 
@@ -69,10 +71,6 @@ INITIAL_ACHIEVEMENTS = [
     ("codex_500", "Arquivo Lendário", "Desbloqueie 500 registros no Códex.", "codex_discovered", 500, 5000, 0),
 ]
 
-_GENERATED_EQUIPMENT_DESCRIPTION = re.compile(
-    r"Equipamento (?:comum|incomum|raro|épico|lendário|mítico) indicado para progressão "
-    r"entre os níveis (\d+) e (\d+)\."
-)
 _KNOWN_ITEM_RARITIES = {"common", "uncommon", "rare", "epic", "legendary", "mythic"}
 
 
@@ -82,18 +80,8 @@ def _canonicalize_codex_item_presentation(entry: CodexEntry, item: ItemTemplate)
     if item.item_type != "equipment" or item.rarity not in _KNOWN_ITEM_RARITIES:
         return
 
-    band_match = re.fullmatch(r"(\d+)-(\d+)", item.level_band or "")
-    description_match = _GENERATED_EQUIPMENT_DESCRIPTION.fullmatch(entry.description or "")
-    if (
-        band_match is None
-        or description_match is None
-        or description_match.groups() != band_match.groups()
-    ):
-        return
-
-    canonical_description = (
-        f"Equipamento {rarity_label(item.rarity).lower()} indicado para progressão "
-        f"entre os níveis {band_match.group(1)} e {band_match.group(2)}."
+    canonical_description = canonical_generated_equipment_description(
+        entry.description, item.rarity, item.level_band,
     )
     if entry.description != canonical_description:
         set_committed_value(entry, "description", canonical_description)

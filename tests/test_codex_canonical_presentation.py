@@ -12,7 +12,7 @@ from app.models.guild import Guild
 from app.models.item import ItemTemplate
 from app.services.achievement_service import get_codex_context
 from app.services.campaign_service import CampaignService
-from app.services.display_service import rarity_label
+from app.services.display_service import canonical_generated_equipment_description, rarity_label
 from app.seeds.massive_content import PACK_KEY
 
 
@@ -23,6 +23,26 @@ _GENERATED_EQUIPMENT_DESCRIPTION = re.compile(
 
 
 class CodexCanonicalPresentationTests(unittest.TestCase):
+    def test_shared_equipment_description_helper_only_updates_the_exact_generated_sentence(self):
+        self.assertEqual(
+            canonical_generated_equipment_description(
+                "Equipamento comum indicado para progressão entre os níveis 20 e 39.",
+                "rare",
+                "20-39",
+            ),
+            "Equipamento raro indicado para progressão entre os níveis 20 e 39.",
+        )
+        custom_lore = "Relato antigo da expedição: a relíquia cantava sob a chuva."
+        self.assertEqual(
+            canonical_generated_equipment_description(custom_lore, "rare", "20-39"),
+            custom_lore,
+        )
+        mismatch = "Equipamento comum indicado para progressão entre os níveis 1 e 19."
+        self.assertEqual(
+            canonical_generated_equipment_description(mismatch, "rare", "20-39"),
+            mismatch,
+        )
+
     def test_item_details_follow_current_template_without_writing_saved_text(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             campaigns = CampaignService(Path(temp_dir) / "saves")
