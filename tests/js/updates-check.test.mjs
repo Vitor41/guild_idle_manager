@@ -62,7 +62,7 @@ test("updates check reports a recoverable error and remains usable for retry", a
   const init = loadInitializer(async () => {
     requestCount += 1;
     if (requestCount === 1) throw new Error("Falha de rede temporária.");
-    return { ok: true, json: async () => ({ available: false, current_version: "0.10.0", reason: "Checkout local já está nesta versão." }) };
+    return { ok: true, json: async () => ({ available: false, current_version: "0.11.0", reason: "Checkout local já está nesta versão." }) };
   });
   const button = createButton();
   const status = { textContent: "" };

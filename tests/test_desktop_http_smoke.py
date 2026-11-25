@@ -455,8 +455,10 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b'aria-labelledby="map-title"' in rendered_pages["/regional"]
         assert '<summary id="map-title">Estado das cinco regiões</summary>'.encode("utf-8") in rendered_pages["/regional"]
         assert b"data-check-local-update" in rendered_pages["/updates"]
+        assert b"<dd>0.11.0</dd>" in rendered_pages["/updates"]
         update_check_status, _update_check_location, update_check_body = request("/updates/check")
         assert update_check_status == 200 and b'"channel":"dev-local"' in update_check_body, update_check_body[:400]
+        assert b'"current_version":"0.11.0"' in update_check_body, update_check_body[:400]
         assert b'id="regional-portals"' in central_events_page
         assert b'id="regional-rebellions"' in central_events_page
         regional_events_nav = re.search(
