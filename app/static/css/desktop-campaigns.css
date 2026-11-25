@@ -42,8 +42,11 @@ body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 70% 0
 .campaign-details .campaign-region { margin-top: 2px; color: var(--e-teal); font-weight: 750; }
 .campaign-details .campaign-state { color: var(--e-green); font-weight: 700; }
 .campaign-details .campaign-state--warning { color: var(--e-red); }
-.campaign-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; padding: 0 14px 14px; }
-.campaign-actions .evolution-button { min-height: 36px; padding: 7px 10px; font-size: .74rem; }
+.campaign-actions { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(120px, auto) minmax(0, 1fr); align-items: center; gap: 10px; padding: 0 14px 14px; }
+.campaign-actions > .open-campaign { min-height: 40px; padding: 8px 14px; }
+.campaign-maintenance-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.campaign-actions .campaign-maintenance-actions .evolution-button { min-height: 40px; padding: 7px 10px; font-size: .74rem; }
+.campaign-destructive-actions { grid-column: 1 / -1; justify-self: end; width: 100%; padding-top: 7px; border-top: 1px solid rgba(120,84,76,.55); text-align: right; }
 .evolution-button--danger { display: inline-flex; justify-content: center; align-items: center; min-height: 42px; padding: 9px 15px; border: 1px solid #78544c; border-radius: 6px; color: #f0b3a2; background: #352321; font-weight: 750; cursor: pointer; }
 .evolution-button--danger:hover { background: #49302c; }
 .campaign-empty { position: relative; min-height: 170px; display: flex; align-items: center; overflow: hidden; isolation: isolate; border: 1px solid var(--e-line); border-radius: 8px; background: #172327; }
@@ -67,4 +70,4 @@ body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 70% 0
 .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
 .campaign-manager :focus-visible { outline: 3px solid var(--e-gold-soft); outline-offset: 3px; }
 @media (max-width: 920px) { .campaign-workspace { grid-template-columns: 1fr; } .campaign-create { order: -1; } .campaign-list { grid-template-columns: 1fr; } }
-@media (max-width: 600px) { .campaign-manager { width: min(100% - 28px, 560px); } .campaign-topbar { margin: 0 -14px; padding: 10px 14px; } .campaign-topbar > span { font-size: .61rem; text-align: right; } .campaign-welcome { min-height: 215px; } .campaign-section .evolution-section__heading { align-items: flex-start; flex-direction: column; } .campaign-card { grid-template-columns: 86px minmax(0, 1fr); } .campaign-card__art { min-height: 170px; } .campaign-details { padding: 13px 12px 8px; } .campaign-actions { padding: 0 10px 11px; } .campaign-actions .evolution-button { flex: 1 1 44%; } }
+@media (max-width: 600px) { .campaign-manager { width: min(100% - 28px, 560px); } .campaign-topbar { margin: 0 -14px; padding: 10px 14px; } .campaign-topbar > span { font-size: .61rem; text-align: right; } .campaign-welcome { min-height: 215px; } .campaign-section .evolution-section__heading { align-items: flex-start; flex-direction: column; } .campaign-card { grid-template-columns: 86px minmax(0, 1fr); } .campaign-card__art { min-height: 170px; } .campaign-details { padding: 13px 12px 8px; } .campaign-actions { grid-template-columns: minmax(0, 1fr); padding: 0 10px 11px; } .campaign-actions > .open-campaign { justify-self: start; min-width: 160px; } .campaign-maintenance-actions .evolution-button { flex: 1 1 44%; } }

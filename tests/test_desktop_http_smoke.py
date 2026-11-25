@@ -1345,7 +1345,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             b"open-campaign", b"rename-campaign", b"backup-campaign", b"export-campaign",
             b"restore-campaign", b"delete-campaign", b"import-campaign",
         ))
-        assert b"/static/css/desktop-campaigns.css?v=20261029-2" in campaign_page
+        assert b"/static/css/desktop-campaigns.css?v=20261125-1" in campaign_page
         assert b"Trilhas de conquistas" in rendered_pages["/codex"]
         codex_page = rendered_pages["/codex"]
         assert b"evolution/illustrations/achievement-reliquary.webp" in codex_page
@@ -1407,7 +1407,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         evolution_css_url = b"/static/css/desktop-evolution.css?v=" + evolution_css_version.group(1)
         assert evolution_css_url in regional_notice_body
         evolution_css_status, _location, evolution_css = request(evolution_css_url.decode("ascii"))
-        assert evolution_css_status == 200 and b"--regional-event-sticky-topbar-height" in evolution_css
+        assert evolution_css_status == 200 and b"--game-sticky-topbar-height" in evolution_css
         local_portal_card = re.search(
             rb'<article[^>]*id="regional-event-' + str(portal_notice_event_id).encode("ascii") + rb'".*?</article>',
             regional_notice_body, re.S,

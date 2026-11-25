@@ -5,11 +5,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261124-1">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261125-1">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261117-1">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261125-1">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-sidebar-layout.css') }}?v=20261103-1">{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261117-3">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261125-1">{% endif %}
   </head>
   <body data-app-mode="{{ request.app.state.app_mode }}" data-route="{{ request.url.path }}">
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
@@ -182,8 +182,7 @@
           {% if request.app.state.app_mode == 'desktop' %}<img src="/static/assets/desktop/evolution/sprites/ui_64/gathering-kit.png" width="48" height="48" alt="" loading="lazy">{% endif %}
           <p>Você ficou ausente por <strong>{{ offline.elapsed_label or 'um período' }}</strong>. Foram reconhecidas <strong>{{ offline.credited_label or '0min' }}</strong>.</p>
           <dl class="offline-reward-grid">
-            <div><dt>Ouro</dt><dd>+{{ offline.gold }}</dd></div>
-            {% if offline.gold_sources %}<div><dt>Produção da guilda (base, nível e equipe)</dt><dd>+{{ offline.gold_sources.guild_production }}</dd></div><div><dt>Bônus do Armazém</dt><dd>+{{ offline.gold_sources.warehouse }}</dd></div>{% endif %}
+            <div class="offline-gold-total"><dt>Ouro total</dt><dd>+{{ offline.gold }}{% if offline.gold_sources %}<small class="offline-gold-breakdown">Produção da guilda: +{{ offline.gold_sources.guild_production }}{% if offline.gold_sources.warehouse %} · Bônus do Armazém: +{{ offline.gold_sources.warehouse }}{% endif %}</small>{% endif %}</dd></div>
             <div><dt>Cristais</dt><dd>+{{ offline.crystals or offline.special_crystals or 0 }}</dd></div>
             <div><dt>Estamina consumida</dt><dd>{{ ((offline.stamina_spent_seconds or 0) // 3600) }}h</dd></div>
             <div><dt>Estamina restante</dt><dd>{{ ((offline.stamina_remaining_seconds or 0) // 3600) }}h</dd></div>
@@ -196,8 +195,8 @@
               {% endfor %}
             </ul>
           {% endif %}
-          {% if offline.cap_reached %}<p class="note">O limite offline de {{ offline.cap_hours }} horas foi atingido.</p>{% endif %}
-          {% if offline.warning %}<p class="note">{{ offline.warning }}</p>{% endif %}
+          {% if offline.cap_reached %}<p class="note offline-cap-warning">O limite offline de {{ offline.cap_hours }} horas foi atingido.</p>{% endif %}
+          {% if offline.warning and not offline.cap_reached %}<p class="note">{{ offline.warning }}</p>{% endif %}
           {% if offline.regional_context %}
             <section class="offline-regional-context" aria-labelledby="offline-regional-title">
               <h3 id="offline-regional-title">Vigília durante a ausência</h3>
@@ -215,7 +214,7 @@
         <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
-    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261125-2"></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261125-3"></script>
     <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261110-1" defer></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261103-2" defer></script>
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261117-1" defer></script>
@@ -223,7 +222,7 @@
     <script src="{{ url_for('static', path='/js/offline-stamina.js') }}?v=20261030-1" defer></script>
     <script src="{{ url_for('static', path='/js/building-reset.js') }}?v=20261117-1" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}?v=20261124-1" defer></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}?v=20261125-1" defer></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261117-2" defer></script>{% endif %}
     {% block scripts %}{% endblock %}
   </body>

@@ -31,6 +31,13 @@
     );
   }
 
+  function sidebarRouteMatches(route, path) {
+    const regionalDetail = route === "/regional"
+      && path.startsWith("/regional/")
+      && !path.startsWith("/regional/events");
+    return regionalDetail || routeMatches(route, path);
+  }
+
   function makeImage(url, className) {
     const image = document.createElement("img");
     image.src = url;
@@ -104,6 +111,7 @@
       const iconMaps = manifest.icon_maps || {};
       const navigationArt = manifest.navigation || {};
       let navigationErrors = 0;
+      let currentNavigationArtKey = null;
 
       for (const element of queryRoot.querySelectorAll("[data-desktop-class]")) {
         const code = normalizeKey(element.dataset.desktopClass);
@@ -156,7 +164,10 @@
         const href = link.getAttribute("href");
         const key = navigationArt[href];
         link.removeAttribute("aria-current");
-        if (href && routeMatches(href, route)) link.setAttribute("aria-current", "page");
+        if (href && sidebarRouteMatches(href, route)) {
+          link.setAttribute("aria-current", "page");
+          if (key && manifest.sprites?.[key]) currentNavigationArtKey = key;
+        }
         const icon = link.querySelector(".nav-icon");
         if (!icon) {
           navigationErrors += 1;
@@ -171,6 +182,11 @@
           navigationErrors += 1;
           continue;
         }
+        const existingArt = icon.querySelector(".desktop-nav-art");
+        if (existingArt?.getAttribute("src") === url) {
+          icon.classList.remove("desktop-nav-icon--fallback");
+          continue;
+        }
         const image = makeImage(url, "desktop-nav-art");
         image.addEventListener("error", () => {
           icon.replaceChildren();
@@ -183,13 +199,6 @@
       body.dataset.desktopArtStatus = navigationErrors === 0 ? "ready" : "error";
 
       const currentArt = routeArt.find((entry) => routeMatches(entry.path, route));
-      if (!currentArt) return;
-      const title = queryRoot.querySelector("main.game-shell h1, main.desktop-shell h1");
-      const iconUrl = spriteUrl(currentArt.sprite);
-      if (title && iconUrl && !title.querySelector(".desktop-title-art")) {
-        title.prepend(makeImage(iconUrl, "desktop-title-art"));
-      }
-
       const brand = queryRoot.querySelector(".brand-sigil, .seal");
       const crestUrl = spriteUrl("guild-sigil");
       if (brand && crestUrl && !brand.querySelector("img")) brand.replaceChildren(makeImage(crestUrl, "desktop-brand-art"));
@@ -207,6 +216,15 @@
           mark.replaceChildren(makeImage(campaignMarkUrl, "desktop-campaign-art"), initial);
         }
       }
+
+      const title = queryRoot.querySelector("main.game-shell h1, main.desktop-shell h1");
+      const titleSprite = currentArt?.sprite || currentNavigationArtKey;
+      const iconUrl = titleSprite && spriteUrl(titleSprite);
+      if (title && iconUrl && !title.querySelector(".desktop-title-art")) {
+        title.prepend(makeImage(iconUrl, "desktop-title-art"));
+      }
+
+      if (!currentArt) return;
 
       const illustration = currentArt.illustration && illustrationUrl(currentArt.illustration);
       const header = queryRoot.querySelector(".masthead, .dashboard > .topbar, .dashboard > .desktop-operations-intro");

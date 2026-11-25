@@ -165,7 +165,8 @@ class Stage5UiContractTests(unittest.TestCase):
 
         self.assertIn('id="missions-title"', missions)
         self.assertIn("Decida, prepare e colete.", missions)
-        self.assertIn('href="#available-missions-title"', missions)
+        self.assertIn('href="/regional/events"', missions)
+        self.assertNotIn('href="#available-missions-title"', missions)
         self.assertIn('href="/regional#regional-board"', missions)
         self.assertIn('id="dungeons-title"', dungeons)
         self.assertIn("Prepare a companhia para a incursão.", dungeons)
@@ -250,8 +251,9 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("Próxima recarga de 2h em", base)
         self.assertIn('aria-describedby="offline-stamina-description"', base)
         offline_css = self.read("app/static/css/main.css")
-        self.assertIn(".offline-action:hover .offline-help__popover", offline_css)
-        self.assertIn(".offline-action:focus-within .offline-help__popover", offline_css)
+        self.assertIn(".offline-help[open] .offline-help__popover", offline_css)
+        self.assertNotIn(".offline-action:hover .offline-help__popover", offline_css)
+        self.assertNotIn(".offline-action:focus-within .offline-help__popover", offline_css)
         self.assertIn("offline-help__popover", offline_css)
 
         classes = self.read("app/templates/classes/index.html")
@@ -262,7 +264,8 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("aria-current", class_guide_js)
         self.assertIn("nav.scrollTo({ left: nav.scrollLeft", class_guide_js)
         self.assertNotIn("link.scrollIntoView", class_guide_js)
-        self.assertIn("escape-dismissed", self.read("app/static/js/main.js"))
+        self.assertIn("dismissHeaderPopoverOnEscape", self.read("app/static/js/main.js"))
+        self.assertIn("initializeHeaderPopovers(currentTopbar)", self.read("app/static/js/main.js"))
         self.assertIn("prefers-reduced-motion: reduce", self.read("app/static/css/main.css"))
 
     def test_gathering_live_status_polls_and_updates_counts_without_a_reload(self):

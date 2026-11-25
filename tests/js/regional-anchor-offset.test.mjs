@@ -27,7 +27,9 @@ test("regional anchor offset follows the measured sticky header and ignores rela
 
   run();
   assert.equal(values.get("--regional-event-sticky-topbar-height"), "139px");
+  assert.equal(values.get("--game-sticky-topbar-height"), "139px");
   position = "relative";
   run();
   assert.equal(values.get("--regional-event-sticky-topbar-height"), "0px");
+  assert.equal(values.get("--game-sticky-topbar-height"), "0px");
 });

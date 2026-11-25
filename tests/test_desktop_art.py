@@ -143,7 +143,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("async function applyDesktopArt(root = document)", script)
         self.assertIn('element.querySelector(".desktop-entity-art")', script)
         self.assertIn('element.querySelector(".desktop-resource-art")', script)
-        self.assertIn('window.GIMApplyDesktopArt?.(currentMain)', main)
+        self.assertIn('window.GIMApplyDesktopArt?.(document)', main)
 
     def test_regional_event_notices_use_persisted_pending_states_and_reenter_vigil(self):
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
@@ -172,7 +172,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn('document.visibilityState === "hidden"', main)
         self.assertIn("dialog.dataset.eventDeadline", dialogs)
         self.assertIn(
-            "scroll-margin-top: calc(var(--regional-event-sticky-topbar-height, 0px) + 16px)",
+            "scroll-margin-top: calc(var(--game-sticky-topbar-height, 0px) + 12px)",
             theme,
         )
         self.assertIn("getBoundingClientRect().height", main)

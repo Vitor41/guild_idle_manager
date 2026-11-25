@@ -117,7 +117,8 @@ body[data-app-mode="desktop"] .desktop-save-state small { margin-bottom: 3px; co
 body[data-app-mode="desktop"] .desktop-save-state strong { color: #d8e4de; font-size: .78rem; }
 
 body[data-app-mode="desktop"] .game-topbar {
-  min-height: 76px; gap: 14px; padding: 11px 24px; border-color: #2b4146;
+  display: grid; grid-template-columns: auto minmax(150px, .8fr) minmax(250px, 1fr) auto;
+  min-height: 0; gap: 10px; padding: 9px 18px; border-color: #2b4146;
   background: rgba(13, 23, 26, .95); backdrop-filter: blur(12px);
 }
 body[data-app-mode="desktop"] .topbar-back-button {
@@ -132,7 +133,12 @@ body[data-app-mode="desktop"] .crest-placeholder {
 }
 body[data-app-mode="desktop"] .topbar-label,
 body[data-app-mode="desktop"] .topbar-stats small { color: #8fa6a6; }
-body[data-app-mode="desktop"] .guild-banner strong { color: var(--text); font-family: Georgia, "Times New Roman", serif; }
+body[data-app-mode="desktop"] .guild-banner { min-width: 0; margin-right: 0; }
+body[data-app-mode="desktop"] .guild-banner > div { min-width: 0; }
+body[data-app-mode="desktop"] .guild-banner strong { display: block; color: var(--text); font-family: Georgia, "Times New Roman", serif; line-height: 1.15; overflow-wrap: anywhere; }
+body[data-app-mode="desktop"] .topbar-stats { display: grid; grid-template-columns: max-content max-content minmax(130px, 1fr); gap: 6px; min-width: 0; }
+body[data-app-mode="desktop"] .topbar-stats > span { min-width: 0; padding: 6px 8px; font-size: .82rem; }
+body[data-app-mode="desktop"] .treasury-menu { min-width: 0; }
 body[data-app-mode="desktop"] .topbar-stats span,
 body[data-app-mode="desktop"] .treasury-menu summary {
   border-color: #334b50; border-radius: 7px; background: #162428;
@@ -144,8 +150,8 @@ body[data-app-mode="desktop"] .treasury-popover dl div { border-color: #2a4146; 
 
 body[data-app-mode="desktop"] .page-shell { width: min(100% - 48px, 1500px); padding: 26px 0 44px; }
 body[data-app-mode="desktop"] .dashboard > .topbar {
-  position: relative; isolation: isolate; min-height: 174px; margin-bottom: 24px;
-  padding: clamp(22px, 3vw, 38px); border-color: #3c5b5e; border-radius: 10px;
+  position: relative; isolation: isolate; min-height: 0; margin-bottom: 12px;
+  padding: 16px clamp(18px, 2.5vw, 28px); border-color: #3c5b5e; border-radius: 10px;
   background: linear-gradient(100deg, #193034 0%, #17272a 54%, #142327 100%);
 }
 body[data-app-mode="desktop"] .dashboard > .topbar > div:first-child { max-width: min(720px, 74%); }
@@ -444,6 +450,11 @@ body[data-app-mode="desktop"] .gathering-progress { color: var(--muted); font-va
 body[data-app-mode="desktop"] .gathering-assignment-form { display: grid; gap: 8px; }
 body[data-app-mode="desktop"] .gathering-assignment-form select { min-height: 42px; }
 body[data-app-mode="desktop"] .offline-ack-error { color: var(--red); }
+body[data-app-mode="desktop"] .offline-summary { padding: 16px 20px; }
+body[data-app-mode="desktop"] .offline-gold-total { grid-column: 1 / -1; gap: 4px; }
+body[data-app-mode="desktop"] .offline-gold-total dd { font-size: 1.45rem; }
+body[data-app-mode="desktop"] .offline-gold-breakdown { display: block; margin-top: 2px; color: var(--muted); font-size: .76rem; font-weight: 500; line-height: 1.35; }
+body[data-app-mode="desktop"] .offline-cap-warning { margin: 8px 0; }
 body[data-app-mode="desktop"] .offline-gathering-list { display: grid; gap: 6px; padding-left: 18px; }
 body[data-app-mode="desktop"] .offline-gathering-list li { display: flex; justify-content: space-between; gap: 14px; }
 body[data-app-mode="desktop"] .offline-gathering-list li span { text-align: right; color: var(--muted); }
@@ -454,4 +465,31 @@ body[data-app-mode="desktop"] .status-gathering { color: var(--blue); border-col
   body[data-app-mode="desktop"] .gathering-hero { min-height: 270px; padding: 18px; background: linear-gradient(0deg, rgba(11, 19, 22, .98) 0%, rgba(11, 19, 22, .78) 60%, rgba(11, 19, 22, .1) 100%), var(--surface); }
   body[data-app-mode="desktop"] .gathering-hero > img:first-child { z-index: 0; opacity: .7; }
   body[data-app-mode="desktop"] .gathering-hero > div { position: relative; z-index: 1; }
+}
+
+/* Responsive overrides for the shared campaign header, kept last so the
+   compact layout retains the full balance, stamina and help controls. */
+@media (max-width: 1100px) {
+  body[data-app-mode="desktop"] .game-topbar { grid-template-columns: 42px minmax(0, 1fr) auto; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-back-button { grid-column: 1; grid-row: 1; }
+  body[data-app-mode="desktop"] .game-topbar > .guild-banner { grid-column: 2; grid-row: 1; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats { grid-column: 1 / -1; grid-row: 2; grid-template-columns: minmax(64px, .45fr) minmax(64px, .45fr) minmax(140px, 1fr); }
+  body[data-app-mode="desktop"] .game-topbar > .offline-action { grid-column: 3; grid-row: 1; }
+}
+@media (max-width: 800px) {
+  body[data-app-mode="desktop"] .game-topbar { display: grid; grid-template-columns: 42px minmax(0, 1fr); }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-back-button { grid-column: 1; grid-row: 1; width: 42px; min-width: 42px; padding: 8px; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-back-button > span:last-child { display: none; }
+  body[data-app-mode="desktop"] .game-topbar > .guild-banner { grid-column: 2; grid-row: 1; min-width: 0; }
+  body[data-app-mode="desktop"] .game-topbar > .guild-banner strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(52px, .45fr) minmax(52px, .45fr) minmax(0, 1fr); gap: 6px; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats > span:nth-child(1),
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats > span:nth-child(3) { display: block; }
+  body[data-app-mode="desktop"] .game-topbar > .offline-action { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
+  body[data-app-mode="desktop"] .offline-action .topbar-back-button { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 3px 8px; width: auto; max-width: calc(100vw - 80px); min-height: 40px; text-align: left; }
+  body[data-app-mode="desktop"] .offline-stamina-value { white-space: normal; }
+}
+@media (max-width: 460px) {
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats > .treasury-menu { grid-column: 1 / -1; }
 }

@@ -313,19 +313,43 @@ function updateGenericCountdowns() {
   });
 }
 
+const resourceTotalFormatter = new Intl.NumberFormat("pt-BR");
+let resourceTotalsRequest = null;
+
+function parseResourceTotal(value) {
+  const normalized = String(value ?? "").trim().replace(/[.\s\u00a0\u202f]/g, "");
+  if (!/^\d+$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function formatResourceTotals(root = document) {
+  root.querySelectorAll("[data-resource-total]").forEach((element) => {
+    const value = parseResourceTotal(element.textContent);
+    if (value !== null) element.textContent = resourceTotalFormatter.format(value);
+  });
+}
+
 async function refreshResourceTotals() {
+  formatResourceTotals();
   if (!document.querySelector("[data-resource-total]")) return;
-  try {
-    const response = await fetch("/api/resources", { credentials: "same-origin", cache: "no-store" });
-    if (!response.ok) return;
-    const totals = await response.json();
-    document.querySelectorAll("[data-resource-total]").forEach((element) => {
-      const value = totals[element.dataset.resourceTotal];
-      if (Number.isFinite(value)) element.textContent = new Intl.NumberFormat("pt-BR").format(value);
-    });
-  } catch (_error) {
-    // Live totals are a convenience; the server-rendered balance remains visible.
-  }
+  if (resourceTotalsRequest) return resourceTotalsRequest;
+  resourceTotalsRequest = (async () => {
+    try {
+      const response = await fetch("/api/resources", { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) return;
+      const totals = await response.json();
+      document.querySelectorAll("[data-resource-total]").forEach((element) => {
+        const value = totals[element.dataset.resourceTotal];
+        if (Number.isSafeInteger(value) && value >= 0) element.textContent = resourceTotalFormatter.format(value);
+      });
+    } catch (_error) {
+      // Live totals are a convenience; the server-rendered balance remains visible.
+    } finally {
+      resourceTotalsRequest = null;
+    }
+  })();
+  return resourceTotalsRequest;
 }
 
 refreshResourceTotals();
@@ -373,19 +397,39 @@ function initializeClassGuideIndex() {
   });
 }
 
-document.addEventListener("keydown", (event) => {
+function initializeHeaderPopovers(root = document) {
+  root.querySelectorAll(".treasury-menu, .offline-help").forEach((popover) => {
+    if (popover.dataset.headerPopoverInitialized === "true") return;
+    popover.dataset.headerPopoverInitialized = "true";
+    popover.addEventListener("toggle", () => closeOtherHeaderPopovers(popover));
+  });
+}
+
+function closeOtherHeaderPopovers(activePopover) {
+  if (!activePopover.open) return;
+  document.querySelectorAll(".game-topbar .treasury-menu, .game-topbar .offline-help").forEach((other) => {
+    if (other !== activePopover && other.open) other.open = false;
+  });
+}
+
+function dismissHeaderPopoversOutside(event) {
+  document.querySelectorAll(".game-topbar .treasury-menu, .game-topbar .offline-help").forEach((popover) => {
+    if (popover.open && !popover.contains(event.target)) popover.open = false;
+  });
+}
+
+function dismissHeaderPopoverOnEscape(event) {
   if (event.key !== "Escape") return;
-  const help = document.querySelector(".offline-action:hover .offline-help, .offline-action:focus-within .offline-help");
-  if (!help) return;
-  help.open = false;
-  help.classList.add("escape-dismissed");
-  help.querySelector("summary")?.blur();
-});
-document.querySelectorAll(".offline-help").forEach((help) => {
-  help.addEventListener("toggle", () => { if (help.open) help.classList.remove("escape-dismissed"); });
-  help.addEventListener("pointerleave", () => help.classList.remove("escape-dismissed"));
-  help.addEventListener("focusin", () => help.classList.remove("escape-dismissed"));
-});
+  const popover = document.querySelector(".game-topbar .treasury-menu[open], .game-topbar .offline-help[open]");
+  if (!popover) return;
+  popover.open = false;
+  popover.querySelector("summary")?.focus();
+  event.preventDefault();
+}
+
+document.addEventListener("click", dismissHeaderPopoversOutside);
+document.addEventListener("keydown", dismissHeaderPopoverOnEscape);
+initializeHeaderPopovers();
 
 const offlineDialog = document.querySelector("#offline-dialog[data-auto-open]");
 if (offlineDialog) {
@@ -799,6 +843,7 @@ function refreshRegionalEventAnchorOffset() {
       offset = Math.ceil(topbar.getBoundingClientRect().height + (Number.isFinite(top) ? Math.max(0, top) : 0));
     }
   }
+  root.style.setProperty("--game-sticky-topbar-height", `${offset}px`);
   root.style.setProperty("--regional-event-sticky-topbar-height", `${offset}px`);
 
   if (regionalEventTopbarObserved !== topbar && regionalEventTopbarObserver) {
@@ -925,13 +970,15 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   const currentTopbar = document.querySelector(".game-topbar");
   if (updateTopbar && incomingTopbar && currentTopbar) {
     currentTopbar.innerHTML = incomingTopbar.innerHTML;
+    initializeHeaderPopovers(currentTopbar);
   }
+  refreshResourceTotals();
   window.refreshRegionalEventAnchorOffset?.();
 
   document.title = parsedDocument.title || document.title;
   document.body.dataset.route = nextUrl.pathname;
   syncCurrentSidebarPage(nextUrl.pathname);
-  window.GIMApplyDesktopArt?.(currentMain);
+  window.GIMApplyDesktopArt?.(document);
   window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   updateGenericCountdowns();
   initializeSalvagePreviews();

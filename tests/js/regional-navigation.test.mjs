@@ -83,7 +83,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   const stubs = [
     "initializeGameGuideForContent", "initializeEquipmentDetails", "initializeMarketEstimates", "initializeGatheringCycles",
     "updateGenericCountdowns", "initializeSalvagePreviews",
-    "restoreGameFormState", "initializeRegionalSupply", "initializeRegionalComparison",
+    "restoreGameFormState", "initializeRegionalSupply", "initializeRegionalComparison", "refreshResourceTotals", "initializeHeaderPopovers",
     "showActionToast", "refreshNavigationWorkIndicators",
   ];
   const context = vm.createContext({
