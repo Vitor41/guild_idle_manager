@@ -1268,6 +1268,21 @@ function initializeRegionalComparison(root = document) {
 window.initializeRegionalComparison = initializeRegionalComparison;
 initializeRegionalComparison();
 
+let gameNavigationRevision = 0;
+function beginGameNavigation() {
+  return {
+    revision: ++gameNavigationRevision,
+    root: document.querySelector(".game-shell"),
+    route: document.body.dataset.route,
+  };
+}
+
+function isCurrentGameNavigation(navigation) {
+  return navigation.revision === gameNavigationRevision
+    && navigation.root === document.querySelector(".game-shell")
+    && navigation.route === document.body.dataset.route;
+}
+
 document.addEventListener("click", async (event) => {
   if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
     const noticeLink = event.target.closest("[data-regional-notice-close]");
@@ -1287,6 +1302,7 @@ document.addEventListener("click", async (event) => {
   const scrollPosition = window.scrollY;
   const scrollToTop = link.hasAttribute("data-scroll-top");
   const formState = captureGameFormState();
+  const navigation = beginGameNavigation();
   link.setAttribute("aria-busy", "true");
   try {
     const response = await fetch(targetUrl, {
@@ -1294,9 +1310,12 @@ document.addEventListener("click", async (event) => {
       credentials: "same-origin",
       headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
     });
+    if (!isCurrentGameNavigation(navigation)) return;
     if (!response.ok) throw new Error("Falha ao atualizar a tela");
+    const html = await response.text();
+    if (!isCurrentGameNavigation(navigation)) return;
     replaceGameContent(
-      await response.text(),
+      html,
       preserveRequestedNavigationFragment(response.url || targetUrl.href, targetUrl.href),
       previousPath,
       scrollPosition,
@@ -1305,6 +1324,7 @@ document.addEventListener("click", async (event) => {
       scrollToTop,
     );
   } catch (error) {
+    if (!isCurrentGameNavigation(navigation)) return;
     if (scrollToTop) window.scrollTo({ top: 0, behavior: "auto" });
     window.location.assign(targetUrl);
   }
@@ -1377,6 +1397,7 @@ document.addEventListener("submit", async (event) => {
 
   delete form.dataset.confirmed;
   event.preventDefault();
+  const navigation = beginGameNavigation();
   const submitter = event.submitter;
   const formData = new FormData(form);
   if (submitter && submitter.name) {
@@ -1421,7 +1442,9 @@ document.addEventListener("submit", async (event) => {
       requestOptions.body = new URLSearchParams(formData);
     }
     const response = await fetch(requestUrl, requestOptions);
+    if (!isCurrentGameNavigation(navigation)) return;
     let html = await response.text();
+    if (!isCurrentGameNavigation(navigation)) return;
     let responseUrl = response.url || window.location.href;
     const contextualUrl = method === "post"
       ? preservePageContext(responseUrl, previousUrl)
@@ -1432,13 +1455,16 @@ document.addEventListener("submit", async (event) => {
         credentials: "same-origin",
         headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
       });
+      if (!isCurrentGameNavigation(navigation)) return;
       if (contextualResponse.ok) {
         html = await contextualResponse.text();
+        if (!isCurrentGameNavigation(navigation)) return;
         responseUrl = contextualResponse.url;
       }
     }
     replaceGameContent(html, responseUrl, previousPath, scrollPosition, response.ok, formState);
   } catch (error) {
+    if (!isCurrentGameNavigation(navigation)) return;
     form.removeAttribute("aria-busy");
     const needsTavernRevalidation = form.dataset.revalidateOnError === "true";
     if (submitter && !needsTavernRevalidation) {
@@ -1448,6 +1474,7 @@ document.addEventListener("submit", async (event) => {
     }
     if (needsTavernRevalidation) {
       const refreshed = await fetchTavernStateAfterUncertainAction(previousUrl);
+      if (!isCurrentGameNavigation(navigation)) return;
       if (refreshed) {
         replaceGameContent(
           refreshed.html,
