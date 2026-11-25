@@ -159,12 +159,18 @@ def test_bad_setup_hash_is_rejected(monkeypatch, tmp_path):
 def test_running_game_updates_page_cannot_install_or_restart_releases():
     root = Path(__file__).resolve().parents[1]
     template = (root / "app" / "templates" / "updates.html").read_text(encoding="utf-8")
+    script = (root / "app" / "static" / "js" / "main.js").read_text(encoding="utf-8")
     route = (root / "app" / "routes" / "update_routes.py").read_text(encoding="utf-8")
 
     assert 'data-check-release-update' in template
-    assert "Feche a campanha e abra o launcher pelo atalho para atualizar." in template
+    assert 'data-release-update-status' in template
+    assert "Esta página é informativa. A instalação é atualizada pelo launcher do aplicativo." in template
+    assert "result.available_version" in script
+    assert "está disponível. Feche a campanha e abra o launcher pelo atalho para atualizar." in script
     assert "install-release" not in template
     assert "apply-local" not in template
+    assert "install-release" not in script
+    assert "apply-local" not in script
     assert "def install_verified_release_update" not in route
     assert "def apply_local_checkout_update" not in route
     assert "download=False" in route

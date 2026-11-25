@@ -1360,7 +1360,65 @@ with tempfile.TemporaryDirectory() as data_dir:
         ))
         assert b"/static/css/desktop-campaigns.css?v=20261125-1" in campaign_page
         assert b"Trilhas de conquistas" in rendered_pages["/codex"]
-        codex_page = rendered_pages["/codex"]
+        with SessionLocal() as db:
+            first_hire_template = db.query(AchievementTemplate).filter_by(key="first_hire").one()
+            first_hire = db.query(GuildAchievement).filter_by(
+                guild_id=guild_id,
+                achievement_template_id=first_hire_template.id,
+            ).one_or_none()
+            if first_hire is None:
+                first_hire = GuildAchievement(
+                    guild_id=guild_id,
+                    achievement_template_id=first_hire_template.id,
+                )
+                db.add(first_hire)
+            first_hire.progress = first_hire_template.threshold
+            first_hire.unlocked_at = datetime.now(timezone.utc)
+            first_hire.claimed_at = None
+            db.flush()
+            first_hire_id = first_hire.id
+            first_hire_reward = first_hire_template.reward_gold
+            assert first_hire_reward > 0 and first_hire_template.reward_xp == 0
+            gold_before_codex_get = db.query(GuildResources).filter_by(guild_id=guild_id).one().gold
+            db.commit()
+        codex_ready_status, _codex_ready_location, codex_ready_body = request("/codex")
+        ready_achievement_card = re.search(
+            rb'<article[^>]*id="achievement-' + str(first_hire_id).encode("ascii") + rb'".*?</article>',
+            codex_ready_body,
+            re.S,
+        )
+        assert codex_ready_status == 200 and ready_achievement_card
+        assert ready_achievement_card.group(0).count(b'class="codex-achievement-state"') == 1
+        assert b"Pronta para resgate" in ready_achievement_card.group(0)
+        assert b"Ver requisito e recompensa" in ready_achievement_card.group(0)
+        assert (
+            b'<form method="post" action="/codex/achievements/'
+            + str(first_hire_id).encode("ascii")
+            + b'/claim">'
+        ) in ready_achievement_card.group(0)
+        with SessionLocal() as db:
+            persisted_ready = db.query(GuildAchievement).filter_by(id=first_hire_id).one()
+            assert persisted_ready.claimed_at is None, "a Codex GET must not claim a ready reward"
+            assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == gold_before_codex_get
+        codex_claim_status, codex_claim_location, _codex_claim_body = request(
+            f"/codex/achievements/{first_hire_id}/claim", method="POST", body="",
+        )
+        assert codex_claim_status == 303 and codex_claim_location.startswith("/codex?message=")
+        codex_claimed_status, _codex_claimed_location, codex_claimed_body = request("/codex")
+        claimed_achievement_card = re.search(
+            rb'<article[^>]*id="achievement-' + str(first_hire_id).encode("ascii") + rb'".*?</article>',
+            codex_claimed_body,
+            re.S,
+        )
+        assert codex_claimed_status == 200 and claimed_achievement_card
+        assert b"Resgatada" in claimed_achievement_card.group(0)
+        assert b"Pronta para resgate" not in claimed_achievement_card.group(0)
+        assert b"/codex/achievements/" not in claimed_achievement_card.group(0)
+        with SessionLocal() as db:
+            persisted_claim = db.query(GuildAchievement).filter_by(id=first_hire_id).one()
+            assert persisted_claim.claimed_at is not None
+            assert db.query(GuildResources).filter_by(guild_id=guild_id).one().gold == gold_before_codex_get + first_hire_reward
+        codex_page = codex_claimed_body
         assert b"evolution/illustrations/achievement-reliquary.webp" in codex_page
         assert b"evolution/sprites/ui_64/achievement-medal.png" in codex_page
         assert b'href="#codex-achievements"' in codex_page
@@ -1373,7 +1431,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b'aria-valuenow=' in codex_page and b'aria-label="Filtrar trilhas"' in codex_page
         assert b'aria-label="Filtrar C\xc3\xb3dex"' in codex_page
         assert b'class="codex-card__heading"' in codex_page
-        assert b"Ver requisito e estado" in rendered_pages["/codex"]
+        assert b"Ver requisito e recompensa" in codex_page
         css_status, _location, codex_css = request("/static/css/main.css")
         assert css_status == 200
         assert b".codex-legendary-card.is-ready" in codex_css

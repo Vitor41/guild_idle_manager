@@ -18,10 +18,13 @@ from app.database.connection import Base, SessionLocal, configure_database, get_
 from app.models.campaign import CampaignMetadata
 from app.models.dungeon import DungeonTemplate
 from app.models.item import ItemTemplate
+from app.models.mercenary import MercenaryClass
 from app.models.regional import (
     RegionalCycle,
+    RegionalCpuMercenary,
     RegionalEvent,
     RegionalPortalSpawnState,
+    RegionalGuildState,
     RegionalRegionState,
 )
 from app.services.portal_spawn_rules import (
@@ -64,6 +67,7 @@ class RegionalPortalSpawnPolicyTests(unittest.TestCase):
                 security=100,
             )
             db.add(self.region)
+            self._add_native_cpu_team(db, "vale-norte")
             self._add_content(db)
             db.commit()
             self.region_id = self.region.id
@@ -104,6 +108,59 @@ class RegionalPortalSpawnPolicyTests(unittest.TestCase):
                 is_active=True,
             ))
         return boss
+
+    def _add_native_cpu_team(self, db, region_code, campaign_id=None):
+        campaign_id = campaign_id or self.campaign_id
+        if db.scalar(select(MercenaryClass.id).where(
+            MercenaryClass.code == "portal-policy-damage",
+        )) is None:
+            db.add(MercenaryClass(
+                name="Atacante de política de portal",
+                code="portal-policy-damage",
+                description="Classe sintética elegível para os cenários de geração de portal.",
+                role_type="damage",
+                base_power=20,
+                base_vitality=20,
+                base_agility=20,
+                base_intelligence=20,
+                base_luck=20,
+                is_active=True,
+            ))
+            db.flush()
+        state = RegionalGuildState(
+            campaign_id=campaign_id,
+            region_code=region_code,
+            slot=1,
+            guild_id=None,
+            name=f"CPU elegível {region_code}",
+            profile="strong",
+            archetype="exploration",
+            level=1,
+            roster_size=2,
+            active=True,
+        )
+        db.add(state)
+        db.flush()
+        db.add_all([
+            RegionalCpuMercenary(
+                campaign_id=campaign_id,
+                guild_state_id=state.id,
+                slot=slot,
+                name=f"Equipe {region_code} {slot}",
+                class_code="portal-policy-damage",
+                level=1,
+                power=20,
+                vitality=20,
+                agility=20,
+                intelligence=20,
+                luck=20,
+                armor=0,
+                equipment_bonus_json="{}",
+                active=True,
+            )
+            for slot in range(2)
+        ])
+        return state
 
     def _cycle(self, number: int, ends_at: datetime, campaign_id: str | None = None):
         return RegionalCycle(
@@ -264,7 +321,7 @@ class RegionalPortalSpawnPolicyTests(unittest.TestCase):
             db.commit()
             self.assertEqual(self._utc(old_portal.expires_at_utc), self.now + timedelta(hours=3))
 
-    def test_missing_boss_or_loot_records_block_without_consuming_failure(self):
+    def test_missing_boss_or_loot_records_no_eligible_content_without_consuming_failure(self):
         configure_database("sqlite:///:memory:")
         Base.metadata.create_all(bind=get_engine())
         no_loot_campaign = str(uuid4())
@@ -292,10 +349,10 @@ class RegionalPortalSpawnPolicyTests(unittest.TestCase):
                 RegionalPortalSpawnState.campaign_id == no_loot_campaign,
             ))
             self.assertEqual(state.failure_stacks, 0)
-            self.assertEqual(state.last_result, "content_unavailable")
+            self.assertEqual(state.last_result, "no_eligible_content")
             self.assertEqual(state.last_evaluated_cycle_number, 1)
 
-    def test_missing_boss_records_block_without_calling_rng(self):
+    def test_missing_boss_records_no_eligible_content_without_calling_rng(self):
         with SessionLocal() as db:
             db.query(DungeonTemplate).delete()
             cycle = self._cycle(1, self.now + timedelta(hours=6))
@@ -307,7 +364,29 @@ class RegionalPortalSpawnPolicyTests(unittest.TestCase):
                 RegionalPortalSpawnState.campaign_id == self.campaign_id,
             ))
             self.assertEqual(state.failure_stacks, 0)
-            self.assertEqual(state.last_result, "content_unavailable")
+            self.assertEqual(state.last_result, "no_eligible_content")
+
+    def test_native_roster_that_cannot_meet_boss_requirements_blocks_without_rng_or_stack(self):
+        with SessionLocal() as db:
+            boss = db.scalar(select(DungeonTemplate).where(DungeonTemplate.content_type == "boss"))
+            boss.required_min_mercenary_level = 99
+            cycle = self._cycle(1, self.now + timedelta(hours=6))
+            db.add(cycle)
+            db.flush()
+            with patch("app.services.regional_event_service._rng", side_effect=AssertionError("ineligible content must not roll")):
+                create_cycle_portals(db, self.campaign_id, cycle, [self._region(db)])
+            state = db.scalar(select(RegionalPortalSpawnState).where(
+                RegionalPortalSpawnState.campaign_id == self.campaign_id,
+                RegionalPortalSpawnState.region_code == "vale-norte",
+            ))
+            self.assertEqual(state.last_result, "no_eligible_content")
+            self.assertEqual(state.failure_stacks, 0)
+            self.assertEqual(state.last_evaluated_cycle_number, cycle.cycle_number)
+            self.assertIsNone(db.scalar(select(RegionalEvent.id).where(
+                RegionalEvent.campaign_id == self.campaign_id,
+                RegionalEvent.event_type == "portal",
+                RegionalEvent.region_code == "vale-norte",
+            )))
 
     def test_state_isolated_by_campaign_and_region(self):
         other_campaign = str(uuid4())
@@ -328,6 +407,8 @@ class RegionalPortalSpawnPolicyTests(unittest.TestCase):
                 region_name="Vale do Norte",
             )
             db.add_all([same_campaign_other_region, other_campaign_region])
+            self._add_native_cpu_team(db, "vale-sul")
+            self._add_native_cpu_team(db, "vale-norte", other_campaign)
             db.add_all([
                 RegionalPortalSpawnState(
                     campaign_id=self.campaign_id,
@@ -436,6 +517,7 @@ class RegionalPortalSpawnPolicyTests(unittest.TestCase):
                     region_code="vale-norte",
                     region_name="Vale do Norte",
                 ))
+                self._add_native_cpu_team(db, "vale-norte")
                 db.add(self._cycle(1, self.now + timedelta(hours=6)))
                 db.commit()
             barrier = Barrier(2)
