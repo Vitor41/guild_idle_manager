@@ -488,8 +488,13 @@ body[data-app-mode="desktop"] .status-gathering { color: var(--blue); border-col
   body[data-app-mode="desktop"] .game-topbar > .offline-action { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
   body[data-app-mode="desktop"] .offline-action .topbar-back-button { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 3px 8px; width: auto; max-width: calc(100vw - 80px); min-height: 40px; text-align: left; }
   body[data-app-mode="desktop"] .offline-stamina-value { white-space: normal; }
+  body[data-app-mode="desktop"] .offline-action .topbar-back-button > .offline-stamina-value { display: block; flex: 1 0 100%; min-width: 0; overflow-wrap: anywhere; }
 }
 @media (max-width: 460px) {
   body[data-app-mode="desktop"] .game-topbar > .topbar-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body[data-app-mode="desktop"] .game-topbar > .topbar-stats > .treasury-menu { grid-column: 1 / -1; }
 }
+body[data-app-mode="desktop"] .offline-regional-context a,
+body[data-app-mode="desktop"] .offline-summary__notice a { display: inline-flex; align-items: center; min-width: 40px; min-height: 40px; padding: 4px 8px; border-radius: 5px; vertical-align: middle; }
+body[data-app-mode="desktop"] .offline-regional-context a:focus-visible,
+body[data-app-mode="desktop"] .offline-summary__notice a:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
