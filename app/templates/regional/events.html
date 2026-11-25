@@ -4,7 +4,7 @@
 {% from "components/regional_event_history.html" import event_history with context %}
 {% block title %}Eventos Regionais · Guild Idle Manager{% endblock %}
 {% block content %}
-<section class="evolution-page regional-events-page" aria-labelledby="regional-events-title" data-regional-events data-section="{{ event_section }}">
+<section class="evolution-page regional-events-page" aria-labelledby="regional-events-title" data-regional-events data-review-token="{{ regional_events_review_token }}" data-section="{{ event_section }}">
   {% if error %}<p class="evolution-notice evolution-notice--error" role="alert">{{ error }}{% if diagnostic_id %} Referência de diagnóstico: {{ diagnostic_id }}.{% endif %}</p>{% endif %}
   {% if message %}<p class="evolution-notice" role="status">{{ message }}</p>{% endif %}
 
@@ -29,7 +29,7 @@
     </div>
     {% if portal_spawn_status and portal_spawn_status.available %}
       <details class="portal-next-attempt">
-        <summary>Próxima tentativa</summary>
+        <summary id="portal-next-attempt-summary">Próxima tentativa</summary>
         <p>{{ portal_spawn_status.next_attempt_label }}</p>
         <p><strong>Chance efetiva: {{ portal_spawn_status.effective_chance_pp }}%</strong> = {{ portal_spawn_status.base_chance_pp }}% base + {{ portal_spawn_status.failure_bonus_pp }} p.p. por falhas + {{ portal_spawn_status.explorer_bonus_pp }} p.p. dos Exploradores.</p>
         <p>{{ portal_spawn_status.failure_stacks }} falha(s) consecutiva(s) de {{ portal_spawn_status.maximum_failure_stacks }}.</p>

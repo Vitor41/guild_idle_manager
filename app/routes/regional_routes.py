@@ -34,6 +34,7 @@ from app.services.achievement_service import get_codex_context
 from app.services.guild_service import get_current_guild_context
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 from app.services.mission_service import MissionError, start_mission
+from app.services.navigation_work_status_service import regional_events_review_token
 from app.services.regional_cycle_service import (
     PUBLIC_REGIONAL_OFFER_TYPES,
     get_current_player_regional_guild,
@@ -964,6 +965,9 @@ def regional_index(
         # This route advances the regional clock but intentionally skips the
         # gathering commit used by the main Vigília page.
         db.commit()
+    review_token = regional_events_review_token(
+        db, campaign.campaign_id, guild.id, now=region_now,
+    ) if central_events_view else ""
     return templates.TemplateResponse(
         request=request,
         name="regional/events.html" if central_events_view else "regional/index.html",
@@ -989,6 +993,7 @@ def regional_index(
             "portal_cards": portal_cards,
             "event_history_cards": event_history_cards,
             "portal_spawn_status": portal_spawn_status,
+            "regional_events_review_token": review_token,
             "central_events_view": central_events_view,
             "event_section": request.query_params.get("section")
             if request.query_params.get("section") in {"portals", "rebellions"}

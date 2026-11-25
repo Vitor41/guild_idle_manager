@@ -16,6 +16,11 @@ ART_ROOT = STATIC / "assets" / "desktop"
 
 
 class DesktopArtIntegrationTests(unittest.TestCase):
+    def test_regional_events_template_exposes_review_revision_and_stable_summary_focus(self):
+        template = (ROOT / "app" / "templates" / "regional" / "events.html").read_text(encoding="utf-8")
+        self.assertIn('data-review-token="{{ regional_events_review_token }}"', template)
+        self.assertIn('id="portal-next-attempt-summary"', template)
+
     @unittest.skipUnless(shutil.which("node"), "Node.js is required for the JavaScript queue regression.")
     def test_initial_and_partial_regional_notices_are_sorted_before_opening(self):
         script = r"""

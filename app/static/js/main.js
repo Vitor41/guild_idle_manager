@@ -153,6 +153,7 @@ async function refreshNavigationWorkIndicators(force = false) {
   navigationWorkStatusController = controller;
   let refreshRegionalEvents = false;
   let regionalEventStatusTransition = null;
+  const regionalEventsPageRoot = document.querySelector(".regional-events-page[data-regional-events]");
   const markUnavailable = (link) => {
     link.querySelector(".nav-work-indicator")?.remove();
     const indicator = document.createElement("span");
@@ -180,7 +181,8 @@ async function refreshNavigationWorkIndicators(force = false) {
       const status = payload.menus?.[link.dataset.navWorkMenu];
       if (!status || !Number.isInteger(status.active) || status.active < 0
           || !Number.isInteger(status.ready) || status.ready < 0
-          || typeof status.label !== "string" || !status.label.trim()) {
+          || typeof status.label !== "string" || !status.label.trim()
+          || (link.dataset.navWorkMenu === "regional_events" && typeof status.review_token !== "string")) {
         markUnavailable(link);
         continue;
       }
@@ -188,14 +190,30 @@ async function refreshNavigationWorkIndicators(force = false) {
       const ready = status.ready;
       const previousActive = Number(link.dataset.workActive);
       const previousReady = Number(link.dataset.workReady);
+      let previousReviewToken = link.dataset.workReviewToken;
+      if (link.dataset.navWorkMenu === "regional_events" && regionalEventsPageRoot?.dataset.reviewToken) {
+        previousReviewToken = regionalEventsPageRoot.dataset.reviewToken;
+        link.dataset.workReviewToken = previousReviewToken;
+      }
+      const nextReviewToken = link.dataset.navWorkMenu === "regional_events"
+        ? status.review_token
+        : undefined;
+      const reviewChanged = typeof nextReviewToken === "string"
+        && previousReviewToken !== undefined
+        && previousReviewToken !== nextReviewToken;
       if (link.dataset.navWorkMenu === "regional_events"
-          && Number.isInteger(previousActive) && Number.isInteger(previousReady)
-          && (previousActive !== active || previousReady !== ready)) {
+          && ((Number.isInteger(previousActive) && Number.isInteger(previousReady)
+              && (previousActive !== active || previousReady !== ready))
+            || reviewChanged)) {
         refreshRegionalEvents = true;
-        regionalEventStatusTransition = { link, previousActive, previousReady, active, ready };
+        regionalEventStatusTransition = {
+          link, previousActive, previousReady, active, ready,
+          previousReviewToken, nextReviewToken,
+        };
       }
       link.dataset.workActive = String(active);
       link.dataset.workReady = String(ready);
+      if (typeof nextReviewToken === "string") link.dataset.workReviewToken = nextReviewToken;
       link.querySelector(".nav-work-indicator")?.remove();
       if (!active && !ready) {
         link.removeAttribute("data-work-state");
@@ -219,10 +237,14 @@ async function refreshNavigationWorkIndicators(force = false) {
       const pageRefresh = window.refreshRegionalEventsPageFromServer?.();
       const restorePreviousCounts = () => {
         if (!regionalEventStatusTransition) return;
-        const { link, previousActive, previousReady, active, ready } = regionalEventStatusTransition;
+        const { link, previousActive, previousReady, active, ready, previousReviewToken, nextReviewToken } = regionalEventStatusTransition;
         if (link.dataset.workActive === String(active) && link.dataset.workReady === String(ready)) {
           link.dataset.workActive = String(previousActive);
           link.dataset.workReady = String(previousReady);
+        }
+        if (nextReviewToken !== undefined && link.dataset.workReviewToken === nextReviewToken) {
+          if (previousReviewToken === undefined) delete link.dataset.workReviewToken;
+          else link.dataset.workReviewToken = previousReviewToken;
         }
       };
       if (pageRefresh && typeof pageRefresh.then === "function") {

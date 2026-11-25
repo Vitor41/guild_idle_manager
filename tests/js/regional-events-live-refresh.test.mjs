@@ -107,6 +107,71 @@ test("a successful refresh updates event cards while preserving form values, foc
   assert.equal(stateCalls[0][0], "restore");
 });
 
+test("a refreshed portal attempt summary keeps focus by its stable id and retains expansion", async () => {
+  const focusCalls = [];
+  const scrollCalls = [];
+  const oldSummary = { id: "portal-next-attempt-summary" };
+  const newSummary = { id: "portal-next-attempt-summary", focus(options) { focusCalls.push(options); } };
+  const oldDetails = { id: "portal-next-attempt", open: true };
+  const newDetails = { id: "portal-next-attempt", open: false };
+  const oldRoot = {
+    isConnected: true,
+    contains(node) { return node === oldSummary; },
+    querySelectorAll(selector) {
+      if (selector === "details[open]") return [oldDetails];
+      if (selector === "details") return [oldDetails];
+      return [];
+    },
+    replaceWith(node) { document.currentRoot = node; this.isConnected = false; },
+  };
+  const incomingRoot = {
+    querySelectorAll(selector) {
+      if (selector === "details[open]") return [];
+      if (selector === "details") return [newDetails];
+      return [];
+    },
+    querySelector(selector) { return selector === "#portal-next-attempt" ? newDetails : null; },
+  };
+  const parsedDocument = {
+    querySelector(selector) { return selector === ".regional-events-page[data-regional-events]" ? incomingRoot : null; },
+  };
+  const document = {
+    activeElement: oldSummary,
+    currentRoot: oldRoot,
+    querySelector(selector) { return selector === ".regional-events-page[data-regional-events]" ? this.currentRoot : null; },
+    importNode(node) { return node; },
+    getElementById(id) { return id === newSummary.id ? newSummary : null; },
+  };
+  const window = {
+    location: { href: "https://game.test/regional/events?section=portals", pathname: "/regional/events" },
+    scrollY: 400,
+    scrollTo(options) { scrollCalls.push(options); },
+  };
+  const context = vm.createContext({
+    URL,
+    AbortController,
+    document,
+    window,
+    DOMParser: class { parseFromString() { return parsedDocument; } },
+    fetch: async () => ({ ok: true, url: window.location.href, text: async () => "fresh event page" }),
+    captureGameFormState() { return new Map(); },
+    restoreGameFormState() {},
+    updateGenericCountdowns() {},
+    regionalEventsRefreshRequest: null,
+  });
+  vm.runInContext(refreshFunction, context, { filename: "regional-events-focus-summary.js" });
+
+  const updated = await context.refreshRegionalEventsPageFromServer();
+
+  assert.equal(updated, true);
+  assert.equal(focusCalls.length, 1);
+  assert.equal(focusCalls[0].preventScroll, true);
+  assert.equal(newDetails.open, true);
+  assert.equal(scrollCalls.length, 1);
+  assert.equal(scrollCalls[0].top, 400);
+  assert.equal(scrollCalls[0].behavior, "auto");
+});
+
 test("a failed page refresh leaves the last rendered state intact", async () => {
   const oldRoot = { isConnected: true, replaceWith() { assert.fail("failed request must not replace the page"); } };
   const document = {

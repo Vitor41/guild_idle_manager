@@ -1,5 +1,6 @@
 import unittest
 import json
+import random
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
@@ -44,8 +45,8 @@ class NavigationWorkStatusTests(unittest.TestCase):
         self.db = Session(self.engine, autoflush=False, expire_on_commit=False)
         self.now = datetime(2026, 11, 9, 12, tzinfo=timezone.utc)
         self.db.add_all([
-            CampaignMetadata(campaign_id="campaign-a", campaign_name="Campanha A"),
-            CampaignMetadata(campaign_id="campaign-b", campaign_name="Campanha B"),
+            CampaignMetadata(campaign_id="campaign-a", campaign_name="Campanha A", created_at_utc=self.now),
+            CampaignMetadata(campaign_id="campaign-b", campaign_name="Campanha B", created_at_utc=self.now),
         ])
         self.db.flush()
         self.guild = Guild(name="Guilda A", campaign_id="campaign-a")
@@ -307,6 +308,131 @@ class NavigationWorkStatusTests(unittest.TestCase):
             (state.id, portal.status, rebellion.status, participant.status, active_event.status),
             before,
         )
+
+    def test_regional_event_review_token_tracks_external_expiration_without_count_change(self):
+        campaign = self.db.get(CampaignMetadata, "campaign-a")
+        campaign.home_region = "Vale da Fronteira"
+        self.db.add(RegionalGuildState(
+            campaign_id="campaign-a", region_code="vale-fronteira", slot=0,
+            guild_id=self.guild.id, name=self.guild.name, profile="player", archetype="player",
+        ))
+        external = RegionalEvent(
+            campaign_id="campaign-a", event_type="portal", region_code="bosque-ambar",
+            trigger_cycle_number=10, rules_version="regional-events-v6", seed="external-review-token",
+            status="active", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=1),
+        )
+        self.db.add(external)
+        self.db.flush()
+
+        statements = []
+
+        def capture_statements(_conn, _cursor, statement, _parameters, _context, _many):
+            statements.append(statement.lstrip().split(None, 1)[0].upper())
+
+        event.listen(self.engine, "before_cursor_execute", capture_statements)
+        rng_before = random.getstate()
+        try:
+            before = get_navigation_work_status(
+                self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+            )["regional_events"]
+            still_open = get_navigation_work_status(
+                self.db, self.guild.id, campaign_id="campaign-a", now=self.now + timedelta(minutes=30),
+            )["regional_events"]
+            expired = get_navigation_work_status(
+                self.db, self.guild.id, campaign_id="campaign-a", now=self.now + timedelta(hours=2),
+            )["regional_events"]
+        finally:
+            event.remove(self.engine, "before_cursor_execute", capture_statements)
+
+        self.assertEqual((before["active"], before["ready"]), (0, 0))
+        self.assertEqual((expired["active"], expired["ready"]), (0, 0))
+        self.assertEqual(before["review_token"], still_open["review_token"])
+        self.assertNotEqual(before["review_token"], expired["review_token"])
+        self.assertEqual(external.status, "active", "status polling must not expire or progress the event")
+        self.assertEqual(random.getstate(), rng_before, "status revision must not consume random state")
+        self.assertFalse(set(statements) & {"INSERT", "UPDATE", "DELETE"})
+
+    def test_regional_event_review_token_tracks_event_identity_and_cycle_without_activity(self):
+        campaign = self.db.get(CampaignMetadata, "campaign-a")
+        campaign.home_region = "Vale da Fronteira"
+        first = RegionalEvent(
+            campaign_id="campaign-a", event_type="portal", region_code="bosque-ambar",
+            trigger_cycle_number=10, rules_version="regional-events-v6", seed="first-external-portal",
+            status="active", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=2),
+        )
+        self.db.add(first)
+        self.db.flush()
+        initial = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )["regional_events"]
+
+        self.db.add(RegionalEvent(
+            campaign_id="campaign-a", event_type="portal", region_code="planicie-dourada",
+            trigger_cycle_number=11, rules_version="regional-events-v6", seed="second-external-portal",
+            status="active", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=2),
+        ))
+        self.db.flush()
+        two_events = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )["regional_events"]
+        next_cycle = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now + timedelta(hours=6),
+        )["regional_events"]
+
+        self.assertEqual((initial["active"], initial["ready"]), (0, 0))
+        self.assertEqual((two_events["active"], two_events["ready"]), (0, 0))
+        self.assertEqual((next_cycle["active"], next_cycle["ready"]), (0, 0))
+        self.assertNotEqual(initial["review_token"], two_events["review_token"])
+        self.assertNotEqual(two_events["review_token"], next_cycle["review_token"])
+
+    def test_regional_event_review_token_changes_at_cycle_boundary_with_no_events(self):
+        before_cycle = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a",
+            now=self.now + timedelta(hours=5, minutes=59),
+        )["regional_events"]
+        after_cycle = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a",
+            now=self.now + timedelta(hours=6),
+        )["regional_events"]
+
+        self.assertEqual((before_cycle["active"], before_cycle["ready"]), (0, 0))
+        self.assertEqual((after_cycle["active"], after_cycle["ready"]), (0, 0))
+        self.assertNotEqual(before_cycle["review_token"], after_cycle["review_token"])
+
+    def test_regional_event_review_token_tracks_own_activity_ready_transition(self):
+        state = RegionalGuildState(
+            campaign_id="campaign-a", region_code="vale-fronteira", slot=0,
+            guild_id=self.guild.id, name=self.guild.name, profile="player", archetype="player",
+        )
+        event_row = RegionalEvent(
+            campaign_id="campaign-a", event_type="rebellion", region_code="vale-fronteira",
+            trigger_cycle_number=12, rules_version="regional-events-v6", seed="review-own-ready",
+            status="in_progress", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=3),
+        )
+        self.db.add_all([state, event_row])
+        self.db.flush()
+        run = self._run(
+            MissionRun, self.guild.id, ends_in_seconds=3600, mission_template_id=self.mission.id,
+        )
+        self.db.flush()
+        activity = RegionalEventActivity(
+            event_id=event_row.id, guild_state_id=state.id, source_type="mission",
+            source_run_id=run.id, status="in_progress", due_at_utc=run.ends_at,
+        )
+        self.db.add(activity)
+        self.db.flush()
+
+        active = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )["regional_events"]
+        ready = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now + timedelta(hours=2),
+        )["regional_events"]
+
+        self.assertEqual((active["active"], active["ready"]), (1, 0))
+        self.assertEqual((ready["active"], ready["ready"]), (0, 1))
+        self.assertNotEqual(active["review_token"], ready["review_token"])
+        self.assertEqual((event_row.status, activity.status, run.status), ("in_progress", "in_progress", "in_progress"))
 
     def test_portal_indicator_requires_live_template_and_available_party(self):
         campaign = self.db.get(CampaignMetadata, "campaign-a")

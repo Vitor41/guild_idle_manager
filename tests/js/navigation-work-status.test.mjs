@@ -29,15 +29,17 @@ function makeLink() {
   };
 }
 
-function setup(response, { workActive, workReady, path = "/updates", onRefresh = () => {} } = {}) {
+function setup(response, { workActive, workReady, workReviewToken, path = "/updates", onRefresh = () => {} } = {}) {
   const link = makeLink();
   if (workActive !== undefined) link.dataset.workActive = String(workActive);
   if (workReady !== undefined) link.dataset.workReady = String(workReady);
+  if (workReviewToken !== undefined) link.dataset.workReviewToken = workReviewToken;
   const context = vm.createContext({
     AbortController,
     Number,
     document: {
       body: { dataset: { route: path } },
+      querySelector: () => null,
       querySelectorAll: () => [link],
       createElement: () => ({ dataset: {}, setAttribute(name, value) { this[name] = value; }, remove() {} }),
     },
@@ -72,7 +74,7 @@ test("a confirmed portal status transition refreshes the visible central event c
   let refreshes = 0;
   const { context, link } = setup({
     ok: true,
-    json: async () => ({ menus: { regional_events: { active: 0, ready: 1, state: "ready", label: "Eventos Regionais: 1 evento pronto para ação" } } }),
+    json: async () => ({ menus: { regional_events: { active: 0, ready: 1, state: "ready", label: "Eventos Regionais: 1 evento pronto para ação", review_token: "rev-1" } } }),
   }, { workActive: 1, workReady: 0, path: "/regional/events", onRefresh() {
     refreshes += 1;
     return Promise.resolve(true);
@@ -102,7 +104,7 @@ test("a failed status request does not refresh cards or infer a completed result
 test("a failed page refresh keeps counts eligible for retry on the next poll", async () => {
   const { context, link } = setup({
     ok: true,
-    json: async () => ({ menus: { regional_events: { active: 0, ready: 1, state: "ready", label: "Eventos Regionais: 1 evento pronto para ação" } } }),
+    json: async () => ({ menus: { regional_events: { active: 0, ready: 1, state: "ready", label: "Eventos Regionais: 1 evento pronto para ação", review_token: "rev-1" } } }),
   }, { workActive: 1, workReady: 0, path: "/regional/events", onRefresh() { return Promise.resolve(false); } });
 
   await context.refreshNavigationWorkIndicators();
@@ -115,11 +117,72 @@ test("a failed page refresh keeps counts eligible for retry on the next poll", a
 test("a complete zero result clears the unavailable marker instead of treating absent data as zero", async () => {
   const { context, link } = setup({
     ok: true,
-    json: async () => ({ menus: { regional_events: { active: 0, ready: 0, state: "none", label: "Eventos Regionais" } } }),
+    json: async () => ({ menus: { regional_events: { active: 0, ready: 0, state: "none", label: "Eventos Regionais", review_token: "rev-1" } } }),
   });
   await context.refreshNavigationWorkIndicators();
   assert.equal(link.dataset.workState, undefined);
   assert.equal(link.indicator, null);
   assert.equal(link.getAttribute("aria-label"), null);
   assert.equal(link.title, "");
+});
+
+test("an event review-token change refreshes the central even when counts stay equal", async () => {
+  let refreshes = 0;
+  const { context, link } = setup({
+    ok: true,
+    json: async () => ({ menus: { regional_events: {
+      active: 0, ready: 0, state: "none", label: "Eventos Regionais", review_token: "rev-2",
+    } } }),
+  }, { workActive: 0, workReady: 0, workReviewToken: "rev-1", path: "/regional/events", onRefresh() {
+    refreshes += 1;
+    return Promise.resolve(true);
+  } });
+
+  await context.refreshNavigationWorkIndicators();
+  await Promise.resolve();
+
+  assert.equal(refreshes, 1);
+  assert.equal(link.dataset.workReviewToken, "rev-2");
+});
+
+test("an unchanged event review-token does not request another page", async () => {
+  let refreshes = 0;
+  const { context } = setup({
+    ok: true,
+    json: async () => ({ menus: { regional_events: {
+      active: 0, ready: 0, state: "none", label: "Eventos Regionais", review_token: "rev-1",
+    } } }),
+  }, { workActive: 0, workReady: 0, workReviewToken: "rev-1", path: "/regional/events", onRefresh() {
+    refreshes += 1;
+    return Promise.resolve(true);
+  } });
+
+  await context.refreshNavigationWorkIndicators();
+
+  assert.equal(refreshes, 0);
+});
+
+test("a failed event-page refresh rolls back the token for retry on the next poll", async () => {
+  let attempts = 0;
+  const response = {
+    ok: true,
+    json: async () => ({ menus: { regional_events: {
+      active: 0, ready: 0, state: "none", label: "Eventos Regionais", review_token: "rev-2",
+    } } }),
+  };
+  const { context, link } = setup(response, {
+    workActive: 0, workReady: 0, workReviewToken: "rev-1", path: "/regional/events", onRefresh() {
+      attempts += 1;
+      return Promise.resolve(false);
+    },
+  });
+
+  await context.refreshNavigationWorkIndicators();
+  await Promise.resolve();
+  assert.equal(link.dataset.workReviewToken, "rev-1");
+  await context.refreshNavigationWorkIndicators();
+  await Promise.resolve();
+
+  assert.equal(attempts, 2);
+  assert.equal(link.dataset.workReviewToken, "rev-1");
 });

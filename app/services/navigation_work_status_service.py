@@ -1,5 +1,6 @@
 """Read-only activity summaries for the shared navigation."""
 import json
+from hashlib import sha256
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -15,13 +16,14 @@ from app.models.gathering import GatheringAssignment
 from app.models.market import MarketSale
 from app.models.mission import MissionRun
 from app.models.regional import (
+    RegionalCycle,
     RegionalEvent,
     RegionalEventActivity,
     RegionalEventParticipant,
     RegionalGuildState,
     RegionalOffer,
 )
-from app.services.regional_cycle_service import REGIONS
+from app.services.regional_cycle_service import CYCLE_SECONDS, REGIONS
 from app.models.salvage import GuildSalvageJob
 from app.models.workshop import SupplyWorkshopJob
 
@@ -50,6 +52,161 @@ READY_LABELS = {
     "regional": ("preparação pronta para iniciar", "preparações prontas para iniciar"),
     "regional_events": ("evento pronto para ação", "eventos prontos para ação"),
 }
+
+
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _regional_events_review_token(
+    db: Session,
+    campaign_id: str,
+    guild_id: int,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Fingerprint only the campaign/event state visible in the central events view.
+
+    The token changes at stored event/run milestones and each six-hour campaign
+    cycle boundary. It is read-only and deliberately excludes the current clock
+    value so routine polling does not force a refresh every time.
+    """
+    timestamp = _utc(now or datetime.now(timezone.utc))
+    campaign = db.get(CampaignMetadata, campaign_id)
+    if campaign is None:
+        return ""
+    elapsed = max(0.0, (timestamp - _utc(campaign.created_at_utc)).total_seconds())
+    target_cycle = int(elapsed // CYCLE_SECONDS)
+    cycle = db.scalar(select(RegionalCycle).where(
+        RegionalCycle.campaign_id == campaign_id,
+    ).order_by(RegionalCycle.cycle_number.desc()).limit(1))
+    cycle_state = {
+        "target_cycle": target_cycle,
+        "materialized_cycle": cycle.cycle_number if cycle else None,
+        "cycle_status": cycle.status if cycle else None,
+        "cycle_ends_at": _utc(cycle.ends_at_utc).isoformat() if cycle else None,
+        "cycle_elapsed": bool(cycle and timestamp >= _utc(cycle.ends_at_utc)),
+    }
+    recent_history_ids = select(RegionalEvent.id).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEvent.status.not_in(("not_triggered", "suppressed")),
+    ).order_by(RegionalEvent.created_at_utc.desc(), RegionalEvent.id.desc()).limit(12)
+    events = list(db.scalars(select(RegionalEvent).where(
+        RegionalEvent.campaign_id == campaign_id,
+        or_(
+            RegionalEvent.status.in_(("active", "in_progress")),
+            RegionalEvent.id.in_(recent_history_ids),
+        ),
+    ).order_by(RegionalEvent.event_type, RegionalEvent.created_at_utc, RegionalEvent.id)))
+    event_ids = [event.id for event in events]
+    player_state_id = db.scalar(select(RegionalGuildState.id).where(
+        RegionalGuildState.campaign_id == campaign_id,
+        RegionalGuildState.guild_id == guild_id,
+    ))
+    participants_by_event: dict[int, list[dict[str, object]]] = {}
+    activities_by_event: dict[int, list[dict[str, object]]] = {}
+    if player_state_id is not None and event_ids:
+        participant_rows = db.execute(select(
+            RegionalEventParticipant.event_id,
+            RegionalEventParticipant.status,
+            RegionalEventParticipant.contribution,
+            RegionalEventParticipant.success,
+            RegionalEventParticipant.resolved_at_utc,
+        ).where(
+            RegionalEventParticipant.event_id.in_(event_ids),
+            RegionalEventParticipant.guild_state_id == player_state_id,
+        ).order_by(RegionalEventParticipant.event_id))
+        for event_id, status, contribution, success, resolved_at in participant_rows:
+            participants_by_event.setdefault(event_id, []).append({
+                "status": status,
+                "contribution": contribution,
+                "success": success,
+                "resolved_at": _utc(resolved_at).isoformat() if resolved_at else None,
+            })
+
+        activity = RegionalEventActivity
+        activity_rows = db.execute(select(
+            activity.event_id,
+            activity.source_type,
+            activity.status,
+            activity.successes,
+            activity.failures,
+            activity.contribution,
+            activity.due_at_utc,
+            activity.resolved_at_utc,
+            DungeonRun.status,
+            DungeonRun.ends_at,
+            MissionRun.status,
+            MissionRun.ends_at,
+        ).outerjoin(
+            DungeonRun,
+            and_(activity.source_type == "dungeon", DungeonRun.id == activity.source_run_id,
+                 DungeonRun.guild_id == guild_id),
+        ).outerjoin(
+            MissionRun,
+            and_(activity.source_type == "mission", MissionRun.id == activity.source_run_id,
+                 MissionRun.guild_id == guild_id),
+        ).where(
+            activity.event_id.in_(event_ids),
+            activity.guild_state_id == player_state_id,
+        ).order_by(activity.event_id, activity.id))
+        for (event_id, source_type, status, successes, failures, contribution, due_at,
+             resolved_at, dungeon_status, dungeon_ends_at, mission_status, mission_ends_at) in activity_rows:
+            run_status, run_ends_at = (
+                (dungeon_status, dungeon_ends_at) if source_type == "dungeon"
+                else (mission_status, mission_ends_at) if source_type == "mission"
+                else (None, None)
+            )
+            milestone = due_at or run_ends_at
+            activities_by_event.setdefault(event_id, []).append({
+                "source_type": source_type,
+                "status": status,
+                "successes": successes,
+                "failures": failures,
+                "contribution": contribution,
+                "due_at": _utc(milestone).isoformat() if milestone else None,
+                "due_elapsed": bool(milestone and timestamp >= _utc(milestone)),
+                "run_status": run_status,
+                "run_ends_at": _utc(run_ends_at).isoformat() if run_ends_at else None,
+                "resolved_at": _utc(resolved_at).isoformat() if resolved_at else None,
+            })
+
+    event_state = []
+    for event in events:
+        expires_at = _utc(event.expires_at_utc)
+        priority_ends_at = _utc(event.priority_ends_at_utc) if event.priority_ends_at_utc else None
+        event_state.append({
+            "id": event.id,
+            "type": event.event_type,
+            "region": event.region_code,
+            "status": event.status,
+            "created_at": _utc(event.created_at_utc).isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "expired": timestamp >= expires_at,
+            "priority_ends_at": priority_ends_at.isoformat() if priority_ends_at else None,
+            "priority_elapsed": bool(priority_ends_at and timestamp >= priority_ends_at),
+            "cpu_started_at": _utc(event.cpu_started_at_utc).isoformat() if event.cpu_started_at_utc else None,
+            "summary_digest": sha256((event.summary_json or "{}").encode("utf-8")).hexdigest(),
+            "participants": participants_by_event.get(event.id, []),
+            "activities": activities_by_event.get(event.id, []),
+        })
+    material = json.dumps(
+        {"cycle": cycle_state, "events": event_state},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    )
+    return sha256(material.encode("utf-8")).hexdigest()
+
+
+def regional_events_review_token(
+    db: Session,
+    campaign_id: str,
+    guild_id: int,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Read the current central-event revision without flushing pending ORM state."""
+    with db.no_autoflush:
+        return _regional_events_review_token(db, campaign_id, guild_id, now=now)
 
 
 def _count_row(menu: str, model, guild_id: int, now: datetime, *, ready_action: bool = True):
@@ -282,6 +439,10 @@ def _get_navigation_work_status(
             "state": "ready" if ready_count else "active" if active_count else "none",
             "label": _accessible_status(menu, active_count, ready_count),
         }
+    if campaign_id and "regional_events" in result:
+        result["regional_events"]["review_token"] = regional_events_review_token(
+            db, campaign_id, guild_id, now=timestamp,
+        )
     return result
 
 
