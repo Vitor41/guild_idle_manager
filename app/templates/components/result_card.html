@@ -19,38 +19,41 @@
     </dl>
 
     {% if run.result_view["has_details"] %}
-      <div class="result-detail-grid">
-        {% if run.result_view["xp_awards"] %}
-          <section>
-            <h4>Experiência</h4>
-            <ul>{% for entry in run.result_view["xp_awards"] %}<li>{{ entry }}</li>{% endfor %}</ul>
-          </section>
-        {% endif %}
-        {% if run.result_view["level_ups"] %}
-          <section class="result-highlight">
-            <h4>Evoluções</h4>
-            <ul>{% for entry in run.result_view["level_ups"] %}<li>{{ entry }}</li>{% endfor %}</ul>
-          </section>
-        {% endif %}
-        {% if run.result_view["guild_progress"] %}
-          <section>
-            <h4>Guilda</h4>
-            <ul>{% for entry in run.result_view["guild_progress"] %}<li>{{ entry }}</li>{% endfor %}</ul>
-          </section>
-        {% endif %}
-        {% if run.result_view["items"] %}
-          <section class="result-items">
-            <h4>Itens obtidos</h4>
-            <ul>{% for entry in run.result_view["items"] %}<li>{{ entry }}</li>{% endfor %}</ul>
-          </section>
-        {% endif %}
-        {% if run.result_view["notes"] %}
-          <section>
-            <h4>Outros detalhes</h4>
-            <ul>{% for entry in run.result_view["notes"] %}<li>{{ entry }}</li>{% endfor %}</ul>
-          </section>
-        {% endif %}
-      </div>
+      <details class="result-history-details">
+        <summary>Ver detalhes do resultado</summary>
+        <div class="result-detail-grid">
+          {% if run.result_view["xp_awards"] %}
+            <section>
+              <h4>Experiência</h4>
+              <ul>{% for entry in run.result_view["xp_awards"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+            </section>
+          {% endif %}
+          {% if run.result_view["level_ups"] %}
+            <section class="result-highlight">
+              <h4>Evoluções</h4>
+              <ul>{% for entry in run.result_view["level_ups"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+            </section>
+          {% endif %}
+          {% if run.result_view["guild_progress"] %}
+            <section>
+              <h4>Guilda</h4>
+              <ul>{% for entry in run.result_view["guild_progress"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+            </section>
+          {% endif %}
+          {% if run.result_view["items"] %}
+            <section class="result-items">
+              <h4>Itens obtidos</h4>
+              <ul>{% for entry in run.result_view["items"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+            </section>
+          {% endif %}
+          {% if run.result_view["notes"] %}
+            <section>
+              <h4>Outros detalhes</h4>
+              <ul>{% for entry in run.result_view["notes"] %}<li>{{ entry }}</li>{% endfor %}</ul>
+            </section>
+          {% endif %}
+        </div>
+      </details>
     {% else %}
       <p class="note">Nenhuma ocorrência adicional neste resultado.</p>
     {% endif %}

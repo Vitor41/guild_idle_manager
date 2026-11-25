@@ -461,6 +461,46 @@ body[data-app-mode="desktop"] .offline-gathering-list { display: grid; gap: 6px;
 body[data-app-mode="desktop"] .offline-gathering-list li { display: flex; justify-content: space-between; gap: 14px; }
 body[data-app-mode="desktop"] .offline-gathering-list li span { text-align: right; color: var(--muted); }
 body[data-app-mode="desktop"] .status-gathering { color: var(--blue); border-color: var(--blue); }
+body[data-app-mode="desktop"] .candidate-hire-form__summary { margin: 0; }
+body[data-app-mode="desktop"] .candidate-hire-form__reason,
+body[data-app-mode="desktop"] .bulk-hire-form__reason { margin: 0; color: var(--gold-2); }
+body[data-app-mode="desktop"] .mercenary-hiring-summary { margin-top: 16px; }
+body[data-app-mode="desktop"] .mercenary-attribute-table-wrap { overflow-x: visible; }
+body[data-app-mode="desktop"] table.mercenary-attribute-table { width: 100%; min-width: 0; table-layout: fixed; }
+body[data-app-mode="desktop"] .mercenary-attribute-table th,
+body[data-app-mode="desktop"] .mercenary-attribute-table td { min-width: 0; overflow-wrap: anywhere; padding: 9px 10px; }
+body[data-app-mode="desktop"] .mercenary-attribute-table__mobile-label { display: none; }
+body[data-app-mode="desktop"] .mercenary-dismiss-form { margin-top: 14px; }
+body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button {
+  min-height: 40px; border-color: #78544c; background: transparent; color: #f0c0b5; font-weight: 650;
+}
+body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button:hover:not(:disabled),
+body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button:focus-visible { background: #3a2927; }
+body[data-app-mode="desktop"] .result-history-details { padding-top: 8px; border-top: 1px solid rgba(233, 198, 116, .14); }
+body[data-app-mode="desktop"] .result-history-details > summary {
+  display: flex; align-items: center; min-height: 40px; padding: 4px 0; color: var(--gold-2); font-weight: 700; cursor: pointer;
+}
+body[data-app-mode="desktop"] .result-history-details > summary:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
+body[data-app-mode="desktop"] .result-history-details[open] > summary { margin-bottom: 10px; }
+
+@media (max-width: 480px) {
+  body[data-app-mode="desktop"] .mercenary-attribute-table-wrap { overflow: visible; }
+  body[data-app-mode="desktop"] table.mercenary-attribute-table { min-width: 0; font-size: .84rem; }
+  body[data-app-mode="desktop"] .mercenary-attribute-table thead {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody { display: grid; gap: 8px; }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody tr {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;
+    padding: 8px; border: 1px solid rgba(233, 198, 116, .13); border-radius: 7px;
+  }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody th[scope="row"] { grid-column: 1 / -1; padding: 2px 0 5px; border: 0; }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody td {
+    display: grid; gap: 3px; padding: 4px; border: 0; overflow-wrap: anywhere;
+  }
+  body[data-app-mode="desktop"] .mercenary-attribute-table__mobile-label { display: inline; color: var(--muted); font-size: .72rem; }
+}
 
 @media (max-width: 760px) {
   body[data-app-mode="desktop"] .gathering-grid { grid-template-columns: 1fr; }
