@@ -79,10 +79,15 @@
     <div class="evolution-section__heading"><div><p class="evolution-eyebrow">ANTES · DEPOIS · CAUSAS</p><h2 id="history-title">Relatórios encerrados</h2></div><span class="evolution-muted">{{ reports|length }} registros recentes</span></div>
     {% if reports %}<div class="evolution-report-list">{% for report in reports %}<article class="evolution-report-row"><div><span class="evolution-status evolution-status--muted">Ciclo {{ report.cycle_number + 1 }} · encerrado</span><h3>{{ home_region.region_name }}</h3><p>{{ report.row.cpu_successes }} sucessos em {{ report.row.cpu_actions }} ações CPU · {{ report.row.cpu_failures }} falhas · {{ report.summary.get('player_actions', 0) }} ações da guilda</p></div><button type="button" class="evolution-button evolution-button--secondary" data-evolution-dialog="report-{{ report.row.id }}" aria-haspopup="dialog" aria-controls="report-{{ report.row.id }}">Ler relatório</button></article>
       <dialog class="evolution-dialog" id="report-{{ report.row.id }}" aria-labelledby="report-{{ report.row.id }}-title">
-        <form method="dialog">
+        <form method="dialog" class="regional-report-dialog__form">
+          <header class="regional-report-dialog__header">
+            <div>
+              <p class="evolution-eyebrow">PRESTAÇÃO DE CONTAS · CICLO {{ report.cycle_number + 1 }}</p>
+              <h2 id="report-{{ report.row.id }}-title">{{ home_region.region_name }}</h2>
+            </div>
           <button class="evolution-dialog__close" aria-label="Fechar">×</button>
-          <p class="evolution-eyebrow">PRESTAÇÃO DE CONTAS · CICLO {{ report.cycle_number + 1 }}</p>
-          <h2 id="report-{{ report.row.id }}-title">{{ home_region.region_name }}</h2>
+          </header>
+          <div class="regional-report-dialog__body">
           <dl>
             <div><dt>Segurança</dt><dd>{{ '%.2f'|format(report.row.security_before) }} → {{ '%.2f'|format(report.row.security_after) }} · {% set delta = report.row.security_after - report.row.security_before %}{% if delta > 0 %}<span aria-hidden="true">↑</span> +{{ '%.2f'|format(delta) }} p.p.{% elif delta < 0 %}<span aria-hidden="true">↓</span> {{ '%.2f'|format(delta) }} p.p.{% else %}<span aria-hidden="true">→</span> 0.00 p.p.{% endif %}</dd></div>
             <div><dt>Ameaça</dt><dd>{{ '%.2f'|format(report.row.threat_before) }} → {{ '%.2f'|format(report.row.threat_after) }} · {% set delta = report.row.threat_after - report.row.threat_before %}{% if delta > 0 %}<span aria-hidden="true">↑</span> +{{ '%.2f'|format(delta) }} p.p.{% elif delta < 0 %}<span aria-hidden="true">↓</span> {{ '%.2f'|format(delta) }} p.p.{% else %}<span aria-hidden="true">→</span> 0.00 p.p.{% endif %}</dd></div>
@@ -98,7 +103,10 @@
             <ul>{% for archetype, count in report.summary.get('actions_by_archetype', {}).items() %}<li>{{ {'expansion': 'Expansão', 'security': 'Segurança', 'contracts': 'Contratos', 'exploration': 'Exploração'}.get(archetype, archetype) }}: {{ count }} ações</li>{% else %}<li>Sem ações CPU neste ciclo.</li>{% endfor %}</ul>
           </details>
           <p>{% if report.summary.get('baseline', {}).get('applied') %}Sem ações regionais: segurança −1 e ameaça +1 nesta Vigília.{% else %}O baseline sem ações não foi aplicado; os impactos das ações concluídas estão registrados acima.{% endif %}</p>
-          <button class="evolution-button evolution-button--secondary">Fechar relatório</button>
+          </div>
+          <footer class="regional-report-dialog__footer">
+            <button class="evolution-button evolution-button--secondary">Fechar relatório</button>
+          </footer>
         </form>
       </dialog>
     {% endfor %}</div>{% else %}<p class="evolution-empty">Ainda não há uma Vigília encerrada nesta campanha.</p>{% endif %}

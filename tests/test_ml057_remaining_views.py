@@ -37,7 +37,10 @@ class Ml057RemainingViewTests(unittest.TestCase):
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", css)
         self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", css)
         self.assertIn(".evolution-offer-card h4 { overflow-wrap: anywhere; }", css)
-        self.assertIn(".evolution-region-grid, .evolution-offer-grid { grid-template-columns: 1fr; }", css)
+        self.assertIn(".evolution-region-grid { grid-template-columns: 1fr; }", css)
+        self.assertIn(".evolution-offer-group { margin-top: 22px; container-type: inline-size; }", css)
+        self.assertIn("@container (min-width: 640px) { .evolution-offer-grid", css)
+        self.assertIn("@container (min-width: 960px) { .evolution-offer-grid", css)
 
     def test_regional_comparison_keeps_guild_identity_during_local_horizontal_scroll(self):
         page = self.read("app/templates/regional/detail.html")
@@ -53,8 +56,14 @@ class Ml057RemainingViewTests(unittest.TestCase):
 
     def test_regional_report_groups_cpu_stages_on_demand_and_labels_missing_data(self):
         page = self.read("app/templates/regional/index.html")
+        css = self.read("app/static/css/desktop-evolution.css")
         self.assertNotIn("<p></p>", page)
         self.assertIn('<details class="regional-report-activity">', page)
+        self.assertIn('class="regional-report-dialog__header"', page)
+        self.assertIn('class="regional-report-dialog__body"', page)
+        self.assertIn('class="regional-report-dialog__footer"', page)
+        self.assertIn("grid-template-rows: auto minmax(0, 1fr) auto", css)
+        self.assertIn(".regional-report-dialog__body { min-height: 0; overflow: auto;", css)
         for label in ("Planejadas", "Elegíveis", "Iniciadas", "Resolvidas"):
             self.assertIn(f"<th scope=\"col\">{label}</th>", page)
         self.assertIn("activity.planned if activity.planned is not none else 'não registrado'", page)
@@ -148,12 +157,17 @@ class Ml057RemainingViewTests(unittest.TestCase):
         self.assertIn("offer.prepared_mercenary_ids", component)
         self.assertIn("mercenary.class_icon_path", component)
         self.assertIn('data-reinforcement-badge="{{ mercenary.id }}"', component)
+        self.assertIn('data-min-party-size="{{ offer.min_party_size_snapshot }}"', component)
+        self.assertIn('data-max-party-size="{{ offer.max_party_size_snapshot }}"', component)
         self.assertIn("{% if not reinforcement_selected %} hidden{% endif %}", component)
         self.assertIn("Reforço selecionado</strong>", component)
         self.assertIn("annotate_mercenary_display(mercenary)", service)
         self.assertIn("selectinload(Mercenary.mercenary_class)", service)
         self.assertIn("grid-template-columns: 18px 36px minmax(0,1fr) auto", css)
         self.assertIn("min-height: 48px", css)
+        self.assertIn("container-type: inline-size;", css)
+        self.assertIn("overflow-wrap: anywhere;", css)
+        self.assertIn("grid-row: 2; justify-self: start", css)
         self.assertIn("width: min(760px, calc(100vw - 32px))", css)
         self.assertIn("max-height: calc(100dvh - 32px)", css)
 

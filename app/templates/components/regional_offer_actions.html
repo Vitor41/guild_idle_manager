@@ -1,6 +1,6 @@
 {% macro offer_team_fieldset(offer, available_mercenaries) %}
 {% set selected_start_ids = selected_start_mercenary_ids|default([]) %}
-<fieldset>
+<fieldset data-min-party-size="{{ offer.min_party_size_snapshot }}" data-max-party-size="{{ offer.max_party_size_snapshot }}">
   <legend>Exige · Grupo mínimo–máximo: {{ offer.min_party_size_snapshot }}–{{ offer.max_party_size_snapshot }} · Nível mínimo da guilda: {{ offer.required_guild_level_snapshot }}</legend>
   {% for prepared_mercenary in offer.unavailable_prepared_mercenaries %}
     <input type="hidden" name="mercenary_ids" value="{{ prepared_mercenary.id }}" data-prepared-member-hidden="true">

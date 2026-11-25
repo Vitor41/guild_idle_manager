@@ -15,6 +15,8 @@ function makeEnvironment({
   nowMs = 6000,
   startsAtMs = 0,
   endsAtMs = 5000,
+  minPartySize = 1,
+  maxPartySize = 2,
 }) {
   const formListeners = {};
   const intervalCallbacks = [];
@@ -22,13 +24,14 @@ function makeEnvironment({
   const checkboxes = [
     {
       value: "101",
+      name: "mercenary_ids",
       checked: teamAvailable,
       type: teamAvailable ? "checkbox" : "hidden",
       dataset: teamAvailable ? {} : { preparedMemberHidden: "true" },
       listeners: {},
       addEventListener(name, fn) { this.listeners[name] = fn; },
     },
-    { value: "202", checked: false, type: "checkbox", dataset: {}, listeners: {}, addEventListener(name, fn) { this.listeners[name] = fn; } },
+    { value: "202", name: "mercenary_ids", checked: false, type: "checkbox", dataset: {}, listeners: {}, addEventListener(name, fn) { this.listeners[name] = fn; } },
   ];
   const supply = {
     checked: true,
@@ -47,6 +50,8 @@ function makeEnvironment({
     dataset: { readyLabel: "Iniciar com suprimento preparado" },
     textContent: "Aguardando preparo",
   } : null;
+  const withoutSupplyButton = { disabled: false, dataset: { startWithoutSupply: "" } };
+  const teamFieldset = { dataset: { minPartySize: String(minPartySize), maxPartySize: String(maxPartySize) } };
   const prepareButton = prepared ? null : { disabled: false };
   const supplyLabel = {
     textContent: "Suprimento em preparo",
@@ -64,6 +69,8 @@ function makeEnvironment({
       if (selector === 'input[name="supply"]') return supply;
       if (selector === ".supply-preparation small") return summary;
       if (selector === 'button[name="supply_mode"][value="prepared"]') return preparedButton;
+      if (selector === "fieldset[data-min-party-size]") return teamFieldset;
+      if (selector === "[data-start-without-supply]") return withoutSupplyButton;
       if (selector === "[data-prepared-team-status]") return teamAvailable && teamValid ? status : null;
       if (selector === "[data-supply-preparation-label]") return supplyLabel;
       if (selector === "[data-prepare-action]") return prepareButton;
@@ -78,6 +85,7 @@ function makeEnvironment({
       return [];
     },
     addEventListener(name, fn) { formListeners[name] = fn; },
+    requestSubmit() { this.requestSubmitCalls = (this.requestSubmitCalls || 0) + 1; },
   };
   const time = {
     dataset: {
@@ -106,7 +114,13 @@ function makeEnvironment({
     },
   };
   class FormDataStub {
-    constructor(_form) {}
+    constructor(form) { this.form = form; }
+    getAll(name) {
+      if (name !== "mercenary_ids") return [];
+      return this.form.querySelectorAll('input[name="mercenary_ids"]')
+        .filter((input) => input.checked || input.dataset.preparedMemberHidden === "true")
+        .map((input) => String(input.value));
+    }
     *[Symbol.iterator]() { return; }
   }
   const context = vm.createContext({
@@ -131,6 +145,8 @@ function makeEnvironment({
     form,
     intervalCallbacks,
     preparedButton,
+    withoutSupplyButton,
+    FormDataStub,
     prepareButton,
     progressBar,
     progressStatus,
@@ -164,6 +180,7 @@ test("prepared start does not request inventory or get canceled by a stale negat
   assert.equal(page.reinforcementBadge.hidden, false, "selecting a reinforcement shows its badge");
   page.checkboxes[1].listeners.change();
   assert.equal(page.preparedButton.disabled, true);
+  assert.equal(page.withoutSupplyButton.disabled, false, "a valid reinforcement team can start without supply");
   assert.match(page.status.textContent, /Há reforços selecionados/);
   assert.match(page.status.textContent, /Iniciar sem suprimento/);
 
@@ -177,6 +194,31 @@ test("prepared start does not request inventory or get canceled by a stale negat
     preventDefault() { prevented = true; },
   });
   assert.equal(prevented, false);
+});
+
+test("prepared offer disables both starts outside the saved party bounds and keeps submitted IDs exact", () => {
+  const page = makeEnvironment({ prepared: true, minPartySize: 1, maxPartySize: 2 });
+  page.checkboxes[0].checked = false;
+  page.checkboxes[0].listeners.change();
+  assert.equal(page.preparedButton.disabled, true);
+  assert.equal(page.withoutSupplyButton.disabled, true);
+  assert.match(page.status.textContent, /Equipe incompleta/);
+  assert.deepEqual(new page.FormDataStub(page.form).getAll("mercenary_ids"), []);
+
+  page.checkboxes[1].checked = true;
+  page.checkboxes[1].listeners.change();
+  assert.equal(page.preparedButton.disabled, true);
+  assert.equal(page.withoutSupplyButton.disabled, false);
+  assert.deepEqual(new page.FormDataStub(page.form).getAll("mercenary_ids"), ["202"]);
+  assert.match(page.status.textContent, /equipe original/);
+  assert.equal(page.form.requestSubmitCalls || 0, 0, "selection changes never submit automatically");
+
+  const overLimit = makeEnvironment({ prepared: true, minPartySize: 1, maxPartySize: 1 });
+  overLimit.checkboxes[1].checked = true;
+  overLimit.checkboxes[1].listeners.change();
+  assert.equal(overLimit.preparedButton.disabled, true);
+  assert.equal(overLimit.withoutSupplyButton.disabled, true);
+  assert.match(overLimit.status.textContent, /acima do limite/);
 });
 
 test("prepared start combines availability and deadline for occupied, free, and already expired teams", () => {

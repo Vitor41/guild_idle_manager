@@ -13,17 +13,34 @@ const syncPreparedStartButton = (form) => {
   const teamAvailable = form.dataset.preparedTeamAvailable === "true"
     && form.dataset.preparedTeamValid === "true";
   const preparationReady = form.dataset.preparedSupplyReady === "true";
-  button.disabled = !(preparationReady && teamAvailable && exactTeam);
+  const teamBounds = form.querySelector("fieldset[data-min-party-size]")?.dataset || {};
+  const minimumParty = Number(teamBounds.minPartySize);
+  const maximumParty = Number(teamBounds.maxPartySize);
+  const validPartySize = Number.isInteger(minimumParty)
+    && Number.isInteger(maximumParty)
+    && minimumParty >= 1
+    && maximumParty >= minimumParty
+    && selectedIds.size >= minimumParty
+    && selectedIds.size <= maximumParty;
+  const withoutSupplyButton = form.querySelector("[data-start-without-supply]");
+  button.disabled = !(preparationReady && teamAvailable && exactTeam && validPartySize);
+  if (withoutSupplyButton) withoutSupplyButton.disabled = !(teamAvailable && validPartySize);
   button.textContent = preparationReady
     ? button.dataset.readyLabel || button.textContent
     : "Aguardando preparo";
 
   const status = form.querySelector("[data-prepared-team-status]");
   if (!status) return;
-  if (!exactTeam) {
+  if (!Number.isInteger(minimumParty) || !Number.isInteger(maximumParty) || maximumParty < minimumParty) {
+    status.textContent = "O limite da equipe não está disponível. Atualize a Vigília antes de iniciar.";
+  } else if (selectedIds.size < minimumParty) {
+    status.textContent = `Equipe incompleta: selecione ao menos ${minimumParty} integrante(s) para iniciar.`;
+  } else if (selectedIds.size > maximumParty) {
+    status.textContent = `Equipe acima do limite: selecione no máximo ${maximumParty} integrante(s) para iniciar.`;
+  } else if (!exactTeam) {
     const missingPrepared = Array.from(preparedIds).some((id) => !selectedIds.has(id));
     status.textContent = missingPrepared
-      ? "Mantenha toda a equipe preparada selecionada. O bônus exige a equipe exata; reforços podem iniciar sem suprimento."
+      ? "O bônus preparado exige a equipe original; a seleção atual pode iniciar sem suprimento."
       : "Há reforços selecionados. O bônus preparado exige a equipe exata; use “Iniciar sem suprimento” para manter os reforços.";
   } else if (!preparationReady) {
     status.textContent = "Equipe preparada selecionada. O bônus ficará disponível quando o preparo terminar.";
