@@ -56,7 +56,7 @@ from app.routes.tavern_routes import _get_apprentice_preview
 
 # Keep these expectations aligned with `alembic heads`, the schema target
 # applied by campaign creation and upgrades.
-CURRENT_ALEMBIC_HEAD = "e9f8a7b6c5d4"
+CURRENT_ALEMBIC_HEAD = "f8a9b0c1d2e3"
 
 
 class CampaignServiceTests(unittest.TestCase):
