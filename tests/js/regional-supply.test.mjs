@@ -12,6 +12,7 @@ function makeEnvironment({
   fetchImpl,
   teamAvailable = true,
   teamValid = true,
+  preparedTeamCanStart = teamAvailable && teamValid,
   nowMs = 6000,
   startsAtMs = 0,
   endsAtMs = 5000,
@@ -50,7 +51,7 @@ function makeEnvironment({
     dataset: { readyLabel: "Iniciar com suprimento preparado" },
     textContent: "Aguardando preparo",
   } : null;
-  const withoutSupplyButton = { disabled: false, dataset: { startWithoutSupply: "" } };
+  const withoutSupplyButton = { disabled: Boolean(prepared && !preparedTeamCanStart), dataset: { startWithoutSupply: "" } };
   const teamFieldset = { dataset: { minPartySize: String(minPartySize), maxPartySize: String(maxPartySize) } };
   const prepareButton = prepared ? null : { disabled: false };
   const supplyLabel = {
@@ -64,6 +65,7 @@ function makeEnvironment({
       preparedMercenaryIds: prepared ? "101" : "",
       preparedTeamAvailable: String(teamAvailable),
       preparedTeamValid: String(teamValid),
+      preparedTeamCanStart: String(preparedTeamCanStart),
     },
     querySelector(selector) {
       if (selector === 'input[name="supply"]') return supply;
@@ -196,7 +198,7 @@ test("prepared start does not request inventory or get canceled by a stale negat
   assert.equal(prevented, false);
 });
 
-test("prepared offer disables both starts outside the saved party bounds and keeps submitted IDs exact", () => {
+test("prepared offer keeps original members and enforces saved party bounds", () => {
   const page = makeEnvironment({ prepared: true, minPartySize: 1, maxPartySize: 2 });
   page.checkboxes[0].checked = false;
   page.checkboxes[0].listeners.change();
@@ -208,10 +210,16 @@ test("prepared offer disables both starts outside the saved party bounds and kee
   page.checkboxes[1].checked = true;
   page.checkboxes[1].listeners.change();
   assert.equal(page.preparedButton.disabled, true);
-  assert.equal(page.withoutSupplyButton.disabled, false);
+  assert.equal(page.withoutSupplyButton.disabled, true);
   assert.deepEqual(new page.FormDataStub(page.form).getAll("mercenary_ids"), ["202"]);
-  assert.match(page.status.textContent, /equipe original/);
+  assert.match(page.status.textContent, /equipe original do preparo deve permanecer/);
   assert.equal(page.form.requestSubmitCalls || 0, 0, "selection changes never submit automatically");
+
+  page.checkboxes[0].checked = true;
+  page.checkboxes[0].listeners.change();
+  assert.equal(page.preparedButton.disabled, true, "the saved prepared bonus only accepts the exact team");
+  assert.equal(page.withoutSupplyButton.disabled, false, "the original team plus a valid reinforcement may start without supply");
+  assert.deepEqual(new page.FormDataStub(page.form).getAll("mercenary_ids"), ["101", "202"]);
 
   const overLimit = makeEnvironment({ prepared: true, minPartySize: 1, maxPartySize: 1 });
   overLimit.checkboxes[1].checked = true;
@@ -219,6 +227,12 @@ test("prepared offer disables both starts outside the saved party bounds and kee
   assert.equal(overLimit.preparedButton.disabled, true);
   assert.equal(overLimit.withoutSupplyButton.disabled, true);
   assert.match(overLimit.status.textContent, /acima do limite/);
+
+  const rejectedByServer = makeEnvironment({ prepared: true, preparedTeamCanStart: false });
+  assert.equal(rejectedByServer.withoutSupplyButton.disabled, true);
+  rejectedByServer.checkboxes[1].checked = true;
+  rejectedByServer.checkboxes[1].listeners.change();
+  assert.equal(rejectedByServer.withoutSupplyButton.disabled, true, "client updates cannot override the server's prepared-team block");
 });
 
 test("prepared start combines availability and deadline for occupied, free, and already expired teams", () => {

@@ -46,7 +46,7 @@
 
 {% macro offer_action_form(offer, available_mercenaries, return_to, participation=false) %}
 {% set action_verb = 'Participar' if participation else 'Iniciar' %}
-<form method="post" action="/regional/offers/{{ offer.id }}/start" class="evolution-dialog__action" data-supply-quote-url="/regional/offers/{{ offer.id }}/supply-quote"{% if offer.supply_preparation_started_at_utc %} data-prepared-mercenary-ids="{{ offer.prepared_mercenary_ids|join(',') }}" data-prepared-team-available="{{ 'true' if offer.prepared_team_available else 'false' }}" data-prepared-team-valid="{{ 'true' if offer.prepared_team_valid else 'false' }}"{% endif %}>
+<form method="post" action="/regional/offers/{{ offer.id }}/start" class="evolution-dialog__action" data-supply-quote-url="/regional/offers/{{ offer.id }}/supply-quote"{% if offer.supply_preparation_started_at_utc %} data-prepared-mercenary-ids="{{ offer.prepared_mercenary_ids|join(',') }}" data-prepared-team-available="{{ 'true' if offer.prepared_team_available else 'false' }}" data-prepared-team-valid="{{ 'true' if offer.prepared_team_valid else 'false' }}" data-prepared-team-can-start="{{ 'true' if offer.prepared_team_can_start else 'false' }}"{% endif %}>
   <input type="hidden" name="return_to" value="{{ return_to }}">
   {{ offer_team_fieldset(offer, available_mercenaries) }}
   {% if offer.supply_preparation_started_at_utc %}

@@ -10,8 +10,15 @@ const syncPreparedStartButton = (form) => {
   const exactTeam = preparedIds.size > 0
     && selectedIds.size === preparedIds.size
     && Array.from(preparedIds).every((id) => selectedIds.has(id));
+  const preparedMembersRetained = preparedIds.size > 0
+    && Array.from(preparedIds).every((id) => selectedIds.has(id));
   const teamAvailable = form.dataset.preparedTeamAvailable === "true"
     && form.dataset.preparedTeamValid === "true";
+  const withoutSupplyButton = form.querySelector("[data-start-without-supply]");
+  if (typeof form.dataset.preparedTeamCanStart === "undefined") {
+    form.dataset.preparedTeamCanStart = String(Boolean(withoutSupplyButton && !withoutSupplyButton.disabled));
+  }
+  const preparedTeamCanStart = form.dataset.preparedTeamCanStart === "true";
   const preparationReady = form.dataset.preparedSupplyReady === "true";
   const teamBounds = form.querySelector("fieldset[data-min-party-size]")?.dataset || {};
   const minimumParty = Number(teamBounds.minPartySize);
@@ -22,9 +29,10 @@ const syncPreparedStartButton = (form) => {
     && maximumParty >= minimumParty
     && selectedIds.size >= minimumParty
     && selectedIds.size <= maximumParty;
-  const withoutSupplyButton = form.querySelector("[data-start-without-supply]");
-  button.disabled = !(preparationReady && teamAvailable && exactTeam && validPartySize);
-  if (withoutSupplyButton) withoutSupplyButton.disabled = !(teamAvailable && validPartySize);
+  button.disabled = !(preparationReady && teamAvailable && preparedTeamCanStart && exactTeam && validPartySize);
+  if (withoutSupplyButton) {
+    withoutSupplyButton.disabled = !(teamAvailable && preparedTeamCanStart && preparedMembersRetained && validPartySize);
+  }
   button.textContent = preparationReady
     ? button.dataset.readyLabel || button.textContent
     : "Aguardando preparo";
@@ -37,11 +45,12 @@ const syncPreparedStartButton = (form) => {
     status.textContent = `Equipe incompleta: selecione ao menos ${minimumParty} integrante(s) para iniciar.`;
   } else if (selectedIds.size > maximumParty) {
     status.textContent = `Equipe acima do limite: selecione no máximo ${maximumParty} integrante(s) para iniciar.`;
+  } else if (!preparedMembersRetained) {
+    status.textContent = "A equipe original do preparo deve permanecer; adicione reforços sem substituir integrantes preparados.";
   } else if (!exactTeam) {
-    const missingPrepared = Array.from(preparedIds).some((id) => !selectedIds.has(id));
-    status.textContent = missingPrepared
-      ? "O bônus preparado exige a equipe original; a seleção atual pode iniciar sem suprimento."
-      : "Há reforços selecionados. O bônus preparado exige a equipe exata; use “Iniciar sem suprimento” para manter os reforços.";
+    status.textContent = "Há reforços selecionados. O bônus preparado exige a equipe exata; use “Iniciar sem suprimento” para manter os reforços.";
+  } else if (!preparedTeamCanStart) {
+    status.textContent = "A equipe preparada não pode iniciar nesta oferta. Atualize a Vigília para conferir os requisitos.";
   } else if (!preparationReady) {
     status.textContent = "Equipe preparada selecionada. O bônus ficará disponível quando o preparo terminar.";
   } else {
