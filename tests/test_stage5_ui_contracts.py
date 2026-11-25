@@ -234,7 +234,7 @@ class Stage5UiContractTests(unittest.TestCase):
         submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
         self.assertNotIn('form.submit()', submit_catch)
         self.assertRegex(base, r"main\.css.*?\?v=20\d{6}-\d+")
-        self.assertIn("/js/equipment-details.js') }}?v=20261125-1", base)
+        self.assertIn("/js/equipment-details.js') }}?v=20261125-2", base)
 
     def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
         gathering = self.read("app/templates/gathering/index.html")

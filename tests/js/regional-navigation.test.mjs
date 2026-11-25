@@ -83,7 +83,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   window.location.assign = (url) => window.locationAssignCalls.push(url);
   const stubs = [
     "initializeGameGuideForContent", "initializeEquipmentDetails", "initializeMarketEstimates", "initializeGatheringCycles",
-    "initializeUpdateChecks",
+    "initializeUpdateChecks", "initializeClassGuideIndex", "initializeDockPurchaseEstimates",
     "updateGenericCountdowns", "initializeSalvagePreviews",
     "restoreGameFormState", "initializeRegionalSupply", "initializeRegionalComparison", "refreshResourceTotals", "initializeHeaderPopovers",
     "showActionToast", "refreshNavigationWorkIndicators",

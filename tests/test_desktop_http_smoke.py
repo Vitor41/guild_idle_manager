@@ -1171,7 +1171,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         inventory_status, _inventory_location, inventory_body = request("/inventory")
         assert inventory_status == 200, inventory_body[:300]
         assert b'data-desktop-item-family="meat"' in inventory_body, inventory_body[:1000]
-        assert b">x1</span>" in inventory_body, inventory_body[:1000]
+        assert b"<dt>Quantidade</dt><dd>1</dd>" in inventory_body, inventory_body[:1000]
         with SessionLocal() as db:
             meat_stack = db.query(GuildInventoryItem).join(ItemTemplate).filter(
                 GuildInventoryItem.guild_id == guild_id,

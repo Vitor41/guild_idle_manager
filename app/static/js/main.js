@@ -362,9 +362,20 @@ window.parseUtcTimestamp = (value) => {
   return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
 };
 
-function initializeClassGuideIndex() {
-  const nav = document.querySelector(".classes-page .classes-guide-index");
-  if (!nav) return;
+let activeClassGuideObserver = null;
+let activeClassGuideNav = null;
+
+function initializeClassGuideIndex(root = document) {
+  const nav = root?.matches?.(".classes-page .classes-guide-index")
+    ? root
+    : root?.querySelector?.(".classes-page .classes-guide-index") || null;
+  if (activeClassGuideNav && activeClassGuideNav !== nav) {
+    activeClassGuideObserver?.disconnect();
+    activeClassGuideObserver = null;
+    activeClassGuideNav = null;
+  }
+  if (!nav || nav.dataset.classGuideIndexInitialized === "true") return;
+  nav.dataset.classGuideIndexInitialized = "true";
   const links = [...nav.querySelectorAll('a[href^="#"]')];
   const sections = links.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1)))).filter(Boolean);
   const revealLinkHorizontally = (link) => {
@@ -389,6 +400,8 @@ function initializeClassGuideIndex() {
     const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
     if (visible) setActive(visible.target);
   }, { rootMargin: "-120px 0px -65% 0px", threshold: [0, 0.2, 0.5] });
+  activeClassGuideObserver = observer;
+  activeClassGuideNav = nav;
   sections.forEach((section) => observer.observe(section));
   nav.addEventListener("click", (event) => {
     const link = event.target.closest('a[href^="#"]');
@@ -495,10 +508,27 @@ const formatMarketEstimate = (seconds) => {
 function updateMarketEstimate(node) {
   const form = node.closest("form");
   const quantityInput = form?.querySelector("[data-market-quantity]");
-  const quantity = quantityInput ? Number.parseInt(quantityInput.value, 10) : 1;
-  if (!Number.isInteger(quantity) || quantity < 1) {
-    node.textContent = "Informe a quantidade para estimar o prazo.";
-    return;
+  let quantity = 1;
+  if (quantityInput) {
+    const raw = quantityInput.value;
+    const parsed = raw === "" ? NaN : Number(raw);
+    const minimum = Number(quantityInput.min || 0);
+    const maximum = quantityInput.max === "" ? Number.POSITIVE_INFINITY : Number(quantityInput.max);
+    const step = Number(quantityInput.step || 1);
+    const offset = parsed - minimum;
+    const valid = Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum
+      && Number.isFinite(step) && step > 0
+      && Math.abs(offset / step - Math.round(offset / step)) <= 1e-9;
+    const sellButton = form.querySelector(".market-sell-button");
+    if (sellButton && sellButton.dataset.marketServerDisabled === undefined) {
+      sellButton.dataset.marketServerDisabled = String(sellButton.disabled);
+    }
+    if (sellButton) sellButton.disabled = sellButton.dataset.marketServerDisabled === "true" || !valid;
+    if (!valid) {
+      node.textContent = "Informe uma quantidade válida para estimar o prazo.";
+      return;
+    }
+    quantity = parsed;
   }
   const baseSeconds = Number.parseInt(node.dataset.durationBase || form?.dataset.durationBase || "30", 10);
   const reduction = Number.parseInt(node.dataset.timeReduction || form?.dataset.timeReduction || "0", 10);
@@ -509,6 +539,38 @@ function updateMarketEstimate(node) {
 
 function initializeMarketEstimates(root = document) {
   root.querySelectorAll("[data-market-estimate]").forEach((node) => updateMarketEstimate(node));
+}
+
+function updateDockPurchaseEstimate(form) {
+  const input = form.querySelector("[data-dock-quantity]");
+  const total = form.querySelector("[data-dock-total]");
+  const button = form.querySelector("[data-dock-buy]");
+  if (!input || !total || !button) return;
+  const raw = input.value;
+  const quantity = raw === "" ? NaN : Number(raw);
+  const minimum = Number(input.min || 0);
+  const maximum = input.max === "" ? Number.POSITIVE_INFINITY : Number(input.max);
+  const step = Number(input.step || 1);
+  const offset = quantity - minimum;
+  const valid = Number.isSafeInteger(quantity) && quantity >= minimum && quantity <= maximum
+    && Number.isFinite(step) && step > 0
+    && Math.abs(offset / step - Math.round(offset / step)) <= 1e-9;
+  const unitPrice = Number(form.dataset.unitPrice);
+  const canBuyByDefault = form.dataset.dockServerDisabled !== "true";
+  button.disabled = !canBuyByDefault || !valid || !Number.isSafeInteger(unitPrice) || unitPrice < 1;
+  total.textContent = valid && Number.isSafeInteger(unitPrice)
+    ? `Total: ${new Intl.NumberFormat("pt-BR").format(unitPrice * quantity)} ouro`
+    : "Informe uma quantidade disponível para consultar o total.";
+}
+
+function initializeDockPurchaseEstimates(root = document) {
+  root.querySelectorAll("[data-dock-buy-form]").forEach((form) => {
+    if (form.dataset.dockEstimatesInitialized === "true") return;
+    form.dataset.dockEstimatesInitialized = "true";
+    const button = form.querySelector("[data-dock-buy]");
+    form.dataset.dockServerDisabled = String(Boolean(button?.disabled));
+    updateDockPurchaseEstimate(form);
+  });
 }
 
 function initializeUpdateChecks(root = document) {
@@ -553,11 +615,17 @@ function initializeUpdateChecks(root = document) {
   });
 }
 
+initializeClassGuideIndex();
 initializeUpdateChecks();
 initializeMarketEstimates();
+initializeDockPurchaseEstimates();
 document.addEventListener("input", (event) => {
-  if (!event.target.matches("[data-market-quantity]")) return;
-  event.target.closest("form")?.querySelectorAll("[data-market-estimate]").forEach(updateMarketEstimate);
+  if (event.target.matches("[data-market-quantity]")) {
+    event.target.closest("form")?.querySelectorAll("[data-market-estimate]").forEach(updateMarketEstimate);
+  } else if (event.target.matches("[data-dock-quantity]")) {
+    const form = event.target.closest("[data-dock-buy-form]");
+    if (form) updateDockPurchaseEstimate(form);
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -600,25 +668,47 @@ if (sessionFrame) {
 
 updateGenericCountdowns();
 setInterval(updateGenericCountdowns, 1000);
-document.addEventListener("DOMContentLoaded", initializeClassGuideIndex);
 
 function updateSalvagePreview(form) {
   const itemSelect = form.querySelector("[data-salvage-item]");
   const quantityInput = form.querySelector("[data-salvage-quantity]");
   if (!itemSelect || !quantityInput) return;
   const option = itemSelect.selectedOptions[0];
-  const available = Math.max(1, Number(option?.dataset.available || 1));
+  const available = Number(option?.dataset.available || 0);
   quantityInput.max = String(available);
-  const quantity = Math.min(available, Math.max(1, Number(quantityInput.value || 1)));
-  quantityInput.value = String(quantity);
-  const unitCost = Number(form.dataset.unitCost || 0);
-  const unitSeconds = Number(option?.dataset.unitSeconds || 0);
+  const raw = quantityInput.value;
+  const quantity = raw === "" ? NaN : Number(raw);
+  const min = Number(quantityInput.min || 0);
+  const max = Number(quantityInput.max || 0);
+  const step = Number(quantityInput.step || 1);
+  const offset = quantity - min;
+  const valid = Number.isInteger(quantity) && quantity >= min && quantity <= max
+    && Number.isFinite(step) && step > 0
+    && Math.abs(offset / step - Math.round(offset / step)) <= 1e-9;
+  const unitCost = Number(form.dataset.unitCost);
+  const unitSeconds = Number(option?.dataset.unitSeconds);
   const cost = form.querySelector("[data-salvage-cost]");
   const possibleReturn = form.querySelector("[data-salvage-return]");
   const duration = form.querySelector("[data-salvage-duration]");
-  if (cost) cost.textContent = `${unitCost * quantity} ouro`;
-  if (possibleReturn) possibleReturn.textContent = `${quantity}–${quantity * 3} materiais`;
-  if (duration) duration.textContent = formatGenericRemaining(unitSeconds * quantity * 1000);
+  const submit = form.querySelector("[data-salvage-submit]");
+  const status = form.querySelector("[data-salvage-status]");
+  const goldKnown = form.dataset.goldKnown === "true" && form.dataset.goldBalance !== "";
+  const goldBalance = goldKnown ? Number(form.dataset.goldBalance) : NaN;
+  const totalCost = valid ? unitCost * quantity : NaN;
+  const affordable = goldKnown && Number.isFinite(goldBalance) && goldBalance >= totalCost;
+
+  if (cost) cost.textContent = valid ? `${totalCost} ouro` : "—";
+  if (possibleReturn) possibleReturn.textContent = valid ? `${quantity}–${quantity * 3} materiais` : "—";
+  if (duration) duration.textContent = valid ? formatGenericRemaining(unitSeconds * quantity * 1000) : "—";
+  if (submit) submit.disabled = !valid || !affordable;
+  if (status) {
+    if (!valid) status.textContent = "Informe uma quantidade inteira disponível para desmontar.";
+    else if (!goldKnown) status.textContent = "Saldo de ouro não informado; confira os recursos antes de desmontar.";
+    else if (!Number.isFinite(goldBalance)) status.textContent = "Saldo de ouro indisponível para confirmar este serviço.";
+    else if (!affordable) status.textContent = `Faltam ${totalCost - goldBalance} ouro para desmontar esta quantidade.`;
+    else status.textContent = "";
+    status.hidden = status.textContent === "";
+  }
 }
 
 function initializeSalvagePreviews() {
@@ -1023,6 +1113,9 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  initializeClassGuideIndex(currentMain);
+  window.initializeWorkshopSupplyControls?.(currentMain);
+  initializeDockPurchaseEstimates(currentMain);
   initializeUpdateChecks(currentMain);
   initializeGameGuideForContent(parsedDocument, currentMain);
   window.initializeEquipmentDetails?.(currentMain);

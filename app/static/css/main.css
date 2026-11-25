@@ -75,13 +75,22 @@
 .dock-offers { display: grid; gap: 12px; margin-top: 16px; }
 .merchant-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
 .merchant-card, .dock-offer, .dock-offer > *, .dock-offer__details { min-width: 0; }
+.merchant-card > header small { color: var(--muted); }
 .dock-offer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; border-left-width: 3px; }
 .dock-offer__item { display: grid; grid-template-columns: 58px minmax(0, 1fr); align-items: start; gap: 12px; min-width: 0; }
 .dock-offer__icon { flex: 0 0 auto; }
 .dock-offer h3, .dock-offer .badge-row, .dock-offer .tag { overflow-wrap: anywhere; }
-.buy-form { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; min-width: 0; }
+.dock-offer-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px 10px; margin: 8px 0 0; }
+.dock-offer-facts > div { display: grid; align-content: start; gap: 3px; min-width: 0; }
+.dock-offer-facts dt { color: var(--muted); font-size: .76rem; }
+.dock-offer-facts dd { margin: 0; overflow-wrap: anywhere; }
+.equipment-details-trigger { justify-self: start; min-height: 40px; }
+.dock-offer-description { margin: 8px 0 0; }
+.buy-form { display: grid; grid-template-columns: minmax(76px, 1fr) minmax(0, 1.2fr); align-items: end; gap: 8px; min-width: 0; }
+.buy-form label { color: var(--muted); font-size: .78rem; }
 .buy-form input { min-width: 0; }
 .buy-form button { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.buy-form output { grid-column: 1 / -1; color: var(--parchment-soft); font-size: .9rem; font-weight: 700; }
 .price-line { color: var(--gold-light, #f3d486); font-weight: 700; margin-bottom: 0; }
 .resource-pill { border: 1px solid var(--border, #6d5530); padding: 10px 14px; }
 
@@ -1943,6 +1952,18 @@ textarea {
   border-width: 1px;
 }
 
+.inventory-facts,
+.inventory-facts--bonuses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+.inventory-facts > div { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.inventory-facts dt { color: var(--muted); font-size: .78rem; }
+.inventory-facts dd { margin: 0; overflow-wrap: anywhere; }
+.inventory-facts--bonuses { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); padding-top: 8px; border-top: 1px solid rgba(233,198,116,.14); }
+
 .equipment-layout {
   display: grid;
   grid-template-columns: repeat(5, minmax(82px, 1fr));
@@ -2088,6 +2109,10 @@ textarea {
 .market-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .market-sale-card, .market-item-row { border: 1px solid var(--border); border-radius: 8px; background: rgba(0, 0, 0, 0.14); }
 .market-sale-card { display: grid; gap: 12px; padding: 16px; }
+.market-sale-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0; }
+.market-sale-facts > div { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.market-sale-facts dt { color: var(--muted); font-size: .76rem; }
+.market-sale-facts dd { margin: 0; overflow-wrap: anywhere; }
 .market-item-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) minmax(200px, 260px); align-items: center; gap: 10px; padding: 10px; }
 .market-item-row small { display: block; margin-top: 3px; color: var(--muted); }
 .market-item-info { min-width: 0; overflow-wrap: anywhere; }
@@ -2118,6 +2143,7 @@ textarea {
 .gathering-target-empty { padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
 @media (max-width: 600px) {
   .market-columns { grid-template-columns: minmax(0, 1fr); }
+  .market-sale-facts { grid-template-columns: minmax(0, 1fr); }
   .market-item-row { grid-template-columns: 44px minmax(0, 1fr); }
   .market-item-row--material .market-item-action, .market-item-row--equipment .market-equipment-form { grid-column: 1 / -1; grid-row: auto; }
   .market-material-form { grid-template-columns: minmax(72px, 1fr) 48px minmax(72px, auto); }
@@ -2242,6 +2268,8 @@ textarea {
 .workshop-batch-form input[type="number"] { width: min(180px, 100%); }
 .workshop-batch-form > button { min-height: 40px; }
 .workshop-blocked-reason { margin: 0; padding: 10px 12px; border-left: 3px solid var(--gold-2); background: rgba(240,203,114,.07); }
+.supply-preparation-progress a.secondary-button { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 8px 12px; }
+.blacksmith-blocked-reason[hidden] { display: none; }
 .workshop-shortfalls { margin: 5px 0 0; padding-left: 20px; }
 .progress-track { height: 10px; overflow: hidden; border-radius: 5px; background: rgba(0,0,0,.35); }
 .progress-track span { display: block; height: 100%; background: linear-gradient(90deg, #7cae5f, var(--gold)); }

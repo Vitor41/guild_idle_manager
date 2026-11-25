@@ -53,12 +53,13 @@
               <dl class="inline-stats"><div><dt>Custo pago</dt><dd>{{ slot.job.gold_cost }}</dd></div><div><dt>Tempo</dt><dd data-ends-at="{{ slot.job.ends_at_iso }}">Calculando...</dd></div></dl>
               <form method="post" action="/blacksmith/salvage/collect"><input type="hidden" name="job_id" value="{{ slot.job.id }}"><button data-ends-at="{{ slot.job.ends_at_iso }}" {% if not slot.job.ready_for_loot %}disabled{% endif %}>Coletar materiais</button></form>
             {% elif salvage_equipment_groups %}
-              <form class="salvage-form" method="post" action="/blacksmith/salvage/start" data-salvage-form data-unit-cost="{{ slot.unit_cost }}" data-confirm-title="Desmontar equipamentos?" data-confirm-message="Os equipamentos selecionados serão consumidos imediatamente e não poderão ser recuperados." data-confirm-key="salvage_equipment">
+              <form class="salvage-form" method="post" action="/blacksmith/salvage/start" data-salvage-form data-unit-cost="{{ slot.unit_cost }}" data-gold-known="{{ 'true' if resources is not none else 'false' }}" data-gold-balance="{{ resources.gold if resources is not none else '' }}" data-confirm-title="Desmontar equipamentos?" data-confirm-message="Os equipamentos selecionados serão consumidos imediatamente e não poderão ser recuperados." data-confirm-key="salvage_equipment">
                 <input type="hidden" name="slot_number" value="{{ slot.number }}">
                 <label>Equipamento<select name="item_template_id" required data-salvage-item>{% for group in salvage_equipment_groups %}<option value="{{ group.item_template.id }}" data-available="{{ group.quantity }}" data-unit-seconds="{{ group.unit_duration_seconds }}">{{ group.display_name }} · {{ rarity_label(group.item_template.rarity) }} · {{ group.quantity }} disponível(is)</option>{% endfor %}</select></label>
-                <label>Quantidade<input name="quantity" type="number" min="1" max="1" value="1" required data-salvage-quantity></label>
+                <label>Quantidade<input name="quantity" type="number" min="1" step="1" max="1" value="1" required data-salvage-quantity></label>
                 <div class="salvage-preview"><span>Custo total <strong data-salvage-cost>{{ slot.unit_cost }} ouro</strong></span><span>Retorno possível <strong data-salvage-return>1–3 materiais</strong></span><span>Duração <strong data-salvage-duration>Calculando...</strong></span></div>
-                <button>Iniciar desmontagem</button>
+                <p class="note blacksmith-blocked-reason" data-salvage-status role="status" aria-live="polite" hidden></p>
+                <button type="submit" data-salvage-submit {% if resources is none or resources.gold < slot.unit_cost %}disabled{% endif %}>Iniciar desmontagem</button>
               </form>
             {% else %}
               <p class="note">Nenhum equipamento livre está disponível para desmontagem.</p>

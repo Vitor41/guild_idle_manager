@@ -272,6 +272,7 @@ body[data-app-mode="desktop"] .secondary-button:focus-visible { outline: 2px sol
 body[data-app-mode="desktop"] .button-link.secondary:focus-visible,
 body[data-app-mode="desktop"] .secondary-button:focus-visible { outline-color: var(--teal, #68c3b5); }
 body[data-app-mode="desktop"] .danger-button:focus-visible { outline-color: #d17669; }
+body[data-app-mode="desktop"] .blacksmith-craft-action > button:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
 
 body[data-app-mode="desktop"] .equipment-slot.filled > button.equipment-slot__trigger:not(.secondary-button):not(.danger-button):not(.topbar-back-button):not(.text-button),
 body[data-app-mode="desktop"] .equipment-slot.filled > button.equipment-slot__trigger:not(.secondary-button):not(.danger-button):not(.topbar-back-button):not(.text-button):hover:not(:disabled),

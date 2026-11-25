@@ -26,7 +26,7 @@
       {% if meat_item is none or herb_item is none %}<p class="note">Os materiais da receita ainda não estão disponíveis no catálogo desta campanha.</p>{% endif %}
       <form method="post" action="/workshops/supply/craft" class="workshop-batch-form">
         <label for="workshop-quantity">Quantidade de Kits</label>
-        <div><input id="workshop-quantity" name="quantity" type="number" min="1" max="{{ max_batch }}" value="1" required {% if not can_craft %}disabled{% endif %}>
+        <div><input id="workshop-quantity" name="quantity" type="number" min="1" step="1" max="{{ max_batch }}" value="1" required {% if not can_craft %}disabled{% endif %}>
         <button type="button" class="secondary" data-workshop-max {% if not can_craft %}disabled{% endif %}>Máximo ({{ max_batch }})</button></div>
         {% if not can_craft and materials_available and warehouse_limited %}
           <p class="note workshop-blocked-reason" role="status">Indisponível · Armazém {{ warehouse_usage }}/{{ warehouse_capacity }} · libere espaço para iniciar.</p>
@@ -36,36 +36,10 @@
             {% if material_shortfalls.herb %}<li>Ervas: {{ stock.herb }}/{{ requirements.herb }} · faltam {{ material_shortfalls.herb }}</li>{% endif %}
           </ul></div>
         {% endif %}
-        <p class="note" data-workshop-estimate data-meat-per-kit="{{ requirements.meat }}" data-herbs-per-kit="{{ requirements.herb }}" data-seconds-per-kit="{{ seconds_per_kit }}">Custo: {{ requirements.meat }} Carnes + {{ requirements.herb }} Ervas · Tempo: {{ seconds_per_kit }} segundos por Kit.</p>
-        <button type="submit" {% if not can_craft %}disabled{% endif %}>Iniciar produção</button>
+        <p class="note" role="status" data-workshop-estimate data-meat-per-kit="{{ requirements.meat }}" data-herbs-per-kit="{{ requirements.herb }}" data-seconds-per-kit="{{ seconds_per_kit }}">Custo: {{ requirements.meat }} Carnes + {{ requirements.herb }} Ervas · Tempo: {{ seconds_per_kit }} segundos por Kit.</p>
+        <button type="submit" data-workshop-submit {% if not can_craft %}disabled{% endif %}>Iniciar produção</button>
       </form>
     {% endif %}
   </section>
 </section>
-<script>
-(() => {
-  const updateProgress = () => document.querySelectorAll("[data-workshop-progress]").forEach((bar) => {
-    const start = Date.parse(bar.dataset.startsAt || "");
-    const end = Date.parse(bar.dataset.endsAt || "");
-    const span = Math.max(1, end - start);
-    const percent = Math.max(0, Math.min(100, ((Date.now() - start) / span) * 100));
-    bar.value = percent;
-    bar.textContent = `${Math.floor(percent)}%`;
-  });
-  updateProgress();
-  window.setInterval(updateProgress, 1000);
-  const form = document.querySelector(".workshop-batch-form");
-  if (!form) return;
-  const input = form.querySelector("#workshop-quantity");
-  const estimate = form.querySelector("[data-workshop-estimate]");
-  form.querySelector("[data-workshop-max]")?.addEventListener("click", () => { input.value = input.max; input.dispatchEvent(new Event("input")); });
-  input.addEventListener("input", () => {
-    const n = Math.max(1, Number(input.value) || 1);
-    const meatPerKit = Number(estimate.dataset.meatPerKit);
-    const herbsPerKit = Number(estimate.dataset.herbsPerKit);
-    const seconds = n * Number(estimate.dataset.secondsPerKit);
-    estimate.textContent = `Custo: ${n * meatPerKit} Carnes + ${n * herbsPerKit} Ervas · Tempo estimado: ${seconds} segundo(s).`;
-  });
-})();
-</script>
 {% endblock %}

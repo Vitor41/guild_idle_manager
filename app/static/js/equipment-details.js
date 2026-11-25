@@ -1,6 +1,12 @@
 (() => {
   const initializedTriggers = new WeakSet();
 
+  const panelForTrigger = (trigger) => {
+    const controlledId = trigger.getAttribute?.("aria-controls");
+    const controlledPanel = controlledId ? document.getElementById?.(controlledId) : null;
+    return controlledPanel || trigger.closest(".equipment-slot")?.querySelector("[data-equipment-details]") || null;
+  };
+
   const closePanel = (trigger, panel, { restoreFocus = false } = {}) => {
     trigger.setAttribute("aria-expanded", "false");
     panel.hidden = true;
@@ -41,7 +47,7 @@
 
   const positionVisiblePanels = () => {
     document.querySelectorAll("[data-equipment-details-trigger][aria-expanded='true']").forEach((trigger) => {
-      const panel = trigger.closest(".equipment-slot")?.querySelector("[data-equipment-details]");
+      const panel = panelForTrigger(trigger);
       if (panel && !panel.hidden) positionPanel(trigger, panel);
     });
   };
@@ -52,9 +58,8 @@
     const triggers = root.querySelectorAll?.("[data-equipment-details-trigger]") ?? [];
     for (const trigger of triggers) {
       if (initializedTriggers.has(trigger)) continue;
-      const slot = trigger.closest(".equipment-slot");
-      const panel = slot?.querySelector("[data-equipment-details]");
-      if (!slot || !panel) continue;
+      const panel = panelForTrigger(trigger);
+      if (!panel) continue;
 
       let pinned = false;
       let closeTimer = 0;

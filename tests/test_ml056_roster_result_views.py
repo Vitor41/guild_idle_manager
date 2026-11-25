@@ -57,7 +57,7 @@ class ML056RosterResultViewTests(unittest.TestCase):
         self.assertIn('panel.style.top = `${top}px`;', script)
         self.assertIn("border-color: #a66f62", desktop_css)
         self.assertIn("outline: 3px solid #f5d798; outline-offset: 3px;", desktop_css)
-        self.assertIn("/js/equipment-details.js') }}?v=20261125-1", base_template)
+        self.assertIn("/js/equipment-details.js') }}?v=20261125-2", base_template)
 
     def test_result_history_details_are_collapsed_and_rewards_remain_visible(self):
         env = Environment(loader=FileSystemLoader(ROOT / "app/templates"), autoescape=True)

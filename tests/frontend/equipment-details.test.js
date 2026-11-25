@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = await readFile(new URL("../../app/static/js/equipment-details.js", import.meta.url), "utf8");
 const mainSource = await readFile(new URL("../../app/static/js/main.js", import.meta.url), "utf8");
 
-function mountDetails({ mobile = false, viewportWidth = mobile ? 390 : 1024, viewportHeight = 768 } = {}) {
+function mountDetails({ mobile = false, viewportWidth = mobile ? 390 : 1024, viewportHeight = 768, generic = false } = {}) {
   const makeClassList = () => {
     const names = new Set();
     return {
@@ -25,12 +25,15 @@ function mountDetails({ mobile = false, viewportWidth = mobile ? 390 : 1024, vie
   const document = {
     activeElement: {},
     querySelectorAll: (selector) => selector === "[data-equipment-swap]" ? [] : currentTriggers,
+    getElementById: (id) => generic && id === "generic-equipment-details" ? panel : null,
   };
   trigger.dataset = {};
   trigger.attributes = new Map();
   trigger.setAttribute = (key, value) => trigger.attributes.set(key, value);
+  trigger.getAttribute = (key) => trigger.attributes.get(key) ?? null;
+  if (generic) trigger.attributes.set("aria-controls", "generic-equipment-details");
   trigger.getBoundingClientRect = () => ({ left: 120, right: 180, top: 160, bottom: 190 });
-  trigger.closest = () => slot;
+  trigger.closest = () => generic ? null : slot;
   trigger.contains = (node) => node === trigger;
   trigger.matches = (selector) => selector === ":hover" && Boolean(trigger.hovering);
   trigger.focus = () => { document.activeElement = trigger; trigger.dispatch("focus"); };
@@ -138,5 +141,16 @@ test("equipment details initialize after partial navigation and remain idempoten
   dynamic.trigger.dispatch("click");
   assert.equal(dynamic.panel.hidden, false);
   assert.equal(dynamic.trigger.attributes.get("aria-expanded"), "true");
-  assert.match(mainSource, /currentMain\.innerHTML = incomingMain\.innerHTML;\s*initializeUpdateChecks\(currentMain\);\s*initializeGameGuideForContent\(parsedDocument, currentMain\);\s*window\.initializeEquipmentDetails\?\.\(currentMain\);/);
+  assert.match(mainSource, /currentMain\.innerHTML = incomingMain\.innerHTML;\s*initializeClassGuideIndex\(currentMain\);\s*window\.initializeWorkshopSupplyControls\?\.\(currentMain\);\s*initializeDockPurchaseEstimates\(currentMain\);\s*initializeUpdateChecks\(currentMain\);\s*initializeGameGuideForContent\(parsedDocument, currentMain\);\s*window\.initializeEquipmentDetails\?\.\(currentMain\);/);
+});
+
+test("the shared equipment detail also opens a template panel outside a roster slot", () => {
+  const ui = mountDetails({ generic: true, mobile: true });
+  ui.trigger.dispatch("click");
+  assert.equal(ui.panel.hidden, false);
+  assert.equal(ui.panel.style.values.left, "15px");
+  assert.equal(ui.trigger.attributes.get("aria-expanded"), "true");
+  ui.panel.dispatch("keydown", { key: "Escape", preventDefault() {} });
+  assert.equal(ui.panel.hidden, true);
+  assert.equal(ui.document.activeElement, ui.trigger);
 });
