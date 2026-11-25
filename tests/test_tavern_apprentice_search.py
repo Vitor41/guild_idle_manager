@@ -151,6 +151,7 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             self.assertIn('name="expected_hire_cost"', html)
             self.assertIn("Buscar outro Aprendiz (", html)
             self.assertIn("Contratar Aprendiz", html)
+            self.assertNotIn("candidate-search-form__reason", html)
             available_hire_form = html.split('action="/tavern/hire-apprentice"', 1)[1].split("</form>", 1)[0]
             self.assertNotIn("disabled", available_hire_form)
             resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == self.guild_id))
@@ -159,6 +160,7 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             resources.gold = 0
             db.commit()
             blocked_html = tavern_index(self._get_request(), db, player).body.decode("utf-8")
+            self.assertIn("Indisponível: faltam 35 ouro para buscar outro Aprendiz.", blocked_html)
             hire_form = blocked_html.split('action="/tavern/hire-apprentice"', 1)[1].split("</form>", 1)[0]
             self.assertIn("disabled", hire_form)
             self.assertIn("faltam", hire_form)
@@ -171,10 +173,14 @@ class TavernApprenticeSearchTests(unittest.TestCase):
                 unknown_balance_html = tavern_index(self._get_request(), db, player).body.decode("utf-8")
             unknown_hire_form = unknown_balance_html.split('action="/tavern/hire-apprentice"', 1)[1].split("</form>", 1)[0]
             unknown_bulk_form = unknown_balance_html.split('action="/tavern/hire-apprentices-bulk"', 1)[1].split("</form>", 1)[0]
+            unknown_search_form = unknown_balance_html.split('action="/tavern/search-apprentice"', 1)[1].split("</form>", 1)[0]
             self.assertIn("saldo de ouro não informado", unknown_hire_form)
             self.assertIn("saldo de ouro não informado", unknown_bulk_form)
+            self.assertIn("saldo de ouro não informado", unknown_balance_html)
+            self.assertIn("disabled", unknown_search_form)
             self.assertNotIn("faltam", unknown_hire_form)
             self.assertNotIn("faltam", unknown_bulk_form)
+            self.assertNotIn("faltam 35 ouro para buscar outro Aprendiz", unknown_balance_html)
 
     def test_reload_keeps_preview_and_double_post_only_charges_once(self):
         with SessionLocal() as db:

@@ -85,9 +85,11 @@
           <button class="secondary-button" type="submit" data-pending-label="Buscando…" {% if not resources or resources.gold < apprentice_search_cost %}disabled{% endif %}>Buscar outro Aprendiz ({{ apprentice_search_cost }} ouro)</button>
           <p class="note" role="status" aria-live="polite" data-apprentice-search-status></p>
         </form>
-        {% if not resources or resources.gold < apprentice_search_cost %}
-          {% set search_shortfall = apprentice_search_cost - (resources.gold if resources else 0) %}
-          <p class="note">Indisponível: faltam {{ search_shortfall }} ouro para buscar outro Aprendiz.</p>
+        {% if not resources %}
+          <p class="note candidate-search-form__reason">Indisponível: saldo de ouro não informado; confira os recursos antes de buscar outro Aprendiz.</p>
+        {% elif resources.gold < apprentice_search_cost %}
+          {% set search_shortfall = apprentice_search_cost - resources.gold %}
+          <p class="note candidate-search-form__reason">Indisponível: faltam {{ search_shortfall }} ouro para buscar outro Aprendiz.</p>
         {% endif %}
         <form class="form-stack candidate-hire-form" method="post" action="/tavern/hire-apprentice" data-tavern-candidate-price-mutation>
           <p class="note candidate-hire-form__summary">Contratar este candidato · <strong>{{ current_apprentice_final_cost }} ouro</strong> · Ocupação {{ mercenary_count }}/{{ mercenary_limit }}</p>
