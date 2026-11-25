@@ -217,6 +217,28 @@ def _portal_has_pending_cpu_cycle(db: Session, event: RegionalEvent) -> bool:
     return _utc(event.created_at_utc) <= cycle_start < _utc(event.expires_at_utc)
 
 
+def _portal_blocks_spawn_evaluation(
+    db: Session,
+    campaign_id: str,
+    region_code: str,
+    at: datetime,
+) -> bool:
+    """Match the portal generator's block after expired events are normalized."""
+    current = _utc(at)
+    blocker = db.scalar(select(RegionalEvent.id).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEvent.event_type == "portal",
+        RegionalEvent.region_code == region_code,
+        RegionalEvent.status.in_(("active", "in_progress")),
+        RegionalEvent.created_at_utc <= current,
+        or_(
+            RegionalEvent.status == "in_progress",
+            RegionalEvent.expires_at_utc > current,
+        ),
+    ).limit(1))
+    return blocker is not None
+
+
 def _finalize_portal_event_when_ready(db: Session, event: RegionalEvent, now: datetime) -> None:
     if _has_in_progress_activity(db, event.id):
         _mark_event_waiting_for_started_activities(db, event)
@@ -787,13 +809,9 @@ def portal_spawn_status_for_region(
             "unavailable_label": "Sem conteúdo elegível para a próxima tentativa.",
         }
 
-    active_portal = db.scalar(select(RegionalEvent.id).where(
-        RegionalEvent.campaign_id == campaign.campaign_id,
-        RegionalEvent.event_type == "portal",
-        RegionalEvent.region_code == region_code,
-        RegionalEvent.status.in_(("active", "in_progress")),
-        RegionalEvent.expires_at_utc > current,
-    ).limit(1))
+    active_portal = _portal_blocks_spawn_evaluation(
+        db, campaign.campaign_id, region_code, current,
+    )
     cooldown_until = _utc(state.cooldown_until_utc) if state.cooldown_until_utc else None
     cooldown_active = cooldown_until is not None and current < cooldown_until
     player_state = db.scalar(select(RegionalGuildState).where(
@@ -814,7 +832,7 @@ def portal_spawn_status_for_region(
     base_chance_pp, explorer_bonus_pp, effective_chance_pp = rules.chance_percentages(
         failure_stacks, explorer_bonus_pp,
     )
-    if active_portal is not None:
+    if active_portal:
         next_attempt_label = "Há um portal ativo; a próxima tentativa aguarda uma Vigília elegível."
     elif cooldown_active:
         next_attempt_label = "Nova tentativa após o cooldown, em uma Vigília elegível."
@@ -823,7 +841,7 @@ def portal_spawn_status_for_region(
 
     return {
         "available": True,
-        "reason_code": "active_portal" if active_portal is not None else "cooldown" if cooldown_active else "eligible_next_cycle",
+        "reason_code": "active_portal" if active_portal else "cooldown" if cooldown_active else "eligible_next_cycle",
         "next_attempt_label": next_attempt_label,
         "failure_stacks": failure_stacks,
         "maximum_failure_stacks": rules.max_stack(),
@@ -925,14 +943,9 @@ def _create_versioned_cycle_portals_locked(
             state.updated_at_utc = cycle_end
             continue
 
-        active_event = db.scalar(select(RegionalEvent.id).where(
-            RegionalEvent.campaign_id == campaign_id,
-            RegionalEvent.event_type == "portal",
-            RegionalEvent.region_code == region.region_code,
-            RegionalEvent.status.in_(("active", "in_progress")),
-            RegionalEvent.created_at_utc <= cycle_end,
-        ).limit(1))
-        if active_event is not None:
+        if _portal_blocks_spawn_evaluation(
+            db, campaign_id, region.region_code, cycle_end,
+        ):
             result = "active_portal"
         elif state.cooldown_until_utc is not None and cycle_end < _utc(state.cooldown_until_utc):
             result = "cooldown"

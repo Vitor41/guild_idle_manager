@@ -60,6 +60,7 @@ from app.services.regional_cycle_service import (
     REGIONS,
     VIGILIA_RULES_VERSION,
     VIGILIA_V9_EVENT_RULES_VERSION,
+    VIGILIA_V9_RULES_VERSION,
     _cpu_portal_offer_for_guild,
     regional_outcome_impact,
 )
@@ -350,6 +351,148 @@ class RegionalEventServiceTests(unittest.TestCase):
                 (state.failure_stacks, state.cooldown_until_utc, state.last_evaluated_cycle_number),
                 before,
             )
+
+    def test_pending_expired_portal_still_blocks_status_and_generator_without_rng(self):
+        with SessionLocal() as db:
+            campaign = db.get(CampaignMetadata, self.campaign_id)
+            campaign.home_region = "Vale da Fronteira"
+            region_code = "vale-fronteira"
+            cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=10,
+                starts_at_utc=self.now - timedelta(hours=6),
+                ends_at_utc=self.now,
+                seed="pending-expired-portal-cycle",
+                rules_version=VIGILIA_V9_RULES_VERSION,
+                player_level_snapshot=1,
+                portal_spawn_rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
+            )
+            region = RegionalRegionState(
+                campaign_id=self.campaign_id,
+                region_code=region_code,
+                region_name="Vale da Fronteira",
+                threat=80,
+            )
+            template = DungeonTemplate(
+                name="Chefe elegível após prazo", description="",
+                content_type="boss", level_band="1-20", recommended_level=1,
+                biome="portal", difficulty="normal", duration_seconds=3600,
+                base_gold_reward=1, base_xp_reward=1, base_success_chance=50,
+                min_party_size=1, max_party_size=1, required_guild_level=1,
+                required_min_mercenary_level=1, is_active=True,
+            )
+            state = RegionalPortalSpawnState(
+                campaign_id=self.campaign_id,
+                region_code=region_code,
+                failure_stacks=2,
+                last_evaluated_cycle_number=9,
+                cooldown_until_utc=self.now - timedelta(hours=1),
+                rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
+                created_at_utc=self.now - timedelta(hours=5),
+                updated_at_utc=self.now - timedelta(hours=5),
+            )
+            db.add_all([cycle, region, template, state])
+            db.flush()
+            event = RegionalEvent(
+                campaign_id=self.campaign_id,
+                event_type="portal",
+                region_code=region_code,
+                trigger_cycle_number=9,
+                rules_version=VIGILIA_V9_EVENT_RULES_VERSION,
+                seed="expired-window-pending-portal",
+                status="in_progress",
+                dungeon_template_id=template.id,
+                created_at_utc=self.now - timedelta(hours=5),
+                expires_at_utc=self.now - timedelta(hours=2),
+                summary_json="{}",
+            )
+            db.add(event)
+            db.flush()
+            activity = RegionalEventActivity(
+                event_id=event.id,
+                guild_state_id=self.guild_state_id,
+                source_type="cpu_portal",
+                source_run_id=7701,
+                status="in_progress",
+                started_at_utc=self.now - timedelta(hours=1),
+                due_at_utc=self.now + timedelta(hours=30),
+                snapshot_json="{}",
+            )
+            db.add(activity)
+            db.flush()
+            state_before = (
+                state.failure_stacks,
+                state.cooldown_until_utc,
+                state.last_evaluated_cycle_number,
+                state.last_result,
+            )
+
+            with (
+                patch("app.services.regional_event_service._versioned_portal_boss_pool",
+                      return_value=([template], True)),
+                patch("app.services.regional_event_service._native_portal_boss_pool",
+                      return_value=[template]),
+                patch("app.services.regional_event_service._rng",
+                      side_effect=AssertionError("portal blocker must not consume RNG")) as rng,
+            ):
+                status = portal_spawn_status_for_region(
+                    db, campaign, cycle, region_code, self.now,
+                )
+                self.assertEqual(status["reason_code"], "active_portal")
+                self.assertIn("portal ativo", status["next_attempt_label"])
+                self.assertEqual(
+                    (state.failure_stacks, state.cooldown_until_utc,
+                     state.last_evaluated_cycle_number, state.last_result),
+                    state_before,
+                )
+                self.assertEqual((event.status, activity.status), ("in_progress", "in_progress"))
+
+                create_cycle_portals(db, self.campaign_id, cycle, [region])
+                self.assertEqual(rng.call_count, 0)
+
+            self.assertEqual(state.last_result, "active_portal")
+            self.assertEqual(state.last_evaluated_cycle_number, cycle.cycle_number)
+            self.assertEqual(state.failure_stacks, state_before[0])
+            self.assertEqual(state.cooldown_until_utc, state_before[1])
+            self.assertEqual((event.status, activity.status), ("in_progress", "in_progress"))
+
+            activity.status = "resolved"
+            event.status = "resolved"
+            next_cycle = RegionalCycle(
+                campaign_id=self.campaign_id,
+                cycle_number=11,
+                starts_at_utc=self.now,
+                ends_at_utc=self.now + timedelta(hours=6),
+                seed="pending-expired-portal-next-cycle",
+                rules_version=VIGILIA_V9_RULES_VERSION,
+                player_level_snapshot=1,
+                portal_spawn_rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
+            )
+            db.add(next_cycle)
+            db.flush()
+
+            class RollFailure:
+                @staticmethod
+                def random():
+                    return 0.99
+
+            with (
+                patch("app.services.regional_event_service._versioned_portal_boss_pool",
+                      return_value=([template], True)),
+                patch("app.services.regional_event_service._native_portal_boss_pool",
+                      return_value=[template]),
+                patch("app.services.regional_event_service._rng",
+                      return_value=RollFailure()) as rng,
+            ):
+                after_resolution = portal_spawn_status_for_region(
+                    db, campaign, next_cycle, region_code,
+                    self.now + timedelta(hours=6),
+                )
+                self.assertEqual(after_resolution["reason_code"], "eligible_next_cycle")
+                create_cycle_portals(db, self.campaign_id, next_cycle, [region])
+                self.assertEqual(rng.call_count, 1)
+            self.assertEqual(state.last_result, "rolled_failure")
+            self.assertEqual(state.failure_stacks, state_before[0] + 1)
 
     def test_current_rules_combine_low_threat_portal_and_rebellion_without_changing_pressure(self):
         class FixedRng:
