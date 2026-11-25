@@ -178,6 +178,21 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("@media (prefers-reduced-motion: reduce)", theme)
         self.assertIn(".regional-event-notice *", theme)
 
+    def test_regional_events_show_authoritative_portal_attempt_breakdown(self):
+        route = (ROOT / "app" / "routes" / "regional_routes.py").read_text(encoding="utf-8")
+        template = (ROOT / "app" / "templates" / "regional" / "events.html").read_text(encoding="utf-8")
+
+        self.assertIn("portal_spawn_status_for_region(", route)
+        self.assertIn("portal_spawn_status.effective_chance_pp", template)
+        self.assertIn("portal_spawn_status.base_chance_pp", template)
+        self.assertIn("portal_spawn_status.failure_bonus_pp", template)
+        self.assertIn("portal_spawn_status.explorer_bonus_pp", template)
+        self.assertIn("portal_spawn_status.maximum_failure_stacks", template)
+        self.assertIn("portal_spawn_status.failure_cap_reached", template)
+        self.assertIn("portal_spawn_status.cooldown_until_iso", template)
+        self.assertIn("portal_spawn_status.unavailable_label", template)
+        self.assertIn("não garante o surgimento", template)
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
