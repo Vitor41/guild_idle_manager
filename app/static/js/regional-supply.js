@@ -59,7 +59,7 @@ const syncPreparedStartButton = (form) => {
 };
 
 window.initializeRegionalSupply = (root = document) => {
-  root.querySelectorAll(".supply-preparation-progress").forEach((progressBox) => {
+  root.querySelectorAll('form[data-supply-quote-url] .supply-preparation-progress').forEach((progressBox) => {
     if (progressBox.dataset.regionalTimerInitialized === "true") return;
     progressBox.dataset.regionalTimerInitialized = "true";
     const time = progressBox.querySelector("time[data-ends-at]");

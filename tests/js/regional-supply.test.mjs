@@ -110,7 +110,7 @@ function makeEnvironment({
   };
   const root = {
     querySelectorAll(selector) {
-      if (selector === ".supply-preparation-progress") return prepared ? [progressBox] : [];
+      if (selector === 'form[data-supply-quote-url] .supply-preparation-progress') return prepared ? [progressBox] : [];
       if (selector === "form[data-supply-quote-url]") return [form];
       return [];
     },
