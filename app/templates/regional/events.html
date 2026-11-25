@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% from "components/drop_preview.html" import drop_preview with context %}
+{% from "components/regional_offer_actions.html" import offer_action_form with context %}
+{% from "components/regional_event_history.html" import event_history with context %}
 {% block title %}Eventos Regionais · Guild Idle Manager{% endblock %}
 {% block content %}
 <section class="evolution-page regional-events-page" aria-labelledby="regional-events-title" data-regional-events data-section="{{ event_section }}">
@@ -18,14 +20,24 @@
   <nav class="classes-guide-index regional-events-index" aria-label="Seções de eventos regionais">
     <a href="#regional-portals" {% if event_section == 'portals' %}aria-current="location"{% endif %}>Portais</a>
     <a href="#regional-rebellions" {% if event_section == 'rebellions' %}aria-current="location"{% endif %}>Rebeliões</a>
-    <a href="#regional-event-history" {% if event_section == 'history' %}aria-current="location"{% endif %}>Histórico</a>
   </nav>
 
   <section class="evolution-section" id="regional-portals" aria-labelledby="regional-portals-title" tabindex="-1">
     <div class="evolution-section__heading">
       <div><p class="evolution-eyebrow">ENTRADA LIMITADA</p><h2 id="regional-portals-title">Portais</h2><p>Uma equipe pode iniciar enquanto a janela está aberta. Se começar no prazo, continua até terminar.</p></div>
-      <span class="evolution-muted">{{ portal_cards|length }} portal(is) na região natal</span>
+      <span class="evolution-muted">{{ portal_cards|length }} portal(is) atual(is) {% if central_events_view %}na campanha{% else %}na região natal{% endif %}</span>
     </div>
+    {% if portal_spawn_status and portal_spawn_status.available %}
+      <details class="portal-next-attempt">
+        <summary>Próxima tentativa</summary>
+        <p>{{ portal_spawn_status.next_attempt_label }}</p>
+        <p><strong>Chance efetiva: {{ portal_spawn_status.effective_chance_pp }}%</strong> = {{ portal_spawn_status.base_chance_pp }}% base + {{ portal_spawn_status.failure_bonus_pp }} p.p. por falhas + {{ portal_spawn_status.explorer_bonus_pp }} p.p. dos Exploradores.</p>
+        <p>{{ portal_spawn_status.failure_stacks }} falha(s) consecutiva(s) de {{ portal_spawn_status.maximum_failure_stacks }}.</p>
+        {% if portal_spawn_status.failure_cap_reached %}<p class="evolution-status evolution-status--warning">Teto de falhas atingido</p>{% endif %}
+        {% if portal_spawn_status.cooldown_until_iso %}<p>Cooldown até <time data-evolution-countdown="{{ portal_spawn_status.cooldown_until_iso }}" datetime="{{ portal_spawn_status.cooldown_until_iso }}">{{ portal_spawn_status.cooldown_until_label }}</time>.</p>{% endif %}
+        <small>A chance vale para uma Vigília elegível e não garante o surgimento. Portais podem continuar surgindo enquanto o jogo está fechado.</small>
+      </details>
+    {% elif portal_spawn_status %}<p class="evolution-status evolution-status--muted">{{ portal_spawn_status.unavailable_label }}</p>{% endif %}
     {% if portal_cards %}
       <div class="evolution-future-grid">
         {% for card in portal_cards %}
@@ -33,15 +45,27 @@
             <img src="{{ evolution_art.illustrations.dimensional_portal.src }}" width="{{ evolution_art.illustrations.dimensional_portal.width }}" height="{{ evolution_art.illustrations.dimensional_portal.height }}" alt="" loading="lazy">
             <div>
               <img src="{{ evolution_art.sprites.portal_gate['64'] }}" width="48" height="48" alt="">
-              <span class="evolution-status {% if card.entry_state == 'available' %}evolution-status--ready{% else %}evolution-status--muted{% endif %}">{{ card.entry_state_label }}</span>
+              <span class="evolution-status {% if card.entry_state == 'available' %}evolution-status--ready{% elif card.event.status == 'in_progress' %}evolution-status--active{% else %}evolution-status--muted{% endif %}">{{ card.entry_state_label }}</span>
               <h3>{{ card.template.name if card.template else 'Portal instável' }}</h3>
               <p><strong>Região:</strong> {{ card.region_name }}</p>
-              <p><strong>Prazo:</strong> <time data-evolution-countdown="{{ card.expires_at_iso }}" datetime="{{ card.expires_at_iso }}">{{ card.event.expires_at_utc.strftime('%d/%m/%Y às %H:%M UTC') }}</time></p>
+              <p><strong>Prazo de entrada:</strong> <time data-evolution-countdown="{{ card.expires_at_iso }}" datetime="{{ card.expires_at_iso }}">{{ card.event.expires_at_utc.strftime('%d/%m/%Y às %H:%M UTC') }}</time></p>
               <p>{{ card.entry_state_description }}</p>
               {{ drop_preview(card.visible_drops, card.drop_preview_available, card.drop_chance_basis, "Loot do portal") }}
-              {% if card.entered %}
-                <span class="evolution-status evolution-status--active">{% if card.participant.status == 'resolved' %}Atividade do portal concluída{% else %}Atividade do portal em andamento{% endif %}</span>
-              {% elif card.template and not card.action_blocker %}
+              {% if card.activity_due %}
+                <span class="evolution-status evolution-status--ready">Resultado disponível para coleta</span>
+                <p>Sua equipe terminou em <time datetime="{{ card.activity_due_iso }}">{{ card.own_run.ends_at.strftime('%d/%m/%Y às %H:%M UTC') }}</time>. O resultado ainda não foi coletado.</p>
+                <a class="evolution-button evolution-button--primary" href="/dungeons">Abrir masmorras para coletar</a>
+              {% elif card.activity_collected %}
+                <span class="evolution-status evolution-status--muted">Resultado coletado · {{ 'sucesso' if card.own_run.success else 'falha' }}</span>
+              {% elif card.entered and card.own_activity and card.own_run %}
+                <span class="evolution-status evolution-status--active">Equipe em andamento</span>
+                <p>Prazo da equipe: <time data-evolution-countdown="{{ card.activity_due_iso }}" datetime="{{ card.activity_due_iso }}">{{ card.own_run.ends_at.strftime('%d/%m/%Y às %H:%M UTC') }}</time>.</p>
+              {% elif card.event.status == 'in_progress' %}
+                <span class="evolution-status evolution-status--active">Atividades iniciadas continuam</span>
+                <p>A janela de entrada encerrou; as equipes que começaram no prazo ainda podem concluir suas atividades.</p>
+              {% elif card.entered %}
+                <span class="evolution-status evolution-status--muted">Entrada utilizada; resultado da atividade indisponível.</span>
+              {% elif card.event.status == 'active' and card.entry_state == 'available' and card.template and not card.action_blocker %}
                 <form method="post" action="/regional/events/{{ card.event.id }}/portals/start" class="evolution-dialog__action" data-supply-quote-url="/regional/events/{{ card.event.id }}/portals/supply-quote">
                   <input type="hidden" name="return_to" value="/regional/events?section=portals#regional-event-{{ card.event.id }}">
                   <fieldset>
@@ -57,7 +81,8 @@
           </article>
         {% endfor %}
       </div>
-    {% else %}<p class="evolution-empty">Nenhum portal está aberto na região natal.</p>{% endif %}
+    {% else %}<p class="evolution-empty">{% if central_events_view %}Nenhum portal atual está registrado na campanha.{% else %}Nenhum portal está aberto na região natal.{% endif %}</p>{% endif %}
+    {{ event_history(portal_history_cards) }}
   </section>
 
   <section class="evolution-section" id="regional-rebellions" aria-labelledby="regional-rebellions-title" tabindex="-1">
@@ -67,7 +92,7 @@
         <img src="{{ evolution_art.illustrations.regional_rebellion.src }}" width="{{ evolution_art.illustrations.regional_rebellion.width }}" height="{{ evolution_art.illustrations.regional_rebellion.height }}" alt="" loading="lazy">
         <div>
           <img src="{{ evolution_art.sprites.rebellion_shield['64'] }}" width="48" height="48" alt="">
-          <span class="evolution-status {% if rebellion_participant and rebellion_participant.status in ['accepted', 'participating'] %}evolution-status--ready{% elif rebellion_event.status == 'in_progress' %}evolution-status--active{% else %}evolution-status--warning{% endif %}">Rebelião · {{ rebellion_region_name }}{% if rebellion_event.status == 'in_progress' %} · concluindo atividades{% endif %}</span>
+          <span class="evolution-status {% if rebellion_participant and rebellion_participant.status in ['accepted', 'participating'] %}evolution-status--ready{% elif rebellion_event.status == 'in_progress' %}evolution-status--active{% else %}evolution-status--warning{% endif %}">{% if rebellion_invite_expired %}Convite expirado{% else %}Rebelião · {{ rebellion_region_name }}{% endif %}{% if rebellion_event.status == 'in_progress' %} · concluindo atividades{% endif %}</span>
           <h3>Convite para a defesa regional</h3>
           {% if rebellion_event.status == 'in_progress' %}
             <p>O prazo terminou. As atividades iniciadas dentro da janela continuam e serão incluídas no resultado; novas entradas não são aceitas.</p>
@@ -75,7 +100,7 @@
             <p>Responda até <time data-evolution-countdown="{{ rebellion_priority_ends_at_iso }}" datetime="{{ rebellion_priority_ends_at_iso }}">{{ rebellion_event.priority_ends_at_utc.strftime('%d/%m/%Y às %H:%M UTC') }}</time>. Se aceitar, a janela de atividade começa após a prioridade. Se delegar ou não responder, a CPU recebe o período de atividade. O prazo continua offline.</p>
           {% elif rebellion_participant.status in ['accepted', 'participating'] %}
             <p>Convite aceito. Sua guilda pode participar até <time data-evolution-countdown="{{ rebellion_expires_at_iso }}" datetime="{{ rebellion_expires_at_iso }}">{{ rebellion_event.expires_at_utc.strftime('%d/%m/%Y às %H:%M UTC') }}</time>. {% if rebellion_priority_elapsed %}A CPU também pode participar.{% else %}A prioridade da guilda termina em {{ rebellion_event.priority_ends_at_utc.strftime('%d/%m/%Y às %H:%M UTC') }}.{% endif %} O prazo continua offline.</p>
-          {% else %}<p>Convite {{ 'delegado à CPU' if rebellion_participant.status == 'declined' else rebellion_participant.status }}. A janela termina em {{ rebellion_event.expires_at_utc.strftime('%d/%m/%Y às %H:%M UTC') }}.</p>
+          {% else %}<p>{% if rebellion_invite_expired %}Você não respondeu dentro do prazo; a CPU recebeu esta defesa.{% else %}Convite {{ 'delegado à CPU' if rebellion_participant.status == 'declined' else rebellion_participant.status }}.{% endif %} A janela termina em {{ rebellion_event.expires_at_utc.strftime('%d/%m/%Y às %H:%M UTC') }}.</p>
           {% endif %}
 
           {% if rebellion_event.status == 'active' and (not rebellion_participant or rebellion_participant.status == 'invited') %}
@@ -84,62 +109,33 @@
               <form method="post" action="/regional/events/{{ rebellion_event.id }}/decision"><input type="hidden" name="return_to" value="/regional/events?section=rebellions#regional-event-{{ rebellion_event.id }}"><button class="evolution-button evolution-button--secondary" type="submit" name="decision" value="decline">Delegar à CPU</button></form>
             </div>
           {% elif rebellion_participant and rebellion_participant.status in ['accepted', 'participating'] and rebellion_event.status == 'active' %}
-            {% if rebellion_event.region_code == home_region_code %}
-              <p>As ofertas da região natal também contam para esta rebelião.</p>
-              <a class="evolution-button evolution-button--secondary" href="/regional#regional-board" data-async-navigation>Escolher uma atividade da Vigília</a>
-            {% elif rebellion_offers %}
+            {% if rebellion_offers %}
               <div class="evolution-offer-group"><h3>Atividades disponíveis</h3><div class="evolution-offer-grid">
                 {% for offer in rebellion_offers %}
                   <article class="evolution-offer-card">
                     <div class="evolution-offer-card__heading"><span class="evolution-rank">{{ offer.rank }}</span><div><h4>{{ offer.name_snapshot }}</h4><small>{{ offer.duration_seconds_snapshot // 60 }} min · chance base {{ offer.success_chance_snapshot }}%</small></div></div>
                     <p>{{ offer.description_snapshot or 'Atividade disponível durante a rebelião.' }}</p>
                     <p>Grupo {{ offer.min_party_size_snapshot }}–{{ offer.max_party_size_snapshot }} · nível de guilda {{ offer.required_guild_level_snapshot }}+</p>
-                    {% if offer.status == 'supply_preparing' %}
-                      <p class="evolution-status evolution-status--active">Suprimento em preparo</p><a class="evolution-button evolution-button--secondary" href="/regional#regional-board" data-async-navigation>Continuar na Vigília Regional</a>
-                    {% elif guild.level >= offer.required_guild_level_snapshot %}
-                      <form method="post" action="/regional/offers/{{ offer.id }}/start" class="evolution-dialog__action">
-                        <input type="hidden" name="return_to" value="/regional/events?section=rebellions#regional-event-{{ rebellion_event.id }}">
-                        <fieldset><legend>Escolha a equipe</legend>{% for mercenary in available_mercenaries %}<label><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}"> {{ mercenary.name }} · nível {{ mercenary.level }}</label>{% else %}<p>Nenhum mercenário disponível.</p>{% endfor %}</fieldset>
-                        <button class="evolution-button evolution-button--primary" type="submit" name="supply_mode" value="none">Participar sem suprimento</button>
-                      </form>
+                    {% if guild.level >= offer.required_guild_level_snapshot %}
+                      {{ offer_action_form(offer, available_mercenaries, '/regional/events?section=rebellions#regional-event-' ~ rebellion_event.id, true) }}
                     {% else %}<p class="evolution-status evolution-status--muted">Exige nível mínimo de guilda {{ offer.required_guild_level_snapshot }}.</p>{% endif %}
                   </article>
                 {% endfor %}
               </div></div>
-            {% else %}<p class="evolution-empty">Não há ofertas livres nesta Vigília. Consulte novamente após o próximo ciclo.</p>{% endif %}
+            {% else %}<p class="evolution-empty">Não há ofertas livres nesta Vigília.</p>{% endif %}
           {% elif rebellion_event.status == 'in_progress' %}<p class="evolution-empty">Aguardando a conclusão das atividades que começaram dentro do prazo.</p>
           {% elif rebellion_participant and rebellion_participant.status == 'declined' %}<p>A CPU recebeu esta defesa; sua guilda não pode iniciar novas atividades neste convite.</p>{% endif %}
         </div>
       </article>
     {% else %}<p class="evolution-empty">Nenhuma rebelião aguarda resposta ou participação.</p>{% endif %}
-  </section>
-
-  <section class="evolution-section" id="regional-event-history" aria-labelledby="regional-event-history-title" tabindex="-1">
-    <div class="evolution-section__heading"><div><p class="evolution-eyebrow">REGISTROS DA CAMPANHA</p><h2 id="regional-event-history-title">Histórico</h2><p>Eventos encerrados e contribuições continuam consultáveis.</p></div></div>
-    {% if event_history_cards %}
-      <div class="evolution-report-list">
-        {% for card in event_history_cards %}
-          <article class="evolution-report-row" id="regional-event-{{ card.event.id }}" tabindex="-1">
-            <div>
-              <span class="evolution-status evolution-status--muted">{{ 'Portal' if card.event.event_type == 'portal' else 'Rebelião' }} · {{ card.status_label }}</span>
-              <h3>{{ card.region_name }}</h3>
-              <p>{% if card.summary.get('started_activities_may_finish') %}Prazo encerrado; atividades iniciadas continuam até a conclusão.{% elif card.summary.get('activities_completed_after_deadline', 0) %}{{ card.summary.get('activities_completed_after_deadline') }} atividade(s) foi(ram) concluída(s) depois do prazo.{% elif card.summary.get('result') %}Resultado: {{ 'sucesso' if card.summary.get('result') == 'success' else 'falha' }}.{% else %}{{ card.reason_label }}{% endif %}</p>
-              <details class="event-history-details"><summary>Ver contribuição e resultado</summary>
-                <dl><div><dt>Região</dt><dd>{{ card.region_name }}</dd></div><div><dt>Ciclo</dt><dd>{{ card.event.trigger_cycle_number + 1 }}</dd></div><div><dt>Resultado geral</dt><dd>{% if card.summary.get('result') %}{{ 'Sucesso' if card.summary.get('result') == 'success' else 'Falha' }}{% elif card.event.status == 'expired' %}Expirado sem atividade resolvida{% else %}{{ card.status_label }}{% endif %}</dd></div>{% if card.summary.get('aggregate') %}<div><dt>Atividades</dt><dd>{{ card.summary.aggregate.get('successes', 0) }} sucessos · {{ card.summary.aggregate.get('failures', 0) }} falhas</dd></div>{% endif %}</dl>
-                <h4>Contribuição por guilda</h4>{% if card.contributions %}<ul>{% for contribution in card.contributions %}<li><strong>{{ contribution.guild }}</strong> · contribuição {{ contribution.contribution }} · {{ contribution.successes }} sucesso(s) · {{ contribution.failures }} falha(s)</li>{% endfor %}</ul>{% else %}<p>Nenhuma atividade individual foi registrada neste evento.</p>{% endif %}
-              </details>
-            </div>
-          </article>
-        {% endfor %}
-      </div>
-    {% else %}<p class="evolution-empty">Nenhum evento foi registrado nesta campanha.</p>{% endif %}
+    {{ event_history(rebellion_history_cards) }}
   </section>
 </section>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const section = document.querySelector('[data-regional-events]')?.dataset.section;
   if (!window.location.hash && section && section !== 'portals') {
-    const target = document.getElementById(`regional-${section === 'history' ? 'event-history' : section}`);
+    const target = document.getElementById(`regional-${section}`);
     if (target) target.scrollIntoView({ block: 'start' });
   }
 });

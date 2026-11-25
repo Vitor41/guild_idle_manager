@@ -292,13 +292,108 @@ class NavigationWorkStatusTests(unittest.TestCase):
             self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
         )
 
-        self.assertEqual(result["regional_events"]["ready"], 2)
-        self.assertEqual(result["regional_events"]["active"], 1)
+        self.assertEqual(result["regional_events"]["ready"], 1)
+        self.assertEqual(result["regional_events"]["active"], 0)
         self.assertEqual(result["regional_events"]["state"], "ready")
         self.assertEqual(
             (state.id, portal.status, rebellion.status, participant.status, active_event.status),
             before,
         )
+
+    def test_portal_indicator_requires_live_template_and_available_party(self):
+        campaign = self.db.get(CampaignMetadata, "campaign-a")
+        campaign.home_region = "Vale da Fronteira"
+        self.db.add(RegionalGuildState(
+            campaign_id="campaign-a", region_code="vale-fronteira", slot=0,
+            guild_id=self.guild.id, name=self.guild.name, profile="player", archetype="player",
+        ))
+        portal = RegionalEvent(
+            campaign_id="campaign-a", event_type="portal", region_code="vale-fronteira",
+            trigger_cycle_number=20, rules_version="regional-events-v6", seed="portal-no-route",
+            status="active", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=1),
+        )
+        self.db.add(portal)
+        self.db.flush()
+
+        unavailable = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )["regional_events"]
+        self.assertEqual((unavailable["ready"], unavailable["state"]), (0, "none"))
+
+        portal.dungeon_template_id = self.dungeon.id
+        self.db.flush()
+        no_team = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )["regional_events"]
+        self.assertEqual((no_team["ready"], no_team["state"]), (0, "none"))
+
+        second_worker = Mercenary(
+            guild_id=self.guild.id, class_id=self.mercenary_class.id, name="Equipe disponível QA",
+            power=1, vitality=1, agility=1, intelligence=1, luck=1,
+        )
+        self.db.add(second_worker)
+        self.db.flush()
+        ready = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )["regional_events"]
+        self.assertEqual((ready["ready"], ready["state"]), (1, "ready"))
+
+    def test_event_run_ready_to_collect_is_green_and_own_running_work_is_yellow(self):
+        state = RegionalGuildState(
+            campaign_id="campaign-a", region_code="north", slot=0, guild_id=self.guild.id,
+            name=self.guild.name, profile="player", archetype="player",
+        )
+        resolved_event = RegionalEvent(
+            campaign_id="campaign-a", event_type="rebellion", region_code="north",
+            trigger_cycle_number=21, rules_version="regional-events-v6", seed="ready-to-collect",
+            status="in_progress", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=1),
+        )
+        active_event = RegionalEvent(
+            campaign_id="campaign-a", event_type="rebellion", region_code="south",
+            trigger_cycle_number=22, rules_version="regional-events-v6", seed="still-running",
+            status="in_progress", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=1),
+        )
+        other_campaign_event = RegionalEvent(
+            campaign_id="campaign-b", event_type="rebellion", region_code="north",
+            trigger_cycle_number=21, rules_version="regional-events-v6", seed="other-campaign",
+            status="in_progress", created_at_utc=self.now, expires_at_utc=self.now + timedelta(hours=1),
+        )
+        self.db.add_all([state, resolved_event, active_event, other_campaign_event])
+        self.db.flush()
+        due_run = self._run(
+            DungeonRun, self.guild.id, ends_in_seconds=-1, dungeon_template_id=self.dungeon.id,
+        )
+        running_run = self._run(
+            MissionRun, self.guild.id, ends_in_seconds=60, mission_template_id=self.mission.id,
+        )
+        other_guild_run = self._run(
+            MissionRun, self.other_guild.id, ends_in_seconds=60, mission_template_id=self.mission.id,
+        )
+        self.db.flush()
+        due_activity = RegionalEventActivity(
+            event_id=resolved_event.id, guild_state_id=state.id, source_type="dungeon",
+            source_run_id=due_run.id, status="in_progress", due_at_utc=due_run.ends_at,
+        )
+        active_activity = RegionalEventActivity(
+            event_id=active_event.id, guild_state_id=state.id, source_type="mission",
+            source_run_id=running_run.id, status="in_progress", due_at_utc=running_run.ends_at,
+        )
+        cpu_activity = RegionalEventActivity(
+            event_id=other_campaign_event.id, guild_state_id=state.id, source_type="mission",
+            source_run_id=other_guild_run.id, status="in_progress", due_at_utc=other_guild_run.ends_at,
+        )
+        self.db.add_all([due_activity, active_activity, cpu_activity])
+        self.db.flush()
+
+        result = get_navigation_work_status(
+            self.db, self.guild.id, campaign_id="campaign-a", now=self.now,
+        )["regional_events"]
+
+        self.assertEqual(result["ready"], 1)
+        self.assertEqual(result["active"], 1)
+        self.assertEqual(result["state"], "ready")
+        self.assertEqual((due_activity.status, active_activity.status, cpu_activity.status),
+                         ("in_progress", "in_progress", "in_progress"))
 
 
 if __name__ == "__main__":

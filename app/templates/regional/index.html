@@ -1,28 +1,6 @@
 {% extends "base.html" %}
 {% from "components/drop_preview.html" import drop_preview with context %}
-{% macro offer_team_fieldset(offer, available_mercenaries) %}
-<fieldset>
-  <legend>Exige · Grupo mínimo–máximo: {{ offer.min_party_size_snapshot }}–{{ offer.max_party_size_snapshot }} · Nível mínimo da guilda: {{ offer.required_guild_level_snapshot }}</legend>
-  {% for prepared_mercenary in offer.unavailable_prepared_mercenaries %}
-    <input type="hidden" name="mercenary_ids" value="{{ prepared_mercenary.id }}" data-prepared-member-hidden="true">
-  {% endfor %}
-  {% for mercenary in available_mercenaries %}
-    {% set is_prepared = offer.supply_preparation_started_at_utc and mercenary.id|string in offer.prepared_mercenary_ids %}
-    <label><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}"{% if is_prepared %} checked{% endif %}> {{ mercenary.name }} · nível {{ mercenary.level }}{% if offer.supply_preparation_started_at_utc %} · {% if is_prepared %}Equipe preparada{% else %}Reforço disponível{% endif %}{% endif %}</label>
-  {% else %}
-    <p>Nenhum mercenário disponível{% if not offer.supply_preparation_started_at_utc %}. Libere alguém de uma atividade para continuar.{% else %}. A equipe preparada será exibida abaixo.{% endif %}</p>
-  {% endfor %}
-</fieldset>
-{% if offer.supply_preparation_started_at_utc %}
-  {% if not offer.prepared_team_valid or (offer.prepared_team_issue and not offer.unavailable_prepared_mercenaries) %}
-    <p class="evolution-notice evolution-notice--error prepared-team-status" role="alert">{{ offer.prepared_team_issue }}</p>
-  {% elif offer.unavailable_prepared_mercenaries %}
-    <p class="evolution-notice evolution-notice--error prepared-team-status" role="status">Equipe preparada indisponível: {% for prepared_mercenary in offer.unavailable_prepared_mercenaries %}{% if not loop.first %}, {% endif %}{{ prepared_mercenary.name }}{% endfor %}. Libere esses integrantes antes de iniciar.</p>
-  {% else %}
-    <p class="subtle-note prepared-team-status" data-prepared-team-status role="status" aria-live="polite">Equipe preparada pré-selecionada. O bônus exige a equipe exata; com reforços, inicie sem suprimento.</p>
-  {% endif %}
-{% endif %}
-{% endmacro %}
+{% from "components/regional_offer_actions.html" import offer_team_fieldset %}
 {% block title %}Vigília Regional · Guild Idle Manager{% endblock %}
 {% block content %}
 <section class="evolution-page" aria-labelledby="evolution-title">

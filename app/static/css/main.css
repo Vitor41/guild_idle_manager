@@ -476,6 +476,7 @@ a:hover {
 
 .nav-work-indicator[data-state="active"] { background: #E6B965; }
 .nav-work-indicator[data-state="ready"] { background: #9BD498; }
+.nav-work-indicator[data-state="unknown"] { background: #A9B3B5; }
 
 .sidebar-nav a:hover,
 .logout-link:hover {

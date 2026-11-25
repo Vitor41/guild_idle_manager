@@ -146,8 +146,8 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         dialogs = (STATIC / "js" / "evolution-dialogs.js").read_text(encoding="utf-8")
         theme = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
 
-        self.assertIn("request.url.path == '/regional' and pending_rebellion_invite", base)
-        self.assertIn("request.url.path == '/regional' and pending_portal_notice", base)
+        self.assertIn("request.url.path in ['/regional', '/regional/events'] and pending_rebellion_invite", base)
+        self.assertIn("request.url.path in ['/regional', '/regional/events'] and pending_portal_notice", base)
         for asset in ("regional-rebellion.webp", "rebellion-shield.png", "dimensional-portal.webp", "portal-gate.png"):
             self.assertIn(asset, base)
         self.assertIn("Aceitar convite", base)
@@ -155,7 +155,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         portal_dialog = base.split('id="regional-portal-notice"', 1)[1].split("</dialog>", 1)[0]
         self.assertNotIn('name="decision"', portal_dialog)
         self.assertIn("uma entrada", portal_dialog)
-        self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument)", main)
+        self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument, Boolean(nextUrl.hash))", main)
         self.assertIn("window.GIMEnqueueRegionalNotice?.(dialog)", main)
         self.assertIn("modalQueue?.beginBatch?.()", main)
         self.assertIn("modalQueue?.endBatch?.()", main)
@@ -183,7 +183,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
         navigation_routes = re.findall(r'<a href="(/[^"#]+)"[^>]*>.*?<span class="nav-icon">', base)
 
-        self.assertEqual(len(navigation_routes), 22)
+        self.assertEqual(len(navigation_routes), 23)
         self.assertEqual(set(navigation_routes), set(manifest["navigation"]))
         for route in navigation_routes:
             sprite_key = manifest["navigation"][route]
@@ -353,7 +353,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("if (scrollToTop) window.scrollTo({ top: 0", main)
         self.assertIn("document.body.dataset.route = nextUrl.pathname", main)
         self.assertIn('window.addEventListener("pageshow"', main)
-        self.assertIn('document.body.dataset.route !== "/regional"', main)
+        self.assertIn('!new Set(["/regional", "/regional/events"]).has(document.body.dataset.route)', main)
         self.assertIn("window.location.hash", main)
         self.assertIn('window.scrollTo({ top: 0, behavior: "auto" })', main)
         self.assertIn("url_for('static', path='/js/main.js') }}?v=", base)

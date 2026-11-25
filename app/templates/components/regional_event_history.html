@@ -1,0 +1,47 @@
+{% macro event_history(cards) %}
+{% if cards %}
+<details class="regional-event-history">
+  <summary>Encerrados · {{ cards|length }}</summary>
+  {% if cards %}
+    <div class="evolution-report-list">
+      {% for card in cards %}
+        <article class="evolution-report-row" id="regional-event-{{ card.event.id }}" tabindex="-1">
+          <div>
+            <span class="evolution-status evolution-status--muted">{{ card.region_name }} · {{ card.status_label }}</span>
+            <h3>{{ card.event.event_type == 'portal' and 'Portal' or 'Rebelião' }} · ciclo {{ card.event.trigger_cycle_number + 1 }}</h3>
+            {% if card.event.event_type == 'rebellion' and card.summary.get('player_decision') == 'delegated_cpu' and card.summary.get('priority_elapsed_offline') %}<p>Convite expirado sem aceite; a CPU assumiu a defesa.</p>{% endif %}
+            {% if card.event.event_type == 'portal' and card.player_activity_due %}
+              <span class="evolution-status evolution-status--ready">Resultado disponível para coleta</span>
+              <p>Sua equipe terminou em <time datetime="{{ card.player_activity_due_iso }}">{{ card.player_run.ends_at.strftime('%d/%m/%Y às %H:%M UTC') }}</time>. O resultado ainda não foi coletado.</p>
+              <a class="evolution-button evolution-button--primary" href="/dungeons">Abrir masmorras para coletar</a>
+            {% elif card.event.event_type == 'portal' and card.player_activity_active %}
+              <span class="evolution-status evolution-status--active">Equipe em andamento</span>
+              <p>Prazo da equipe: <time data-evolution-countdown="{{ card.player_activity_due_iso }}" datetime="{{ card.player_activity_due_iso }}">{{ card.player_run.ends_at.strftime('%d/%m/%Y às %H:%M UTC') }}</time>.</p>
+            {% elif card.event.event_type == 'portal' and card.player_result_collected %}
+              <span class="evolution-status evolution-status--muted">Resultado coletado · {{ 'sucesso' if card.player_result_success else 'falha' }}</span>
+            {% endif %}
+            <p>{% if card.event.event_type == 'portal' and card.event.region_code != home_region_code %}{{ card.reason_label }}{% elif card.summary.get('started_activities_may_finish') %}Prazo encerrado; atividades iniciadas continuam até a conclusão.{% elif card.summary.get('activities_completed_after_deadline', 0) %}{{ card.summary.get('activities_completed_after_deadline') }} atividade(s) terminou(aram) depois do prazo.{% elif card.summary.get('result') %}Resultado: {{ 'sucesso' if card.summary.get('result') == 'success' else 'falha' }}.{% else %}{{ card.reason_label }}{% endif %}</p>
+            <details class="event-history-details">
+              <summary>Ver resultado e contribuição</summary>
+              <dl>
+                <div><dt>Região</dt><dd>{{ card.region_name }}</dd></div>
+                <div><dt>Resultado geral</dt><dd>{% if card.summary.get('result') %}{{ 'Sucesso' if card.summary.get('result') == 'success' else 'Falha' }}{% elif card.event.status == 'expired' %}Expirado sem atividade resolvida{% else %}{{ card.status_label }}{% endif %}</dd></div>
+                {% if card.summary.get('aggregate') %}<div><dt>Atividades</dt><dd>{{ card.summary.aggregate.get('successes', 0) }} sucessos · {{ card.summary.aggregate.get('failures', 0) }} falhas</dd></div>{% endif %}
+              </dl>
+              {% if card.contributions %}
+                <h4>Contribuição por guilda</h4>
+                <ul>{% for contribution in card.contributions %}<li><strong>{{ contribution.guild }}</strong> · contribuição {{ contribution.contribution }} · {{ contribution.successes }} sucesso(s) · {{ contribution.failures }} falha(s)</li>{% endfor %}</ul>
+              {% elif not card.history_data_registered %}<p>Dados de participação não registrados neste evento.</p>
+              {% elif card.history_has_rows %}<p>O registro de participação está incompleto.</p>
+              {% else %}<p>Nenhuma atividade individual foi registrada neste evento.</p>{% endif %}
+              {% if card.summary.get('player_decision') %}<p>Decisão da guilda: {{ card.decision_label }}.</p>{% endif %}
+              {% if card.summary.get('reason') %}<p>Encerramento: {{ card.reason_label }}</p>{% endif %}
+            </details>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}<p class="evolution-empty">Nenhum evento encerrado registrado nesta campanha.</p>{% endif %}
+</details>
+{% endif %}
+{% endmacro %}

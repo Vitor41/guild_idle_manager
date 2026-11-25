@@ -450,7 +450,22 @@ with tempfile.TemporaryDirectory() as data_dir:
         central_events_page = rendered_pages["/regional/events"]
         assert b'id="regional-portals"' in central_events_page
         assert b'id="regional-rebellions"' in central_events_page
-        assert b'id="regional-event-history"' in central_events_page
+        regional_events_nav = re.search(
+            rb'<nav class="classes-guide-index regional-events-index"[^>]*>.*?</nav>',
+            central_events_page, re.S,
+        )
+        assert regional_events_nav, "the event hub should link its two primary sections"
+        assert len(re.findall(rb'<a href="#regional-(?:portals|rebellions)"', regional_events_nav.group(0))) == 2
+        assert b"Hist\xc3\xb3rico" not in regional_events_nav.group(0)
+        regional_sidebar_events = re.search(rb'<a href="/regional/events"[^>]*>', central_events_page)
+        regional_sidebar_vigil = re.search(rb'<a href="/regional"[^>]*>', central_events_page)
+        vigil_page = rendered_pages["/regional"]
+        vigil_sidebar_events = re.search(rb'<a href="/regional/events"[^>]*>', vigil_page)
+        vigil_sidebar_vigil = re.search(rb'<a href="/regional"[^>]*>', vigil_page)
+        assert regional_sidebar_events and b'aria-current="page"' in regional_sidebar_events.group(0)
+        assert regional_sidebar_vigil and b'aria-current="page"' not in regional_sidebar_vigil.group(0)
+        assert vigil_sidebar_vigil and b'aria-current="page"' in vigil_sidebar_vigil.group(0)
+        assert vigil_sidebar_events and b'aria-current="page"' not in vigil_sidebar_events.group(0)
         assert b'data-nav-work-menu="regional_events"' in central_events_page
         equipment_detail_page = rendered_pages[f"/mercenaries/{mercenary_id}"]
         assert b"data-equipment-details-trigger" in equipment_detail_page
@@ -1469,6 +1484,14 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Prazo aberto \xc2\xb7 fora do alcance da guilda" in outside_portal_card.group(0)
         assert b"Portais s\xc3\xb3 aceitam entrada na regi\xc3\xa3o natal" in outside_portal_card.group(0)
         assert b"/portals/start" not in outside_portal_card.group(0)
+        central_outside_status, _central_outside_location, central_outside_body = request("/regional/events?section=portals")
+        central_outside_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(outside_portal_id).encode("ascii") + rb'".*?</article>',
+            central_outside_body, re.S,
+        )
+        assert central_outside_status == 200 and central_outside_card
+        assert b"Prazo de entrada aberto \xc2\xb7 fora do alcance da guilda" in central_outside_card.group(0)
+        assert b"/portals/start" not in central_outside_card.group(0)
         outside_portal_quote_status, _outside_portal_quote_location, outside_portal_quote_body = request(
             f"/regional/events/{outside_portal_id}/portals/supply-quote", method="POST", body="",
         )
@@ -1509,6 +1532,17 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Prazo aberto" not in expired_external_card.group(0)
         with SessionLocal() as db:
             assert db.get(RegionalEvent, expired_external_portal_id).status == "in_progress"
+        central_expired_external_status, _central_expired_external_location, central_expired_external_body = request(
+            "/regional/events?section=portals",
+        )
+        central_expired_external_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(expired_external_portal_id).encode("ascii") + rb'".*?</article>',
+            central_expired_external_body, re.S,
+        )
+        assert central_expired_external_status == 200 and central_expired_external_card
+        assert b"Atividade em andamento \xc2\xb7 fora do alcance da guilda" in central_expired_external_card.group(0)
+        assert b"Atividades iniciadas continuam" in central_expired_external_card.group(0)
+        assert b"/portals/start" not in central_expired_external_card.group(0)
         with SessionLocal() as db:
             invite_event = db.query(RegionalEvent).filter_by(
                 campaign_id=campaign.campaign_id, event_type="rebellion", status="active",
@@ -1543,6 +1577,133 @@ with tempfile.TemporaryDirectory() as data_dir:
             invite_event = db.get(RegionalEvent, invite_event_id)
             invited_participant = db.query(RegionalEventParticipant).filter_by(event_id=invite_event_id).one()
             assert invite_event.player_decision == "accept" and invited_participant.status == "accepted"
+            regional_cycle = db.query(RegionalCycle).filter_by(
+                campaign_id=campaign.campaign_id, status="open",
+            ).order_by(RegionalCycle.cycle_number.desc()).first()
+            assert regional_cycle is not None
+            event_state = db.query(RegionalGuildState).filter_by(
+                campaign_id=campaign.campaign_id, guild_id=guild_id,
+            ).one()
+            prepare_worker = create_mercenary(
+                db, guild_id, db.get(MercenaryClass, mercenary_class_id), "Equipe preparada na central",
+            )
+            reinforce_worker = create_mercenary(
+                db, guild_id, db.get(MercenaryClass, mercenary_class_id), "Reforço iniciado na central",
+            )
+            for worker in (prepare_worker, reinforce_worker):
+                worker.level = 1
+                worker.power, worker.vitality, worker.agility, worker.intelligence, worker.luck = 6, 4, 4, 2, 3
+            db.add(RegionalOffer(
+                campaign_id=campaign.campaign_id, cycle_id=regional_cycle.id,
+                cycle_number=regional_cycle.cycle_number, region_code=invite_event.region_code,
+                offer_type="contract", slot=9901, mission_template_id=regional_mission_template_id,
+                rank="E", name_snapshot="Atividade iniciada pela central",
+                recommended_level_snapshot=1, recommended_power_snapshot=9999,
+                min_party_size_snapshot=1, max_party_size_snapshot=2,
+                required_guild_level_snapshot=1, duration_seconds_snapshot=60,
+                required_min_mercenary_level_snapshot=1, gold_reward_snapshot=1,
+                xp_reward_snapshot=1, success_chance_snapshot=20,
+            ))
+            inventory_kit = db.query(GuildInventoryItem).filter_by(
+                guild_id=guild_id, item_template_id=supply_kit_id,
+            ).one()
+            inventory_kit.quantity = max(inventory_kit.quantity, 10)
+            db.query(GuildResources).filter_by(guild_id=guild_id).one().gold = 100000
+            db.flush()
+            central_offer_id = db.query(RegionalOffer).filter_by(
+                cycle_id=regional_cycle.id, region_code=invite_event.region_code, slot=9901,
+            ).one().id
+            central_event_state_id = event_state.id
+            prepare_worker_id, reinforce_worker_id = prepare_worker.id, reinforce_worker.id
+            db.commit()
+        central_events_status, _central_events_location, central_events_body = request(
+            "/regional/events?section=rebellions",
+        )
+        assert central_events_status == 200
+        central_offer_card = re.search(
+            rb'<article[^>]*class="evolution-offer-card".*?Atividade iniciada pela central.*?</article>',
+            central_events_body, re.S,
+        )
+        assert central_offer_card and b"Participar sem suprimento" in central_offer_card.group(0)
+        assert b"/regional/events?section=rebellions#regional-event-" + str(invite_event_id).encode("ascii") in central_offer_card.group(0)
+        central_return = (
+            "%2Fregional%2Fevents%3Fsection%3Drebellions%23regional-event-"
+            + str(invite_event_id)
+        )
+        central_prepare_status, central_prepare_location, central_prepare_body = request(
+            f"/regional/offers/{central_offer_id}/prepare", method="POST",
+            body=(f"return_to={central_return}&mercenary_ids={prepare_worker_id}&supply=1"),
+        )
+        assert central_prepare_status == 303 and central_prepare_location.startswith(
+            f"/regional/events?section=rebellions&message="
+        ), (central_prepare_status, central_prepare_location, central_prepare_body[:400])
+        assert central_prepare_location.endswith(f"#regional-event-{invite_event_id}")
+        with SessionLocal() as db:
+            central_offer = db.get(RegionalOffer, central_offer_id)
+            assert central_offer.status == "supply_preparing"
+            assert central_offer.reserved_by_guild_state_id == central_event_state_id
+            assert json.loads(central_offer.supply_preparation_snapshot_json)["mercenary_ids"] == [str(prepare_worker_id)]
+            central_offer.supply_preparation_ends_at_utc = datetime.now(timezone.utc) - timedelta(seconds=1)
+            db.commit()
+        central_prepared_status, _central_prepared_location, central_prepared_body = request(
+            "/regional/events?section=rebellions",
+        )
+        central_prepared_offer = re.search(
+            rb'<article[^>]*class="evolution-offer-card".*?Atividade iniciada pela central.*?</article>',
+            central_prepared_body, re.S,
+        )
+        assert central_prepared_status == 200 and central_prepared_offer
+        assert "Reforço disponível".encode("utf-8") in central_prepared_offer.group(0)
+        central_start_status, central_start_location, central_start_body = request(
+            f"/regional/offers/{central_offer_id}/start", method="POST",
+            body=(f"return_to={central_return}&mercenary_ids={prepare_worker_id}"
+                  f"&mercenary_ids={reinforce_worker_id}&supply_mode=none"),
+        )
+        assert central_start_status == 303 and central_start_location.startswith(
+            f"/regional/events?section=rebellions&message="
+        ), (central_start_status, central_start_location, central_start_body[:400])
+        assert central_start_location.endswith(f"#regional-event-{invite_event_id}")
+        with SessionLocal() as db:
+            central_offer = db.get(RegionalOffer, central_offer_id)
+            central_run = db.query(MissionRun).filter_by(regional_offer_id=central_offer_id).one()
+            central_activity = db.query(RegionalEventActivity).filter_by(
+                event_id=invite_event_id, guild_state_id=central_event_state_id,
+                source_type="mission", source_run_id=central_run.id,
+            ).one()
+            assert central_offer.status == "in_progress" and central_activity.status == "in_progress"
+            assert central_run.status == "in_progress"
+            assert {member.mercenary_id for member in central_run.members} == {
+                prepare_worker_id, reinforce_worker_id,
+            }
+        with SessionLocal() as db:
+            home_region = next(code for code, _name in REGIONS if code == home_region_code)
+            empty_history_region = next(code for code, _name in REGIONS if code != home_region)
+            history_now = datetime.now(timezone.utc)
+            unregistered_history = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="portal", region_code=home_region,
+                trigger_cycle_number=990001, rules_version="history-smoke-v1",
+                seed="unregistered-history-smoke", status="expired",
+                created_at_utc=history_now, expires_at_utc=history_now - timedelta(seconds=1),
+                summary_json="{}",
+            )
+            empty_history = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="rebellion", region_code=empty_history_region,
+                trigger_cycle_number=990002, rules_version="history-smoke-v1",
+                seed="empty-history-smoke", status="resolved",
+                created_at_utc=history_now, expires_at_utc=history_now - timedelta(seconds=1),
+                summary_json=json.dumps({"activities": []}),
+            )
+            db.add_all([unregistered_history, empty_history])
+            db.flush()
+            unregistered_history_id, empty_history_id = unregistered_history.id, empty_history.id
+            db.commit()
+        history_status, _history_location, history_body = request("/regional/events")
+        assert history_status == 200
+        assert b"Encerrados" in history_body
+        assert "Dados de participação não registrados neste evento.".encode("utf-8") in history_body
+        assert b"Nenhuma atividade individual foi registrada neste evento." in history_body
+        assert b"id=\"regional-event-" + str(unregistered_history_id).encode("ascii") in history_body
+        assert b"id=\"regional-event-" + str(empty_history_id).encode("ascii") in history_body
         accepted_external_portal_status, _accepted_external_portal_location, accepted_external_portal_body = request(
             f"/regional/events/{outside_portal_id}/portals/supply-quote", method="POST", body="",
         )
@@ -1587,6 +1748,42 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"Sua prioridade segue at\xc3\xa9" in post_decision_regional
         assert b"Prioridade encerrada." not in post_decision_regional
         assert b"a CPU tamb\xc3\xa9m participa" not in post_decision_regional
+        with SessionLocal() as db:
+            expired_invite_now = datetime.now(timezone.utc)
+            expired_invite_started_at = expired_invite_now - timedelta(hours=14)
+            expired_invite = RegionalEvent(
+                campaign_id=campaign.campaign_id, event_type="rebellion",
+                region_code=next(code for code, _name in REGIONS if code != home_region_code),
+                trigger_cycle_number=990003, rules_version="regional-events-v1",
+                seed="expired-unaccepted-invite-smoke", status="active",
+                created_at_utc=expired_invite_started_at,
+                priority_ends_at_utc=expired_invite_started_at + timedelta(hours=1),
+                expires_at_utc=expired_invite_started_at + timedelta(hours=13),
+                summary_json="{}",
+            )
+            db.add(expired_invite)
+            db.flush()
+            expired_invite_id = expired_invite.id
+            db.add(RegionalEventParticipant(
+                event_id=expired_invite_id, guild_state_id=central_event_state_id,
+                status="invited",
+            ))
+            expire_due_events(db, campaign.campaign_id, expired_invite_now)
+            db.flush()
+            assert expired_invite.status == "resolved"
+            assert expired_invite.player_decision == "delegated_cpu"
+            assert json.loads(expired_invite.summary_json)["priority_elapsed_offline"] is True
+            db.commit()
+        expired_invite_status, _expired_invite_location, expired_invite_body = request(
+            "/regional/events",
+        )
+        expired_invite_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(expired_invite_id).encode("ascii") + rb'".*?</article>',
+            expired_invite_body, re.S,
+        )
+        assert expired_invite_status == 200 and expired_invite_card
+        assert "Convite expirado sem aceite; a CPU assumiu a defesa.".encode("utf-8") in expired_invite_card.group(0)
+        assert b"/decision" not in expired_invite_card.group(0)
         assert b"/static/js/desktop-art.js" in rendered_pages["/dashboard"]
         base_template = (Path.cwd() / "app" / "templates" / "base.html").read_bytes()
         desktop_theme_version = re.search(rb"desktop-theme\.css.*?\?v=([^\"&\s]+)", base_template)
@@ -1772,15 +1969,42 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert b"multiplicador" not in portal_preview_card.group(0).lower()
         status, location, portal_start_body = request(
             f"/regional/events/{portal_event_id}/portals/start", method="POST",
-            body=f"mercenary_ids={portal_mercenary_id}",
+            body=(f"mercenary_ids={portal_mercenary_id}"
+                  f"&return_to=%2Fregional%2Fevents%3Fsection%3Dportals%23regional-event-{portal_event_id}"),
             extra_headers={"X-GIM-Diagnostic-ID": "9999999999999999"},
         )
-        assert status == 303 and location == "/dungeons?message=Expedi%C3%A7%C3%A3o%20de%20portal%20iniciada", (status, location, portal_start_body)
+        portal_return = urlsplit(location)
+        assert status == 303 and portal_return.path == "/regional/events", (status, location, portal_start_body)
+        assert parse_qs(portal_return.query).get("section") == ["portals"]
+        assert portal_return.fragment == f"regional-event-{portal_event_id}"
         with SessionLocal() as db:
             portal_run = db.query(DungeonRun).filter_by(
                 guild_id=guild_id, dungeon_template_id=portal_template_id, status="in_progress",
             ).one()
             run_id = portal_run.id
+            portal_event = db.get(RegionalEvent, portal_event_id)
+            portal_event.expires_at_utc = datetime.now(timezone.utc) - timedelta(seconds=1)
+            db.commit()
+        central_portal_status, _central_portal_location, central_portal_body = request(
+            "/regional/events?section=portals",
+        )
+        assert central_portal_status == 200
+        assert b"Prazo de entrada:" in central_portal_body
+        assert b"Equipe em andamento" in central_portal_body
+        assert b"Prazo da equipe" in central_portal_body
+        started_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(portal_event_id).encode("ascii") + rb'".*?</article>',
+            central_portal_body, re.S,
+        )
+        assert started_portal_card and b"Entrada j\xc3\xa1 utilizada" in started_portal_card.group(0)
+        assert b"/portals/start" not in started_portal_card.group(0)
+        with SessionLocal() as db:
+            assert db.get(RegionalEvent, portal_event_id).status == "in_progress"
+        with SessionLocal() as db:
+            portal_run = db.query(DungeonRun).filter_by(
+                guild_id=guild_id, dungeon_template_id=portal_template_id, status="in_progress",
+            ).one()
+            assert portal_run.id == run_id
             assert (portal_run.ends_at - portal_run.started_at).total_seconds() >= 3600
             portal_activity = db.query(RegionalEventActivity).filter_by(
                 event_id=portal_event_id, source_type="dungeon", source_run_id=run_id,
@@ -1788,6 +2012,17 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert portal_activity.status == "in_progress"
             portal_run.ends_at = datetime.now(timezone.utc) - timedelta(seconds=1)
             db.commit()
+        ready_portal_status, _ready_portal_location, ready_portal_body = request(
+            "/regional/events?section=portals",
+        )
+        ready_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(portal_event_id).encode("ascii") + rb'".*?</article>',
+            ready_portal_body, re.S,
+        )
+        assert ready_portal_status == 200 and ready_portal_card
+        assert "Resultado disponível para coleta".encode("utf-8") in ready_portal_card.group(0)
+        assert b"Prazo da equipe" not in ready_portal_card.group(0)
+        assert b'href="/dungeons"' in ready_portal_card.group(0)
         class FixedPortalRoll:
             def __init__(self, *_args): pass
             def randint(self, low, _high): return low
@@ -1800,7 +2035,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             portal_event = db.get(RegionalEvent, portal_event_id)
             portal_activity = db.query(RegionalEventActivity).filter_by(event_id=portal_event_id).one()
             participant = db.query(RegionalEventParticipant).filter_by(event_id=portal_event_id).one()
-            assert portal_event.status == "active" and portal_activity.status == "resolved"
+            assert portal_event.status == "resolved" and portal_activity.status == "resolved"
             assert participant.success is not None and portal_activity.successes + portal_activity.failures == 1
             portal_summary = json.loads(portal_event.summary_json)
             assert portal_summary["portal_loot"]["version"] == "portal-loot-v1"
@@ -1849,6 +2084,16 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert portal_event.status == "resolved"
             assert portal_summary["aggregate"] == {"entries": 1, "successes": 1, "failures": 0}
             assert len(portal_summary["participant_results"]) == 1
+        collected_portal_status, _collected_portal_location, collected_portal_body = request(
+            "/regional/events?section=portals",
+        )
+        collected_portal_card = re.search(
+            rb'<article[^>]*id="regional-event-' + str(portal_event_id).encode("ascii") + rb'".*?</article>',
+            collected_portal_body, re.S,
+        )
+        assert collected_portal_status == 200 and collected_portal_card
+        assert "Resultado coletado".encode("utf-8") in collected_portal_card.group(0), collected_portal_card.group(0).decode("utf-8", "replace")
+        assert b'href="/dungeons"' not in collected_portal_card.group(0)
         status, _location, _duplicate_claim_body = request(f"/dungeons/{run_id}/claim", method="POST", body="")
         assert status == 303
         with SessionLocal() as db:

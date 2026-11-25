@@ -206,3 +206,17 @@
 .supply-preparation{display:flex;align-items:flex-start;gap:.7rem;margin:.75rem 0;padding:.7rem .8rem;border:1px solid rgba(210,171,91,.42);border-radius:.65rem;background:rgba(41,34,25,.32);cursor:pointer}.supply-preparation:has(input:checked){border-color:#d2ab5b;box-shadow:inset 0 0 0 1px rgba(210,171,91,.25)}.supply-preparation input{margin-top:.2rem;accent-color:#d2ab5b}.supply-preparation input:focus-visible{outline:2px solid #f4d18c;outline-offset:3px}.supply-preparation span{display:grid;gap:.2rem}.supply-preparation small{color:var(--evolution-muted,#b9b2a4);line-height:1.4}
 
 .supply-preparation.is-prepared:has(input:checked){border-color:rgba(111,196,132,.75);background:rgba(29,73,46,.32);box-shadow:inset 0 0 0 1px rgba(111,196,132,.22)}.supply-preparation.is-prepared input{accent-color:#75c98b}.supply-preparation.is-prepared strong{color:#9ce0aa}
+
+.regional-events-index { flex-wrap: wrap; gap: 8px; }
+.regional-events-index > a { display: inline-flex; min-height: 40px; align-items: center; padding: 6px 12px; }
+.regional-events-index > a:focus-visible,
+.event-history-details > summary:focus-visible,
+.regional-event-history > summary:focus-visible,
+.portal-next-attempt > summary:focus-visible { outline: 3px solid var(--e-gold); outline-offset: 3px; }
+.event-history-details > summary,
+.regional-event-history > summary,
+.portal-next-attempt > summary { display: flex; min-height: 40px; align-items: center; padding: 0 8px; cursor: pointer; }
+.regional-event-history { margin-top: 14px; }
+.regional-event-history .evolution-report-list { margin-top: 8px; }
+.portal-next-attempt { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--e-line); border-radius: 8px; background: var(--e-panel); }
+.portal-next-attempt p { margin: 6px 0; }

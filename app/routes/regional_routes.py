@@ -17,12 +17,13 @@ from app.core.forms import read_form_multi_fields
 from app.desktop.gameplay_diagnostics import log_gathering_advancement
 from app.models.campaign import CampaignMetadata
 from app.models.guild import GuildResources
-from app.models.dungeon import DungeonTemplate
+from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.item import ItemTemplate
-from app.models.mission import MissionTemplate
+from app.models.mission import MissionRun, MissionTemplate
 from app.models.mercenary import Mercenary
 from app.models.regional import (
-    RegionalCpuCyclePlan, RegionalCpuMercenary, RegionalCpuResource, RegionalEvent, RegionalEventParticipant,
+    RegionalCpuCyclePlan, RegionalCpuMercenary, RegionalCpuResource, RegionalEvent, RegionalEventActivity,
+    RegionalEventParticipant,
     RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome,
 )
 from app.models.regional import RegionalCycle
@@ -45,6 +46,7 @@ from app.services.regional_event_service import (
     record_rebellion_decision,
     expire_due_events,
     build_portal_boss_snapshot,
+    portal_spawn_status_for_region,
 )
 from app.services.evolution_art_service import get_evolution_art_context
 from app.services.supply_preparation_service import estimate_drop_sale_value, guild_gold, quote_supply, regional_kit_quote
@@ -689,13 +691,24 @@ def regional_index(
         )
         rebellion_priority_elapsed = priority_deadline <= region_now
     rebellion_participant = None
+    rebellion_invite_expired = False
     rebellion_offers = []
     rebellion_region_name = None
     portal_cards = []
     event_history_cards = []
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
     home_code = _regional_home_code(campaign)
-    for event in board.get("portal_events", []):
+    portal_spawn_status = portal_spawn_status_for_region(
+        db, campaign, board.get("cycle"), home_code, region_now,
+    ) if central_events_view else None
+    portal_events = list(board.get("portal_events", []))
+    if central_events_view:
+        portal_events = list(db.scalars(select(RegionalEvent).where(
+            RegionalEvent.campaign_id == campaign.campaign_id,
+            RegionalEvent.event_type == "portal",
+            RegionalEvent.status.in_(("active", "in_progress")),
+        ).order_by(RegionalEvent.expires_at_utc, RegionalEvent.id)))
+    for event in portal_events:
         try:
             event_summary = json.loads(event.summary_json or "{}")
         except (TypeError, json.JSONDecodeError):
@@ -711,6 +724,30 @@ def regional_index(
             RegionalEventParticipant.event_id == event.id,
             RegionalEventParticipant.guild_state_id == player_state.id,
         )) if player_state is not None else None
+        own_activity = db.scalar(select(RegionalEventActivity).where(
+            RegionalEventActivity.event_id == event.id,
+            RegionalEventActivity.guild_state_id == player_state.id,
+            RegionalEventActivity.source_type == "dungeon",
+        ).order_by(RegionalEventActivity.id.desc()).limit(1)) if player_state is not None else None
+        own_run = (
+            db.get(DungeonRun, own_activity.source_run_id)
+            if own_activity is not None else None
+        )
+        run_due_at = own_run.ends_at if own_run is not None else None
+        if run_due_at is not None:
+            run_due_at = (
+                run_due_at.replace(tzinfo=timezone.utc)
+                if run_due_at.tzinfo is None else run_due_at.astimezone(timezone.utc)
+            )
+        activity_due = bool(
+            own_activity is not None and own_activity.status == "in_progress"
+            and own_run is not None and own_run.status == "in_progress"
+            and run_due_at <= region_now
+        )
+        activity_collected = bool(
+            own_activity is not None and own_activity.status == "resolved"
+            and own_run is not None and own_run.status in {"completed", "failed"}
+        )
         blocker = _portal_action_blocker(db, campaign, event, player_state, region_now)
         portal_deadline = event.expires_at_utc
         portal_deadline = (
@@ -720,6 +757,7 @@ def regional_index(
         )
         entry_state = (
             "used" if participant is not None else
+            "unavailable" if event.region_code != home_code else
             "unavailable_content" if template is None else
             "expired" if portal_deadline <= region_now else
             "unavailable" if blocker else
@@ -742,17 +780,33 @@ def regional_index(
             "unavailable": blocker or "A entrada não está disponível para esta guilda.",
             "available": "Uma equipe enfrenta o chefe do bioma portal; a duração mínima é de 1 hora.",
         }
+        entry_state_label = entry_state_labels[entry_state]
+        entry_state_description = entry_state_descriptions[entry_state]
+        if event.region_code != home_code:
+            entry_state_label = (
+                "Atividade em andamento · fora do alcance da guilda"
+                if event.status == "in_progress" else
+                "Prazo de entrada aberto · fora do alcance da guilda"
+                if portal_deadline > region_now else
+                "Prazo encerrado · fora do alcance da guilda"
+            )
+            entry_state_description = blocker or "Portais só aceitam entrada na região natal da guilda."
         portal_cards.append({
             "event": event,
             "template": template,
             "region_name": event_region_name(event.region_code),
             "participant": participant,
+            "own_activity": own_activity,
+            "own_run": own_run,
+            "activity_due": activity_due,
+            "activity_collected": activity_collected,
+            "activity_due_iso": _datetime_iso(run_due_at),
             "entered": participant is not None,
             "action_blocker": blocker,
             "entry_window_closed": portal_deadline <= region_now,
             "entry_state": entry_state,
-            "entry_state_label": entry_state_labels[entry_state],
-            "entry_state_description": entry_state_descriptions[entry_state],
+            "entry_state_label": entry_state_label,
+            "entry_state_description": entry_state_description,
             "expires_at_iso": _datetime_iso(event.expires_at_utc),
             **_portal_drop_preview(db, event_summary),
             "supply_quote": quote_supply(
@@ -769,10 +823,14 @@ def regional_index(
                 RegionalEventParticipant.event_id == rebellion.id,
                 RegionalEventParticipant.guild_state_id == player_state.id,
             ))
+        rebellion_invite_expired = bool(
+            rebellion_participant is not None
+            and rebellion_participant.status == "declined"
+            and rebellion.player_decision == "delegated_cpu"
+        )
         rebellion_region_name = event_region_name(rebellion.region_code)
         if (rebellion.status == "active" and rebellion_participant is not None
-                and rebellion_participant.status in {"accepted", "participating"}
-                and rebellion.region_code != home_code):
+                and rebellion_participant.status in {"accepted", "participating"}):
             rebellion_offers = list(db.scalars(select(RegionalOffer).where(
                 RegionalOffer.cycle_id == board["cycle"].id,
                 RegionalOffer.region_code == rebellion.region_code,
@@ -801,11 +859,44 @@ def regional_index(
         if event.id in current_event_ids:
             continue
         summary = event_history_summary(event)
-        raw_rows = summary.get("participant_results", []) if event.event_type == "portal" else summary.get("activities", [])
+        rows_key = "participant_results" if event.event_type == "portal" else "activities"
+        saved_rows = summary.get(rows_key)
+        history_data_registered = isinstance(saved_rows, list)
+        raw_rows = saved_rows if history_data_registered else []
         state_ids = {int(row["guild_state_id"]) for row in raw_rows
                      if isinstance(row, dict) and row.get("guild_state_id") is not None}
         states = list(db.scalars(select(RegionalGuildState).where(RegionalGuildState.id.in_(state_ids)))) if state_ids else []
         state_names = {state.id: state.name for state in states}
+        player_activity = db.scalar(select(RegionalEventActivity).where(
+            RegionalEventActivity.event_id == event.id,
+            RegionalEventActivity.guild_state_id == player_state.id,
+        ).order_by(RegionalEventActivity.id.desc()).limit(1)) if player_state is not None else None
+        player_run = None
+        if player_activity is not None:
+            if player_activity.source_type == "dungeon":
+                player_run = db.get(DungeonRun, player_activity.source_run_id)
+            elif player_activity.source_type == "mission":
+                player_run = db.get(MissionRun, player_activity.source_run_id)
+        player_run_due_at = player_run.ends_at if player_run is not None else None
+        if player_run_due_at is not None:
+            player_run_due_at = (
+                player_run_due_at.replace(tzinfo=timezone.utc)
+                if player_run_due_at.tzinfo is None else player_run_due_at.astimezone(timezone.utc)
+            )
+        player_activity_due = bool(
+            player_activity is not None and player_activity.status == "in_progress"
+            and player_run is not None and player_run.status == "in_progress"
+            and player_run_due_at <= region_now
+        )
+        player_activity_active = bool(
+            player_activity is not None and player_activity.status == "in_progress"
+            and player_run is not None and player_run.status == "in_progress"
+            and player_run_due_at > region_now
+        )
+        player_result_collected = bool(
+            player_activity is not None and player_activity.status == "resolved"
+            and player_run is not None and player_run.status in {"completed", "failed"}
+        )
         contribution_rows = []
         if event.event_type == "portal":
             contribution_rows = [{
@@ -831,6 +922,14 @@ def regional_index(
             "region_name": event_region_name(event.region_code),
             "summary": summary,
             "contributions": contribution_rows,
+            "history_data_registered": history_data_registered,
+            "history_has_rows": bool(raw_rows),
+            "player_result_collected": player_result_collected,
+            "player_result_success": bool(player_run.success) if player_result_collected else None,
+            "player_activity_due": player_activity_due,
+            "player_activity_active": player_activity_active,
+            "player_activity_due_iso": _datetime_iso(player_run_due_at),
+            "player_run": player_run,
             "status_label": {
                 "active": "Aberto", "in_progress": "Em andamento", "resolved": "Concluído",
                 "expired": "Expirado", "suppressed": "Não ocorreu: outra rebelião estava ativa",
@@ -880,6 +979,7 @@ def regional_index(
             "assignments": assignments,
             "reports": reports,
             "rebellion_participant": rebellion_participant,
+            "rebellion_invite_expired": rebellion_invite_expired,
             "home_region_code": home_code,
             "rebellion_priority_ends_at_iso": _datetime_iso(rebellion.priority_ends_at_utc) if rebellion else None,
             "rebellion_priority_elapsed": rebellion_priority_elapsed,
@@ -888,9 +988,15 @@ def regional_index(
             "rebellion_region_name": rebellion_region_name,
             "portal_cards": portal_cards,
             "event_history_cards": event_history_cards,
+            "portal_spawn_status": portal_spawn_status,
+            "central_events_view": central_events_view,
             "event_section": request.query_params.get("section")
-            if request.query_params.get("section") in {"portals", "rebellions", "history"}
+            if request.query_params.get("section") in {"portals", "rebellions"}
             else "portals",
+            "portal_history_cards": [card for card in event_history_cards
+                                     if card["event"].event_type == "portal"],
+            "rebellion_history_cards": [card for card in event_history_cards
+                                        if card["event"].event_type == "rebellion"],
             "achievement_cards": achievement_context["achievement_cards"],
             "warehouse_used": get_inventory_usage(db, guild.id),
             "warehouse_capacity": get_inventory_capacity(db, guild),

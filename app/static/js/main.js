@@ -61,18 +61,39 @@ async function refreshNavigationWorkIndicators(force = false) {
   if (!links.length) return;
   const controller = new AbortController();
   navigationWorkStatusController = controller;
+  const markUnavailable = (link) => {
+    link.querySelector(".nav-work-indicator")?.remove();
+    const indicator = document.createElement("span");
+    indicator.className = "nav-work-indicator";
+    indicator.dataset.state = "unknown";
+    indicator.setAttribute("aria-hidden", "true");
+    link.append(indicator);
+    link.dataset.workState = "unknown";
+    const label = `${link.dataset.navWorkLabel || "Atividade"}: status indisponível`;
+    link.setAttribute("aria-label", label);
+    link.title = label;
+  };
   const pendingRequest = fetch("/api/navigation/work-status", {
     credentials: "same-origin",
     cache: "no-store",
     signal: controller.signal,
     headers: { "Accept": "application/json", "X-Requested-With": "fetch" },
   }).then(async (response) => {
-    if (!response.ok) return;
+    if (!response.ok) {
+      links.forEach(markUnavailable);
+      return;
+    }
     const payload = await response.json();
     for (const link of links) {
       const status = payload.menus?.[link.dataset.navWorkMenu];
-      const active = Number(status?.active || 0);
-      const ready = Number(status?.ready || 0);
+      if (!status || !Number.isInteger(status.active) || status.active < 0
+          || !Number.isInteger(status.ready) || status.ready < 0
+          || typeof status.label !== "string" || !status.label.trim()) {
+        markUnavailable(link);
+        continue;
+      }
+      const active = status.active;
+      const ready = status.ready;
       link.querySelector(".nav-work-indicator")?.remove();
       if (!active && !ready) {
         link.removeAttribute("data-work-state");
@@ -92,7 +113,9 @@ async function refreshNavigationWorkIndicators(force = false) {
       link.setAttribute("aria-label", accessibleLabel);
       link.title = accessibleLabel;
     }
-  }).catch(() => {}).finally(() => {
+  }).catch(() => {
+    if (!controller.signal.aborted) links.forEach(markUnavailable);
+  }).finally(() => {
     if (navigationWorkStatusRequest === pendingRequest) {
       navigationWorkStatusRequest = null;
       navigationWorkStatusController = null;
@@ -651,8 +674,20 @@ window.refreshRegionalEventAnchorOffset = refreshRegionalEventAnchorOffset;
 window.addEventListener("resize", refreshRegionalEventAnchorOffset);
 refreshRegionalEventAnchorOffset();
 
+function syncCurrentSidebarPage(pathname) {
+  const currentPath = pathname.startsWith("/regional/events")
+    ? "/regional/events"
+    : pathname.startsWith("/regional") ? "/regional" : pathname;
+  for (const link of document.querySelectorAll(".sidebar-nav a[href]")) {
+    const linkPath = new URL(link.href, window.location.origin).pathname;
+    if (linkPath === currentPath) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+}
+
 function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
+  const nextUrl = new URL(responseUrl, window.location.origin);
   const incomingMain = parsedDocument.querySelector(".game-shell");
   const currentMain = document.querySelector(".game-shell");
   if (!incomingMain || !currentMain) {
@@ -665,7 +700,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   window.initializeEquipmentDetails?.(currentMain);
   window.initializeBuildingResetDialogs?.(currentMain);
   initializeMarketEstimates(currentMain);
-  syncRegionalEventNoticeDialogs(parsedDocument);
+  syncRegionalEventNoticeDialogs(parsedDocument, Boolean(nextUrl.hash));
   window.initializeGatheringCycles?.();
   const incomingTopbar = parsedDocument.querySelector(".game-topbar");
   const currentTopbar = document.querySelector(".game-topbar");
@@ -675,8 +710,8 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   window.refreshRegionalEventAnchorOffset?.();
 
   document.title = parsedDocument.title || document.title;
-  const nextUrl = new URL(responseUrl, window.location.origin);
   document.body.dataset.route = nextUrl.pathname;
+  syncCurrentSidebarPage(nextUrl.pathname);
   window.GIMApplyDesktopArt?.(currentMain);
   window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   updateGenericCountdowns();
@@ -713,8 +748,17 @@ function regionalNoticeMatches(current, replacement) {
 }
 window.GIMRegionalNoticeMatches = regionalNoticeMatches;
 
-function syncRegionalEventNoticeDialogs(parsedDocument) {
+function syncRegionalEventNoticeDialogs(parsedDocument, suppressAutoOpen = false) {
   const modalQueue = window.GIMStartupModalQueue;
+  if (suppressAutoOpen) {
+    for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
+      current.dataset.regionalNoticeProgrammaticClose = "true";
+      modalQueue?.remove(current);
+      if (current.open) current.close();
+      current.remove();
+    }
+    return;
+  }
   modalQueue?.beginBatch?.();
   try {
     const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];

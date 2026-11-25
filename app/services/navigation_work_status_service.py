@@ -1,16 +1,18 @@
 """Read-only activity summaries for the shared navigation."""
 from datetime import datetime, timezone
 
-from sqlalchemy import case, func, literal, select, union_all
+from sqlalchemy import and_, case, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.models.campaign import CampaignMetadata
 from app.models.class_change import ClassChangeRun
 from app.models.content import ProfessionTraining
-from app.models.dungeon import DungeonRun
+from app.models.dungeon import DungeonRun, DungeonTemplate
+from app.models.guild import Guild
 from app.models.gathering import GatheringAssignment
 from app.models.market import MarketSale
 from app.models.mission import MissionRun
+from app.models.mercenary import Mercenary
 from app.models.regional import (
     RegionalEvent,
     RegionalEventActivity,
@@ -111,12 +113,26 @@ def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
         RegionalGuildState.campaign_id == CampaignMetadata.campaign_id,
         RegionalGuildState.guild_id == guild_id,
     ).scalar_subquery()
+    available_count = select(func.count(Mercenary.id)).where(
+        Mercenary.guild_id == guild_id,
+        Mercenary.status == "available",
+    ).scalar_subquery()
+    guild_level = select(Guild.level).where(Guild.id == guild_id).scalar_subquery()
+    eligible_portal_template = select(DungeonTemplate.id).where(
+        DungeonTemplate.id == RegionalEvent.dungeon_template_id,
+        DungeonTemplate.is_active.is_(True),
+        DungeonTemplate.min_party_size <= available_count,
+        DungeonTemplate.max_party_size >= DungeonTemplate.min_party_size,
+        DungeonTemplate.required_guild_level <= guild_level,
+    ).exists()
     ready_portals = select(func.count(RegionalEvent.id)).where(
         RegionalEvent.campaign_id == campaign_id,
         RegionalEvent.event_type == "portal",
         RegionalEvent.region_code == home_code,
         RegionalEvent.status == "active",
         RegionalEvent.expires_at_utc > now,
+        RegionalEvent.dungeon_template_id.is_not(None),
+        eligible_portal_template,
         ~select(RegionalEventParticipant.id).where(
             RegionalEventParticipant.event_id == RegionalEvent.id,
             RegionalEventParticipant.guild_state_id == player_state_id,
@@ -133,6 +149,43 @@ def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
         RegionalEventParticipant.guild_state_id == player_state_id,
         RegionalEventParticipant.status.in_(("invited", "accepted", "participating")),
     ).scalar_subquery()
+    dungeon_ready = select(DungeonRun.id).where(
+        DungeonRun.id == RegionalEventActivity.source_run_id,
+        DungeonRun.guild_id == guild_id,
+        DungeonRun.status == "in_progress",
+        DungeonRun.ends_at <= now,
+    ).exists()
+    mission_ready = select(MissionRun.id).where(
+        MissionRun.id == RegionalEventActivity.source_run_id,
+        MissionRun.guild_id == guild_id,
+        MissionRun.status == "in_progress",
+        MissionRun.ends_at <= now,
+    ).exists()
+    dungeon_active = select(DungeonRun.id).where(
+        DungeonRun.id == RegionalEventActivity.source_run_id,
+        DungeonRun.guild_id == guild_id,
+        DungeonRun.status == "in_progress",
+        DungeonRun.ends_at > now,
+    ).exists()
+    mission_active = select(MissionRun.id).where(
+        MissionRun.id == RegionalEventActivity.source_run_id,
+        MissionRun.guild_id == guild_id,
+        MissionRun.status == "in_progress",
+        MissionRun.ends_at > now,
+    ).exists()
+    ready_activities = select(func.count(func.distinct(RegionalEventActivity.event_id))).join(
+        RegionalEvent,
+        RegionalEvent.id == RegionalEventActivity.event_id,
+    ).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEventActivity.guild_state_id == player_state_id,
+        RegionalEventActivity.status == "in_progress",
+        RegionalEvent.status.in_(("active", "in_progress")),
+        or_(
+            and_(RegionalEventActivity.source_type == "dungeon", dungeon_ready),
+            and_(RegionalEventActivity.source_type == "mission", mission_ready),
+        ),
+    ).scalar_subquery()
     active_events = select(func.count(func.distinct(RegionalEventActivity.event_id))).join(
         RegionalEvent,
         RegionalEvent.id == RegionalEventActivity.event_id,
@@ -141,8 +194,12 @@ def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
         RegionalEventActivity.guild_state_id == player_state_id,
         RegionalEventActivity.status == "in_progress",
         RegionalEvent.status.in_(("active", "in_progress")),
+        or_(
+            and_(RegionalEventActivity.source_type == "dungeon", dungeon_active),
+            and_(RegionalEventActivity.source_type == "mission", mission_active),
+        ),
     ).scalar_subquery()
-    ready = ready_portals + ready_rebellions
+    ready = ready_portals + ready_rebellions + ready_activities
     return select(
         literal("regional_events").label("menu"),
         func.coalesce(active_events, 0).label("active"),

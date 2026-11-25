@@ -5,11 +5,15 @@ import vm from "node:vm";
 
 const main = await readFile(new URL("../../app/static/js/main.js", import.meta.url), "utf8");
 const fragmentHelper = main.match(/^function preserveRequestedNavigationFragment\([\s\S]*?^\}/m)?.[0];
+const sidebarSyncFunction = main.match(/^function syncCurrentSidebarPage\([\s\S]*?^\}/m)?.[0];
 const replaceFunction = main.match(/^function replaceGameContent\([\s\S]*?^\}(?=\r?\n\r?\nfunction regionalNoticeMatches)/m)?.[0];
+const noticeSyncFunction = main.match(/^function syncRegionalEventNoticeDialogs\([\s\S]*?^\}/m)?.[0];
 const clickStart = main.indexOf('document.addEventListener("click", async (event) => {');
 const clickEnd = main.indexOf("\n});", clickStart) + 4;
 assert.ok(fragmentHelper, "fragment helper is present");
+assert.ok(sidebarSyncFunction, "current sidebar page helper is present");
 assert.ok(replaceFunction, "partial page replacement function is present");
+assert.ok(noticeSyncFunction, "regional notice synchronization is present");
 assert.ok(clickStart >= 0 && clickEnd > clickStart, "async navigation click handler is present");
 const clickHandler = main.slice(clickStart, clickEnd);
 
@@ -21,6 +25,7 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   const scrollCalls = [];
   const focusCalls = [];
   const resetInitializerCalls = [];
+  const noticeSyncCalls = [];
   let clickHandlerCallback;
   const incomingMain = { innerHTML: "fresh regional page" };
   const currentMain = { innerHTML: "old page" };
@@ -41,6 +46,15 @@ test("async navigation keeps a requested portal fragment through a redirect and 
     hasAttribute() { return false; },
     setAttribute() {},
   };
+  const menuLink = (href) => ({
+    href,
+    attributes: new Map(),
+    setAttribute(name, value) { this.attributes.set(name, value); },
+    removeAttribute(name) { this.attributes.delete(name); },
+    getAttribute(name) { return this.attributes.get(name) ?? null; },
+  });
+  const regionalMenuLink = menuLink("http://localhost/regional");
+  const eventsMenuLink = menuLink("http://localhost/regional/events");
   const document = {
     title: "Anterior",
     body: { dataset: {} },
@@ -49,7 +63,9 @@ test("async navigation keeps a requested portal fragment through a redirect and 
       if (name === "click" && !clickHandlerCallback) clickHandlerCallback = callback;
     },
     querySelector(selector) { return selector === ".game-shell" ? currentMain : null; },
-    querySelectorAll() { return []; },
+    querySelectorAll(selector) {
+      return selector === ".sidebar-nav a[href]" ? [regionalMenuLink, eventsMenuLink] : [];
+    },
     getElementById(id) { return id === "regional-event-42" ? portalCard : null; },
   };
   const window = {
@@ -65,8 +81,8 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   };
   window.location.assign = (url) => window.locationAssignCalls.push(url);
   const stubs = [
-    "initializeEquipmentDetails", "initializeMarketEstimates", "syncRegionalEventNoticeDialogs",
-    "initializeGatheringCycles", "updateGenericCountdowns", "initializeSalvagePreviews",
+    "initializeEquipmentDetails", "initializeMarketEstimates", "initializeGatheringCycles",
+    "updateGenericCountdowns", "initializeSalvagePreviews",
     "restoreGameFormState", "initializeRegionalSupply", "initializeRegionalComparison",
     "showActionToast", "refreshNavigationWorkIndicators",
   ];
@@ -82,9 +98,10 @@ test("async navigation keeps a requested portal fragment through a redirect and 
       return { ok: true, url: redirectedUrl, text: async () => "redirected html" };
     },
     ...Object.fromEntries(stubs.map((name) => [name, () => {}])),
+    syncRegionalEventNoticeDialogs(...args) { noticeSyncCalls.push(args); },
   });
 
-  vm.runInContext(`${fragmentHelper}\n${replaceFunction}\n${clickHandler}`, context, { filename: "main-navigation.js" });
+  vm.runInContext(`${fragmentHelper}\n${sidebarSyncFunction}\n${replaceFunction}\n${clickHandler}`, context, { filename: "main-navigation.js" });
   const event = {
     button: 0,
     ctrlKey: false,
@@ -105,6 +122,8 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   assert.equal(requestedCalls.length, 1);
   assert.equal(requestedCalls[0].options.method, "GET");
   assert.equal(requestedCalls[0].url, requestedUrl);
+  assert.equal(noticeSyncCalls.length, 1);
+  assert.equal(noticeSyncCalls[0][1], true, "anchored event navigation suppresses startup notices");
   assert.deepEqual(historyCalls, ["/regional?tab=current#regional-event-42"]);
   assert.equal(window.locationAssignCalls.length, 0);
   assert.equal(focusCalls.length, 1);
@@ -113,7 +132,58 @@ test("async navigation keeps a requested portal fragment through a redirect and 
   assert.equal(scrollCalls[0].block, "start");
   assert.equal(scrollCalls[0].behavior, "auto");
   assert.equal(document.body.dataset.route, "/regional");
+  assert.equal(regionalMenuLink.getAttribute("aria-current"), "page");
+  assert.equal(eventsMenuLink.getAttribute("aria-current"), null);
   assert.deepEqual(resetInitializerCalls, [currentMain]);
+});
+
+test("async navigation marks Events active separately from the Vigília", () => {
+  const menuLink = (href) => ({
+    href,
+    attributes: new Map([["aria-current", "page"]]),
+    setAttribute(name, value) { this.attributes.set(name, value); },
+    removeAttribute(name) { this.attributes.delete(name); },
+    getAttribute(name) { return this.attributes.get(name) ?? null; },
+  });
+  const regionalMenuLink = menuLink("http://localhost/regional");
+  const eventsMenuLink = menuLink("http://localhost/regional/events");
+  const context = vm.createContext({
+    URL,
+    document: { querySelectorAll: () => [regionalMenuLink, eventsMenuLink] },
+    window: { location: { origin: "http://localhost" } },
+  });
+  vm.runInContext(sidebarSyncFunction, context, { filename: "sidebar-navigation.js" });
+  context.syncCurrentSidebarPage("/regional/events");
+  assert.equal(regionalMenuLink.getAttribute("aria-current"), null);
+  assert.equal(eventsMenuLink.getAttribute("aria-current"), "page");
+});
+
+test("an event hash target removes startup notices without enqueuing them", () => {
+  const queue = { removed: [], enqueued: [], remove(dialog) { this.removed.push(dialog); }, enqueue(dialog) { this.enqueued.push(dialog); } };
+  const current = {
+    dataset: {},
+    open: true,
+    closed: false,
+    removed: false,
+    close() { this.open = false; this.closed = true; },
+    remove() { this.removed = true; },
+  };
+  const incoming = { id: "regional-portal-notice" };
+  const document = { querySelectorAll: () => [current] };
+  const parsedDocument = { querySelectorAll: () => [incoming] };
+  const context = vm.createContext({
+    document,
+    window: { GIMStartupModalQueue: queue },
+  });
+
+  vm.runInContext(noticeSyncFunction, context, { filename: "regional-notice-sync.js" });
+  context.syncRegionalEventNoticeDialogs(parsedDocument, true);
+
+  assert.equal(current.closed, true);
+  assert.equal(current.removed, true);
+  assert.equal(current.dataset.regionalNoticeProgrammaticClose, "true");
+  assert.deepEqual(queue.removed, [current]);
+  assert.deepEqual(queue.enqueued, []);
 });
 
 test("an intentional redirect fragment takes precedence over the requested fragment", () => {
