@@ -17,6 +17,11 @@ class InventoryDockMarketViewTests(unittest.TestCase):
         self.assertIn("<dt>Refino</dt><dd>+{{ item.upgrade_level }}</dd>", template)
         self.assertIn("<dt>Estado</dt><dd>", template)
         self.assertIn("<dt>{{ label }}</dt><dd>+{{ value }}</dd>", template)
+        self.assertIn("item.normal_bonuses_view", template)
+        self.assertIn("{{ roll.attribute_label }}", template)
+        self.assertIn("+{{ roll.value }} normal", template)
+        self.assertNotIn('class="bonus-pill rng-bonus"', template)
+        self.assertIn("item.strong_bonuses_view", template)
         self.assertIn('name="category"', template)
         self.assertIn('name="rarity"', template)
         self.assertIn('name="max_level"', template)
@@ -29,7 +34,7 @@ class InventoryDockMarketViewTests(unittest.TestCase):
         template = read("app/templates/docks/index.html")
         route = read("app/routes/dock_routes.py")
         main = read("app/static/js/main.js")
-        self.assertIn("Ofertas até", template)
+        self.assertIn("Tempo restante da rotação", template)
         self.assertIn("clean_generated_name(visit.merchant.name)", template)
         self.assertIn("merchant_type_labels.get(visit.merchant.merchant_type", template)
         self.assertIn("<dt>Estoque</dt><dd>{{ offer.remaining_stock }}</dd>", template)
@@ -58,8 +63,21 @@ class InventoryDockMarketViewTests(unittest.TestCase):
         self.assertIn('action="/market/{{ sale.id }}/collect"', template)
         self.assertIn('action="/market/{{ sale.id }}/cancel"', template)
         self.assertIn("required aria-label=\"Quantidade para anunciar", template)
+        self.assertIn("data-unit-price=\"{{ item.market_unit_value if item.market_unit_value is not none else '' }}\"", template)
+        self.assertIn('data-market-total role="status" aria-live="polite"', template)
+        self.assertIn("<dt>Preço por unidade</dt>", template)
+        self.assertIn("<dt>Total para a quantidade atual</dt>", template)
+        self.assertIn("<dt>Prazo estimado</dt>", template)
         self.assertIn("Number.isInteger(parsed)", main)
         self.assertIn("marketServerDisabled", main)
+
+    def test_measured_focus_targets_use_the_shared_three_pixel_gold_indicator(self):
+        css = read("app/static/css/desktop-theme.css")
+        block = css.split(".inventory-filters :focus-visible", 1)[1].split("}", 1)[0]
+        self.assertIn(".market-max-button:focus-visible", block)
+        self.assertIn(".dock-offer [data-dock-buy]:focus-visible", block)
+        self.assertIn("outline: 3px solid var(--gold-2)", block)
+        self.assertIn("outline-offset: 3px", block)
 
     def test_workshop_and_salvage_status_never_claim_an_invalid_or_unaffordable_batch(self):
         workshop = read("app/templates/workshops/index.html")

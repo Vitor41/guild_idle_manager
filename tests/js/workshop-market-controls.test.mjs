@@ -163,14 +163,20 @@ test("market sale estimate validates integer bounds and preserves server-side st
 
   function run({ initialDisabled = false } = {}) {
     const input = { value: "1", min: "1", max: "5", step: "1" };
+    const total = { textContent: "" };
     const button = { dataset: {}, disabled: initialDisabled };
-    const form = { querySelector: (selector) => selector === "[data-market-quantity]" ? input : selector === ".market-sell-button" ? button : null };
+    const form = {
+      dataset: { unitPrice: "2" },
+      querySelector: (selector) => selector === "[data-market-quantity]" ? input
+        : selector === "[data-market-total]" ? total
+          : selector === ".market-sell-button" ? button : null,
+    };
     const node = { dataset: { durationBase: "20", timeReduction: "0" }, textContent: "", closest: () => form };
     const helper = new Function(`${format}\n${update}\nreturn updateMarketEstimate;`)();
-    return { helper, input, button, node };
+    return { helper, form, input, button, total, node };
   }
 
-  const { helper, input, button, node } = run();
+  const { helper, input, button, total, node } = run();
   for (const invalid of ["", "0", "1.5", "6"]) {
     input.value = invalid;
     helper(node);
@@ -181,11 +187,27 @@ test("market sale estimate validates integer bounds and preserves server-side st
   helper(node);
   assert.equal(button.disabled, false);
   assert.equal(node.textContent, "Prazo estimado: 40 s.");
+  assert.equal(total.textContent, "4 ouro");
+
+  input.max = "23";
+  input.value = "3";
+  helper(node);
+  assert.equal(total.textContent, "6 ouro", "quantity times the server-provided unit price is visible before selling");
+  input.value = "23";
+  helper(node);
+  assert.equal(total.textContent, "46 ouro", "MAX quantity has a matching total using the same unit price");
 
   const blocked = run({ initialDisabled: true });
   blocked.input.value = "2";
   blocked.helper(blocked.node);
   assert.equal(blocked.button.disabled, true, "a server-rendered stock or slot block is not undone");
+
+  const priceUnavailable = run();
+  priceUnavailable.form.dataset.unitPrice = "";
+  priceUnavailable.input.value = "2";
+  priceUnavailable.helper(priceUnavailable.node);
+  assert.equal(priceUnavailable.button.disabled, true, "an unknown unit price does not present the sale as ready");
+  assert.equal(priceUnavailable.total.textContent, "Preço total indisponível.");
 });
 
 test("dock offer totals use the server unit price and validate available stock", () => {

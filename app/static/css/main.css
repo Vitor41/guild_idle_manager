@@ -2125,6 +2125,8 @@ textarea {
 .market-item-action { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .market-item-action .market-material-form { max-width: 100%; }
 .market-material-form .market-sale-estimate { grid-column: 1 / 3; grid-row: 2; align-self: center; }
+.market-material-form .market-sell-summary { grid-column: 1 / -1; grid-row: auto; margin: 0; }
+.market-sell-summary dd > .market-sale-estimate { margin: 0; }
 .market-material-form .market-item-availability { grid-column: 1 / -1; }
 .market-material-form .market-sell-button { grid-column: 3; grid-row: 2; justify-self: end; min-width: 72px; min-height: 40px; }
 .market-item-availability { line-height: 1.35; }

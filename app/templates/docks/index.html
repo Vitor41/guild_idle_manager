@@ -13,7 +13,7 @@
     <div class="merchant-grid">
       {% for visit in rotation.merchants %}
         <section class="panel merchant-card">
-          <header><span class="card-icon" aria-hidden="true">&#9875;</span><div><p class="eyebrow">{{ merchant_type_labels.get(visit.merchant.merchant_type, 'Comércio rotativo') }}</p><h2>{{ clean_generated_name(visit.merchant.name) }}</h2><small>Doca {{ loop.index }} · Ofertas até <time data-ends-at="{{ rotation.ends_at_iso }}">Calculando...</time></small></div></header>
+          <header><span class="card-icon" aria-hidden="true">&#9875;</span><div><p class="eyebrow">{{ merchant_type_labels.get(visit.merchant.merchant_type, 'Comércio rotativo') }}</p><h2>{{ clean_generated_name(visit.merchant.name) }}</h2><small>Doca {{ loop.index }} · Tempo restante da rotação: <time data-ends-at="{{ rotation.ends_at_iso }}">Calculando...</time></small></div></header>
           <div class="dock-offers">
             {% for offer in visit.offers %}
               <article class="dock-offer rarity-{{ offer.item_template.rarity }}">

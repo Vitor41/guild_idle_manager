@@ -508,6 +508,7 @@ const formatMarketEstimate = (seconds) => {
 function updateMarketEstimate(node) {
   const form = node.closest("form");
   const quantityInput = form?.querySelector("[data-market-quantity]");
+  const totalOutput = form?.querySelector("[data-market-total]");
   let quantity = 1;
   if (quantityInput) {
     const raw = quantityInput.value;
@@ -519,13 +520,27 @@ function updateMarketEstimate(node) {
     const valid = Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum
       && Number.isFinite(step) && step > 0
       && Math.abs(offset / step - Math.round(offset / step)) <= 1e-9;
+    const unitPrice = form.dataset.unitPrice === "" ? NaN : Number(form.dataset.unitPrice);
+    const unitPriceValid = Number.isSafeInteger(unitPrice) && unitPrice > 0;
+    const totalValue = valid && unitPriceValid ? unitPrice * parsed : NaN;
+    const totalValid = !totalOutput || (Number.isSafeInteger(totalValue) && totalValue > 0);
     const sellButton = form.querySelector(".market-sell-button");
     if (sellButton && sellButton.dataset.marketServerDisabled === undefined) {
       sellButton.dataset.marketServerDisabled = String(sellButton.disabled);
     }
-    if (sellButton) sellButton.disabled = sellButton.dataset.marketServerDisabled === "true" || !valid;
+    if (sellButton) sellButton.disabled = sellButton.dataset.marketServerDisabled === "true" || !valid || !totalValid;
     if (!valid) {
+      if (totalOutput) totalOutput.textContent = "Indisponível para esta quantidade.";
       node.textContent = "Informe uma quantidade válida para estimar o prazo.";
+      return;
+    }
+    if (totalOutput) {
+      totalOutput.textContent = totalValid
+        ? `${new Intl.NumberFormat("pt-BR").format(totalValue)} ouro`
+        : "Preço total indisponível.";
+    }
+    if (!totalValid) {
+      node.textContent = "Preço unitário indisponível para estimar o prazo.";
       return;
     }
     quantity = parsed;

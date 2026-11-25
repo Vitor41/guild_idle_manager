@@ -84,6 +84,9 @@ def get_market_page_context(db: Session, guild: Guild) -> dict[str, object]:
     slots_available = len(active_sales) < int(market["slots"])
     for item in inventory_items:
         item.market_max_quantity = int(item.quantity) if slots_available else 0
+        item.market_unit_value = _sale_unit_value(
+            item.item_template.base_sell_value, market["value_bonus_percent"],
+        )
     for sale in active_sales:
         prepare_timer_context(sale, now)
         sale.cancelable = not sale.ready_for_loot

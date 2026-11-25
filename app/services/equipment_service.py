@@ -24,7 +24,7 @@ from app.services.balance_service import (
     power_success_adjustment,
     rarity_success_bonus,
 )
-from app.services.display_service import clean_generated_name, format_attribute_bonus
+from app.services.display_service import attribute_label, clean_generated_name, format_attribute_bonus
 
 
 LEGACY_SLOT_MAP = {
@@ -189,6 +189,7 @@ def annotate_item_bonus_view(item: GuildItemInstance) -> None:
         {
             "kind": roll.get("kind", "normal"),
             "attribute": roll["attribute"],
+            "attribute_label": attribute_label(roll["attribute"]),
             "value": int(roll["value"]),
             "label": STRONG_BONUS_LABELS[roll["attribute"]] if roll.get("kind") == "strong" else format_attribute_bonus(roll["attribute"], int(roll["value"]), generated=True),
         }
