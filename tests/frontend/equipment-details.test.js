@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = await readFile(new URL("../../app/static/js/equipment-details.js", import.meta.url), "utf8");
 const mainSource = await readFile(new URL("../../app/static/js/main.js", import.meta.url), "utf8");
 
-function mountDetails({ mobile = false } = {}) {
+function mountDetails({ mobile = false, viewportWidth = mobile ? 390 : 1024, viewportHeight = 768 } = {}) {
   const makeClassList = () => {
     const names = new Set();
     return {
@@ -29,7 +29,7 @@ function mountDetails({ mobile = false } = {}) {
   trigger.dataset = {};
   trigger.attributes = new Map();
   trigger.setAttribute = (key, value) => trigger.attributes.set(key, value);
-  trigger.getBoundingClientRect = () => ({ left: 120, right: 180, top: 160 });
+  trigger.getBoundingClientRect = () => ({ left: 120, right: 180, top: 160, bottom: 190 });
   trigger.closest = () => slot;
   trigger.contains = (node) => node === trigger;
   trigger.matches = (selector) => selector === ":hover" && Boolean(trigger.hovering);
@@ -45,8 +45,8 @@ function mountDetails({ mobile = false } = {}) {
   slot.contains = (node) => node === trigger || node === panel || node === closeButton;
   let timeout = 0;
   const window = {
-    innerWidth: 1024,
-    innerHeight: 768,
+    innerWidth: viewportWidth,
+    innerHeight: viewportHeight,
     matchMedia: () => ({ matches: mobile }),
     addEventListener() {},
     setTimeout(callback) { callback(); return ++timeout; },
@@ -105,13 +105,28 @@ test("equipment details open with keyboard focus and Escape closes while restori
   assert.equal(ui.document.activeElement, ui.trigger);
 });
 
-test("touch-style click toggles the panel and mobile keeps it in normal flow", () => {
+test("touch-style click toggles a viewport-positioned panel on narrow screens", () => {
   const ui = mountDetails({ mobile: true });
   ui.trigger.dispatch("click");
   assert.equal(ui.panel.hidden, false);
-  assert.equal(ui.panel.style.values.left, undefined);
+  assert.equal(ui.panel.style.values.left, "15px");
+  assert.equal(ui.panel.style.values.top, "202px");
+  assert.equal(ui.panel.style.values.maxHeight, "744px");
   ui.trigger.dispatch("click");
   assert.equal(ui.panel.hidden, true);
+
+  const reflowed = mountDetails({ mobile: true, viewportWidth: 720 });
+  reflowed.trigger.dispatch("click");
+  assert.equal(reflowed.panel.style.values.left, "180px");
+  assert.equal(reflowed.panel.style.values.top, "202px");
+
+  const constrained = mountDetails({ mobile: true, viewportHeight: 240 });
+  constrained.trigger.dispatch("click");
+  assert.equal(constrained.panel.style.values.top, "12px");
+  assert.equal(constrained.panel.style.values.maxHeight, "216px");
+  constrained.closeButton.dispatch("click");
+  assert.equal(constrained.panel.hidden, true);
+  assert.equal(constrained.document.activeElement, constrained.trigger);
 });
 
 test("equipment details initialize after partial navigation and remain idempotent", () => {

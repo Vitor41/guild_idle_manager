@@ -477,10 +477,11 @@ body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button {
 body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button:hover:not(:disabled),
 body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button:focus-visible { background: #3a2927; }
 body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove {
-  min-height: 40px; border-color: #78544c; background: transparent; color: #f0c0b5; font-size: .86rem; font-weight: 650;
+  min-height: 40px; border-color: #a66f62; background: transparent; color: #f0c0b5; font-size: .86rem; font-weight: 650;
 }
 body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove:hover:not(:disabled),
 body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove:focus-visible { background: #3a2927; }
+body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove:focus-visible { outline: 3px solid #f5d798; outline-offset: 3px; }
 body[data-app-mode="desktop"] .result-history-details { padding-top: 8px; border-top: 1px solid rgba(233, 198, 116, .14); }
 body[data-app-mode="desktop"] .result-history-details > summary {
   display: flex; align-items: center; min-height: 40px; padding: 4px 0; color: var(--gold-2); font-weight: 700; cursor: pointer;

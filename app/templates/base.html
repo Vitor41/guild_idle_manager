@@ -5,9 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261125-3">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261125-4">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261125-4">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261125-5">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-sidebar-layout.css') }}?v=20261103-1">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261125-5">{% endif %}
   </head>
@@ -215,7 +215,7 @@
       </dialog>
     {% endif %}
     <script src="{{ url_for('static', path='/js/main.js') }}?v=20261125-6"></script>
-    <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261110-1" defer></script>
+    <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261125-1" defer></script>
     <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261125-1" defer></script>
     <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261125-1" defer></script>
     {% if request.url.path == '/market' %}<script src="{{ url_for('static', path='/js/market-max.js') }}?v=20261102-1" defer></script>{% endif %}

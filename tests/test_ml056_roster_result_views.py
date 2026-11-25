@@ -9,6 +9,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ML056RosterResultViewTests(unittest.TestCase):
+    def test_tavern_cards_keep_content_height_when_the_special_offer_is_empty(self):
+        template = (ROOT / "app/templates/tavern/index.html").read_text(encoding="utf-8")
+        css = (ROOT / "app/static/css/main.css").read_text(encoding="utf-8")
+
+        self.assertIn('class="dashboard tavern-dashboard"', template)
+        self.assertIn(".tavern-dashboard > .dashboard-grid { align-items: start; }", css)
+
     def test_roster_precedes_compact_hiring_summary_and_class_name_is_not_repeated_as_image_alt(self):
         template = (ROOT / "app/templates/mercenaries/index.html").read_text(encoding="utf-8")
         roster_position = template.index('class="mercenary-grid table-panel"')
@@ -33,6 +40,24 @@ class ML056RosterResultViewTests(unittest.TestCase):
         self.assertIn("@media (max-width: 480px)", css)
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", css)
         self.assertIn(".mercenary-dismiss-form .danger-button", css)
+
+    def test_equipment_details_use_a_viewport_panel_on_narrow_screens_and_keep_accessible_controls(self):
+        main_css = (ROOT / "app/static/css/main.css").read_text(encoding="utf-8")
+        desktop_css = (ROOT / "app/static/css/desktop-theme.css").read_text(encoding="utf-8")
+        script = (ROOT / "app/static/js/equipment-details.js").read_text(encoding="utf-8")
+        base_template = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
+
+        self.assertIn(".equipment-details__close { flex: 0 0 40px; width: 40px; min-width: 40px; min-height: 40px !important;", main_css)
+        self.assertIn("@media (max-width: 760px) {\n  .equipment-details.is-open {\n    position: fixed;", main_css)
+        narrow_panel_start = main_css.index("@media (max-width: 760px) {\n  .equipment-details.is-open")
+        narrow_panel_end = main_css.index("  .equipment-details__meta", narrow_panel_start)
+        self.assertNotIn("position: static;", main_css[narrow_panel_start:narrow_panel_end])
+        self.assertIn("window.matchMedia(\"(max-width: 760px)\").matches", script)
+        self.assertIn('panel.style.left = `${left}px`;', script)
+        self.assertIn('panel.style.top = `${top}px`;', script)
+        self.assertIn("border-color: #a66f62", desktop_css)
+        self.assertIn("outline: 3px solid #f5d798; outline-offset: 3px;", desktop_css)
+        self.assertIn("/js/equipment-details.js') }}?v=20261125-1", base_template)
 
     def test_result_history_details_are_collapsed_and_rewards_remain_visible(self):
         env = Environment(loader=FileSystemLoader(ROOT / "app/templates"), autoescape=True)

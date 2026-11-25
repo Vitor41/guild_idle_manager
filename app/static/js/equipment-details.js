@@ -16,19 +16,27 @@
   };
 
   const positionPanel = (trigger, panel) => {
-    if (window.matchMedia("(max-width: 760px)").matches) return;
     const rect = trigger.getBoundingClientRect();
     const margin = 12;
-    const width = Math.min(360, window.innerWidth - margin * 2);
-    const estimatedHeight = Math.min(panel.scrollHeight || 300, window.innerHeight - margin * 2);
-    const rightSpace = window.innerWidth - rect.right;
-    const left = rightSpace >= width + margin
-      ? rect.right + margin
-      : Math.max(margin, rect.left - width - margin);
-    const top = Math.max(margin, Math.min(rect.top, window.innerHeight - estimatedHeight - margin));
+    const viewportWidth = window.visualViewport?.width || window.innerWidth;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const width = Math.max(0, Math.min(360, viewportWidth - margin * 2));
+    const estimatedHeight = Math.min(panel.scrollHeight || 300, viewportHeight - margin * 2);
+    const narrow = window.matchMedia("(max-width: 760px)").matches;
+    const rightSpace = viewportWidth - rect.right;
+    const left = narrow
+      ? Math.max(margin, (viewportWidth - width) / 2)
+      : rightSpace >= width + margin
+        ? rect.right + margin
+        : Math.max(margin, rect.left - width - margin);
+    const belowTop = (rect.bottom ?? rect.top) + margin;
+    const topCandidate = narrow && belowTop + estimatedHeight > viewportHeight - margin
+      ? rect.top - estimatedHeight - margin
+      : narrow ? belowTop : rect.top;
+    const top = Math.max(margin, Math.min(topCandidate, viewportHeight - estimatedHeight - margin));
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
-    panel.style.maxHeight = `${window.innerHeight - margin * 2}px`;
+    panel.style.maxHeight = `${viewportHeight - margin * 2}px`;
   };
 
   const positionVisiblePanels = () => {

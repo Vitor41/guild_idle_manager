@@ -750,6 +750,8 @@ h3 {
   gap: 16px;
 }
 
+.tavern-dashboard > .dashboard-grid { align-items: start; }
+
 .dashboard-card {
   position: relative;
   overflow: hidden;
@@ -2040,7 +2042,7 @@ textarea {
 }
 .equipment-details__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .equipment-details__header h3 { margin: 0; color: #fff6d8; }
-.equipment-details__close { flex: 0 0 36px; min-height: 36px !important; padding: 0 !important; font-size: 1.2rem !important; }
+.equipment-details__close { flex: 0 0 40px; width: 40px; min-width: 40px; min-height: 40px !important; padding: 0 !important; font-size: 1.2rem !important; }
 .equipment-details__meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
 .equipment-details__meta > div { min-width: 0; padding: 8px; border: 1px solid rgba(233, 198, 116, .18); border-radius: 8px; background: rgba(0, 0, 0, .14); }
 .equipment-details__meta dt { color: var(--muted); font-size: .72rem; }
@@ -2680,12 +2682,12 @@ html { scroll-behavior: smooth; }
 }
 @media (max-width: 760px) {
   .equipment-details.is-open {
-    position: static;
-    width: 100%;
-    max-height: none !important;
-    grid-column: 1 / -1;
-    margin-top: 10px;
-    box-shadow: none;
+    position: fixed;
+    width: min(360px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    margin: 0;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, .6);
   }
   .equipment-details__meta { grid-template-columns: 1fr; }
   .market-columns { grid-template-columns: minmax(0, 1fr); }
