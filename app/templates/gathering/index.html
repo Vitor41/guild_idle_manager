@@ -19,7 +19,7 @@
     <section class="panel gathering-capacity" aria-label="Capacidade do Armazém">
       <div><span>Armazém compartilhado</span><strong data-gathering-warehouse-label>{{ "{:,.0f}".format(used).replace(",", ".") }} / {{ "{:,.0f}".format(capacity).replace(",", ".") }}</strong></div>
       <progress max="{{ capacity }}" value="{{ [used, capacity]|min }}" data-gathering-warehouse-progress aria-label="Armazém: {{ used }} de {{ capacity }}">{{ used }} de {{ capacity }}</progress>
-      {% if capacity > 0 and used >= capacity %}<p class="gathering-capacity-state evolution-status evolution-status--paused" role="status">Armazém cheio</p>{% endif %}
+      <p class="gathering-capacity-state evolution-status evolution-status--paused" data-gathering-capacity-state role="status"{% if capacity <= 0 or used < capacity %} hidden{% endif %}>Armazém cheio</p>
       <p>Equipamentos únicos não ocupam espaço. A produção excedente é descartada quando cada ciclo termina.</p>
     </section>
 
