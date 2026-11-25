@@ -1708,8 +1708,16 @@ textarea {
 
 .tier-guide-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+}
+
+.tier-guide-panel { container-type: inline-size; container-name: tier-guide; }
+@container tier-guide (min-width: 560px) {
+  .tier-guide-panel .tier-guide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container tier-guide (min-width: 900px) {
+  .tier-guide-panel .tier-guide-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .tier-guide-card {
@@ -2626,6 +2634,7 @@ tr:hover td {
 html { scroll-behavior: smooth; }
 .guide-nav { position: sticky; top: 76px; z-index: 4; padding: 10px; border: 1px solid var(--border); background: rgba(18,15,12,.96); }
 .guide-section { scroll-margin-top: calc(var(--game-sticky-topbar-height, 0px) + 12px); }
+.classes-page .guide-section { scroll-margin-top: calc(var(--game-sticky-topbar-height, 0px) + var(--classes-guide-index-height, 0px) + 12px); }
 .classes-guide-index { position: sticky; top: var(--game-sticky-topbar-height, 64px); z-index: 5; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: rgba(18,15,12,.96); }
 .classes-guide-index a { min-height: 40px; padding: 9px 13px; white-space: nowrap; }
 .classes-guide-index a[aria-current="location"] { background: var(--surface-3); border-color: var(--gold); color: var(--gold-2); }

@@ -76,7 +76,14 @@ class Ml057RemainingViewTests(unittest.TestCase):
         self.assertEqual(page.count("{{ rarity.description }}"), 1)
         self.assertNotIn("<h3>{{ rarity.label }}</h3>", page)
         self.assertIn("tier-guide-grid--equipment", page)
-        self.assertIn("grid-template-columns: repeat(auto-fit, minmax(250px, 1fr))", css)
+        self.assertEqual(page.count("tier-guide-panel"), 2)
+        self.assertIn("container-type: inline-size; container-name: tier-guide", css)
+        self.assertIn("@container tier-guide (min-width: 560px)", css)
+        self.assertIn("@container tier-guide (min-width: 900px)", css)
+        grid_rule = re.search(r"\.tier-guide-grid\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(grid_rule)
+        self.assertIn("grid-template-columns: minmax(0, 1fr)", grid_rule.group(1))
+        self.assertNotIn("auto-fit", grid_rule.group(1))
         self.assertEqual(page.count("{{ rarity.label }}"), 2)
 
     def test_codex_detail_return_preserves_filters_and_returns_to_the_selected_entry(self):
@@ -97,17 +104,39 @@ class Ml057RemainingViewTests(unittest.TestCase):
         for sprite in ("guild-sigil", "building-tavern", "expedition-map", "dungeon-gate", "building-docks"):
             self.assertTrue((ROOT / f"app/static/assets/desktop/sprites/64/{sprite}.png").is_file())
         self.assertIn(".tutorial-actions > a, .tutorial-actions > form button { min-width: 40px; min-height: 40px; }", css)
+        desktop_css = self.read("app/static/css/desktop-theme.css")
+        self.assertIn('form[action="/tutorial/decline"] > button.text-button', desktop_css)
+        self.assertIn("min-height: 40px", desktop_css)
+
+    def test_classes_guide_anchor_offset_includes_measured_sticky_index(self):
+        main = self.read("app/static/js/main.js")
+        css = self.read("app/static/css/main.css")
+        self.assertIn('document.querySelector(".classes-page .classes-guide-index")', main)
+        self.assertIn('root.style.setProperty("--classes-guide-index-height", `${classesIndexOffset}px`)', main)
+        self.assertIn("classesGuideIndexObserver ||= new ResizeObserver", main)
+        self.assertIn("var(--classes-guide-index-height, 0px)", css)
 
     def test_updates_prioritize_version_channel_and_manual_verification(self):
         page = self.read("app/templates/updates.html")
         route = self.read("app/routes/update_routes.py")
+        main = self.read("app/static/js/main.js")
         self.assertIn("updates-version-summary", page)
         self.assertIn("Canal {{ installed_channel or 'não configurado' }}", page)
         self.assertIn('"installed_channel": installed_channel', route)
         self.assertIn("Origem: GitHub Releases", page)
         self.assertIn(">Verificar</button>", page)
+        self.assertNotIn("<script>", page)
+        self.assertIn("function initializeUpdateChecks(root = document)", main)
+        self.assertIn("initializeUpdateChecks(currentMain);", main)
+        self.assertIn("initializeUpdateChecks();", main)
         self.assertNotIn("updates/install-release", page)
         self.assertNotIn("updates/apply-local", page)
+
+    def test_regional_offer_macro_has_request_context_and_map_heading_target(self):
+        page = self.read("app/templates/regional/index.html")
+        self.assertIn('{% from "components/regional_offer_actions.html" import offer_team_fieldset with context %}', page)
+        self.assertIn('aria-labelledby="map-title"', page)
+        self.assertIn('<summary id="map-title">Estado das cinco regiões</summary>', page)
 
     def test_prepared_activity_separates_team_and_reinforcements_with_real_class_icons(self):
         component = self.read("app/templates/components/regional_offer_actions.html")
@@ -118,6 +147,9 @@ class Ml057RemainingViewTests(unittest.TestCase):
         self.assertIn('value="{{ mercenary.id }}" checked', component)
         self.assertIn("offer.prepared_mercenary_ids", component)
         self.assertIn("mercenary.class_icon_path", component)
+        self.assertIn('data-reinforcement-badge="{{ mercenary.id }}"', component)
+        self.assertIn("{% if not reinforcement_selected %} hidden{% endif %}", component)
+        self.assertIn("Reforço selecionado</strong>", component)
         self.assertIn("annotate_mercenary_display(mercenary)", service)
         self.assertIn("selectinload(Mercenary.mercenary_class)", service)
         self.assertIn("grid-template-columns: 18px 36px minmax(0,1fr) auto", css)

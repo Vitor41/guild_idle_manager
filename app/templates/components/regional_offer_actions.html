@@ -1,4 +1,5 @@
 {% macro offer_team_fieldset(offer, available_mercenaries) %}
+{% set selected_start_ids = selected_start_mercenary_ids|default([]) %}
 <fieldset>
   <legend>Exige · Grupo mínimo–máximo: {{ offer.min_party_size_snapshot }}–{{ offer.max_party_size_snapshot }} · Nível mínimo da guilda: {{ offer.required_guild_level_snapshot }}</legend>
   {% for prepared_mercenary in offer.unavailable_prepared_mercenaries %}
@@ -18,7 +19,8 @@
       <h3 id="reinforcement-team-title-{{ offer.id }}">Disponíveis para reforço</h3>
       <div class="regional-team-members">
         {% for mercenary in available_mercenaries if mercenary.id|string not in offer.prepared_mercenary_ids %}
-          <label class="regional-team-member"><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}">{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" width="36" height="36" alt="" aria-hidden="true" loading="lazy">{% else %}<span class="regional-team-class-fallback" aria-hidden="true">{{ mercenary.class_label[:1] }}</span>{% endif %}<span>{{ mercenary.name }} · nível {{ mercenary.level }}</span><strong>Reforço</strong></label>
+          {% set reinforcement_selected = mercenary.id|string in selected_start_ids %}
+          <label class="regional-team-member"><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}"{% if reinforcement_selected %} checked{% endif %}>{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" width="36" height="36" alt="" aria-hidden="true" loading="lazy">{% else %}<span class="regional-team-class-fallback" aria-hidden="true">{{ mercenary.class_label[:1] }}</span>{% endif %}<span>{{ mercenary.name }} · nível {{ mercenary.level }}</span><strong data-reinforcement-badge="{{ mercenary.id }}"{% if not reinforcement_selected %} hidden{% endif %}>Reforço selecionado</strong></label>
         {% else %}<p>Nenhum reforço disponível.</p>{% endfor %}
       </div>
     </section>

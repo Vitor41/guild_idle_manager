@@ -39,6 +39,7 @@ from app.services.regional_cycle_service import REGIONS, ensure_campaign_world, 
 from app.services.regional_event_service import expire_due_events
 from app.services.equipment_service import RARITY_BONUS_RULES, get_item_bonus_rolls
 from app.services.display_service import clean_generated_name
+from app.services.icon_service import get_class_icon_path
 from sqlalchemy import select
 import uvicorn
 
@@ -109,7 +110,9 @@ with tempfile.TemporaryDirectory() as data_dir:
     assert persisted_stamina == 8 * 3600, "the status endpoint must not mutate the saved balance"
     with SessionLocal() as db:
         guild = db.query(Guild).first()
-        mercenary_class = db.query(MercenaryClass).order_by(MercenaryClass.id).first()
+        mercenary_class = next((candidate for candidate in db.query(MercenaryClass).order_by(MercenaryClass.id).all()
+                                if get_class_icon_path(candidate)), None)
+        regional_class_icon_path = get_class_icon_path(mercenary_class) if mercenary_class else None
         item_template = db.query(ItemTemplate).filter(
             ItemTemplate.icon_group.is_not(None), ItemTemplate.item_type == "material",
         ).order_by(ItemTemplate.id).first()
@@ -121,7 +124,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             ItemTemplate.item_type == "equipment",
             ItemTemplate.equipment_slot == "ring",
         ).order_by(ItemTemplate.id).first()
-        assert guild and mercenary_class and item_template and equipment_template and equipment_route_template, "campaign must seed display entities for the desktop art smoke"
+        assert guild and mercenary_class and regional_class_icon_path and item_template and equipment_template and equipment_route_template, "campaign must seed display entities for the desktop art smoke"
         guild_id = guild.id
         smoke_market_item_template_id = item_template.id
         mercenary_class_id = mercenary_class.id
@@ -437,7 +440,7 @@ with tempfile.TemporaryDirectory() as data_dir:
         assert "RuntimeError: Falha de consulta da tela de atividades" in desktop_trace
         rendered_pages = {}
         regional_outcome_path = f"/regional/regions/{regional_outcome_region_code}"
-        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", "/regional/events", regional_outcome_path, "/codex", "/guide", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial")
+        page_paths = ("/desktop/campaigns", "/dashboard", "/tavern", "/mercenaries", f"/mercenaries/{mercenary_id}", "/missions", "/gathering", "/workshops", "/dungeons", "/regional", "/regional/events", regional_outcome_path, "/codex", "/guide", "/inventory", "/buildings", "/market", "/blacksmith", "/professions", "/class-change", "/docks", "/guild/progress", "/tutorial", "/updates")
         for path in page_paths:
             if path in {"/dashboard", "/regional", "/regional/events"}:
                 with patch("app.services.regional_event_service.REBELLION_CHANCE", 1.0):
@@ -448,6 +451,12 @@ with tempfile.TemporaryDirectory() as data_dir:
             assert b"Internal Server Error" not in body, path
             rendered_pages[path] = body
         central_events_page = rendered_pages["/regional/events"]
+        regional_class_icon_url = f"/static/{regional_class_icon_path.lstrip('/')}".encode("utf-8")
+        assert b'aria-labelledby="map-title"' in rendered_pages["/regional"]
+        assert '<summary id="map-title">Estado das cinco regiões</summary>'.encode("utf-8") in rendered_pages["/regional"]
+        assert b"data-check-local-update" in rendered_pages["/updates"]
+        update_check_status, _update_check_location, update_check_body = request("/updates/check")
+        assert update_check_status == 200 and b'"channel":"dev-local"' in update_check_body, update_check_body[:400]
         assert b'id="regional-portals"' in central_events_page
         assert b'id="regional-rebellions"' in central_events_page
         regional_events_nav = re.search(
@@ -919,7 +928,11 @@ with tempfile.TemporaryDirectory() as data_dir:
             prepared_dialog.group(0), re.S,
         ), prepared_dialog.group(0) if prepared_dialog else progress_body[:4000]
         assert b'data-prepared-team-available="true"' in prepared_dialog.group(0)
-        assert b'Equipe preparada pr' in prepared_dialog.group(0)
+        prepared_team_status = re.findall(
+            rb'<p[^>]*class="[^\"]*prepared-team-status[^\"]*"[^>]*>.*?</p>',
+            prepared_dialog.group(0), re.S,
+        )
+        assert b'Equipe preparada selecionada' in prepared_dialog.group(0), prepared_team_status
         assert b'1 Kit(s) j\xc3\xa1 utilizado(s)' in prepared_dialog.group(0)
 
         with SessionLocal() as db:
@@ -1620,6 +1633,7 @@ with tempfile.TemporaryDirectory() as data_dir:
             "/regional/events?section=rebellions",
         )
         assert central_events_status == 200
+        assert regional_class_icon_url in central_events_body, central_events_body[:1200]
         central_offer_card = re.search(
             rb'<article[^>]*class="evolution-offer-card".*?Atividade iniciada pela central.*?</article>',
             central_events_body, re.S,
@@ -1653,7 +1667,19 @@ with tempfile.TemporaryDirectory() as data_dir:
             central_prepared_body, re.S,
         )
         assert central_prepared_status == 200 and central_prepared_offer
-        assert "Reforço disponível".encode("utf-8") in central_prepared_offer.group(0)
+        assert b"Dispon\xc3\xadveis para refor\xc3\xa7o" in central_prepared_offer.group(0)
+        assert b'<strong data-reinforcement-badge="' in central_prepared_offer.group(0)
+        assert b'hidden>Refor\xc3\xa7o selecionado</strong>' in central_prepared_offer.group(0)
+        selected_central_status, _selected_central_location, selected_central_body = request(
+            f"/regional/events?section=rebellions&selected_mercenary_id={reinforce_worker_id}",
+        )
+        selected_reinforcement = re.search(
+            rb'<label class="regional-team-member"><input[^>]*value="' + str(reinforce_worker_id).encode("ascii")
+            + rb'"[^>]*checked>.*?<strong data-reinforcement-badge="' + str(reinforce_worker_id).encode("ascii")
+            + rb'">' + "Refor\u00e7o selecionado</strong></label>".encode("utf-8"),
+            selected_central_body, re.S,
+        )
+        assert selected_central_status == 200 and selected_reinforcement, selected_central_body[:1200]
         central_start_status, central_start_location, central_start_body = request(
             f"/regional/offers/{central_offer_id}/start", method="POST",
             body=(f"return_to={central_return}&mercenary_ids={prepare_worker_id}"
@@ -2258,6 +2284,36 @@ with tempfile.TemporaryDirectory() as data_dir:
             and "status=403 outcome=origin_rejected" in line
             for line in gameplay_trace.splitlines()
         ), "the loopback origin guard should remain in effect for equipment actions"
+
+        with SessionLocal() as db:
+            macro_now = datetime.now(timezone.utc)
+            active_campaign_id = app.state.active_campaign.campaign_id
+            macro_campaign = db.get(CampaignMetadata, active_campaign_id)
+            macro_guild = db.scalar(select(Guild).where(Guild.campaign_id == active_campaign_id))
+            assert macro_campaign is not None and macro_guild is not None
+            macro_board = get_regional_board(db, macro_campaign, macro_guild, now=macro_now)
+            macro_cycle = macro_board["cycle"]
+            macro_offer = next(
+                offer for offer in macro_board["offers"]["contract"]
+                if offer.status == "available"
+                and macro_guild.level >= offer.required_guild_level_snapshot
+            )
+            macro_class = next((
+                candidate for candidate in db.scalars(
+                    select(MercenaryClass).order_by(MercenaryClass.id)
+                ) if get_class_icon_path(candidate)
+            ), None)
+            assert macro_class is not None
+            macro_class_icon_url = f"/static/{get_class_icon_path(macro_class).lstrip('/')}"
+            macro_worker = create_mercenary(
+                db, macro_guild.id, macro_class, "Ícone da Vigília",
+            )
+            macro_worker.status = "available"
+            db.commit()
+        regional_macro_status, _regional_macro_location, regional_macro_body = request("/regional")
+        assert regional_macro_status == 200 and macro_class_icon_url.encode("utf-8") in regional_macro_body, (
+            regional_macro_status, macro_class_icon_url,
+        )
     finally:
         from app.desktop.lifecycle import close_campaign
         close_campaign(app, saves, guard)

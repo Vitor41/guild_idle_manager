@@ -511,6 +511,49 @@ function initializeMarketEstimates(root = document) {
   root.querySelectorAll("[data-market-estimate]").forEach((node) => updateMarketEstimate(node));
 }
 
+function initializeUpdateChecks(root = document) {
+  root.querySelectorAll("[data-check-release-update], [data-check-local-update]").forEach((button) => {
+    const packagedCheck = button.hasAttribute("data-check-release-update");
+    const status = root.querySelector(packagedCheck ? "[data-release-update-status]" : "[data-local-update-status]");
+    if (!status || button.dataset.updateCheckBound === "true") return;
+    button.dataset.updateCheckBound = "true";
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      status.textContent = packagedCheck ? "Consultando versões assinadas…" : "Lendo a versão do checkout local…";
+      try {
+        const response = await fetch("/updates/check", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || (packagedCheck ? "Consulta indisponível." : "Verificação indisponível."));
+        if (result.failed) {
+          status.textContent = packagedCheck
+            ? `Não foi possível verificar atualizações: ${result.reason || "tente novamente."}`
+            : (result.reason || "Não foi possível verificar a versão local.");
+        } else if (packagedCheck && result.available) {
+          status.textContent = `A versão ${result.available_version} está disponível. Feche a campanha e abra o launcher pelo atalho para atualizar.`;
+        } else if (packagedCheck) {
+          status.textContent = result.reason || `Guild Idle Manager ${result.current_version} está atualizado.`;
+        } else if (result.available) {
+          status.textContent = `Versão ${result.available_version} detectada. Feche esta campanha para carregar os arquivos do projeto.`;
+        } else {
+          status.textContent = result.reason || `Checkout local na versão ${result.current_version}.`;
+        }
+      } catch (error) {
+        status.textContent = error.message || (packagedCheck
+          ? "Não foi possível consultar atualizações."
+          : "Não foi possível verificar a versão local.");
+      } finally {
+        button.disabled = packagedCheck && button.dataset.updateQueryEnabled === "false";
+      }
+    });
+  });
+}
+
+initializeUpdateChecks();
 initializeMarketEstimates();
 document.addEventListener("input", (event) => {
   if (!event.target.matches("[data-market-quantity]")) return;
@@ -831,11 +874,15 @@ function preserveRequestedNavigationFragment(responseUrl, requestedUrl) {
 
 let regionalEventTopbarObserver = null;
 let regionalEventTopbarObserved = null;
+let classesGuideIndexObserver = null;
+let classesGuideIndexObserved = null;
 
 function refreshRegionalEventAnchorOffset() {
   const topbar = document.querySelector(".game-topbar");
+  const classesGuideIndex = document.querySelector(".classes-page .classes-guide-index");
   const root = document.documentElement;
   let offset = 0;
+  let classesIndexOffset = 0;
   if (topbar) {
     const style = window.getComputedStyle(topbar);
     if (style.position === "sticky" || style.position === "fixed") {
@@ -843,8 +890,15 @@ function refreshRegionalEventAnchorOffset() {
       offset = Math.ceil(topbar.getBoundingClientRect().height + (Number.isFinite(top) ? Math.max(0, top) : 0));
     }
   }
+  if (classesGuideIndex) {
+    const style = window.getComputedStyle(classesGuideIndex);
+    if (style.position === "sticky" || style.position === "fixed") {
+      classesIndexOffset = Math.ceil(classesGuideIndex.getBoundingClientRect().height);
+    }
+  }
   root.style.setProperty("--game-sticky-topbar-height", `${offset}px`);
   root.style.setProperty("--regional-event-sticky-topbar-height", `${offset}px`);
+  root.style.setProperty("--classes-guide-index-height", `${classesIndexOffset}px`);
 
   if (regionalEventTopbarObserved !== topbar && regionalEventTopbarObserver) {
     if (regionalEventTopbarObserved) regionalEventTopbarObserver.unobserve(regionalEventTopbarObserved);
@@ -854,6 +908,15 @@ function refreshRegionalEventAnchorOffset() {
     regionalEventTopbarObserver ||= new ResizeObserver(() => refreshRegionalEventAnchorOffset());
     regionalEventTopbarObserved = topbar;
     regionalEventTopbarObserver.observe(topbar);
+  }
+  if (classesGuideIndexObserved !== classesGuideIndex && classesGuideIndexObserver) {
+    if (classesGuideIndexObserved) classesGuideIndexObserver.unobserve(classesGuideIndexObserved);
+    classesGuideIndexObserved = null;
+  }
+  if (classesGuideIndex && classesGuideIndexObserved !== classesGuideIndex && typeof ResizeObserver === "function") {
+    classesGuideIndexObserver ||= new ResizeObserver(() => refreshRegionalEventAnchorOffset());
+    classesGuideIndexObserved = classesGuideIndex;
+    classesGuideIndexObserver.observe(classesGuideIndex);
   }
 }
 
@@ -960,6 +1023,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  initializeUpdateChecks(currentMain);
   initializeGameGuideForContent(parsedDocument, currentMain);
   window.initializeEquipmentDetails?.(currentMain);
   window.initializeBuildingResetDialogs?.(currentMain);

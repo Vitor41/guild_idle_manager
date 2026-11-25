@@ -498,3 +498,7 @@ body[data-app-mode="desktop"] .offline-regional-context a,
 body[data-app-mode="desktop"] .offline-summary__notice a { display: inline-flex; align-items: center; min-width: 40px; min-height: 40px; padding: 4px 8px; border-radius: 5px; vertical-align: middle; }
 body[data-app-mode="desktop"] .offline-regional-context a:focus-visible,
 body[data-app-mode="desktop"] .offline-summary__notice a:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
+body[data-app-mode="desktop"] .tutorial-actions form[action="/tutorial/decline"] > button.text-button {
+  min-height: 40px;
+  padding-block: 8px;
+}

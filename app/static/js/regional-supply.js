@@ -84,6 +84,18 @@ window.initializeRegionalSupply = (root = document) => {
   root.querySelectorAll("form[data-supply-quote-url]").forEach((form) => {
     if (form.dataset.regionalSupplyInitialized === "true") return;
     form.dataset.regionalSupplyInitialized = "true";
+    const syncReinforcementBadges = () => {
+      const selectedIds = new Set(Array.from(form.querySelectorAll('input[name="mercenary_ids"]'))
+        .filter((input) => input.checked || input.dataset.preparedMemberHidden === "true")
+        .map((input) => String(input.value)));
+      form.querySelectorAll("[data-reinforcement-badge]").forEach((badge) => {
+        badge.hidden = !selectedIds.has(String(badge.dataset.reinforcementBadge));
+      });
+    };
+    form.addEventListener("change", (event) => {
+      if (event.target?.matches?.('input[name="mercenary_ids"]')) syncReinforcementBadges();
+    });
+    syncReinforcementBadges();
     const supply = form.querySelector('input[name="supply"]');
     const summary = form.querySelector(".supply-preparation small");
     if (!supply || !summary) return;

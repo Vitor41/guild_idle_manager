@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "components/drop_preview.html" import drop_preview with context %}
-{% from "components/regional_offer_actions.html" import offer_team_fieldset %}
+{% from "components/regional_offer_actions.html" import offer_team_fieldset with context %}
 {% block title %}Vigília Regional · Guild Idle Manager{% endblock %}
 {% block content %}
 <section class="evolution-page" aria-labelledby="evolution-title">
@@ -23,7 +23,7 @@
   </section>
 
   <section class="evolution-section regional-map-section" aria-labelledby="map-title">
-    <details class="regional-map-details"><summary>Estado das cinco regiões</summary>
+    <details class="regional-map-details"><summary id="map-title">Estado das cinco regiões</summary>
     <div class="evolution-region-grid">
       {% for region in regions %}
         <article class="evolution-region-card {% if region.region_code == home_region.region_code %}is-home{% endif %}">

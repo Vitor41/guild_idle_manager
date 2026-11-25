@@ -39,6 +39,7 @@ function makeEnvironment({
   };
   const summary = { textContent: "Cotação salva do preparo." };
   const status = { textContent: "Equipe preparada pré-selecionada." };
+  const reinforcementBadge = { dataset: { reinforcementBadge: "202" }, hidden: true };
   const preparedButton = prepared ? {
     name: "supply_mode",
     value: "prepared",
@@ -72,6 +73,7 @@ function makeEnvironment({
       if (selector.startsWith('input[name="mercenary_ids"]')) {
         return selector.endsWith(":checked") ? checkboxes.filter((input) => input.checked) : checkboxes;
       }
+      if (selector === "[data-reinforcement-badge]") return [reinforcementBadge];
       if (selector === 'select[name="run_multiplier"]') return [];
       return [];
     },
@@ -133,6 +135,7 @@ function makeEnvironment({
     progressBar,
     progressStatus,
     status,
+    reinforcementBadge,
     supply,
     summary,
     time,
@@ -154,12 +157,19 @@ test("prepared start does not request inventory or get canceled by a stale negat
   assert.equal(quoteRequests, 0);
   assert.equal(page.preparedButton.disabled, false);
   assert.match(page.status.textContent, /bônus do suprimento está pronto/);
+  assert.equal(page.reinforcementBadge.hidden, true, "an unselected reinforcement has no reinforcement badge");
 
   page.checkboxes[1].checked = true;
+  page.formListeners.change({ target: { matches: (selector) => selector === 'input[name="mercenary_ids"]' } });
+  assert.equal(page.reinforcementBadge.hidden, false, "selecting a reinforcement shows its badge");
   page.checkboxes[1].listeners.change();
   assert.equal(page.preparedButton.disabled, true);
   assert.match(page.status.textContent, /Há reforços selecionados/);
   assert.match(page.status.textContent, /Iniciar sem suprimento/);
+
+  page.checkboxes[1].checked = false;
+  page.formListeners.change({ target: { matches: (selector) => selector === 'input[name="mercenary_ids"]' } });
+  assert.equal(page.reinforcementBadge.hidden, true, "removing the selection hides its badge");
 
   let prevented = false;
   page.formListeners.submit({
