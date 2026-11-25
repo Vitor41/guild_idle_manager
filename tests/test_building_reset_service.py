@@ -545,7 +545,14 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertIn("Você recebe", html)
         self.assertIn("Capacidade após o reset", html)
         self.assertIn("estoque e reservas após a cobrança e os reembolsos", html)
+        self.assertIn('class="building-costs"', html)
+        self.assertIn('aria-label="Custo para o próximo nível"', html)
+        self.assertNotIn("0 ouro, 0 madeira, 0 minério, 0 cristais", html)
         reset_dialog = html.split('<dialog class="building-reset-dialog"', 1)[1].split("</dialog>", 1)[0]
+        self.assertIn('class="building-reset-provenance"><summary>Ver composição do investimento registrado</summary>', reset_dialog)
+        self.assertIn("<summary>Ver base da estimativa</summary>", reset_dialog)
+        self.assertNotIn('class="building-reset-provenance" open', reset_dialog)
+        self.assertIn("Estimativa de investimento antigo:", reset_dialog)
         self.assertIn('href="/market"', reset_dialog)
         self.assertIn("Vendas em andamento", reset_dialog)
         pending_materials = get_building_reset_preview(self.db, self.guild.id)["refund"]["pending_materials"]
@@ -562,6 +569,13 @@ class BuildingResetServiceTests(unittest.TestCase):
         self.assertIn('aria-live="polite" data-reset-status', html)
         self.assertEqual(self.db.scalar(select(func.count(GuildBuildingReset.id))), 0)
         self.assertIsNone(self.db.get(GuildBuildingResetState, self.guild.id))
+
+        with patch("app.routes.building_routes.get_current_guild_context", return_value=(self.guild, None)):
+            unavailable_response = buildings_index(Request(scope), self.db, user)
+        unavailable_html = unavailable_response.body.decode("utf-8")
+        self.assertIn('data-resource-total="gold">Indisponível</dd>', unavailable_html)
+        self.assertIn("Saldo indisponível", unavailable_html)
+        self.assertNotIn('data-resource-total="gold">0</dd>', unavailable_html)
 
         with patch("app.routes.building_routes.get_current_guild_context", return_value=(self.guild, self.resources)):
             response = reset_buildings(

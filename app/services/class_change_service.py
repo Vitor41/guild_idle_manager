@@ -114,7 +114,7 @@ def get_class_change_page_context(
         "finished_runs": [run for run in runs if run.status == "completed"][:10],
         "training_ground_level": training_ground_level,
         "requirement_steps": _transition_requirement_steps(
-            db, guild, int(resources.gold if resources is not None else 0),
+            db, guild, int(resources.gold) if resources is not None and resources.gold is not None else None,
             training_ground_level, all_mercenaries,
         ),
         "now": now,

@@ -1039,6 +1039,9 @@ button.is-loading::after {
 .building-reset-result { min-width: 0; overflow-wrap: anywhere; }
 .building-reset-columns h3,
 .building-reset-preview section h3 { margin-bottom: 8px; }
+.building-reset-provenance { margin-top: 8px; }
+.building-reset-provenance > summary { display: flex; align-items: center; min-height: 40px; padding: 6px 8px; cursor: pointer; color: var(--gold-2); }
+.building-reset-provenance > :not(summary) { margin-top: 8px; }
 .building-reset-blockers { padding-left: 24px; }
 .building-reset-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
 .building-reset-actions [role="status"] { flex-basis: 100%; margin: 0; text-align: right; }
@@ -1903,9 +1906,19 @@ textarea {
   padding-top: 16px;
 }
 
-.building-body .inline-stats {
-  grid-template-columns: 1fr;
-}
+.building-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0 0 12px; }
+.building-facts > div { display: grid; gap: 3px; min-width: 0; }
+.building-facts dt, .building-costs dt { color: var(--muted); font-size: .78rem; }
+.building-facts dd, .building-costs dd { margin: 0; overflow-wrap: anywhere; }
+.building-cost-section h4 { margin: 0 0 8px; color: var(--gold-2); }
+.building-costs { display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 8px; margin: 0; }
+.building-costs > div { display: grid; gap: 3px; min-width: 0; padding: 8px; border: 1px solid rgba(233,198,116,.2); border-radius: 8px; background: rgba(0,0,0,.12); }
+.building-costs dt [data-desktop-resource] { display: inline-flex; align-items: center; gap: 5px; }
+.building-costs .desktop-resource-art { width: 20px; height: 20px; object-fit: contain; }
+.building-costs dd { display: grid; gap: 2px; }
+.building-costs dd strong { color: var(--parchment-soft); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.building-costs dd small { color: var(--muted); }
+.building-costs dd small.is-short { color: var(--warning, #f0cb72); }
 
 .building-benefits { display: grid; gap: 5px; padding: 12px; border-left: 3px solid var(--green); background: rgba(110,168,90,.06); }
 .building-benefits.next { border-left-color: var(--gold); background: rgba(210,168,74,.06); }
@@ -1917,6 +1930,14 @@ textarea {
 .merc-choice { position: relative; }
 .profession-active { display: block; margin-top: 5px; color: var(--profession-color) !important; font-weight: 800; }
 .profession-card { border-color: var(--profession-color) !important; box-shadow: inset 3px 0 var(--profession-color); }
+.profession-card__heading { display: flex; align-items: center; gap: 10px; }
+.profession-card__heading .item-icon-frame { flex: 0 0 40px; width: 40px; height: 40px; }
+.profession-card__heading h3 { margin: 0; }
+.profession-card__heading .eyebrow { margin: 0 0 3px; }
+.profession-facts { display: grid; gap: 7px; margin: 12px 0 0; }
+.profession-facts > div { display: grid; grid-template-columns: minmax(110px, .7fr) minmax(0, 1fr); gap: 8px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.08); }
+.profession-facts dt { color: var(--muted); }
+.profession-facts dd { margin: 0; overflow-wrap: anywhere; }
 .long-idle-badge { border-color: var(--blue) !important; color: #bdddff !important; }
 .multi-select-options [data-close-multi-select] { position: sticky; bottom: 0; width: 100%; margin-top: 6px; }
 
@@ -2216,7 +2237,6 @@ textarea {
 .codex-legendary-card__reward strong { color: #f1d38e; }
 .codex-legendary-card__reward span, .codex-legendary-card__locked { color: var(--muted); font-size: .8rem; }
 .codex-legendary-card .progress-track { width: 100%; }
-.codex-collection-count { display: block; width: fit-content; margin: 0 0 14px auto; }
 .codex-card__heading { display: flex; align-items: center; gap: 9px; min-height: 48px; }
 .codex-card__heading img { flex: 0 0 48px; width: 48px; height: 48px; object-fit: contain; }
 .codex-card__icon-fallback { display: grid; flex: 0 0 48px; width: 48px; height: 48px; place-items: center; border-radius: 7px; color: var(--gold-2); background: rgba(210, 168, 74, .09); font-size: 1.8rem; }
@@ -2235,7 +2255,6 @@ textarea {
   .codex-legendary-card { grid-template-columns: minmax(0, 1fr); }
   .codex-legendary-card__art { min-height: 156px; }
   .codex-legendary-card__content { padding: 15px; }
-  .codex-collection-count { font-size: 1.1rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto !important; }
@@ -2295,6 +2314,9 @@ textarea {
 .class-requirement-checks li > span { color: var(--muted); overflow-wrap: anywhere; }
 .class-requirement-checks li > b { color: #e6b965; text-align: right; }
 .class-requirement-checks li.is-met > b { color: #9bd498; }
+.class-requirement-matrix { margin-top: 6px; }
+.class-requirement-matrix > summary { display: flex; align-items: center; min-height: 40px; cursor: pointer; color: var(--gold-2); }
+.class-requirement-checks--missing { margin-top: 8px; }
 .dungeon-purpose-strip { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; }
 .dungeon-purpose-strip > span { display: grid; gap: 3px; min-width: 0; padding: 9px 10px; border: 1px solid rgba(233, 198, 116, .18); border-radius: 6px; background: rgba(0, 0, 0, .16); }
 .dungeon-purpose-strip small { color: var(--muted); font-size: .72rem; }
