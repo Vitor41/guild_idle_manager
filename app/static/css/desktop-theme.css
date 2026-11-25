@@ -554,3 +554,29 @@ body[data-app-mode="desktop"] .tutorial-actions form[action="/tutorial/decline"]
   min-height: 40px;
   padding-block: 8px;
 }
+
+body[data-app-mode="desktop"] .achievement-card details > summary {
+  min-height: 40px;
+  padding: 10px 8px;
+  cursor: pointer;
+}
+body[data-app-mode="desktop"] .codex-card a,
+body[data-app-mode="desktop"] .codex-entry-detail .section-heading > a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+body[data-app-mode="desktop"] .achievement-card details > summary:focus-visible,
+body[data-app-mode="desktop"] .codex-card a:focus-visible,
+body[data-app-mode="desktop"] .codex-entry-detail .section-heading > a:focus-visible {
+  outline: 3px solid var(--gold-2);
+  outline-offset: 3px;
+}
+body[data-app-mode="desktop"] .building-card button:focus-visible,
+body[data-app-mode="desktop"] form[action="/professions/train"] button:focus-visible {
+  outline: 3px solid var(--gold-2);
+  outline-offset: 3px;
+}
+body[data-app-mode="desktop"] .profession-card .eyebrow { letter-spacing: 0; }

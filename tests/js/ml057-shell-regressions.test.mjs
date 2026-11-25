@@ -131,7 +131,7 @@ test("desktop art keeps the guild mark and uses the active navigation sprite whe
 });
 
 test("shell and page links keep the F01-F07 content and actions consistent", () => {
-  assert.match(baseTemplate, /desktop-theme\.css[^\"]*\?v=20261125-7/);
+  assert.match(baseTemplate, /desktop-theme\.css[^\"]*\?v=20261125-8/);
   assert.match(main, /GIMApplyDesktopArt\?\.\(document\)/);
   assert.match(main, /refreshResourceTotals\(\);/);
   assert.match(main, /initializeHeaderPopovers\(currentTopbar\)/);

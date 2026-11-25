@@ -99,7 +99,28 @@ class Ml056StateViewTests(unittest.TestCase):
         self.assertNotIn("Estado:", achievement)
         self.assertNotIn("Recompensa entregue", template)
         self.assertIn("category={{ selected_category }}&amp;trail={{ selected_trail }}#codex-entry-{{ selected_codex_entry.id }}", collection)
+        self.assertIn('href="/codex?category={{ selected_category }}&amp;trail={{ selected_trail }}&amp;entry={{ entry.id }}#codex-entry-detail"', template)
+        self.assertIn('href="/codex?category={{ selected_category }}&amp;trail={{ selected_trail }}#codex-entry-{{ selected_codex_entry.id }}"', template)
         self.assertIn("/codex/achievements/{{ achievement.id }}/claim", achievement)
+
+    def test_final_codex_targets_building_profession_focus_and_profession_eyebrow(self):
+        theme = (ROOT / "app/static/css/desktop-theme.css").read_text(encoding="utf-8")
+
+        codex_targets = theme.split(
+            'body[data-app-mode="desktop"] .codex-entry-detail .section-heading > a {',
+            1,
+        )[1].split("}", 1)[0]
+        self.assertIn("display: inline-flex", codex_targets)
+        self.assertIn("min-width: 40px", codex_targets)
+        self.assertIn("min-height: 40px", codex_targets)
+        self.assertIn('body[data-app-mode="desktop"] .achievement-card details > summary {', theme)
+        self.assertIn("body[data-app-mode=\"desktop\"] .achievement-card details > summary:focus-visible", theme)
+        self.assertIn("body[data-app-mode=\"desktop\"] .codex-card a:focus-visible", theme)
+        self.assertIn("outline: 3px solid var(--gold-2);", theme)
+        self.assertIn("outline-offset: 3px;", theme)
+        self.assertIn('body[data-app-mode="desktop"] .building-card button:focus-visible', theme)
+        self.assertIn('body[data-app-mode="desktop"] form[action="/professions/train"] button:focus-visible', theme)
+        self.assertIn('body[data-app-mode="desktop"] .profession-card .eyebrow { letter-spacing: 0; }', theme)
 
 
 if __name__ == "__main__":
