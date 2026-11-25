@@ -1141,6 +1141,7 @@ function lockTavernActionsUntilReload(form, submitter, previousUrl) {
 }
 
 document.addEventListener("submit", async (event) => {
+  if (event.defaultPrevented) return;
   const form = event.target;
   const method = form instanceof HTMLFormElement ? form.method.toLowerCase() : "";
   if (
