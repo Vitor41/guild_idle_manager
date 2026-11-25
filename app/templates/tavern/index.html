@@ -89,14 +89,13 @@
           {% set search_shortfall = apprentice_search_cost - (resources.gold if resources else 0) %}
           <p class="note">Indisponível: faltam {{ search_shortfall }} ouro para buscar outro Aprendiz.</p>
         {% endif %}
-        {% set apprentice_gold_shortfall = current_apprentice_final_cost - (resources.gold if resources else 0) %}
         <form class="form-stack candidate-hire-form" method="post" action="/tavern/hire-apprentice" data-tavern-candidate-price-mutation>
           <p class="note candidate-hire-form__summary">Contratar este candidato · <strong>{{ current_apprentice_final_cost }} ouro</strong> · Ocupação {{ mercenary_count }}/{{ mercenary_limit }}</p>
           <label>Nome do Aprendiz <input type="text" name="name" required></label>
           <input type="hidden" name="preview_id" value="{{ apprentice_preview.preview_id }}">
           <input type="hidden" name="expected_hire_cost" value="{{ current_apprentice_final_cost }}">
           <button type="submit" {% if mercenary_count >= mercenary_limit or not resources or resources.gold < current_apprentice_final_cost %}disabled{% endif %}>Contratar Aprendiz</button>
-          {% if mercenary_count >= mercenary_limit %}<p class="note candidate-hire-form__reason">Indisponível: libere uma vaga no Alojamento para contratar.</p>{% elif not resources or resources.gold < current_apprentice_final_cost %}<p class="note candidate-hire-form__reason">Indisponível: faltam {{ apprentice_gold_shortfall }} ouro para contratar.</p>{% endif %}
+          {% if mercenary_count >= mercenary_limit %}<p class="note candidate-hire-form__reason">Indisponível: libere uma vaga no Alojamento para contratar.</p>{% elif not resources %}<p class="note candidate-hire-form__reason">Indisponível: saldo de ouro não informado; confira os recursos antes de contratar.</p>{% elif resources.gold < current_apprentice_final_cost %}{% set apprentice_gold_shortfall = current_apprentice_final_cost - resources.gold %}<p class="note candidate-hire-form__reason">Indisponível: faltam {{ apprentice_gold_shortfall }} ouro para contratar.</p>{% endif %}
         </form>
         <form
           class="form-stack bulk-hire-form"
@@ -115,7 +114,7 @@
           <button type="submit" {% if mercenary_count + bulk_hire_count > mercenary_limit or not resources or resources.gold < bulk_hire_cost %}disabled{% endif %}>
             Contratar {{ bulk_hire_count }}
           </button>
-          {% if mercenary_count + bulk_hire_count > mercenary_limit %}<p class="note bulk-hire-form__reason">Indisponível: libere {{ mercenary_count + bulk_hire_count - mercenary_limit }} vagas para contratar {{ bulk_hire_count }} Aprendizes.</p>{% elif not resources or resources.gold < bulk_hire_cost %}{% set bulk_hire_gold_shortfall = bulk_hire_cost - (resources.gold if resources else 0) %}<p class="note bulk-hire-form__reason">Indisponível: faltam {{ bulk_hire_gold_shortfall }} ouro para esta contratação.</p>{% endif %}
+          {% if mercenary_count + bulk_hire_count > mercenary_limit %}<p class="note bulk-hire-form__reason">Indisponível: libere {{ mercenary_count + bulk_hire_count - mercenary_limit }} vagas para contratar {{ bulk_hire_count }} Aprendizes.</p>{% elif not resources %}<p class="note bulk-hire-form__reason">Indisponível: saldo de ouro não informado; confira os recursos antes de contratar.</p>{% elif resources.gold < bulk_hire_cost %}{% set bulk_hire_gold_shortfall = bulk_hire_cost - resources.gold %}<p class="note bulk-hire-form__reason">Indisponível: faltam {{ bulk_hire_gold_shortfall }} ouro para esta contratação.</p>{% endif %}
         </form>
       </article>
 

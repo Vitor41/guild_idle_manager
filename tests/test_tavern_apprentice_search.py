@@ -151,13 +151,30 @@ class TavernApprenticeSearchTests(unittest.TestCase):
             self.assertIn('name="expected_hire_cost"', html)
             self.assertIn("Buscar outro Aprendiz (", html)
             self.assertIn("Contratar Aprendiz", html)
+            available_hire_form = html.split('action="/tavern/hire-apprentice"', 1)[1].split("</form>", 1)[0]
+            self.assertNotIn("disabled", available_hire_form)
             resources = db.scalar(select(GuildResources).where(GuildResources.guild_id == self.guild_id))
+            housing = get_guild_building_by_effect(db, self.guild_id, "housing")
+            housing.level = 100
             resources.gold = 0
             db.commit()
             blocked_html = tavern_index(self._get_request(), db, player).body.decode("utf-8")
             hire_form = blocked_html.split('action="/tavern/hire-apprentice"', 1)[1].split("</form>", 1)[0]
             self.assertIn("disabled", hire_form)
             self.assertIn("faltam", hire_form)
+            bulk_form = blocked_html.split('action="/tavern/hire-apprentices-bulk"', 1)[1].split("</form>", 1)[0]
+            self.assertIn("faltam", bulk_form)
+            with patch(
+                "app.routes.tavern_routes.get_current_guild_context",
+                return_value=(db.get(Guild, self.guild_id), None),
+            ):
+                unknown_balance_html = tavern_index(self._get_request(), db, player).body.decode("utf-8")
+            unknown_hire_form = unknown_balance_html.split('action="/tavern/hire-apprentice"', 1)[1].split("</form>", 1)[0]
+            unknown_bulk_form = unknown_balance_html.split('action="/tavern/hire-apprentices-bulk"', 1)[1].split("</form>", 1)[0]
+            self.assertIn("saldo de ouro não informado", unknown_hire_form)
+            self.assertIn("saldo de ouro não informado", unknown_bulk_form)
+            self.assertNotIn("faltam", unknown_hire_form)
+            self.assertNotIn("faltam", unknown_bulk_form)
 
     def test_reload_keeps_preview_and_double_post_only_charges_once(self):
         with SessionLocal() as db:

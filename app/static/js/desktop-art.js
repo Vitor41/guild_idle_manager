@@ -69,6 +69,14 @@
     pistoleiro: "shooter",
     sacerdote: "high_priest",
   };
+
+  function classSpriteKey(value, iconMaps, sprites) {
+    const code = normalizeKey(value);
+    const canonical = classAliases[code] || code;
+    const key = iconMaps.classes?.[canonical] || `class-${canonical}`;
+    return sprites?.[key] ? key : null;
+  }
+
   let desktopArtManifestPromise = null;
 
   function loadDesktopArtManifest() {
@@ -93,6 +101,18 @@
     element.dataset.desktopArtApplied = key;
   }
 
+  function applyTitleArt(queryRoot, title, titleSprite, spriteUrl) {
+    const detailClassMark = queryRoot.querySelector(".desktop-detail-class-mark");
+    if (detailClassMark) {
+      queryRoot.querySelectorAll(".desktop-title-art").forEach((image) => image.remove());
+      return;
+    }
+    const iconUrl = titleSprite && spriteUrl(titleSprite);
+    if (title && iconUrl && !title.querySelector(".desktop-title-art")) {
+      title.prepend(makeImage(iconUrl, "desktop-title-art"));
+    }
+  }
+
   async function applyDesktopArt(root = document) {
     const queryRoot = root && typeof root.querySelectorAll === "function" ? root : document;
     body.dataset.desktopArtStatus = "loading";
@@ -114,10 +134,8 @@
       let currentNavigationArtKey = null;
 
       for (const element of queryRoot.querySelectorAll("[data-desktop-class]")) {
-        const code = normalizeKey(element.dataset.desktopClass);
-        const canonical = classAliases[code] || code;
-        const key = iconMaps.classes?.[canonical] || `class-${canonical}`;
-        if (manifest.sprites?.[key]) installEntityIcon(element, key, spriteUrl);
+        const key = classSpriteKey(element.dataset.desktopClass, iconMaps, manifest.sprites);
+        if (key) installEntityIcon(element, key, spriteUrl);
       }
 
       for (const element of queryRoot.querySelectorAll("[data-desktop-building]")) {
@@ -219,10 +237,7 @@
 
       const title = queryRoot.querySelector("main.game-shell h1, main.desktop-shell h1");
       const titleSprite = currentArt?.sprite || currentNavigationArtKey;
-      const iconUrl = titleSprite && spriteUrl(titleSprite);
-      if (title && iconUrl && !title.querySelector(".desktop-title-art")) {
-        title.prepend(makeImage(iconUrl, "desktop-title-art"));
-      }
+      applyTitleArt(queryRoot, title, titleSprite, spriteUrl);
 
       if (!currentArt) return;
 
