@@ -277,9 +277,15 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('const page = document.querySelector("[data-gathering-status-url]");', script)
         self.assertIn('if (!page.isConnected || document.querySelector("[data-gathering-status-url]") !== page) return;', script)
         self.assertIn('window.setInterval(refreshGatheringStatus, 15000)', script)
-        self.assertIn('counter.textContent = String(state.inventory_by_family', script)
-        self.assertIn('warehouseProgress.value = Math.min(state.warehouse.used, state.warehouse.capacity)', script)
+        self.assertIn('counter.textContent = String(quantity)', script)
+        self.assertIn('Object.prototype.hasOwnProperty.call(state.inventory_by_family, family)', script)
+        self.assertIn('const displayedUsed = Math.min(used, capacity)', script)
+        self.assertIn('typeof value === "number" && Number.isFinite(value)', script)
+        self.assertIn('typeof assignment.capacity_paused !== "boolean"', script)
         self.assertIn('cycleUpdaters.get(cycle)?.(assignment.progress_seconds)', script)
+        evolution_css = self.read("app/static/css/desktop-evolution.css")
+        self.assertIn('.evolution-status[hidden] { display: none !important; }', evolution_css)
+        self.assertIn('color: var(--e-blue, var(--blue))', evolution_css)
 
     def test_naive_sqlite_utc_timestamps_are_parsed_as_utc(self):
         main = self.read("app/static/js/main.js")

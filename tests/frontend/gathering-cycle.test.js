@@ -15,14 +15,14 @@ function makeClassList(initial) {
 }
 
 test("polling synchronizes gathering states, preserved progress, and warehouse capacity", async () => {
-  const warehouseLabel = { textContent: "90 / 100" };
+  const warehouseLabel = { textContent: "0 / 2500" };
   const warehouseProgress = {
-    max: 100,
-    value: 90,
-    attributes: new Map([["aria-label", "Armazém: 90 de 100"]]),
+    max: 2500,
+    value: 0,
+    attributes: new Map([["aria-label", "Armazém: 0 de 2500"]]),
     setAttribute(name, value) { this.attributes.set(name, value); },
   };
-  const capacityState = { hidden: true };
+  const capacityState = { hidden: false };
   const targetLabel = { textContent: "Alvo desta designação:" };
   const targetValue = { textContent: "Madeira · Comum" };
   let statusText = "Em produção · Lina";
@@ -84,29 +84,41 @@ test("polling synchronizes gathering states, preserved progress, and warehouse c
     querySelectorAll: (selector) => selector === "[data-gathering-cycle]" ? [cycle] : [],
   };
   const intervals = [];
+  let reloadCount = 0;
   const window = {
     matchMedia: () => ({ matches: true }),
     setInterval(callback) { intervals.push(callback); return intervals.length; },
     clearInterval() {},
+    location: { reload() { reloadCount += 1; } },
   };
   const states = [
     {
-      warehouse: { used: 90, capacity: 100 },
+      warehouse: { used: 0, capacity: 2500 },
       inventory_by_family: {},
       assignments: { wood: { progress_seconds: 20, capacity_paused: false, catalog_unavailable: false, worker: "Lina", target_item_name: "Madeira", target_item_rarity: "common" } },
     },
     {
-      warehouse: { used: 100, capacity: 100 },
+      warehouse: { used: 2500, capacity: 2500 },
       inventory_by_family: {},
       assignments: { wood: { progress_seconds: 23, capacity_paused: true, catalog_unavailable: false, worker: "Lina", target_item_name: "Madeira", target_item_rarity: "common" } },
     },
     {
-      warehouse: { used: 100, capacity: 100 },
+      warehouse: { used: 2600, capacity: 2500 },
       inventory_by_family: {},
       assignments: { wood: { progress_seconds: 23, capacity_paused: true, catalog_unavailable: false, worker: "Lina", target_item_name: "Madeira", target_item_rarity: "common" } },
     },
     {
-      warehouse: { used: 95, capacity: 120 },
+      warehouse: { used: 2600, capacity: 2500 },
+      inventory_by_family: {},
+      assignments: { wood: { progress_seconds: 23, capacity_paused: true, catalog_unavailable: false, worker: "Lina", target_item_name: "Madeira", target_item_rarity: "common" } },
+    },
+    {
+      warehouse: { used: null, capacity: 2500 },
+      inventory_by_family: {},
+      assignments: { wood: { progress_seconds: null, capacity_paused: false, catalog_unavailable: false, worker: "Lina", target_item_name: "Madeira", target_item_rarity: "common" } },
+    },
+    {
+      warehouse: { used: 2490, capacity: 2500 },
       inventory_by_family: {},
       assignments: { wood: { progress_seconds: 41, capacity_paused: false, catalog_unavailable: false, worker: "Lina", target_item_name: "Madeira", target_item_rarity: "common" } },
     },
@@ -121,6 +133,8 @@ test("polling synchronizes gathering states, preserved progress, and warehouse c
   assert.equal(status.classList.contains("evolution-status--active"), true);
   assert.equal(cycle.hidden, false);
   assert.equal(progress.value, 20);
+  assert.equal(capacityState.hidden, true, "free capacity hides the warehouse warning");
+  assert.equal(warehouseLabel.textContent, "0 / 2.500");
 
   await poll();
   assert.equal(status.textContent, "Pausada · Armazém cheio · Lina");
@@ -129,15 +143,29 @@ test("polling synchronizes gathering states, preserved progress, and warehouse c
   assert.equal(cycle.hidden, true);
   assert.equal(capacityHelp.hidden, false);
   assert.equal(progress.value, 23, "paused progress remains authoritative and does not advance locally");
-  assert.equal(warehouseLabel.textContent, "100 / 100");
-  assert.equal(warehouseProgress.max, 100);
-  assert.equal(warehouseProgress.value, 100);
-  assert.equal(warehouseProgress.attributes.get("aria-label"), "Armazém: 100 de 100");
+  assert.equal(warehouseLabel.textContent, "2.500 / 2.500");
+  assert.equal(warehouseProgress.max, 2500);
+  assert.equal(warehouseProgress.value, 2500);
+  assert.equal(warehouseProgress.attributes.get("aria-label"), "Armazém: 2500 de 2500");
   assert.equal(capacityState.hidden, false);
+
+  await poll();
+  assert.equal(warehouseLabel.textContent, "2.600 / 2.500", "legitimate over-capacity stock is shown instead of discarded");
+  assert.equal(warehouseProgress.value, 2500, "the visual meter remains bounded by its capacity");
+  assert.equal(warehouseProgress.attributes.get("aria-label"), "Armazém: 2600 de 2500");
   const writesWhilePaused = statusWrites;
 
   await poll();
   assert.equal(statusWrites, writesWhilePaused, "unchanged polling does not repeat the status announcement");
+  assert.equal(capacityState.hidden, false);
+
+  await poll();
+  assert.equal(statusWrites, writesWhilePaused, "null fields keep the last coherent paused state");
+  assert.equal(status.classList.contains("evolution-status--paused"), true);
+  assert.equal(cycle.hidden, true, "an invalid payload cannot reactivate the timer");
+  assert.equal(progress.value, 23);
+  assert.equal(warehouseLabel.textContent, "2.600 / 2.500");
+  assert.equal(warehouseProgress.attributes.get("aria-label"), "Armazém: 2600 de 2500");
   assert.equal(capacityState.hidden, false);
 
   await poll();
@@ -147,11 +175,12 @@ test("polling synchronizes gathering states, preserved progress, and warehouse c
   assert.equal(cycle.hidden, false);
   assert.equal(capacityHelp.hidden, true);
   assert.equal(progress.value, 41);
-  assert.equal(warehouseLabel.textContent, "95 / 120");
-  assert.equal(warehouseProgress.max, 120);
-  assert.equal(warehouseProgress.value, 95);
-  assert.equal(warehouseProgress.attributes.get("aria-label"), "Armazém: 95 de 120");
+  assert.equal(warehouseLabel.textContent, "2.490 / 2.500");
+  assert.equal(warehouseProgress.max, 2500);
+  assert.equal(warehouseProgress.value, 2490);
+  assert.equal(warehouseProgress.attributes.get("aria-label"), "Armazém: 2490 de 2500");
   assert.equal(capacityState.hidden, true);
+  assert.equal(reloadCount, 0, "free → full → resumed status is reflected without a page reload");
 });
 
 test("catalog recovery refreshes the saved target label and resumes the live status", async () => {
