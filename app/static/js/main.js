@@ -827,6 +827,37 @@ function syncCurrentSidebarPage(pathname) {
   }
 }
 
+let guideAssetLoadPromise = null;
+function initializeGameGuideForContent(parsedDocument, currentMain) {
+  const guideRoot = currentMain.querySelector(".game-guide");
+  if (!guideRoot) return;
+  if (typeof window.initializeGameGuide === "function") {
+    window.initializeGameGuide(guideRoot);
+    return;
+  }
+  const utilitySrc = parsedDocument.querySelector('script[src*="/js/guide-utils.js"]')?.getAttribute("src");
+  const guideSrc = parsedDocument.querySelector('script[src*="/js/guide.js"]')?.getAttribute("src");
+  if (!utilitySrc || !guideSrc) return;
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", reject, { once: true });
+    document.head.append(script);
+  });
+  guideAssetLoadPromise ||= loadScript(utilitySrc)
+    .then(() => loadScript(guideSrc))
+    .catch((error) => {
+      guideAssetLoadPromise = null;
+      throw error;
+    });
+  void guideAssetLoadPromise.then(() => {
+    if (document.querySelector(".game-guide") === guideRoot) {
+      window.initializeGameGuide?.(guideRoot);
+    }
+  }).catch((error) => console.error("Não foi possível inicializar o Guia após a navegação.", error));
+}
+
 function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
   const nextUrl = new URL(responseUrl, window.location.origin);
@@ -839,6 +870,7 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  initializeGameGuideForContent(parsedDocument, currentMain);
   window.initializeEquipmentDetails?.(currentMain);
   window.initializeBuildingResetDialogs?.(currentMain);
   initializeMarketEstimates(currentMain);
