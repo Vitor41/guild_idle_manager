@@ -54,6 +54,96 @@ window.GIMStartupModalQueue = startupModalQueue;
 
 let navigationWorkStatusRequest = null;
 let navigationWorkStatusController = null;
+let regionalEventsRefreshRequest = null;
+
+async function refreshRegionalEventsPageFromServer() {
+  if (regionalEventsRefreshRequest) return regionalEventsRefreshRequest;
+  const currentUrl = new URL(window.location.href);
+  if (currentUrl.pathname !== "/regional/events") return false;
+  const currentRoot = document.querySelector(".regional-events-page[data-regional-events]");
+  if (!currentRoot) return false;
+
+  const pendingRequest = fetch(`${currentUrl.pathname}${currentUrl.search}`, {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
+  }).then(async (response) => {
+    if (!response.ok) return false;
+    const responseUrl = response.url ? new URL(response.url, currentUrl) : currentUrl;
+    if (responseUrl.origin !== currentUrl.origin || responseUrl.pathname !== currentUrl.pathname) return false;
+    const parsedDocument = new DOMParser().parseFromString(await response.text(), "text/html");
+    const incomingRoot = parsedDocument.querySelector(".regional-events-page[data-regional-events]");
+    if (!incomingRoot || window.location.pathname !== currentUrl.pathname
+        || document.querySelector(".regional-events-page[data-regional-events]") !== currentRoot) return false;
+
+    const formState = captureGameFormState();
+    const activeElement = document.activeElement;
+    let focusState = null;
+    if (activeElement && currentRoot.contains(activeElement)) {
+      const form = activeElement.form || activeElement.closest?.("form");
+      if (activeElement.id) {
+        focusState = { id: activeElement.id };
+      } else if (form && activeElement.name) {
+        const matchingControls = Array.from(form.elements).filter(
+          (control) => getControlStateKey(control) === getControlStateKey(activeElement),
+        );
+        focusState = {
+          formKey: getFormStateKey(form),
+          controlKey: getControlStateKey(activeElement),
+          controlIndex: matchingControls.indexOf(activeElement),
+          selectionStart: typeof activeElement.selectionStart === "number" ? activeElement.selectionStart : null,
+          selectionEnd: typeof activeElement.selectionEnd === "number" ? activeElement.selectionEnd : null,
+        };
+      }
+    }
+    const openDetails = Array.from(currentRoot.querySelectorAll("details[open]")).map((details) => ({
+      id: details.id,
+      index: Array.from(currentRoot.querySelectorAll("details")).indexOf(details),
+    }));
+    const scrollPosition = window.scrollY;
+    const replacement = document.importNode(incomingRoot, true);
+    currentRoot.replaceWith(replacement);
+
+    const replacementDetails = Array.from(replacement.querySelectorAll("details"));
+    for (const detail of openDetails) {
+      const target = (detail.id && replacement.querySelector(`#${detail.id}`)) || replacementDetails[detail.index];
+      if (target) target.open = true;
+    }
+    restoreGameFormState(formState);
+    window.GIMApplyDesktopArt?.(replacement);
+    window.initializeRegionalSupply?.(replacement);
+    updateGenericCountdowns();
+    window.refreshRegionalEventAnchorOffset?.();
+
+    let focusTarget = focusState?.id ? document.getElementById(focusState.id) : null;
+    if (!focusTarget && focusState?.formKey) {
+      const form = Array.from(replacement.querySelectorAll("form")).find(
+        (candidate) => getFormStateKey(candidate) === focusState.formKey,
+      );
+      const matches = form
+        ? Array.from(form.elements).filter((control) => getControlStateKey(control) === focusState.controlKey)
+        : [];
+      focusTarget = matches[focusState.controlIndex] || matches[0] || null;
+    }
+    focusTarget?.focus?.({ preventScroll: true });
+    if (focusTarget && Number.isInteger(focusState?.selectionStart)
+        && typeof focusTarget.setSelectionRange === "function") {
+      focusTarget.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
+    }
+    window.scrollTo({ top: scrollPosition, behavior: "auto" });
+    return true;
+  }).catch(() => {
+    // Keep the last rendered event state when the authoritative page request fails.
+    return false;
+  }).finally(() => {
+    if (regionalEventsRefreshRequest === pendingRequest) regionalEventsRefreshRequest = null;
+  });
+  regionalEventsRefreshRequest = pendingRequest;
+  return regionalEventsRefreshRequest;
+}
+window.refreshRegionalEventsPageFromServer = refreshRegionalEventsPageFromServer;
+
 async function refreshNavigationWorkIndicators(force = false) {
   if (navigationWorkStatusRequest && !force) return navigationWorkStatusRequest;
   if (force) navigationWorkStatusController?.abort();
@@ -61,6 +151,8 @@ async function refreshNavigationWorkIndicators(force = false) {
   if (!links.length) return;
   const controller = new AbortController();
   navigationWorkStatusController = controller;
+  let refreshRegionalEvents = false;
+  let regionalEventStatusTransition = null;
   const markUnavailable = (link) => {
     link.querySelector(".nav-work-indicator")?.remove();
     const indicator = document.createElement("span");
@@ -94,6 +186,16 @@ async function refreshNavigationWorkIndicators(force = false) {
       }
       const active = status.active;
       const ready = status.ready;
+      const previousActive = Number(link.dataset.workActive);
+      const previousReady = Number(link.dataset.workReady);
+      if (link.dataset.navWorkMenu === "regional_events"
+          && Number.isInteger(previousActive) && Number.isInteger(previousReady)
+          && (previousActive !== active || previousReady !== ready)) {
+        refreshRegionalEvents = true;
+        regionalEventStatusTransition = { link, previousActive, previousReady, active, ready };
+      }
+      link.dataset.workActive = String(active);
+      link.dataset.workReady = String(ready);
       link.querySelector(".nav-work-indicator")?.remove();
       if (!active && !ready) {
         link.removeAttribute("data-work-state");
@@ -112,6 +214,24 @@ async function refreshNavigationWorkIndicators(force = false) {
       const accessibleLabel = `${status.label || link.dataset.navWorkLabel || "Atividade pendente"}${inviteNote}`;
       link.setAttribute("aria-label", accessibleLabel);
       link.title = accessibleLabel;
+    }
+    if (refreshRegionalEvents && window.location.pathname === "/regional/events") {
+      const pageRefresh = window.refreshRegionalEventsPageFromServer?.();
+      const restorePreviousCounts = () => {
+        if (!regionalEventStatusTransition) return;
+        const { link, previousActive, previousReady, active, ready } = regionalEventStatusTransition;
+        if (link.dataset.workActive === String(active) && link.dataset.workReady === String(ready)) {
+          link.dataset.workActive = String(previousActive);
+          link.dataset.workReady = String(previousReady);
+        }
+      };
+      if (pageRefresh && typeof pageRefresh.then === "function") {
+        void pageRefresh.then((updated) => {
+          if (updated !== true) restorePreviousCounts();
+        }).catch(restorePreviousCounts);
+      } else {
+        restorePreviousCounts();
+      }
     }
   }).catch(() => {
     if (!controller.signal.aborted) links.forEach(markUnavailable);

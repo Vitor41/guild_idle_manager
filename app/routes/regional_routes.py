@@ -1328,7 +1328,7 @@ async def regional_portal_supply_quote(
     from app.repositories.mercenary_repository import list_available_mercenaries_by_ids
     from app.services.dungeon_service import (
         get_advanced_dungeon_chance, parse_dungeon_mercenary_ids,
-        scouts_values, validate_advanced_party_requirements, validate_dungeon_requirements,
+        scouts_values, validate_dungeon_party_requirements, validate_dungeon_requirements,
     )
     from app.services.building_service import get_building_level
     from app.services.skill_service import get_party_skill_effects
@@ -1353,11 +1353,9 @@ async def regional_portal_supply_quote(
         return JSONResponse({"available": False, "reason": "Conteúdo do chefe indisponível."}, status_code=409)
     try:
         validate_dungeon_requirements(db, guild, template)
-        validate_advanced_party_requirements(db, guild, template, members)
+        validate_dungeon_party_requirements(db, guild, template, members)
     except ValueError as error:
         return JSONResponse({"available": False, "reason": str(error)})
-    if not template.min_party_size <= len(members) <= template.max_party_size:
-        return JSONResponse({"available": False, "reason": "O grupo não atende ao tamanho exigido pelo chefe."})
     chance = get_advanced_dungeon_chance(db, guild.id, template, members)["final_chance"]
     chance = min(95, chance + scouts_values(get_building_level(db, guild.id, "scouts"))["success_bonus_percentage_points"])
     skills = get_party_skill_effects(db, members)

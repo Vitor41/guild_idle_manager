@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from itertools import combinations
 from math import floor
 from random import Random, randint
 import json
@@ -6,12 +7,13 @@ from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from sqlalchemy import func, select, text, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.time import as_utc, prepare_timer_context
 from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.guild import Guild, GuildResources
 from app.models.item import ItemTemplate
+from app.models.mercenary import Mercenary
 from app.repositories.dungeon_repository import (
     count_awaiting_dungeon_loot,
     count_dungeon_runs_by_status,
@@ -42,6 +44,7 @@ from app.services.equipment_service import (
     create_equipment_instance_from_template,
     format_equipment_bonus,
     get_mission_chance_details,
+    get_party_validation_data,
     get_party_chance_details,
 )
 from app.services.guild_progression_service import add_guild_xp_from_mercenary_xp
@@ -235,11 +238,24 @@ def get_group_synergy_power_bonus(mercenaries, template: DungeonTemplate | None 
     return 200 if satisfied else 0
 
 
-def validate_advanced_party_requirements(db: Session, guild: Guild, template: DungeonTemplate, mercenaries) -> None:
+def validate_advanced_party_requirements(
+    db: Session,
+    guild: Guild,
+    template: DungeonTemplate,
+    mercenaries,
+    *,
+    validation_data: dict[str, object] | None = None,
+) -> None:
     if template.content_type != "boss":
         return
     introductory_boss = template.level_band == "1-20" and template.recommended_level <= 1
-    total_power = get_party_power_score(db, guild.id, mercenaries) + get_group_synergy_power_bonus(mercenaries, template)
+    power_scores = validation_data.get("power_scores", {}) if validation_data else {}
+    total_party_power = (
+        sum(int(power_scores.get(mercenary.id, 0)) for mercenary in mercenaries)
+        if validation_data is not None
+        else get_party_power_score(db, guild.id, mercenaries)
+    )
+    total_power = total_party_power + get_group_synergy_power_bonus(mercenaries, template)
     if not introductory_boss and total_power < template.required_total_power:
         raise DungeonError(f"O grupo precisa de Poder Total {template.required_total_power}.")
     if introductory_boss:
@@ -253,9 +269,81 @@ def validate_advanced_party_requirements(db: Session, guild: Guild, template: Du
         raise DungeonError("A composicao do grupo nao atende aos papeis exigidos.")
     if template.required_equipment_tier > 0:
         for mercenary in mercenaries:
-            equipment = list_equipment_for_mercenary(db, guild.id, mercenary.id)
+            equipment_by_mercenary_id = (
+                validation_data.get("equipment_by_mercenary_id", {}) if validation_data else {}
+            )
+            equipment = (
+                equipment_by_mercenary_id.get(mercenary.id, [])
+                if validation_data is not None
+                else list_equipment_for_mercenary(db, guild.id, mercenary.id)
+            )
             if not any(item.item_template.tier >= template.required_equipment_tier for item in equipment):
                 raise DungeonError(f"Todos precisam de equipamento Tier {template.required_equipment_tier} ou superior.")
+
+
+def validate_dungeon_party_requirements(
+    db: Session,
+    guild: Guild,
+    template: DungeonTemplate,
+    mercenaries,
+    *,
+    party_bounds: tuple[int, int] | None = None,
+    validation_data: dict[str, object] | None = None,
+) -> None:
+    """Validate the exact size and advanced requirements used for a dungeon start."""
+    minimum_party, maximum_party = party_bounds or (
+        template.min_party_size, template.max_party_size,
+    )
+    if len(mercenaries) < minimum_party:
+        raise DungeonError("Grupo menor que o mínimo exigido para esta masmorra.")
+    if len(mercenaries) > maximum_party:
+        raise DungeonError("Grupo maior que o máximo permitido para esta masmorra.")
+    validate_advanced_party_requirements(
+        db, guild, template, mercenaries, validation_data=validation_data,
+    )
+
+
+def has_startable_dungeon_party(
+    db: Session,
+    guild: Guild,
+    template: DungeonTemplate,
+    *,
+    party_bounds: tuple[int, int] | None = None,
+) -> bool:
+    """Read-only check for whether one currently available, valid party can start."""
+    if not are_dungeons_available(db, guild.id):
+        return False
+    try:
+        validate_dungeon_requirements(db, guild, template)
+    except DungeonError:
+        return False
+    if get_active_dungeon_run_for_template(db, guild.id, template.id) is not None:
+        return False
+
+    minimum_party, maximum_party = party_bounds or (
+        template.min_party_size, template.max_party_size,
+    )
+    if minimum_party < 1 or maximum_party < minimum_party:
+        return False
+    available = list(db.scalars(
+        select(Mercenary)
+        .options(joinedload(Mercenary.mercenary_class))
+        .where(Mercenary.guild_id == guild.id, Mercenary.status == "available")
+        .order_by(Mercenary.id)
+    ))
+    largest_party = min(maximum_party, len(available))
+    validation_data = get_party_validation_data(db, guild.id, available) if template.content_type == "boss" else None
+    for party_size in range(minimum_party, largest_party + 1):
+        for party in combinations(available, party_size):
+            try:
+                validate_dungeon_party_requirements(
+                    db, guild, template, party, party_bounds=(minimum_party, maximum_party),
+                    validation_data=validation_data,
+                )
+            except DungeonError:
+                continue
+            return True
+    return False
 
 
 def apply_introductory_boss_access_rule(db: Session) -> dict[str, int]:
@@ -352,14 +440,10 @@ def get_dungeon_supply_quote(
         return {"available": False, "reason": "Masmorra indisponível."}
     try:
         validate_dungeon_requirements(db, guild, template)
-        if len(parsed_ids) < template.min_party_size:
-            raise DungeonError("Grupo menor que o mínimo exigido para esta masmorra.")
-        if len(parsed_ids) > template.max_party_size:
-            raise DungeonError("Grupo maior que o máximo permitido para esta masmorra.")
         mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_ids)
         if len(mercenaries) != len(parsed_ids):
             raise DungeonError("Mercenário indisponível.")
-        validate_advanced_party_requirements(db, guild, template, mercenaries)
+        validate_dungeon_party_requirements(db, guild, template, mercenaries)
     except DungeonError as error:
         return {"available": False, "reason": str(error)}
 
@@ -563,18 +647,12 @@ def start_dungeon(
     if get_active_dungeon_run_for_template(db, guild.id, dungeon_template.id) is not None:
         raise DungeonError("Esta masmorra está fechada enquanto outro grupo da guilda está em exploração.")
 
-    minimum_party, maximum_party = regional_party_bounds or (
-        dungeon_template.min_party_size, dungeon_template.max_party_size,
-    )
-    if len(parsed_ids) < minimum_party:
-        raise DungeonError("Grupo menor que o mínimo exigido para esta masmorra.")
-    if len(parsed_ids) > maximum_party:
-        raise DungeonError("Grupo maior que o máximo permitido para esta masmorra.")
-
     mercenaries = list_available_mercenaries_by_ids(db, guild.id, parsed_ids)
     if len(mercenaries) != len(parsed_ids):
         raise DungeonError("Mercenário indisponível.")
-    validate_advanced_party_requirements(db, guild, dungeon_template, mercenaries)
+    validate_dungeon_party_requirements(
+        db, guild, dungeon_template, mercenaries, party_bounds=regional_party_bounds,
+    )
 
     started_at = utc_now()
     skill_effects = get_party_skill_effects(db, mercenaries)

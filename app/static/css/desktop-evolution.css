@@ -152,7 +152,13 @@
 .regional-rebellion-dialog__content p { color: #d0dfda; line-height: 1.5; }
 .regional-rebellion-dialog__actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 20px 0 12px; }
 .regional-rebellion-dialog__actions form { margin: 0; }
-.regional-rebellion-dialog__details { color: var(--e-gold-soft); }
+.regional-event-notice .regional-rebellion-dialog__details {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  padding: 7px 4px;
+  color: var(--e-gold-soft);
+}
 .regional-event-notice[open] .regional-rebellion-dialog__content,
 .regional-event-notice[open] .regional-portal-dialog__content { animation: regional-notice-enter 250ms ease-out both; }
 .regional-event-notice__art { position: relative; height: 142px; margin: -23px -23px 18px; overflow: hidden; background: linear-gradient(135deg, #23383b, #17272b); }
@@ -164,6 +170,12 @@
 .regional-portal-dialog > form { padding: 0; }
 .regional-portal-dialog__content { padding: 23px; }
 .regional-event-notice time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.regional-events-page a.evolution-button--primary[href="/dungeons"],
+.regional-event-history a.evolution-button--primary[href="/dungeons"] { color: #152025; }
+.regional-events-page a.evolution-button--primary[href="/dungeons"]:hover,
+.regional-events-page a.evolution-button--primary[href="/dungeons"]:focus-visible,
+.regional-event-history a.evolution-button--primary[href="/dungeons"]:hover,
+.regional-event-history a.evolution-button--primary[href="/dungeons"]:focus-visible { color: #152025; }
 @keyframes regional-notice-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Responsive regional leaderboard and compact inventory summary. */

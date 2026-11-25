@@ -193,6 +193,32 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("portal_spawn_status.unavailable_label", template)
         self.assertIn("não garante o surgimento", template)
 
+    def test_regional_event_action_contrast_and_notice_link_targets(self):
+        css = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+
+        for selector in (
+            '.regional-events-page a.evolution-button--primary[href="/dungeons"]',
+            '.regional-event-history a.evolution-button--primary[href="/dungeons"]',
+        ):
+            self.assertIn(selector, css)
+        self.assertIn(".regional-events-page a.evolution-button--primary[href=\"/dungeons\"]:hover", css)
+        self.assertIn(".regional-events-page a.evolution-button--primary[href=\"/dungeons\"]:focus-visible", css)
+        self.assertIn(".regional-event-history a.evolution-button--primary[href=\"/dungeons\"]:hover", css)
+        self.assertIn(".regional-event-history a.evolution-button--primary[href=\"/dungeons\"]:focus-visible", css)
+        self.assertIn(".regional-event-notice .regional-rebellion-dialog__details", css)
+        self.assertIn("display: inline-flex", css)
+        self.assertIn("min-height: 40px", css)
+
+        def luminance(color):
+            channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+            linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4 for channel in channels]
+            return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear))
+
+        foreground = luminance("#152025")
+        for background in ("#e6b965", "#f5d798"):
+            ratio = (max(foreground, luminance(background)) + 0.05) / (min(foreground, luminance(background)) + 0.05)
+            self.assertGreaterEqual(ratio, 4.5, f"contrast for {background}: {ratio:.3f}:1")
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")

@@ -1,5 +1,7 @@
 """Read-only activity summaries for the shared navigation."""
+import json
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from sqlalchemy import and_, case, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
@@ -12,7 +14,6 @@ from app.models.guild import Guild
 from app.models.gathering import GatheringAssignment
 from app.models.market import MarketSale
 from app.models.mission import MissionRun
-from app.models.mercenary import Mercenary
 from app.models.regional import (
     RegionalEvent,
     RegionalEventActivity,
@@ -104,7 +105,7 @@ def _regional_preparation_row(campaign_id: str, guild_id: int, now: datetime):
     )
 
 
-def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
+def _regional_event_row(campaign_id: str, guild_id: int, now: datetime, ready_portal_count: int):
     home_code = case(
         *[(CampaignMetadata.home_region == name, code) for code, name in REGIONS],
         else_=REGIONS[0][0],
@@ -112,31 +113,6 @@ def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
     player_state_id = select(RegionalGuildState.id).where(
         RegionalGuildState.campaign_id == CampaignMetadata.campaign_id,
         RegionalGuildState.guild_id == guild_id,
-    ).scalar_subquery()
-    available_count = select(func.count(Mercenary.id)).where(
-        Mercenary.guild_id == guild_id,
-        Mercenary.status == "available",
-    ).scalar_subquery()
-    guild_level = select(Guild.level).where(Guild.id == guild_id).scalar_subquery()
-    eligible_portal_template = select(DungeonTemplate.id).where(
-        DungeonTemplate.id == RegionalEvent.dungeon_template_id,
-        DungeonTemplate.is_active.is_(True),
-        DungeonTemplate.min_party_size <= available_count,
-        DungeonTemplate.max_party_size >= DungeonTemplate.min_party_size,
-        DungeonTemplate.required_guild_level <= guild_level,
-    ).exists()
-    ready_portals = select(func.count(RegionalEvent.id)).where(
-        RegionalEvent.campaign_id == campaign_id,
-        RegionalEvent.event_type == "portal",
-        RegionalEvent.region_code == home_code,
-        RegionalEvent.status == "active",
-        RegionalEvent.expires_at_utc > now,
-        RegionalEvent.dungeon_template_id.is_not(None),
-        eligible_portal_template,
-        ~select(RegionalEventParticipant.id).where(
-            RegionalEventParticipant.event_id == RegionalEvent.id,
-            RegionalEventParticipant.guild_state_id == player_state_id,
-        ).exists(),
     ).scalar_subquery()
     ready_rebellions = select(func.count(RegionalEvent.id)).join(
         RegionalEventParticipant,
@@ -199,7 +175,7 @@ def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
             and_(RegionalEventActivity.source_type == "mission", mission_active),
         ),
     ).scalar_subquery()
-    ready = ready_portals + ready_rebellions + ready_activities
+    ready = literal(ready_portal_count) + ready_rebellions + ready_activities
     return select(
         literal("regional_events").label("menu"),
         func.coalesce(active_events, 0).label("active"),
@@ -207,6 +183,56 @@ def _regional_event_row(campaign_id: str, guild_id: int, now: datetime):
     ).select_from(CampaignMetadata).where(
         CampaignMetadata.campaign_id == campaign_id,
     )
+
+
+def _startable_portal_count(db: Session, campaign_id: str, guild_id: int, now: datetime) -> int:
+    campaign = db.get(CampaignMetadata, campaign_id)
+    guild = db.get(Guild, guild_id)
+    if campaign is None or guild is None:
+        return 0
+    home_code = next((code for code, name in REGIONS if name == campaign.home_region), REGIONS[0][0])
+    player_state_id = db.scalar(select(RegionalGuildState.id).where(
+        RegionalGuildState.campaign_id == campaign_id,
+        RegionalGuildState.guild_id == guild_id,
+    ))
+    if player_state_id is None:
+        return 0
+
+    from app.services.dungeon_service import has_startable_dungeon_party
+
+    unentered = ~select(RegionalEventParticipant.id).where(
+        RegionalEventParticipant.event_id == RegionalEvent.id,
+        RegionalEventParticipant.guild_state_id == player_state_id,
+    ).exists()
+    portals = db.scalars(select(RegionalEvent).where(
+        RegionalEvent.campaign_id == campaign_id,
+        RegionalEvent.event_type == "portal",
+        RegionalEvent.region_code == home_code,
+        RegionalEvent.status == "active",
+        RegionalEvent.expires_at_utc > now,
+        RegionalEvent.dungeon_template_id.is_not(None),
+        unentered,
+    ).order_by(RegionalEvent.id))
+
+    ready = 0
+    for portal in portals:
+        template_record = db.get(DungeonTemplate, portal.dungeon_template_id)
+        if template_record is None:
+            continue
+        try:
+            summary = json.loads(portal.summary_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            summary = {}
+        boss = summary.get("portal_boss") if isinstance(summary, dict) else None
+        snapshot = boss.get("template") if isinstance(boss, dict) else None
+        template = (
+            SimpleNamespace(**snapshot)
+            if isinstance(snapshot, dict) and int(snapshot.get("id", -1)) == portal.dungeon_template_id
+            else template_record
+        )
+        if has_startable_dungeon_party(db, guild, template):
+            ready += 1
+    return ready
 
 
 def _accessible_status(menu: str, active_count: int, ready_count: int) -> str:
@@ -220,14 +246,14 @@ def _accessible_status(menu: str, active_count: int, ready_count: int) -> str:
     return f"{name}: " + "; ".join(parts)
 
 
-def get_navigation_work_status(
+def _get_navigation_work_status(
     db: Session,
     guild_id: int,
     *,
     campaign_id: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, dict[str, int | str]]:
-    """Aggregate persisted tasks in one SELECT without progressing any game state."""
+    """Aggregate persisted tasks without progressing any game state."""
     timestamp = now or datetime.now(timezone.utc)
     rows = [
         _count_row("missions", MissionRun, guild_id, timestamp),
@@ -241,7 +267,10 @@ def get_navigation_work_status(
     ]
     if campaign_id:
         rows.append(_regional_preparation_row(campaign_id, guild_id, timestamp))
-        rows.append(_regional_event_row(campaign_id, guild_id, timestamp))
+        rows.append(_regional_event_row(
+            campaign_id, guild_id, timestamp,
+            _startable_portal_count(db, campaign_id, guild_id, timestamp),
+        ))
 
     work = union_all(*rows).subquery()
     result: dict[str, dict[str, int | str]] = {}
@@ -254,3 +283,17 @@ def get_navigation_work_status(
             "label": _accessible_status(menu, active_count, ready_count),
         }
     return result
+
+
+def get_navigation_work_status(
+    db: Session,
+    guild_id: int,
+    *,
+    campaign_id: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, dict[str, int | str]]:
+    """Read navigation status without flushing or progressing pending game state."""
+    with db.no_autoflush:
+        return _get_navigation_work_status(
+            db, guild_id, campaign_id=campaign_id, now=now,
+        )
