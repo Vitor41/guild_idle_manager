@@ -22,7 +22,7 @@ class LauncherAndEquipmentUiContractTests(unittest.TestCase):
     def test_campaign_update_page_only_checks_and_guides_to_launcher(self):
         template = (ROOT / "app/templates/updates.html").read_text(encoding="utf-8")
         route = (ROOT / "app/routes/update_routes.py").read_text(encoding="utf-8")
-        self.assertIn("Verificar atualizações", template)
+        self.assertIn(">Verificar</button>", template)
         self.assertIn("Feche a campanha e abra o launcher pelo atalho para atualizar.", template)
         self.assertNotIn("/updates/install-release", template)
         self.assertNotIn("/updates/apply-local", template)
@@ -101,8 +101,9 @@ class LauncherAndEquipmentUiContractTests(unittest.TestCase):
         self.assertIn("abaixo dele ainda podem iniciar", missions)
         self.assertIn("Nível recomendado", dungeons)
         self.assertIn("abaixo dele podem iniciar", dungeons)
-        self.assertIn("nível do mercenário é uma recomendação", regional)
-        self.assertIn("requisitos congelados da oferta, da guilda e do grupo", regional)
+        self.assertIn("Recomendado: nível {{ offer.recommended_level_snapshot }}", regional)
+        self.assertIn("Exige · Grupo mínimo–máximo", regional)
+        self.assertIn("/guide#vigilia-regional", regional)
         self.assertIn("Nível recomendado do mercenário", admin_missions)
         self.assertIn("Nível recomendado do mercenário", admin_dungeons)
 

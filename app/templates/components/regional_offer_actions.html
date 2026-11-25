@@ -4,20 +4,40 @@
   {% for prepared_mercenary in offer.unavailable_prepared_mercenaries %}
     <input type="hidden" name="mercenary_ids" value="{{ prepared_mercenary.id }}" data-prepared-member-hidden="true">
   {% endfor %}
-  {% for mercenary in available_mercenaries %}
-    {% set is_prepared = offer.supply_preparation_started_at_utc and mercenary.id|string in offer.prepared_mercenary_ids %}
-    <label><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}"{% if is_prepared %} checked{% endif %}> {{ mercenary.name }} · nível {{ mercenary.level }}{% if offer.supply_preparation_started_at_utc %} · {% if is_prepared %}Equipe preparada{% else %}Reforço disponível{% endif %}{% endif %}</label>
+  {% if offer.supply_preparation_started_at_utc %}
+    <section class="regional-team-group regional-team-group--prepared" aria-labelledby="prepared-team-title-{{ offer.id }}">
+      <h3 id="prepared-team-title-{{ offer.id }}">Equipe preparada</h3>
+      <div class="regional-team-members">
+        {% for mercenary in offer.unavailable_prepared_mercenaries %}<div class="regional-team-unavailable"><span>{{ mercenary.name }}</span><strong>Indisponível</strong></div>{% endfor %}
+        {% for mercenary in available_mercenaries if mercenary.id|string in offer.prepared_mercenary_ids %}
+          <label class="regional-team-member is-prepared"><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}" checked>{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" width="36" height="36" alt="" aria-hidden="true" loading="lazy">{% else %}<span class="regional-team-class-fallback" aria-hidden="true">{{ mercenary.class_label[:1] }}</span>{% endif %}<span>{{ mercenary.name }} · nível {{ mercenary.level }}</span><strong>Preparado</strong></label>
+        {% else %}{% if not offer.unavailable_prepared_mercenaries %}<p>Nenhum integrante preparado está disponível.</p>{% endif %}{% endfor %}
+      </div>
+    </section>
+    <section class="regional-team-group regional-team-group--reinforcements" aria-labelledby="reinforcement-team-title-{{ offer.id }}">
+      <h3 id="reinforcement-team-title-{{ offer.id }}">Disponíveis para reforço</h3>
+      <div class="regional-team-members">
+        {% for mercenary in available_mercenaries if mercenary.id|string not in offer.prepared_mercenary_ids %}
+          <label class="regional-team-member"><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}">{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" width="36" height="36" alt="" aria-hidden="true" loading="lazy">{% else %}<span class="regional-team-class-fallback" aria-hidden="true">{{ mercenary.class_label[:1] }}</span>{% endif %}<span>{{ mercenary.name }} · nível {{ mercenary.level }}</span><strong>Reforço</strong></label>
+        {% else %}<p>Nenhum reforço disponível.</p>{% endfor %}
+      </div>
+    </section>
   {% else %}
-    <p>Nenhum mercenário disponível{% if not offer.supply_preparation_started_at_utc %}. Libere alguém de uma atividade para continuar.{% else %}. A equipe preparada será exibida abaixo.{% endif %}</p>
-  {% endfor %}
+    <section class="regional-team-group regional-team-group--selection" aria-label="Equipe disponível">
+      <div class="regional-team-members">
+        {% for mercenary in available_mercenaries %}<label class="regional-team-member"><input type="checkbox" name="mercenary_ids" value="{{ mercenary.id }}">{% if mercenary.class_icon_path %}<img src="{{ url_for('static', path=mercenary.class_icon_path) }}" width="36" height="36" alt="" aria-hidden="true" loading="lazy">{% else %}<span class="regional-team-class-fallback" aria-hidden="true">{{ mercenary.class_label[:1] }}</span>{% endif %}<span>{{ mercenary.name }} · nível {{ mercenary.level }}</span></label>
+        {% else %}<p>Nenhum mercenário disponível. Libere alguém de uma atividade para continuar.</p>{% endfor %}
+      </div>
+    </section>
+  {% endif %}
 </fieldset>
 {% if offer.supply_preparation_started_at_utc %}
   {% if not offer.prepared_team_valid or (offer.prepared_team_issue and not offer.unavailable_prepared_mercenaries) %}
     <p class="evolution-notice evolution-notice--error prepared-team-status" role="alert">{{ offer.prepared_team_issue }}</p>
   {% elif offer.unavailable_prepared_mercenaries %}
-    <p class="evolution-notice evolution-notice--error prepared-team-status" role="status">Equipe preparada indisponível: {% for prepared_mercenary in offer.unavailable_prepared_mercenaries %}{% if not loop.first %}, {% endif %}{{ prepared_mercenary.name }}{% endfor %}. Libere esses integrantes antes de iniciar.</p>
+    <p class="evolution-notice evolution-notice--error prepared-team-status" role="status">Equipe preparada indisponível. Libere os integrantes marcados acima antes de iniciar.</p>
   {% else %}
-    <p class="subtle-note prepared-team-status" data-prepared-team-status role="status" aria-live="polite">Equipe preparada pré-selecionada. O bônus exige a equipe exata; com reforços, inicie sem suprimento.</p>
+    <p class="subtle-note prepared-team-status" data-prepared-team-status role="status" aria-live="polite">Equipe preparada selecionada. O bônus exige esta composição.</p>
   {% endif %}
 {% endif %}
 {% endmacro %}
@@ -40,7 +60,6 @@
       <small>{% if offer.supply_preparation_started_at_utc %}{{ offer.supply_quote.cost_kits }} Kit(s) já utilizado(s) · bônus de {{ offer.supply_quote.chance_bonus_pp }} p.p. registrado no preparo.{% elif offer.supply_quote.available %}{{ offer.supply_quote.cost_kits }} Kit(s) de Suprimentos · {{ offer.supply_quote.available_kits }} disponível(is) · chance efetiva {{ offer.supply_quote.base_final_chance }}% → {{ offer.supply_quote.final_chance }}%.{% else %}Indisponível: {{ offer.supply_quote.reason }}{% endif %}{% if not offer.supply_preparation_started_at_utc %} A quantidade exigida depende do Rank e é consumida quando a preparação começa.{% endif %}</small>
     </span>
   </label>
-  <p>É possível reforçar a equipe preparada com membros disponíveis ao iniciar sem suprimento. Os kits já usados no preparo não são devolvidos. O preparo leva 1,5% da duração base e continua durante a navegação.</p>
   {% if offer.supply_preparation_started_at_utc %}
     <button class="evolution-button evolution-button--primary" type="submit" name="supply_mode" value="prepared" data-ready-label="{{ action_verb }} com suprimento preparado" {% if not offer.supply_prepared_at_utc or not offer.prepared_team_can_start %}disabled{% endif %}>{% if offer.supply_prepared_at_utc %}{{ action_verb }} com suprimento preparado{% else %}Aguardando preparo{% endif %}</button>
     <button class="evolution-button evolution-button--secondary" type="submit" name="supply_mode" value="none" data-start-without-supply{% if not offer.prepared_team_can_start %} disabled{% endif %}>{{ action_verb }} sem suprimento</button>

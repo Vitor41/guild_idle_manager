@@ -4,12 +4,10 @@
 <section class="panel table-panel" aria-labelledby="updates-title">
   <p class="eyebrow">VERSÃO LOCAL</p>
   <h1 id="updates-title">Atualizações</h1>
-  <p>Esta instalação está na versão <strong>{{ release_version }}</strong>.</p>
+  <dl class="updates-version-summary"><div><dt>Versão</dt><dd>{{ release_version }}</dd></div></dl>
   {% if request.app.state.app_mode == 'desktop' and is_packaged %}
-  <h2>Canal {{ github_releases_status.channel if github_releases_status.configured else 'não configurado' }}</h2>
-  <p>Esta tela consulta atualizações. Para instalar uma versão, feche a campanha e abra o launcher pelo atalho.</p>
+  <div class="updates-release-controls"><div><h2>Canal {{ installed_channel or 'não configurado' }}</h2><small>Origem: GitHub Releases</small></div><button class="updates-check-primary" type="button" data-check-release-update {% if not github_releases_status.query_enabled %}disabled{% endif %}>Verificar</button></div>
   <p role="status" aria-live="polite" data-release-update-status>{{ github_releases_status.reason }}</p>
-  <button type="button" data-check-release-update {% if not github_releases_status.query_enabled %}disabled{% endif %}>Verificar atualizações</button>
   <script>
     const releaseCheckButton = document.querySelector('[data-check-release-update]');
     const releaseStatus = document.querySelector('[data-release-update-status]');

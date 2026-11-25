@@ -10,7 +10,7 @@ import random
 from types import SimpleNamespace
 
 from sqlalchemy import func, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.game_balance import GUILD_MAX_LEVEL, GUILD_XP_BASE, GUILD_XP_GROWTH
 from app.models.campaign import CampaignMetadata
@@ -42,6 +42,7 @@ from app.services.balance_service import (
     power_success_adjustment,
 )
 from app.services.equipment_service import get_mercenary_attribute_summary
+from app.services.display_service import annotate_mercenary_display
 from app.models.content import ProfessionTemplate
 from app.services.mission_power_service import recommended_regional_contract_power
 from app.services.tavern_service import get_discounted_hire_cost, get_tavern_apprentice_chances, next_apprentice_cost
@@ -2690,6 +2691,14 @@ def get_regional_board(
         if offer.status in {"available", "supply_preparing"}
         and max(1, int(guild.level or 1)) >= offer.required_guild_level_snapshot
     ]
+    available_mercenaries = list(db.scalars(select(Mercenary).options(
+        selectinload(Mercenary.mercenary_class),
+    ).where(
+        Mercenary.guild_id == guild.id,
+        Mercenary.status == "available",
+    ).order_by(Mercenary.level.desc(), Mercenary.id)))
+    for mercenary in available_mercenaries:
+        annotate_mercenary_display(mercenary)
     return {
         "world": db.get(RegionalWorldState, campaign.campaign_id),
         "cycle": active_cycle,
@@ -2706,10 +2715,7 @@ def get_regional_board(
         "portal_events": portal_events,
         "rebellion_event": rebellion_event,
         "event_history": event_history,
-        "available_mercenaries": list(db.scalars(select(Mercenary).where(
-            Mercenary.guild_id == guild.id,
-            Mercenary.status == "available",
-        ).order_by(Mercenary.level.desc(), Mercenary.id))),
+        "available_mercenaries": available_mercenaries,
         "active_offer_count": len(open_offers),
         "rank_progression_stage": json.loads(active_cycle.rank_weights_json).get("stage", 0.0),
         "contract_rank_weights": json.loads(active_cycle.rank_weights_json).get("contract", {}),

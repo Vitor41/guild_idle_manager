@@ -3,7 +3,8 @@
 {% block content %}
 <section class="tutorial-page"><article class="tutorial-card">
   <div class="tutorial-progress"><span>Guia da Guilda</span><strong>{{ step }} de {{ steps|length }}</strong></div><div class="progress-track"><span style="width: {{ (step * 100 / steps|length)|round }}%"></span></div>
-  <span class="tutorial-sigil">{{ step }}</span><p class="eyebrow">Etapa {{ step }}</p><h1>{{ step_data[0] }}</h1><p class="tutorial-copy">{{ step_data[1] }}</p>
+  {% set tutorial_icons = {1:'guild-sigil',2:'building-housing',3:'building-tavern',4:'bonus-strong-star',5:'class-warrior',6:'item-quest-scroll',7:'expedition-map',8:'building-blacksmith',9:'item-sword',10:'dungeon-gate',11:'building-docks',12:'building-warehouse',13:'guild-sigil'} %}
+  <div class="tutorial-stage"><img src="{{ url_for('static', path='assets/desktop/sprites/64/' ~ tutorial_icons.get(step, 'guild-sigil') ~ '.png') }}" width="64" height="64" alt="" aria-hidden="true"><div><p class="eyebrow">Etapa {{ step }}</p><h1>{{ step_data[0] }}</h1></div></div><p class="tutorial-copy">{{ step_data[1] }}</p>
   <div class="tutorial-actions">{% if step > 1 %}<a class="secondary-button" href="/tutorial?step={{ step - 1 }}{% if replay %}&replay=1{% endif %}">Voltar</a>{% else %}<span></span>{% endif %}<form method="post" action="/tutorial/decline" data-confirm="Você poderá rever este guia depois pelo menu Ajuda."><button class="text-button">Pular tutorial</button></form>{% if step < steps|length %}<a class="button-link" href="/tutorial?step={{ step + 1 }}{% if replay %}&replay=1{% endif %}">Próximo</a>{% else %}<form method="post" action="/tutorial/complete"><button>Concluir</button></form>{% endif %}</div>
 </article></section>
 {% endblock %}

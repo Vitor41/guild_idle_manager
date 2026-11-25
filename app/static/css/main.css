@@ -1736,6 +1736,28 @@ textarea {
   margin: 0;
 }
 
+.class-tier-group { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid rgba(233, 198, 116, 0.16); }
+.class-tier-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.class-tier-heading h3 { margin: 0; }
+.class-tier-heading a { min-height: 40px; display: inline-flex; align-items: center; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.class-tier-heading a:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
+.tier-guide-grid--equipment .tier-guide-card { min-height: 68px; align-content: center; justify-items: start; gap: 0; }
+.tier-guide-grid--equipment .rarity-badge { border-left: 3px solid var(--rarity-color); }
+.tutorial-stage { display: flex; align-items: center; gap: 16px; margin-top: 30px; }
+.tutorial-stage img { width: 64px; height: 64px; flex: 0 0 64px; object-fit: contain; }
+.tutorial-stage h1, .tutorial-stage .eyebrow { margin: 0; }
+.tutorial-stage .eyebrow { margin-bottom: 6px; }
+.tutorial-actions > a, .tutorial-actions > form button { min-width: 40px; min-height: 40px; }
+.updates-version-summary { display: flex; gap: 12px; margin: 18px 0; }
+.updates-version-summary > div { min-width: 150px; padding: 10px 14px; border-left: 3px solid var(--gold); background: var(--surface-2); }
+.updates-version-summary dt, .updates-release-controls small { color: var(--muted); font-size: .82rem; }
+.updates-version-summary dd { margin: 2px 0 0; font-size: 1.18rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.updates-release-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.updates-release-controls h2 { margin: 0 0 4px; font-size: 1rem; }
+.updates-release-controls small { display: block; }
+.updates-check-primary { min-width: 112px; min-height: 44px; font-weight: 800; }
+@media (max-width: 560px) { .updates-release-controls { align-items: stretch; flex-direction: column; } .updates-check-primary { width: 100%; } }
+
 .tier-gem,
 .tier-number {
   display: grid;
@@ -2604,9 +2626,10 @@ tr:hover td {
 html { scroll-behavior: smooth; }
 .guide-nav { position: sticky; top: 76px; z-index: 4; padding: 10px; border: 1px solid var(--border); background: rgba(18,15,12,.96); }
 .guide-section { scroll-margin-top: calc(var(--game-sticky-topbar-height, 0px) + 12px); }
-.classes-guide-index { position: relative; top: auto; z-index: 1; gap: 8px; padding: 0; border: 0; background: transparent; }
+.classes-guide-index { position: sticky; top: var(--game-sticky-topbar-height, 64px); z-index: 5; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: rgba(18,15,12,.96); }
 .classes-guide-index a { min-height: 40px; padding: 9px 13px; white-space: nowrap; }
 .classes-guide-index a[aria-current="location"] { background: var(--surface-3); border-color: var(--gold); color: var(--gold-2); }
+.codex-card[id^="codex-entry-"] { scroll-margin-top: calc(var(--game-sticky-topbar-height, 0px) + 16px); }
 .guide-index a:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
 .guide-section { scroll-margin-top: calc(var(--game-sticky-topbar-height, 0px) + 12px); }
 .offline-action { display: flex; align-items: center; gap: 6px; position: relative; }

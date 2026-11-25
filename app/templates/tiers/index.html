@@ -28,10 +28,7 @@
           <article class="tier-guide-card rarity-card rarity-{{ rarity.code }}">
             <div class="tier-guide-card__head">
               <span class="tier-gem" aria-hidden="true">◇</span>
-              <div>
-                <span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span>
-                <h3>{{ rarity.label }}</h3>
-              </div>
+              <h3><span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span></h3>
             </div>
             <p>{{ rarity.description }}</p>
             <dl class="stat-list">
@@ -60,7 +57,8 @@
           <p class="note">Equipamentos usam as mesmas seis raridades. O nível mínimo de uso e o refino +N aparecem em campos próprios.</p>
         </div>
       </div>
-      <div class="tier-guide-grid">{% for rarity in rarity_cards %}<article class="tier-guide-card rarity-card rarity-{{ rarity.code }}"><span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span><p>{{ rarity.description }}</p><p class="note">O item também informa nível mínimo e refino de forma independente.</p></article>{% endfor %}</div>
+      <p class="note">Cada item informa nível mínimo e refino +N em campos próprios.</p>
+      <div class="tier-guide-grid tier-guide-grid--equipment">{% for rarity in rarity_cards %}<article class="tier-guide-card rarity-card rarity-{{ rarity.code }}"><span class="rarity-badge rarity-{{ rarity.code }}">{{ rarity.label }}</span></article>{% endfor %}</div>
     </section>
   </section>
 {% endblock %}
