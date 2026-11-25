@@ -15,7 +15,7 @@ function makeProgressBox({ startsAt, endsAt, workshop = false }) {
     dataset: workshop ? { startsAt, endsAt } : {},
   };
   const time = { dataset: { ...(workshop ? {} : { startsAt }), endsAt }, textContent: "calculando..." };
-  const status = { textContent: workshop ? "Produzindo 1 Kit de Suprimentos" : "Suprimento em preparo" };
+  const status = { textContent: workshop ? "Produzindo 100 Kits de Suprimentos" : "Suprimento em preparo" };
   return {
     bar,
     time,
@@ -130,6 +130,7 @@ test("workshop and regional preparation timers keep their own progress on direct
   page.context.window.initializeWorkshopSupplyControls(page.partialRoot);
 
   assert.equal(page.workshopBox.bar.value, 50, "the workshop uses its six-hour production span at UTC-3");
+  assert.equal(page.workshopBox.status.textContent, "Produzindo 100 Kits de Suprimentos", "regional initialization does not relabel the workshop batch");
   assert.equal(page.regionalBox.bar.value, 50, "the regional preparation keeps its own six-hour span");
   assert.equal(page.regionalBox.status.textContent, "Suprimento em preparo");
   assert.equal(page.preparedButton.disabled, true, "the server-backed prepared start remains unavailable before due time");
@@ -138,6 +139,7 @@ test("workshop and regional preparation timers keep their own progress on direct
   page.context.Date.now = () => start + 6 * 60 * 60 * 1000;
   for (const interval of page.intervals) interval.callback();
   assert.equal(page.workshopBox.bar.value, 100);
+  assert.equal(page.workshopBox.status.textContent, "Produzindo 100 Kits de Suprimentos");
   assert.equal(page.regionalBox.bar.value, 100);
   assert.equal(page.regionalBox.status.textContent, "Preparação concluída · pronta para iniciar");
   assert.equal(page.preparedButton.disabled, false, "the prepared participation control follows the completed preparation");
