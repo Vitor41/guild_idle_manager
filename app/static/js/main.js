@@ -1135,7 +1135,7 @@ function initializeRegionalComparison(root = document) {
         const values = {
           wealth: data.wealth,
           roster: data.roster,
-          tiers: Object.entries(data.tier_counts || {}).sort(([left], [right]) => left.localeCompare(right)).map(([tier, count]) => `${tier} ${count}`).join(" · ") || "—",
+          tiers: Object.entries(data.tier_counts_display || {}).map(([tier, count]) => `${tier} ${count}`).join(" · ") || "—",
           contracts: data.results?.contracts ?? 0,
           dungeons: data.results?.dungeons ?? 0,
           bosses: data.results?.bosses ?? 0,

@@ -51,7 +51,7 @@ from app.services.regional_event_service import (
 )
 from app.services.evolution_art_service import get_evolution_art_context
 from app.services.supply_preparation_service import estimate_drop_sale_value, guild_gold, quote_supply, regional_kit_quote
-from app.services.display_service import clean_generated_name, rarity_label
+from app.services.display_service import clean_generated_name, rarity_label, RARITY_LABELS
 from app.services.drop_preview_service import build_drop_preview
 from app.services.icon_service import get_item_icon_path
 from app.repositories.item_repository import list_active_drops_for_mission
@@ -234,6 +234,7 @@ def _regional_comparison_data(db, campaign, guild, region_code: str):
         rows.append({
             "state": state, "wealth": current_wealth, "roster": len(roster) or state.roster_size,
             "tier_counts": tiers,
+            "tier_counts_display": _localized_tier_counts(tiers),
             "results": results.get(state.id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0}),
         })
     return region_name, regions, selected, rows
@@ -265,6 +266,14 @@ def regional_region_detail(
     })
 
 
+def _localized_tier_counts(tier_counts: dict[str, int]) -> dict[str, int]:
+    localized: dict[str, int] = {}
+    for tier, amount in tier_counts.items():
+        label = RARITY_LABELS.get(str(tier).lower(), "Sem classificação")
+        localized[label] = localized.get(label, 0) + amount
+    return dict(sorted(localized.items()))
+
+
 @router.get("/regions/{region_code}/comparison")
 def regional_region_comparison(
     region_code: str, request: Request, db: DbSession,
@@ -283,6 +292,7 @@ def regional_region_comparison(
     return JSONResponse({"guilds": {
         str(row["state"].id): {
             "wealth": row["wealth"], "roster": row["roster"], "tier_counts": row["tier_counts"],
+            "tier_counts_display": row["tier_counts_display"],
             "results": row["results"], "event_wins": row["state"].event_wins,
         } for row in rows
     }})
