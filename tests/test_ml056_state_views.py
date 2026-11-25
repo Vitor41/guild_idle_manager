@@ -24,6 +24,8 @@ class Ml056StateViewTests(unittest.TestCase):
         self.assertIn('class="building-facts"', buildings)
         self.assertIn("Próximo requisito", buildings)
         self.assertIn("Custo para evoluir", buildings)
+        self.assertIn("building.level >= building.building_template.max_level", buildings)
+        self.assertIn("Não há próxima evolução.", buildings)
         self.assertIn("Saldo indisponível", buildings)
         self.assertNotIn("cost.gold }} ouro, {{ cost.wood", buildings)
         self.assertIn("Benefício atual", buildings)
