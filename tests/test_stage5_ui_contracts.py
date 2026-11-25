@@ -165,7 +165,7 @@ class Stage5UiContractTests(unittest.TestCase):
 
         self.assertIn('id="missions-title"', missions)
         self.assertIn("Decida, prepare e colete.", missions)
-        self.assertIn('href="/regional/events"', missions)
+        self.assertIn('href="/regional"', missions)
         self.assertNotIn('href="#available-missions-title"', missions)
         self.assertIn('href="/regional#regional-board"', missions)
         self.assertIn('id="dungeons-title"', dungeons)

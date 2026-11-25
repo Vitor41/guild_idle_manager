@@ -149,8 +149,9 @@ test("shell and page links keep the F01-F07 content and actions consistent", () 
   assert.match(campaignsTemplate, /Arquivo de campanha preservado/);
   assert.doesNotMatch(campaignsTemplate, /Campanhas e trabalhadores|SUAS CAMPANHAS|COLETA<\/span>/);
 
-  assert.doesNotMatch(dashboardTemplate, /desktop-hero-actions|href="\/missions">Ver operações/);
-  assert.match(missionsTemplate, /href="\/regional\/events">Ver ofertas regionais/);
+  assert.doesNotMatch(dashboardTemplate, /desktop-hero-actions|Atividades em andamento e recompensas prontas|href="\/missions">Ver operações/);
+  assert.match(missionsTemplate, /href="\/regional">Ver ofertas regionais/);
+  assert.doesNotMatch(missionsTemplate, /href="\/regional\/events">Ver ofertas regionais/);
   assert.doesNotMatch(missionsTemplate, /href="#available-missions-title">Ver missões/);
 });
 

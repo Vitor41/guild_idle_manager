@@ -26,7 +26,7 @@
     <div>
       <p class="eyebrow">Sala da Guilda</p>
       <h1 id="dashboard-title">{{ guild.name }}</h1>
-      <p class="note">{% if desktop_mode %}Atividades em andamento e recompensas prontas aparecem abaixo.{% else %}Comande missões, equipe mercenários e evolua sua fortaleza.{% endif %}</p>
+      {% if not desktop_mode %}<p class="note">Comande missões, equipe mercenários e evolua sua fortaleza.</p>{% endif %}
     </div>
   </header>
   {% if desktop_mode %}
