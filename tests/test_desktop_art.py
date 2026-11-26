@@ -272,6 +272,58 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         focus_contrast = contrast_ratio("#b6eee5", "#17272b")
         self.assertGreaterEqual(focus_contrast, 3.0, f"focus ring against portal dialog: {focus_contrast:.3f}:1")
 
+    def test_regional_offer_modal_keeps_compact_header_and_scrollable_offer_body(self):
+        regional = (ROOT / "app" / "templates" / "regional" / "index.html").read_text(encoding="utf-8")
+        events = (ROOT / "app" / "templates" / "regional" / "events.html").read_text(encoding="utf-8")
+        css = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+
+        modal_match = re.search(
+            r'<dialog class="evolution-dialog" id="offer-.*?</dialog>', regional, re.DOTALL
+        )
+        self.assertIsNotNone(modal_match)
+        modal = modal_match.group(0)
+        header_match = re.search(
+            r'<form method="dialog" class="regional-offer-dialog__header">(.*?)</form>',
+            modal,
+            re.DOTALL,
+        )
+        body_match = re.search(
+            r'<div class="regional-offer-dialog__body">(.*?)</div>\s*</dialog>',
+            modal,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(header_match)
+        self.assertIsNotNone(body_match)
+        header = header_match.group(1)
+        body = body_match.group(1)
+
+        self.assertIn('class="evolution-dialog__close" aria-label="Fechar"', header)
+        self.assertIn('class="evolution-eyebrow"', header)
+        self.assertIn('id="offer-{{ offer.id }}-title"', header)
+        self.assertNotIn("description_snapshot", header)
+        self.assertNotIn("<dl>", header)
+        self.assertIn('class="regional-offer-dialog__summary"', body)
+        self.assertIn("offer.description_snapshot", body)
+        self.assertLess(body.index("class=\"regional-offer-dialog__summary\""), body.index("drop_preview("))
+        self.assertLess(body.index("drop_preview("), body.index('action="/regional/offers/{{ offer.id }}/start"'))
+        self.assertIn('method="post" action="/regional/offers/{{ offer.id }}/start"', body)
+        self.assertIn('data-supply-quote-url="/regional/offers/{{ offer.id }}/supply-quote"', body)
+        self.assertIn("offer_team_fieldset(offer, available_mercenaries)", body)
+        self.assertIn('name="supply_mode"', body)
+        self.assertIn('formaction="/regional/offers/{{ offer.id }}/prepare"', body)
+
+        self.assertRegex(
+            css,
+            r'\.evolution-dialog\[id\^="offer-"\]\[open\]\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)[^}]*overflow:\s*hidden',
+        )
+        self.assertRegex(
+            css,
+            r'\.evolution-dialog\[id\^="offer-"\]\s*>\s*\.regional-offer-dialog__body\s*\{[^}]*overflow-y:\s*auto[^}]*scroll-padding-block:\s*12px',
+        )
+        self.assertNotRegex(css, r'\.evolution-dialog\[id\^="offer-"\]\s*>\s*form:first-child\s*\{[^}]*position:\s*sticky')
+        self.assertIn('.evolution-dialog[id^="report-"][open]', css)
+        self.assertIn("offer_action_form(offer, available_mercenaries", events)
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
