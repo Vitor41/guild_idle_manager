@@ -350,7 +350,7 @@ body[data-app-mode="desktop"] #equipamentos-materiais > .guide-catalog-table-wra
 }
 body[data-app-mode="desktop"] #equipamentos-materiais > .guide-catalog-table-wrap:focus-visible {
   outline: 3px solid var(--gold-2);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 body[data-app-mode="desktop"] .mission-card h3 { font-family: Georgia, "Times New Roman", serif; }
 body[data-app-mode="desktop"] .mission-timer,

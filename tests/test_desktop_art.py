@@ -351,8 +351,8 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("max-width: 100%", declarations)
         self.assertIn("overflow-x: auto", declarations)
         self.assertIn("overscroll-behavior-x: contain", declarations)
-        self.assertRegex(theme, r'body\[data-app-mode="desktop"\]\s+#equipamentos-materiais\s*>\s*\.guide-catalog-table-wrap:focus-visible\s*\{[^}]*outline: 3px solid var\(--gold-2\)[^}]*outline-offset: 2px')
-        self.assertIn("desktop-theme.css') }}?v=20261126-1", base)
+        self.assertRegex(theme, r'body\[data-app-mode="desktop"\]\s+#equipamentos-materiais\s*>\s*\.guide-catalog-table-wrap:focus-visible\s*\{[^}]*outline: 3px solid var\(--gold-2\)[^}]*outline-offset: 3px')
+        self.assertIn("desktop-theme.css') }}?v=20261126-2", base)
 
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
