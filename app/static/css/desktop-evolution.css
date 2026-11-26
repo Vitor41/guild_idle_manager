@@ -186,6 +186,12 @@
 .regional-events-page a.evolution-button--primary[href="/dungeons"]:focus-visible,
 .regional-event-history a.evolution-button--primary[href="/dungeons"]:hover,
 .regional-event-history a.evolution-button--primary[href="/dungeons"]:focus-visible { color: #152025; }
+#regional-portal-notice .regional-rebellion-dialog__actions > a.evolution-button--primary,
+#regional-portal-notice .regional-rebellion-dialog__actions > a.evolution-button--primary:hover,
+#regional-portal-notice .regional-rebellion-dialog__actions > a.evolution-button--primary:focus-visible {
+  color: #152025;
+  border-color: #152025;
+}
 @keyframes regional-notice-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Responsive regional leaderboard and compact inventory summary. */

@@ -224,6 +224,54 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
             ratio = (max(foreground, luminance(background)) + 0.05) / (min(foreground, luminance(background)) + 0.05)
             self.assertGreaterEqual(ratio, 4.5, f"contrast for {background}: {ratio:.3f}:1")
 
+    def test_portal_notice_primary_cta_overrides_global_link_color_in_all_states(self):
+        css = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+
+        portal_dialog = base.split('id="regional-portal-notice"', 1)[1].split("</dialog>", 1)[0]
+        self.assertIn('class="evolution-button evolution-button--primary"', portal_dialog)
+        self.assertIn('href="/regional/events?section=portals#regional-event-{{ pending_portal_notice.event_id }}"', portal_dialog)
+        self.assertIn("data-async-navigation data-regional-notice-close", portal_dialog)
+        self.assertIn('id="regional-rebellion-notice"', base)
+        self.assertIn("desktop-evolution.css') }}?v=20261126-1", base)
+
+        self.assertIn('body[data-app-mode="desktop"] a', theme)
+        self.assertLess(base.index("desktop-theme.css"), base.index("desktop-evolution.css"))
+        selector = (
+            r"#regional-portal-notice\s+\.regional-rebellion-dialog__actions\s*>\s*a\.evolution-button--primary\s*,"
+            r"\s*#regional-portal-notice\s+\.regional-rebellion-dialog__actions\s*>\s*a\.evolution-button--primary:hover\s*,"
+            r"\s*#regional-portal-notice\s+\.regional-rebellion-dialog__actions\s*>\s*a\.evolution-button--primary:focus-visible"
+        )
+        rule = re.search(selector + r"\s*\{(?P<body>[^}]*)\}", css)
+        self.assertIsNotNone(rule)
+        declarations = rule.group("body")
+        self.assertIn("color: #152025", declarations)
+        self.assertIn("border-color: #152025", declarations)
+        self.assertGreater(rule.start(), css.index(".evolution-button--primary:hover"))
+        self.assertIn(".evolution-button--primary { color: #152025; background: var(--e-gold); border-color: var(--e-gold); }", css)
+        self.assertIn(".evolution-button--primary:hover { background: var(--e-gold-soft); }", css)
+        self.assertIn(".regional-portal-dialog { --e-gold: #8ed9d1; --e-gold-soft: #b6eee5;", css)
+        self.assertIn(".evolution-dialog :focus-visible { outline: 3px solid var(--e-gold-soft); outline-offset: 3px; }", css)
+
+        def luminance(color):
+            channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+            linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4 for channel in channels]
+            return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear))
+
+        def contrast_ratio(first, second):
+            first_luminance = luminance(first)
+            second_luminance = luminance(second)
+            return (max(first_luminance, second_luminance) + 0.05) / (min(first_luminance, second_luminance) + 0.05)
+
+        for background in ("#8ed9d1", "#b6eee5"):
+            text_contrast = contrast_ratio("#152025", background)
+            border_contrast = contrast_ratio("#152025", background)
+            self.assertGreaterEqual(text_contrast, 4.5, f"text on {background}: {text_contrast:.3f}:1")
+            self.assertGreaterEqual(border_contrast, 3.0, f"border on {background}: {border_contrast:.3f}:1")
+        focus_contrast = contrast_ratio("#b6eee5", "#17272b")
+        self.assertGreaterEqual(focus_contrast, 3.0, f"focus ring against portal dialog: {focus_contrast:.3f}:1")
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
