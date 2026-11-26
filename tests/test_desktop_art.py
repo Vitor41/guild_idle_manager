@@ -234,7 +234,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn('href="/regional/events?section=portals#regional-event-{{ pending_portal_notice.event_id }}"', portal_dialog)
         self.assertIn("data-async-navigation data-regional-notice-close", portal_dialog)
         self.assertIn('id="regional-rebellion-notice"', base)
-        self.assertIn("desktop-evolution.css') }}?v=20261126-1", base)
+        self.assertIn("desktop-evolution.css') }}?v=20261126-2", base)
 
         self.assertIn('body[data-app-mode="desktop"] a', theme)
         self.assertLess(base.index("desktop-theme.css"), base.index("desktop-evolution.css"))
