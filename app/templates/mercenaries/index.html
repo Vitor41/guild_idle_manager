@@ -30,21 +30,6 @@
     {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
     {% if error %}<p class="error-message" role="alert">{{ error }}{% if diagnostic_id %} Referência de diagnóstico: {{ diagnostic_id }}. Log: %LOCALAPPDATA%\GuildIdleManager\logs\gameplay-actions.log{% endif %}</p>{% endif %}
 
-    <div class="dashboard-grid">
-      <article class="panel tavern-hero">
-        <h2>Contratação</h2>
-        <dl class="stat-list">
-          <div><dt>Ouro</dt><dd data-resource-total="gold">{{ resources.gold if resources else 0 }}</dd></div>
-          <div><dt>Vagas</dt><dd>{{ mercenaries|length }}/{{ mercenary_limit }}</dd></div>
-        </dl>
-        <p class="note">Novos mercenários entram pela Taverna e nascem como Aprendiz.</p>
-        <div class="action-row compact">
-          <a class="button-link secondary" href="/tavern">Abrir Taverna</a>
-          <a class="button-link secondary" href="/class-change">Troca de Classe</a>
-        </div>
-      </article>
-    </div>
-
     {% if mercenaries %}
       <section class="mercenary-grid table-panel" aria-label="Membros da guilda">
         {% for mercenary in mercenaries %}
@@ -53,14 +38,14 @@
             <div class="mercenary-head">
               <div class="avatar-placeholder avatar-class-icon" data-desktop-class="{{ mercenary.mercenary_class.code or mercenary.mercenary_class.name }}">
                 {% if mercenary.class_icon_path %}
-                  <img class="asset-icon class-icon-img {% if '/assets/extended/' in mercenary.class_icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="{{ mercenary.class_label }}" loading="lazy">
+                  <img class="asset-icon class-icon-img {% if '/assets/extended/' in mercenary.class_icon_path %}extended-class-icon-img{% endif %}" src="{{ url_for('static', path=mercenary.class_icon_path) }}" alt="" loading="lazy">
                 {% else %}
                   <span aria-hidden="true">{{ mercenary.class_label[:1] }}</span>
                 {% endif %}
               </div>
               <div>
                 <h2>{{ mercenary.name }}</h2>
-                <p class="note">{{ mercenary.class_label }} | Nível {{ mercenary.level }}</p>
+                <p class="note">{{ mercenary.class_label }} · Nível {{ mercenary.level }}</p>
                 <div class="badge-row">
                   <span class="rarity-badge rarity-{{ mercenary.rarity }}">{{ mercenary.rarity_label }}</span>
                   <span class="status-badge status-{{ mercenary.status }}">{{ mercenary.status_label }}</span>
@@ -104,10 +89,19 @@
     {% else %}
       <section class="panel table-panel">
         <p class="note">Nenhum mercenário contratado ainda.</p>
-        <div class="action-row compact">
-          <a class="button-link secondary" href="/tavern">Contratar primeiro Aprendiz</a>
-        </div>
       </section>
     {% endif %}
+
+    <article class="panel mercenary-hiring-summary" aria-labelledby="mercenary-hiring-title">
+      <h2 id="mercenary-hiring-title">Contratação</h2>
+      <dl class="stat-list">
+        <div><dt>Ouro</dt><dd data-resource-total="gold">{{ resources.gold if resources else 0 }}</dd></div>
+        <div><dt>Ocupação</dt><dd>{{ mercenaries|length }}/{{ mercenary_limit }}</dd></div>
+      </dl>
+      <div class="action-row compact">
+        <a class="button-link secondary" href="/tavern">Abrir Taverna</a>
+        <a class="button-link secondary" href="/class-change">Troca de Classe</a>
+      </div>
+    </article>
   </section>
 {% endblock %}

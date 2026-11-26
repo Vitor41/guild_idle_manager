@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import Base, create_database_engine
 from app.models import BuildingTemplate, Guild, GuildBuilding, GuildInventoryItem, GuildItemInstance, ItemTemplate, MarketSale
+from app.services.building_balance_service import market_values
+from app.services.economy_pricing_service import market_sale_unit_value
 from app.services.market_service import MarketError, get_market_page_context, start_equipment_sale, start_material_sale
 
 
@@ -36,6 +38,10 @@ class MarketMaxQuantityTests(unittest.TestCase):
     def test_max_is_available_stock_and_zero_without_a_listing_slot(self):
         context = get_market_page_context(self.db, self.guild)
         self.assertEqual(context["inventory_items"][0].market_max_quantity, 80)
+        self.assertEqual(
+            context["inventory_items"][0].market_unit_value,
+            market_sale_unit_value(self.item.base_sell_value, context["market"]["value_bonus_percent"]),
+        )
 
         now = datetime.now(timezone.utc)
         self.db.add(MarketSale(guild_id=self.guild.id, item_template_id=self.item.id, quantity=1,
@@ -44,6 +50,18 @@ class MarketMaxQuantityTests(unittest.TestCase):
         self.db.commit()
         context = get_market_page_context(self.db, self.guild)
         self.assertEqual(context["inventory_items"][0].market_max_quantity, 0)
+
+    def test_market_context_exposes_the_effective_unit_price_used_by_the_sale_service(self):
+        self.item.base_sell_value = 2
+        self.db.query(GuildBuilding).filter_by(
+            guild_id=self.guild.id, building_template_id=self.market_template.id,
+        ).one().level = 10
+        self.db.commit()
+
+        context = get_market_page_context(self.db, self.guild)
+        expected = market_sale_unit_value(self.item.base_sell_value, market_values(10)["value_bonus_percent"])
+        self.assertEqual(expected, 2)
+        self.assertEqual(context["inventory_items"][0].market_unit_value, expected)
 
     def test_server_allows_sale_above_old_quota_and_consumes_inventory(self):
         sale = start_material_sale(self.db, self.guild, str(self.item.id), "60", commit=False)

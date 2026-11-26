@@ -19,13 +19,13 @@ templates.env.globals["utc_iso"] = lambda value: value.isoformat() if value else
 def workshops_index(request: Request, db: DbSession, current_user: User | None = Depends(get_current_player)):
     if current_user is None:
         return RedirectResponse("/login", status_code=303)
-    guild, _resources = get_current_guild_context(db, current_user.id)
+    guild, resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     context = get_supply_workshop_context(db, guild)
     db.commit()
     return templates.TemplateResponse(request=request, name="workshops/index.html", context={
-        "current_user": current_user, "guild": guild, **context,
+        "current_user": current_user, "guild": guild, "resources": resources, **context,
         "message": request.query_params.get("message", ""), "error": request.query_params.get("error", ""),
     })
 

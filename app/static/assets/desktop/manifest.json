@@ -862,6 +862,7 @@
     "/workshops": "nav-workshops",
     "/dungeons": "dungeon-gate",
     "/regional": "nav-regional",
+    "/regional/events": "biome-portal",
     "/inventory": "item-chest",
     "/blacksmith": "building-blacksmith",
     "/market": "building-market",

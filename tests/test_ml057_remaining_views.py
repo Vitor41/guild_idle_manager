@@ -1,0 +1,231 @@
+from pathlib import Path
+import re
+import unittest
+from jinja2 import Environment
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class Ml057RemainingViewTests(unittest.TestCase):
+    def read(self, path: str) -> str:
+        return (ROOT / path).read_text(encoding="utf-8-sig")
+
+    def test_changed_templates_parse(self):
+        environment = Environment()
+        for path in (
+            "app/templates/base.html",
+            "app/templates/components/regional_offer_actions.html",
+            "app/templates/regional/index.html",
+            "app/templates/gathering/index.html",
+            "app/templates/regional/detail.html",
+            "app/templates/classes/index.html",
+            "app/templates/tiers/index.html",
+            "app/templates/codex/index.html",
+            "app/templates/tutorial/index.html",
+            "app/templates/updates.html",
+        ):
+            with self.subTest(template=path):
+                environment.parse(self.read(path))
+
+    def test_regional_offers_lead_and_keep_recommendations_separate_from_requirements(self):
+        page = self.read("app/templates/regional/index.html")
+        css = self.read("app/static/css/desktop-evolution.css")
+        self.assertIn('<details class="regional-map-details">', page)
+        self.assertIn('href="/guide#vigilia-regional"', page)
+        self.assertIn("Recomendado: nível {{ offer.recommended_level_snapshot }}", page)
+        self.assertIn("Exige · Grupo mínimo–máximo", page)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", css)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", css)
+        self.assertIn(".evolution-offer-card h4 { overflow-wrap: anywhere; }", css)
+        self.assertIn(".evolution-region-grid { grid-template-columns: 1fr; }", css)
+        self.assertIn(".evolution-offer-group { margin-top: 22px; container-type: inline-size; }", css)
+        self.assertIn("@container (min-width: 640px) { .evolution-offer-grid", css)
+        self.assertIn("@container (min-width: 960px) { .evolution-offer-grid", css)
+
+    def test_regional_comparison_keeps_guild_identity_during_local_horizontal_scroll(self):
+        page = self.read("app/templates/regional/detail.html")
+        route = self.read("app/routes/regional_routes.py")
+        main = self.read("app/static/js/main.js")
+        css = self.read("app/static/css/desktop-evolution.css")
+        self.assertIn("regional-comparison-table", page)
+        self.assertIn("<th scope=\"row\">{{ row.state.name }}", page)
+        self.assertIn("overflow-x: auto", css)
+        self.assertIn(".regional-comparison-table .evolution-ranking-table th:first-child { position: sticky; left: 0", css)
+        self.assertIn("class=\"numeric\" data-comparison-field=\"wealth\"", page)
+        self.assertIn("{{ region_name|upper }}", page)
+        self.assertIn("row.tier_counts_display.items()", page)
+        self.assertNotIn("row.tier_counts|dictsort", page)
+        self.assertIn('"tier_counts_display": row["tier_counts_display"]', route)
+        self.assertIn("data.tier_counts_display || {}", main)
+        self.assertNotIn("tier_counts || {}", main[main.index("function initializeRegionalComparison"):main.index("window.initializeRegionalComparison")])
+        regional_home = self.read("app/templates/regional/index.html")
+        self.assertIn("regional-main-ranking", regional_home)
+        self.assertIn("position: sticky; left: 70px", css)
+
+    def test_regional_report_groups_cpu_stages_on_demand_and_labels_missing_data(self):
+        page = self.read("app/templates/regional/index.html")
+        css = self.read("app/static/css/desktop-evolution.css")
+        self.assertNotIn("<p></p>", page)
+        self.assertIn('<details class="regional-report-activity">', page)
+        self.assertIn('class="regional-report-dialog__header"', page)
+        self.assertIn('class="regional-report-dialog__body"', page)
+        self.assertIn('class="regional-report-dialog__footer"', page)
+        self.assertIn("grid-template-rows: auto minmax(0, 1fr) auto", css)
+        self.assertIn(".regional-report-dialog__body { min-height: 0; overflow: auto;", css)
+        for label in ("Planejadas", "Elegíveis", "Iniciadas", "Resolvidas"):
+            self.assertIn(f"<th scope=\"col\">{label}</th>", page)
+        self.assertIn("activity.planned if activity.planned is not none else 'não registrado'", page)
+        self.assertIn("activity.resolved if activity.resolved is not none else 'não registrado'", page)
+        self.assertIn("report.has_unmeasured_cpu_activity", page)
+
+    def test_class_guide_flattens_tiers_and_keeps_return_links_in_a_sticky_index(self):
+        page = self.read("app/templates/classes/index.html")
+        css = self.read("app/static/css/main.css")
+        self.assertIn('id="classes-guide-index"', page)
+        self.assertIn('class="class-tier-group"', page)
+        self.assertIn('href="#classes-guide-index">Voltar ao índice</a>', page)
+        self.assertIn(".classes-guide-index { position: sticky;", css)
+        self.assertNotIn('<section class="panel table-panel">\n        <h2>{{ tier_label }}</h2>', page)
+
+    def test_rarity_guide_uses_one_label_per_card_and_does_not_repeat_equipment_copy(self):
+        page = self.read("app/templates/tiers/index.html")
+        css = self.read("app/static/css/main.css")
+        self.assertEqual(page.count("{{ rarity.description }}"), 1)
+        self.assertNotIn("<h3>{{ rarity.label }}</h3>", page)
+        self.assertIn("tier-guide-grid--equipment", page)
+        self.assertEqual(page.count("tier-guide-panel"), 2)
+        self.assertIn("container-type: inline-size; container-name: tier-guide", css)
+        self.assertIn("@container tier-guide (min-width: 560px)", css)
+        self.assertIn("@container tier-guide (min-width: 900px)", css)
+        grid_rule = re.search(r"\.tier-guide-grid\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(grid_rule)
+        self.assertIn("grid-template-columns: minmax(0, 1fr)", grid_rule.group(1))
+        self.assertNotIn("auto-fit", grid_rule.group(1))
+        self.assertEqual(page.count("{{ rarity.label }}"), 2)
+
+    def test_codex_detail_return_preserves_filters_and_returns_to_the_selected_entry(self):
+        page = self.read("app/templates/codex/index.html")
+        route = self.read("app/routes/codex_routes.py")
+        self.assertIn("/codex?category={{ selected_category }}&amp;trail={{ selected_trail }}#codex-entry-{{ selected_codex_entry.id }}", page)
+        self.assertIn('id="codex-entry-{{ entry.id }}" tabindex="-1"', page)
+        self.assertIn('request.query_params.get("category", "all")', route)
+        self.assertIn('request.query_params.get("trail", "all")', route)
+
+    def test_tutorial_has_thirteen_topic_icons_and_reachable_controls(self):
+        page = self.read("app/templates/tutorial/index.html")
+        route = self.read("app/routes/tutorial_routes.py")
+        css = self.read("app/static/css/main.css")
+        self.assertEqual(len(re.findall(r'^    \("', route, re.MULTILINE)), 13)
+        self.assertIn("tutorial_icons = {1:", page)
+        self.assertIn("13:'guild-sigil'", page)
+        for sprite in ("guild-sigil", "building-tavern", "expedition-map", "dungeon-gate", "building-docks"):
+            self.assertTrue((ROOT / f"app/static/assets/desktop/sprites/64/{sprite}.png").is_file())
+        self.assertIn(".tutorial-actions > a, .tutorial-actions > form button { min-width: 40px; min-height: 40px; }", css)
+        desktop_css = self.read("app/static/css/desktop-theme.css")
+        self.assertIn('form[action="/tutorial/decline"] > button.text-button', desktop_css)
+        self.assertIn("min-height: 40px", desktop_css)
+
+    def test_classes_guide_anchor_offset_includes_measured_sticky_index(self):
+        main = self.read("app/static/js/main.js")
+        css = self.read("app/static/css/main.css")
+        self.assertIn('document.querySelector(".classes-page .classes-guide-index")', main)
+        self.assertIn('root.style.setProperty("--classes-guide-index-height", `${classesIndexOffset}px`)', main)
+        self.assertIn("classesGuideIndexObserver ||= new ResizeObserver", main)
+        self.assertIn("var(--classes-guide-index-height, 0px)", css)
+
+    def test_updates_prioritize_version_channel_and_manual_verification(self):
+        page = self.read("app/templates/updates.html")
+        route = self.read("app/routes/update_routes.py")
+        main = self.read("app/static/js/main.js")
+        self.assertIn("updates-version-summary", page)
+        self.assertIn("Canal {{ installed_channel or 'não configurado' }}", page)
+        self.assertIn('"installed_channel": installed_channel', route)
+        self.assertIn("Origem: GitHub Releases", page)
+        self.assertIn(">Verificar</button>", page)
+        self.assertNotIn("<script>", page)
+        self.assertIn("function initializeUpdateChecks(root = document)", main)
+        self.assertIn("initializeUpdateChecks(currentMain);", main)
+        self.assertIn("initializeUpdateChecks();", main)
+        self.assertNotIn("updates/install-release", page)
+        self.assertNotIn("updates/apply-local", page)
+
+    def test_regional_offer_macro_has_request_context_and_map_heading_target(self):
+        page = self.read("app/templates/regional/index.html")
+        self.assertIn('{% from "components/regional_offer_actions.html" import offer_team_fieldset with context %}', page)
+        self.assertIn('aria-labelledby="map-title"', page)
+        self.assertIn('<summary id="map-title">Estado das cinco regiões</summary>', page)
+
+    def test_gathering_summary_uses_only_designated_families_and_matches_pause_states(self):
+        regional = self.read("app/templates/regional/index.html")
+        route = self.read("app/routes/regional_routes.py")
+        gathering = self.read("app/templates/gathering/index.html")
+        css = self.read("app/static/css/desktop-evolution.css")
+        self.assertIn("{% for assignment in assignments %}", regional)
+        self.assertIn("node_labels.get(family, 'Posto de coleta')", regional)
+        self.assertIn("family_labels.get(family, 'Material')", regional)
+        self.assertNotIn("('wood', 'Madeira', 'Bosque'), ('ore', 'Minério', 'Pedreira')", regional)
+        self.assertIn("\"family_labels\": FAMILY_LABELS", route)
+        self.assertIn("\"node_labels\": NODE_LABELS", route)
+        self.assertIn("evolution-status--paused", regional)
+        self.assertIn("Progresso preservado:", regional)
+        self.assertIn("evolution-status--paused", gathering)
+        self.assertIn("Armazém cheio", gathering)
+        self.assertIn(".evolution-status--paused {", css)
+        self.assertIn('aria-label="Armazém: {{ used }} de {{ capacity }}"', gathering)
+
+    def test_regional_gathering_summary_renders_all_designated_families_and_pauses_without_timer(self):
+        from types import SimpleNamespace
+
+        page = self.read("app/templates/regional/index.html")
+        start = page.index('<div class="evolution-task-list">')
+        end = page.index("\n      </div>", start)
+        snippet = page[start:end + len("\n      </div>")]
+        environment = Environment(autoescape=True)
+        assignment = SimpleNamespace(
+            resource_family="essence",
+            catalog_unavailable=False,
+            capacity_paused=True,
+            mercenary=SimpleNamespace(name="Equipe sintética"),
+            extra_chance=0,
+            progress_seconds=24,
+            cycle_count=3,
+        )
+        rendered = environment.from_string(snippet).render(
+            assignments=[assignment],
+            family_labels={"essence": "Essências"},
+            node_labels={"essence": "Veios arcanos"},
+        )
+        self.assertIn("Essências", rendered)
+        self.assertIn("Veios arcanos", rendered)
+        self.assertIn("Pausada · Armazém cheio", rendered)
+        self.assertIn("Progresso preservado: 24 de 60 s", rendered)
+        self.assertNotIn("Próximo ciclo em", rendered)
+
+    def test_prepared_activity_separates_team_and_reinforcements_with_real_class_icons(self):
+        component = self.read("app/templates/components/regional_offer_actions.html")
+        service = self.read("app/services/regional_cycle_service.py")
+        css = self.read("app/static/css/desktop-evolution.css")
+        self.assertIn('aria-labelledby="prepared-team-title-{{ offer.id }}"', component)
+        self.assertIn('aria-labelledby="reinforcement-team-title-{{ offer.id }}"', component)
+        self.assertIn('value="{{ mercenary.id }}" checked', component)
+        self.assertIn("offer.prepared_mercenary_ids", component)
+        self.assertIn("mercenary.class_icon_path", component)
+        self.assertIn('data-reinforcement-badge="{{ mercenary.id }}"', component)
+        self.assertIn('data-min-party-size="{{ offer.min_party_size_snapshot }}"', component)
+        self.assertIn('data-max-party-size="{{ offer.max_party_size_snapshot }}"', component)
+        self.assertIn("{% if not reinforcement_selected %} hidden{% endif %}", component)
+        self.assertIn("Reforço selecionado</strong>", component)
+        self.assertIn("annotate_mercenary_display(mercenary)", service)
+        self.assertIn("selectinload(Mercenary.mercenary_class)", service)
+        self.assertIn("grid-template-columns: 18px 36px minmax(0,1fr) auto", css)
+        self.assertIn("min-height: 48px", css)
+        self.assertIn("container-type: inline-size;", css)
+        self.assertIn("overflow-wrap: anywhere;", css)
+        self.assertIn("grid-row: 2; justify-self: start", css)
+        self.assertIn("width: min(760px, calc(100vw - 32px))", css)
+        self.assertIn("max-height: calc(100dvh - 32px)", css)
+
+
+if __name__ == "__main__":
+    unittest.main()

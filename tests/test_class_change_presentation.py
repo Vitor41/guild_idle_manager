@@ -64,6 +64,35 @@ class ClassChangePresentationTests(unittest.TestCase):
         self.assertEqual(cards[0]["checks"][3]["missing"], "Sem mercenário da classe de origem")
         self.assertIn("Nenhum mercenário", cards[0]["worker_summary"])
 
+    def test_unknown_gold_is_not_rendered_as_zero_or_a_numeric_shortfall(self):
+        cards = self._cards(gold=None, workers=[
+            {"id": 1, "class_id": 10, "level": 20, "status": "available"},
+        ])
+
+        gold_check = cards[0]["checks"][0]
+        self.assertEqual(gold_check["current"], "—")
+        self.assertFalse(gold_check["met"])
+        self.assertIsNone(gold_check["shortfall"])
+        self.assertEqual(gold_check["missing"], "Saldo indisponível")
+        self.assertEqual(cards[0]["state"], "Saldo indisponível")
+        self.assertEqual(cards[0]["eligible_count"], 0)
+
+        known_zero = self._cards(gold=0, workers=[
+            {"id": 1, "class_id": 10, "level": 20, "status": "available"},
+        ])[0]["checks"][0]
+        self.assertEqual(known_zero["current"], 0)
+        self.assertEqual(known_zero["shortfall"], 1000)
+        self.assertEqual(known_zero["missing"], "")
+
+    def test_template_shows_shortfalls_first_and_keeps_full_requirement_matrix_expandable(self):
+        from pathlib import Path
+
+        template = (Path(__file__).resolve().parents[1] / "app/templates/class_change/index.html").read_text(encoding="utf-8")
+        self.assertIn("class-requirement-checks--missing", template)
+        self.assertIn("{% for check in step.checks if not check.met %}", template)
+        self.assertIn("Ver matriz completa · {{ step.checks|length }} requisitos", template)
+        self.assertIn("{% for check in step.checks %}", template)
+
     def test_available_worker_below_required_level_reports_shortfall(self):
         cards = self._cards(workers=[
             {"id": 1, "class_id": 10, "level": 18, "status": "available"},
@@ -86,7 +115,6 @@ class ClassChangePresentationTests(unittest.TestCase):
         grouped = next(card for card in cards if card["gold_cost"] == 1000)
         self.assertEqual(grouped["path_count"], 2)
         self.assertEqual(grouped["eligible_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

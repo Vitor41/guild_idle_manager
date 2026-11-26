@@ -30,6 +30,7 @@ def updates(request: Request, db: DbSession, current_user=Depends(get_current_pl
     guild, resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
+    installed_channel = read_installed_channel() if getattr(sys, "frozen", False) else None
     return templates.TemplateResponse(
         request=request,
         name="updates.html",
@@ -39,9 +40,8 @@ def updates(request: Request, db: DbSession, current_user=Depends(get_current_pl
             "resources": resources,
             "release_version": request.app.version,
             "is_packaged": getattr(sys, "frozen", False),
-            "github_releases_status": provider_status(
-                read_installed_channel() if getattr(sys, "frozen", False) else None
-            ),
+            "installed_channel": installed_channel,
+            "github_releases_status": provider_status(installed_channel),
             "can_restart_local_checkout": (
                 request.app.state.app_mode == "desktop"
                 and settings.app_env == "local"

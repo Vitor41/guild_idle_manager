@@ -38,15 +38,26 @@
                 <span class="class-requirement-state class-requirement-state--{{ step.state_class }}">{{ step.state }}</span>
               </header>
               <p class="class-requirement-eligible">{{ step.worker_summary }}</p>
-              <ul class="class-requirement-checks">
-                {% for check in step.checks %}
+              <ul class="class-requirement-checks class-requirement-checks--missing" aria-label="Requisitos pendentes ou indisponíveis">
+                {% for check in step.checks if not check.met %}
                   <li class="{{ 'is-met' if check.met else 'is-pending' }}">
                     <strong>{{ check.label }}</strong>
                     <span>Necessário {{ check.required }} · atual {{ check.current }}</span>
-                    <b>{% if check.met %}✓ Atendido{% elif check.missing %}{{ check.missing }}{% else %}Faltam {{ check.shortfall }}{% endif %}</b>
+                    <b>{% if check.missing %}{{ check.missing }}{% else %}Faltam {{ check.shortfall }}{% endif %}</b>
                   </li>
-                {% endfor %}
+                {% else %}<li class="is-met"><strong>Requisitos principais</strong><b>Atendidos</b></li>{% endfor %}
               </ul>
+              <details class="class-requirement-matrix"><summary>Ver matriz completa · {{ step.checks|length }} requisitos</summary>
+                <ul class="class-requirement-checks">
+                  {% for check in step.checks %}
+                    <li class="{{ 'is-met' if check.met else 'is-pending' }}">
+                      <strong>{{ check.label }}</strong>
+                      <span>Necessário {{ check.required }} · atual {{ check.current }}</span>
+                      <b>{% if check.met %}Atendido{% elif check.missing %}{{ check.missing }}{% else %}Faltam {{ check.shortfall }}{% endif %}</b>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </details>
             </article>
           {% else %}<p class="note">Nenhuma etapa de troca está configurada no momento.</p>{% endfor %}
         </div>

@@ -5,11 +5,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Guild Idle Manager{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261117-4">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}?v=20261125-9">
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-art.css') }}">{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261117-1">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-theme.css') }}?v=20261126-2">{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-sidebar-layout.css') }}?v=20261103-1">{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261117-3">{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<link rel="stylesheet" href="{{ url_for('static', path='/css/desktop-evolution.css') }}?v=20261126-2">{% endif %}
   </head>
   <body data-app-mode="{{ request.app.state.app_mode }}" data-route="{{ request.url.path }}">
     {% set has_app_shell = current_user is defined and current_user and ((guild is defined and guild) or current_user.is_admin) %}
@@ -36,7 +36,8 @@
             <a href="/workshops" data-nav-work-menu="workshops" data-nav-work-label="Oficinas"><span class="nav-icon">⚗</span><span>Oficinas</span></a>
             <a href="/dungeons" data-nav-work-menu="dungeons" data-nav-work-label="Masmorras"><span class="nav-icon">◆</span><span>Masmorras</span></a>
             {% if request.app.state.app_mode == 'desktop' %}<span class="nav-section-label">Domínio</span>{% endif %}
-            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-async-navigation data-scroll-top data-nav-work-menu="regional" data-nav-work-label="Vigília Regional"><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional" data-async-navigation data-scroll-top data-nav-work-menu="regional" data-nav-work-label="Vigília Regional"{% if request.url.path.startswith('/regional') and not request.url.path.startswith('/regional/events') %} aria-current="page"{% endif %}><span class="nav-icon">⚑</span><span>Vigília Regional</span>{% if pending_rebellion_invite %}<span class="regional-invite-badge" aria-label="Convite de rebelião pendente">!</span>{% endif %}</a>{% endif %}
+            {% if request.app.state.app_mode == 'desktop' %}<a href="/regional/events" data-async-navigation data-scroll-top data-nav-work-menu="regional_events" data-nav-work-label="Eventos Regionais"{% if request.url.path.startswith('/regional/events') %} aria-current="page"{% endif %}><span class="nav-icon">✧</span><span>Eventos Regionais</span></a>{% endif %}
             <a href="/inventory"><span class="nav-icon">◈</span><span>Inventário</span></a>
             <a href="/blacksmith" data-nav-work-menu="blacksmith" data-nav-work-label="Ferreiro"><span class="nav-icon">&#9874;</span><span>Ferreiro</span></a>
             <a href="/market" data-nav-work-menu="market" data-nav-work-label="Mercado"><span class="nav-icon">$</span><span>Mercado</span></a>
@@ -141,7 +142,7 @@
         <div class="confirmation-dialog__actions"><form method="post" action="/tutorial/decline"><button class="secondary-button">Não, pular tutorial</button></form><form method="post" action="/tutorial/start"><button>Sim, iniciar tutorial</button></form></div>
       </dialog>
     {% endif %}
-    {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path == '/regional' and pending_rebellion_invite %}
+    {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path in ['/regional', '/regional/events'] and pending_rebellion_invite %}
       <dialog class="evolution-dialog regional-rebellion-dialog regional-event-notice" id="regional-rebellion-notice" data-regional-event-notice data-event-id="{{ pending_rebellion_invite.event_id }}" data-event-deadline="{{ pending_rebellion_invite.priority_ends_at_iso }}" aria-labelledby="regional-rebellion-title" aria-describedby="regional-rebellion-description">
         <form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar convite">×</button></form>
         <div class="regional-rebellion-dialog__content">
@@ -150,14 +151,14 @@
           <h2 id="regional-rebellion-title">Uma rebelião ameaça {{ pending_rebellion_invite.region_name }}</h2>
           <p id="regional-rebellion-description">Prioridade por mais <time data-evolution-countdown="{{ pending_rebellion_invite.priority_ends_at_iso }}" datetime="{{ pending_rebellion_invite.priority_ends_at_iso }}">{{ pending_rebellion_invite.priority_ends_at_iso }}</time>. Ao aceitar, a janela de atividade é de 12 horas. O prazo continua durante sua ausência.</p>
           <div class="regional-rebellion-dialog__actions">
-            <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--primary" type="submit" name="decision" value="accept" autofocus>Aceitar convite</button></form>
-            <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><button class="evolution-button evolution-button--secondary" type="submit" name="decision" value="decline">Delegar à CPU</button></form>
+            <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><input type="hidden" name="return_to" value="/regional/events?section=rebellions#regional-event-{{ pending_rebellion_invite.event_id }}"><button class="evolution-button evolution-button--primary" type="submit" name="decision" value="accept" autofocus>Aceitar convite</button></form>
+            <form method="post" action="/regional/events/{{ pending_rebellion_invite.event_id }}/decision"><input type="hidden" name="return_to" value="/regional/events?section=rebellions#regional-event-{{ pending_rebellion_invite.event_id }}"><button class="evolution-button evolution-button--secondary" type="submit" name="decision" value="decline">Delegar à CPU</button></form>
           </div>
-          <a class="regional-rebellion-dialog__details" href="/regional#regional-event-{{ pending_rebellion_invite.event_id }}" data-regional-notice-close>Ver convite em Vigília Regional</a>
+          <a class="regional-rebellion-dialog__details" href="/regional/events?section=rebellions#regional-event-{{ pending_rebellion_invite.event_id }}" data-async-navigation data-regional-notice-close>Ver convite em Eventos Regionais</a>
         </div>
       </dialog>
     {% endif %}
-    {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path == '/regional' and pending_portal_notice %}
+    {% if has_app_shell and request.app.state.app_mode == 'desktop' and request.url.path in ['/regional', '/regional/events'] and pending_portal_notice %}
       <dialog class="evolution-dialog regional-portal-dialog regional-event-notice" id="regional-portal-notice" data-regional-event-notice data-event-id="{{ pending_portal_notice.event_id }}" data-event-deadline="{{ pending_portal_notice.expires_at_iso }}" aria-labelledby="regional-portal-title" aria-describedby="regional-portal-description">
         <form method="dialog"><button class="evolution-dialog__close" aria-label="Fechar aviso do portal">×</button></form>
         <div class="regional-portal-dialog__content">
@@ -165,8 +166,8 @@
           <p class="evolution-eyebrow">DESAFIO DIMENSIONAL · ENTRADA LIMITADA</p>
           <h2 id="regional-portal-title">{{ pending_portal_notice.boss_name }}</h2>
           <p id="regional-portal-description">Portal aberto em {{ pending_portal_notice.region_name }}. A entrada termina em <time data-evolution-countdown="{{ pending_portal_notice.expires_at_iso }}" datetime="{{ pending_portal_notice.expires_at_iso }}">{{ pending_portal_notice.expires_at_iso }}</time>. Sua guilda tem uma entrada; fechar este aviso não a consome.</p>
-          <div class="regional-rebellion-dialog__actions"><a class="evolution-button evolution-button--primary" href="/regional#regional-event-{{ pending_portal_notice.event_id }}" data-async-navigation data-regional-notice-close>Ver equipe e portal na Vigília</a></div>
-          <a class="regional-rebellion-dialog__details" href="/regional#regional-event-{{ pending_portal_notice.event_id }}" data-async-navigation data-regional-notice-close>Ver este portal na Vigília</a>
+          <div class="regional-rebellion-dialog__actions"><a class="evolution-button evolution-button--primary" href="/regional/events?section=portals#regional-event-{{ pending_portal_notice.event_id }}" data-async-navigation data-regional-notice-close>Ver equipe e portal em Eventos Regionais</a></div>
+          <a class="regional-rebellion-dialog__details" href="/regional/events?section=portals#regional-event-{{ pending_portal_notice.event_id }}" data-async-navigation data-regional-notice-close>Ver este portal em Eventos Regionais</a>
         </div>
       </dialog>
     {% endif %}
@@ -181,8 +182,7 @@
           {% if request.app.state.app_mode == 'desktop' %}<img src="/static/assets/desktop/evolution/sprites/ui_64/gathering-kit.png" width="48" height="48" alt="" loading="lazy">{% endif %}
           <p>Você ficou ausente por <strong>{{ offline.elapsed_label or 'um período' }}</strong>. Foram reconhecidas <strong>{{ offline.credited_label or '0min' }}</strong>.</p>
           <dl class="offline-reward-grid">
-            <div><dt>Ouro</dt><dd>+{{ offline.gold }}</dd></div>
-            {% if offline.gold_sources %}<div><dt>Produção da guilda (base, nível e equipe)</dt><dd>+{{ offline.gold_sources.guild_production }}</dd></div><div><dt>Bônus do Armazém</dt><dd>+{{ offline.gold_sources.warehouse }}</dd></div>{% endif %}
+            <div class="offline-gold-total"><dt>Ouro total</dt><dd>+{{ offline.gold }}{% if offline.gold_sources %}<small class="offline-gold-breakdown">Produção da guilda: +{{ offline.gold_sources.guild_production }}{% if offline.gold_sources.warehouse %} · Bônus do Armazém: +{{ offline.gold_sources.warehouse }}{% endif %}</small>{% endif %}</dd></div>
             <div><dt>Cristais</dt><dd>+{{ offline.crystals or offline.special_crystals or 0 }}</dd></div>
             <div><dt>Estamina consumida</dt><dd>{{ ((offline.stamina_spent_seconds or 0) // 3600) }}h</dd></div>
             <div><dt>Estamina restante</dt><dd>{{ ((offline.stamina_remaining_seconds or 0) // 3600) }}h</dd></div>
@@ -195,8 +195,8 @@
               {% endfor %}
             </ul>
           {% endif %}
-          {% if offline.cap_reached %}<p class="note">O limite offline de {{ offline.cap_hours }} horas foi atingido.</p>{% endif %}
-          {% if offline.warning %}<p class="note">{{ offline.warning }}</p>{% endif %}
+          {% if offline.cap_reached %}<p class="note offline-cap-warning">O limite offline de {{ offline.cap_hours }} horas foi atingido.</p>{% endif %}
+          {% if offline.warning and not offline.cap_reached %}<p class="note">{{ offline.warning }}</p>{% endif %}
           {% if offline.regional_context %}
             <section class="offline-regional-context" aria-labelledby="offline-regional-title">
               <h3 id="offline-regional-title">Vigília durante a ausência</h3>
@@ -214,15 +214,16 @@
         <div class="confirmation-dialog__actions"><button type="button" data-offline-ack>Continuar</button></div>
       </dialog>
     {% endif %}
-    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261117-5"></script>
-    <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261110-1" defer></script>
-    <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261103-2" defer></script>
-    <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261117-1" defer></script>
-    {% if request.url.path == '/market' %}<script src="{{ url_for('static', path='/js/market-max.js') }}?v=20261102-1" defer></script>{% endif %}
+    <script src="{{ url_for('static', path='/js/main.js') }}?v=20261125-10"></script>
+    <script src="{{ url_for('static', path='/js/equipment-details.js') }}?v=20261125-2" defer></script>
+    <script src="{{ url_for('static', path='/js/gathering-cycle.js') }}?v=20261125-1" defer></script>
+    <script src="{{ url_for('static', path='/js/regional-supply.js') }}?v=20261125-1" defer></script>
+    <script src="{{ url_for('static', path='/js/market-max.js') }}?v=20261125-1" defer></script>
+    <script src="{{ url_for('static', path='/js/workshop-supply.js') }}?v=20261125-2" defer></script>
     <script src="{{ url_for('static', path='/js/offline-stamina.js') }}?v=20261030-1" defer></script>
     <script src="{{ url_for('static', path='/js/building-reset.js') }}?v=20261117-1" defer></script>
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-security.js') }}"></script>{% endif %}
-    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}" defer></script>{% endif %}
+    {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/desktop-art.js') }}?v=20261125-2" defer></script>{% endif %}
     {% if request.app.state.app_mode == 'desktop' %}<script src="{{ url_for('static', path='/js/evolution-dialogs.js') }}?v=20261117-2" defer></script>{% endif %}
     {% block scripts %}{% endblock %}
   </body>

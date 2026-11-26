@@ -2,8 +2,9 @@ from pathlib import Path
 import json
 from datetime import datetime, timedelta, timezone
 from math import floor
+import re
 from types import SimpleNamespace
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -16,22 +17,24 @@ from app.core.forms import read_form_multi_fields
 from app.desktop.gameplay_diagnostics import log_gathering_advancement
 from app.models.campaign import CampaignMetadata
 from app.models.guild import GuildResources
-from app.models.dungeon import DungeonTemplate
+from app.models.dungeon import DungeonRun, DungeonTemplate
 from app.models.item import ItemTemplate
-from app.models.mission import MissionTemplate
+from app.models.mission import MissionRun, MissionTemplate
 from app.models.mercenary import Mercenary
 from app.models.regional import (
-    RegionalCpuCyclePlan, RegionalCpuMercenary, RegionalCpuResource, RegionalEvent, RegionalEventParticipant,
+    RegionalCpuCyclePlan, RegionalCpuMercenary, RegionalCpuResource, RegionalEvent, RegionalEventActivity,
+    RegionalEventParticipant,
     RegionalGuildState, RegionalOffer, RegionalRegionState, RegionalRunOutcome,
 )
 from app.models.regional import RegionalCycle
 from app.models.user import User
 from app.services.dungeon_service import DungeonError, start_dungeon
-from app.services.gathering_service import advance_all_assignments, list_assignments
+from app.services.gathering_service import advance_all_assignments, list_assignments, FAMILY_LABELS, NODE_LABELS
 from app.services.achievement_service import get_codex_context
 from app.services.guild_service import get_current_guild_context
 from app.services.inventory_capacity_service import get_inventory_capacity, get_inventory_usage
 from app.services.mission_service import MissionError, start_mission
+from app.services.navigation_work_status_service import regional_events_review_token
 from app.services.regional_cycle_service import (
     PUBLIC_REGIONAL_OFFER_TYPES,
     get_current_player_regional_guild,
@@ -44,10 +47,11 @@ from app.services.regional_event_service import (
     record_rebellion_decision,
     expire_due_events,
     build_portal_boss_snapshot,
+    portal_spawn_status_for_region,
 )
 from app.services.evolution_art_service import get_evolution_art_context
 from app.services.supply_preparation_service import estimate_drop_sale_value, guild_gold, quote_supply, regional_kit_quote
-from app.services.display_service import clean_generated_name, rarity_label
+from app.services.display_service import clean_generated_name, rarity_label, RARITY_LABELS
 from app.services.drop_preview_service import build_drop_preview
 from app.services.icon_service import get_item_icon_path
 from app.repositories.item_repository import list_active_drops_for_mission
@@ -230,6 +234,7 @@ def _regional_comparison_data(db, campaign, guild, region_code: str):
         rows.append({
             "state": state, "wealth": current_wealth, "roster": len(roster) or state.roster_size,
             "tier_counts": tiers,
+            "tier_counts_display": _localized_tier_counts(tiers),
             "results": results.get(state.id, {"contracts": 0, "dungeons": 0, "bosses": 0, "successes": 0, "failures": 0}),
         })
     return region_name, regions, selected, rows
@@ -261,6 +266,14 @@ def regional_region_detail(
     })
 
 
+def _localized_tier_counts(tier_counts: dict[str, int]) -> dict[str, int]:
+    localized: dict[str, int] = {}
+    for tier, amount in tier_counts.items():
+        label = RARITY_LABELS.get(str(tier).lower(), "Sem classificação")
+        localized[label] = localized.get(label, 0) + amount
+    return dict(sorted(localized.items()))
+
+
 @router.get("/regions/{region_code}/comparison")
 def regional_region_comparison(
     region_code: str, request: Request, db: DbSession,
@@ -279,6 +292,7 @@ def regional_region_comparison(
     return JSONResponse({"guilds": {
         str(row["state"].id): {
             "wealth": row["wealth"], "roster": row["roster"], "tier_counts": row["tier_counts"],
+            "tier_counts_display": row["tier_counts_display"],
             "results": row["results"], "event_wins": row["state"].event_wins,
         } for row in rows
     }})
@@ -378,38 +392,29 @@ def _annotate_offer_drop_preview(db, offer: RegionalOffer) -> None:
     if offer.offer_type == "contract":
         template = db.get(MissionTemplate, offer.mission_template_id) if offer.mission_template_id else None
         active_entries = getattr(template, "item_drops", None) if template is not None else None
-        drop_note = "Chance-base por item/entrada; rola somente após sucesso. Pode variar com habilidades da equipe"
-        if template is not None and template.mission_type == "gathering":
-            drop_note += ", profissão na coleta"
-        if active_entries and any(
-            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
-            for entry in active_entries
-        ):
-            drop_note += ", Ferreiro para equipamentos"
     else:
         template = db.get(DungeonTemplate, offer.dungeon_template_id) if offer.dungeon_template_id else None
         active_entries = getattr(template, "item_drops", None) if template is not None else None
-        drop_note = "Chance-base por item/entrada; rola somente após sucesso. Pode variar com habilidades da equipe e Exploradores"
-        if active_entries and any(
-            entry.is_active and entry.item_template and entry.item_template.item_type == "equipment"
-            for entry in active_entries
-        ):
-            drop_note += ", Ferreiro para equipamentos"
     preview = build_drop_preview(active_entries)
     offer.drop_preview_available = preview["available"]
     offer.visible_drops = preview["drops"]
-    offer.drop_modifier_note = drop_note + "."
+    offer.drop_chance_basis = preview["chance_basis"]
 
 
 def _portal_drop_preview(db, summary: dict[str, object]) -> dict[str, object]:
     table = summary.get("portal_loot")
-    if not isinstance(table, dict) or not isinstance(table.get("entries"), list) or not table["entries"]:
-        return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+    if (
+        not isinstance(table, dict)
+        or table.get("roll_model") != "one_100_point_roll;exclusive_rarity_bands;no_guaranteed_equipment"
+        or not isinstance(table.get("entries"), list)
+        or not table["entries"]
+    ):
+        return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
     drops = []
     try:
         for entry in table["entries"]:
             if not isinstance(entry, dict):
-                return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+                return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
             item_id = int(entry.get("item_template_id", 0))
             chance = int(entry.get("chance_percent", -1))
             quantity = int(entry.get("quantity", 0))
@@ -423,33 +428,102 @@ def _portal_drop_preview(db, summary: dict[str, object]) -> dict[str, object]:
                 or not getattr(item, "name", None) or not getattr(item, "rarity", None)
                 or not 0 <= chance <= 100 or quantity < 1
             ):
-                return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+                return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
             drops.append({
                 "display_name": clean_generated_name(item.name),
                 "rarity_class": str(item.rarity).lower(),
                 "rarity_label": rarity_label(item.rarity),
                 "icon_path": get_item_icon_path(item),
                 "chance_percent": chance,
-                "chance_label": "chance",
+                "chance_label": "após sucesso",
                 "min_quantity": quantity,
                 "max_quantity": quantity,
                 "quantity_unit": "instância(s)",
             })
     except (AttributeError, TypeError, ValueError):
-        return {"drop_preview_available": False, "visible_drops": [], "drop_modifier_note": ""}
+        return {"drop_preview_available": False, "visible_drops": [], "drop_chance_basis": None}
     return {
         "drop_preview_available": True,
         "visible_drops": drops,
-        "drop_modifier_note": "Chance da faixa exclusiva; rolagem somente após sucesso. O portal não garante equipamento.",
+        "drop_chance_basis": "conditional",
     }
 
 
+def _validated_regional_return_to(
+    form: dict[str, list[str]],
+    *,
+    fallback: str = "/regional",
+    fallback_anchor: str = "",
+) -> str:
+    raw = str((form.get("return_to") or [""])[0]).strip()
+    if raw:
+        parsed = urlsplit(raw)
+        if not parsed.scheme and not parsed.netloc and parsed.path in {"/regional", "/regional/events"}:
+            query = parse_qs(parsed.query, keep_blank_values=True)
+            section_values = query.get("section", [])
+            valid_query = set(query).issubset({"section"}) and len(section_values) <= 1
+            valid_section = not section_values or section_values[0] in {"portals", "rebellions", "history"}
+            valid_path_query = parsed.path == "/regional/events" or not section_values
+            fragment = parsed.fragment
+            valid_fragment = (
+                not fragment
+                or fragment in {"regional-board", "portals", "rebellions", "history"}
+                or re.fullmatch(r"regional-event-\d+", fragment) is not None
+            )
+            if valid_query and valid_section and valid_path_query and valid_fragment:
+                path = parsed.path
+                if section_values:
+                    path += "?" + urlencode({"section": section_values[0]})
+                if fragment:
+                    path += "#" + fragment
+                return path
+    target = fallback
+    if fallback_anchor and re.fullmatch(r"#(?:regional-event-\d+|regional-board|portals|rebellions|history)", fallback_anchor):
+        target += fallback_anchor
+    return target
+
+
+def _regional_redirect(
+    form: dict[str, list[str]],
+    *,
+    fallback: str = "/regional",
+    fallback_anchor: str = "",
+    message: str | None = None,
+    error: str | None = None,
+    extra_query: list[tuple[str, str]] | None = None,
+) -> RedirectResponse:
+    target = _validated_regional_return_to(
+        form, fallback=fallback, fallback_anchor=fallback_anchor,
+    )
+    path, fragment_sep, fragment = target.partition("#")
+    base = urlsplit(path)
+    query_items = [
+        (key, value)
+        for key, values in parse_qs(base.query, keep_blank_values=True).items()
+        for value in values
+    ]
+    if message is not None:
+        query_items.append(("message", message))
+    if error is not None:
+        query_items.append(("error", error))
+    query_items.extend(extra_query or [])
+    location = base.path
+    if query_items:
+        location += "?" + urlencode(query_items, doseq=True)
+    if fragment_sep:
+        location += "#" + fragment
+    return RedirectResponse(location, status_code=303)
+
+
 def _start_error_redirect(error: object, form: dict[str, list[str]], anchor: str = "") -> RedirectResponse:
-    query: list[tuple[str, str]] = [("error", str(error))]
-    query.extend(("selected_mercenary_id", value) for value in form.get("mercenary_ids", []))
+    query: list[tuple[str, str]] = [
+        ("selected_mercenary_id", value) for value in form.get("mercenary_ids", [])
+    ]
     if (form.get("supply") or [""])[0] == "1":
         query.append(("selected_supply", "1"))
-    return RedirectResponse(f"/regional?{urlencode(query, doseq=True)}{anchor}", status_code=303)
+    return _regional_redirect(
+        form, error=str(error), fallback_anchor=anchor, extra_query=query,
+    )
 
 
 def _quote_offer_supply(db, guild, offer: RegionalOffer, mercenary_ids: list[str]) -> dict[str, object]:
@@ -554,6 +628,7 @@ async def regional_supply_quote(
     return JSONResponse(_quote_offer_supply(db, guild, offer, form.get("mercenary_ids", [])))
 
 
+@router.get("/events")
 @router.get("")
 def regional_index(
     request: Request,
@@ -566,33 +641,38 @@ def regional_index(
     guild, resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
+    central_events_view = request.url.path == "/regional/events"
     board = get_regional_board(db, campaign, guild)
     region_now = datetime.now(timezone.utc)
-    for offer_list in board.get("offers", {}).values():
-        for offer in offer_list:
-            _annotate_supply_preparation(offer, region_now)
-            _annotate_prepared_team(db, guild.id, offer)
-            _annotate_offer_drop_preview(db, offer)
-            try:
-                saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
-            except (TypeError, json.JSONDecodeError):
-                saved_quote = {}
-            offer.supply_quote = saved_quote or _initial_offer_supply_quote(db, guild, offer, resources.gold if resources else 0)
-    advancement = advance_all_assignments(db, guild)
-    log_gathering_advancement(
-        route=request.url.path,
-        diagnostic_id=getattr(request.state, "diagnostic_id", ""),
-        advancement=advancement,
-    )
-    db.commit()
-    assignments = list_assignments(db, guild.id)
-    for assignment in assignments:
-        assignment.catalog_unavailable = bool(
-            advancement.get(assignment.resource_family, {}).get("catalog_missing")
+    if not central_events_view:
+        for offer_list in board.get("offers", {}).values():
+            for offer in offer_list:
+                _annotate_supply_preparation(offer, region_now)
+                _annotate_prepared_team(db, guild.id, offer)
+                _annotate_offer_drop_preview(db, offer)
+                try:
+                    saved_quote = json.loads(offer.supply_preparation_snapshot_json or "{}")
+                except (TypeError, json.JSONDecodeError):
+                    saved_quote = {}
+                offer.supply_quote = saved_quote or _initial_offer_supply_quote(db, guild, offer, resources.gold if resources else 0)
+        advancement = advance_all_assignments(db, guild)
+        log_gathering_advancement(
+            route=request.url.path,
+            diagnostic_id=getattr(request.state, "diagnostic_id", ""),
+            advancement=advancement,
         )
-    achievement_context = get_codex_context(db, guild, True)
+        db.commit()
+        assignments = list_assignments(db, guild.id)
+        for assignment in assignments:
+            assignment.catalog_unavailable = bool(
+                advancement.get(assignment.resource_family, {}).get("catalog_missing")
+            )
+        achievement_context = get_codex_context(db, guild, True)
+    else:
+        assignments = []
+        achievement_context = {"achievement_cards": []}
     reports = []
-    for history_row in board["latest_history"]:
+    for history_row in ([] if central_events_view else board["latest_history"]):
         cycle = db.get(RegionalCycle, history_row.cycle_id)
         cpu_plans = list(db.execute(select(RegionalCpuCyclePlan, RegionalGuildState).join(
             RegionalGuildState, RegionalGuildState.id == RegionalCpuCyclePlan.guild_state_id,
@@ -622,13 +702,24 @@ def regional_index(
         )
         rebellion_priority_elapsed = priority_deadline <= region_now
     rebellion_participant = None
+    rebellion_invite_expired = False
     rebellion_offers = []
     rebellion_region_name = None
     portal_cards = []
     event_history_cards = []
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
     home_code = _regional_home_code(campaign)
-    for event in board.get("portal_events", []):
+    portal_spawn_status = portal_spawn_status_for_region(
+        db, campaign, board.get("cycle"), home_code, region_now,
+    ) if central_events_view else None
+    portal_events = list(board.get("portal_events", []))
+    if central_events_view:
+        portal_events = list(db.scalars(select(RegionalEvent).where(
+            RegionalEvent.campaign_id == campaign.campaign_id,
+            RegionalEvent.event_type == "portal",
+            RegionalEvent.status.in_(("active", "in_progress")),
+        ).order_by(RegionalEvent.expires_at_utc, RegionalEvent.id)))
+    for event in portal_events:
         try:
             event_summary = json.loads(event.summary_json or "{}")
         except (TypeError, json.JSONDecodeError):
@@ -644,6 +735,30 @@ def regional_index(
             RegionalEventParticipant.event_id == event.id,
             RegionalEventParticipant.guild_state_id == player_state.id,
         )) if player_state is not None else None
+        own_activity = db.scalar(select(RegionalEventActivity).where(
+            RegionalEventActivity.event_id == event.id,
+            RegionalEventActivity.guild_state_id == player_state.id,
+            RegionalEventActivity.source_type == "dungeon",
+        ).order_by(RegionalEventActivity.id.desc()).limit(1)) if player_state is not None else None
+        own_run = (
+            db.get(DungeonRun, own_activity.source_run_id)
+            if own_activity is not None else None
+        )
+        run_due_at = own_run.ends_at if own_run is not None else None
+        if run_due_at is not None:
+            run_due_at = (
+                run_due_at.replace(tzinfo=timezone.utc)
+                if run_due_at.tzinfo is None else run_due_at.astimezone(timezone.utc)
+            )
+        activity_due = bool(
+            own_activity is not None and own_activity.status == "in_progress"
+            and own_run is not None and own_run.status == "in_progress"
+            and run_due_at <= region_now
+        )
+        activity_collected = bool(
+            own_activity is not None and own_activity.status == "resolved"
+            and own_run is not None and own_run.status in {"completed", "failed"}
+        )
         blocker = _portal_action_blocker(db, campaign, event, player_state, region_now)
         portal_deadline = event.expires_at_utc
         portal_deadline = (
@@ -653,6 +768,7 @@ def regional_index(
         )
         entry_state = (
             "used" if participant is not None else
+            "unavailable" if event.region_code != home_code else
             "unavailable_content" if template is None else
             "expired" if portal_deadline <= region_now else
             "unavailable" if blocker else
@@ -675,17 +791,33 @@ def regional_index(
             "unavailable": blocker or "A entrada não está disponível para esta guilda.",
             "available": "Uma equipe enfrenta o chefe do bioma portal; a duração mínima é de 1 hora.",
         }
+        entry_state_label = entry_state_labels[entry_state]
+        entry_state_description = entry_state_descriptions[entry_state]
+        if event.region_code != home_code:
+            entry_state_label = (
+                "Atividade em andamento · fora do alcance da guilda"
+                if event.status == "in_progress" else
+                "Prazo de entrada aberto · fora do alcance da guilda"
+                if portal_deadline > region_now else
+                "Prazo encerrado · fora do alcance da guilda"
+            )
+            entry_state_description = blocker or "Portais só aceitam entrada na região natal da guilda."
         portal_cards.append({
             "event": event,
             "template": template,
             "region_name": event_region_name(event.region_code),
             "participant": participant,
+            "own_activity": own_activity,
+            "own_run": own_run,
+            "activity_due": activity_due,
+            "activity_collected": activity_collected,
+            "activity_due_iso": _datetime_iso(run_due_at),
             "entered": participant is not None,
             "action_blocker": blocker,
             "entry_window_closed": portal_deadline <= region_now,
             "entry_state": entry_state,
-            "entry_state_label": entry_state_labels[entry_state],
-            "entry_state_description": entry_state_descriptions[entry_state],
+            "entry_state_label": entry_state_label,
+            "entry_state_description": entry_state_description,
             "expires_at_iso": _datetime_iso(event.expires_at_utc),
             **_portal_drop_preview(db, event_summary),
             "supply_quote": quote_supply(
@@ -702,10 +834,14 @@ def regional_index(
                 RegionalEventParticipant.event_id == rebellion.id,
                 RegionalEventParticipant.guild_state_id == player_state.id,
             ))
+        rebellion_invite_expired = bool(
+            rebellion_participant is not None
+            and rebellion_participant.status == "declined"
+            and rebellion.player_decision == "delegated_cpu"
+        )
         rebellion_region_name = event_region_name(rebellion.region_code)
         if (rebellion.status == "active" and rebellion_participant is not None
-                and rebellion_participant.status in {"accepted", "participating"}
-                and rebellion.region_code != home_code):
+                and rebellion_participant.status in {"accepted", "participating"}):
             rebellion_offers = list(db.scalars(select(RegionalOffer).where(
                 RegionalOffer.cycle_id == board["cycle"].id,
                 RegionalOffer.region_code == rebellion.region_code,
@@ -734,11 +870,44 @@ def regional_index(
         if event.id in current_event_ids:
             continue
         summary = event_history_summary(event)
-        raw_rows = summary.get("participant_results", []) if event.event_type == "portal" else summary.get("activities", [])
+        rows_key = "participant_results" if event.event_type == "portal" else "activities"
+        saved_rows = summary.get(rows_key)
+        history_data_registered = isinstance(saved_rows, list)
+        raw_rows = saved_rows if history_data_registered else []
         state_ids = {int(row["guild_state_id"]) for row in raw_rows
                      if isinstance(row, dict) and row.get("guild_state_id") is not None}
         states = list(db.scalars(select(RegionalGuildState).where(RegionalGuildState.id.in_(state_ids)))) if state_ids else []
         state_names = {state.id: state.name for state in states}
+        player_activity = db.scalar(select(RegionalEventActivity).where(
+            RegionalEventActivity.event_id == event.id,
+            RegionalEventActivity.guild_state_id == player_state.id,
+        ).order_by(RegionalEventActivity.id.desc()).limit(1)) if player_state is not None else None
+        player_run = None
+        if player_activity is not None:
+            if player_activity.source_type == "dungeon":
+                player_run = db.get(DungeonRun, player_activity.source_run_id)
+            elif player_activity.source_type == "mission":
+                player_run = db.get(MissionRun, player_activity.source_run_id)
+        player_run_due_at = player_run.ends_at if player_run is not None else None
+        if player_run_due_at is not None:
+            player_run_due_at = (
+                player_run_due_at.replace(tzinfo=timezone.utc)
+                if player_run_due_at.tzinfo is None else player_run_due_at.astimezone(timezone.utc)
+            )
+        player_activity_due = bool(
+            player_activity is not None and player_activity.status == "in_progress"
+            and player_run is not None and player_run.status == "in_progress"
+            and player_run_due_at <= region_now
+        )
+        player_activity_active = bool(
+            player_activity is not None and player_activity.status == "in_progress"
+            and player_run is not None and player_run.status == "in_progress"
+            and player_run_due_at > region_now
+        )
+        player_result_collected = bool(
+            player_activity is not None and player_activity.status == "resolved"
+            and player_run is not None and player_run.status in {"completed", "failed"}
+        )
         contribution_rows = []
         if event.event_type == "portal":
             contribution_rows = [{
@@ -764,6 +933,14 @@ def regional_index(
             "region_name": event_region_name(event.region_code),
             "summary": summary,
             "contributions": contribution_rows,
+            "history_data_registered": history_data_registered,
+            "history_has_rows": bool(raw_rows),
+            "player_result_collected": player_result_collected,
+            "player_result_success": bool(player_run.success) if player_result_collected else None,
+            "player_activity_due": player_activity_due,
+            "player_activity_active": player_activity_active,
+            "player_activity_due_iso": _datetime_iso(player_run_due_at),
+            "player_run": player_run,
             "status_label": {
                 "active": "Aberto", "in_progress": "Em andamento", "resolved": "Concluído",
                 "expired": "Expirado", "suppressed": "Não ocorreu: outra rebelião estava ativa",
@@ -794,9 +971,16 @@ def regional_index(
                 event_history_cards[-1]["reason_label"] = (
                     "Portais só aceitam entrada na região natal. Rebeliões oferecem atividades próprias na região quando o convite é aceito."
                 )
+    if central_events_view:
+        # This route advances the regional clock but intentionally skips the
+        # gathering commit used by the main Vigília page.
+        db.commit()
+    review_token = regional_events_review_token(
+        db, campaign.campaign_id, guild.id, now=region_now,
+    ) if central_events_view else ""
     return templates.TemplateResponse(
         request=request,
-        name="regional/index.html",
+        name="regional/events.html" if central_events_view else "regional/index.html",
         context={
             "current_user": current_user,
             "guild": guild,
@@ -807,8 +991,11 @@ def regional_index(
             "selected_start_supply": request.query_params.get("selected_supply") == "1",
             "message": request.query_params.get("message"),
             "assignments": assignments,
+            "family_labels": FAMILY_LABELS,
+            "node_labels": NODE_LABELS,
             "reports": reports,
             "rebellion_participant": rebellion_participant,
+            "rebellion_invite_expired": rebellion_invite_expired,
             "home_region_code": home_code,
             "rebellion_priority_ends_at_iso": _datetime_iso(rebellion.priority_ends_at_utc) if rebellion else None,
             "rebellion_priority_elapsed": rebellion_priority_elapsed,
@@ -817,6 +1004,16 @@ def regional_index(
             "rebellion_region_name": rebellion_region_name,
             "portal_cards": portal_cards,
             "event_history_cards": event_history_cards,
+            "portal_spawn_status": portal_spawn_status,
+            "regional_events_review_token": review_token,
+            "central_events_view": central_events_view,
+            "event_section": request.query_params.get("section")
+            if request.query_params.get("section") in {"portals", "rebellions"}
+            else "portals",
+            "portal_history_cards": [card for card in event_history_cards
+                                     if card["event"].event_type == "portal"],
+            "rebellion_history_cards": [card for card in event_history_cards
+                                        if card["event"].event_type == "rebellion"],
             "achievement_cards": achievement_context["achievement_cards"],
             "warehouse_used": get_inventory_usage(db, guild.id),
             "warehouse_capacity": get_inventory_capacity(db, guild),
@@ -839,6 +1036,7 @@ async def start_offer(
     guild, _resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
+    form = await read_form_multi_fields(request)
     offer = db.scalar(select(RegionalOffer).where(
         RegionalOffer.id == offer_id,
         RegionalOffer.campaign_id == campaign.campaign_id,
@@ -846,8 +1044,7 @@ async def start_offer(
         RegionalOffer.status.in_(("available", "supply_preparing")),
     ))
     if offer is None:
-        return RedirectResponse("/regional?error=Oferta%20indispon%C3%ADvel", status_code=303)
-    form = await read_form_multi_fields(request)
+        return _start_error_redirect("Oferta indisponível.", form)
     requested_supply_mode = (form.get("supply_mode") or [""])[0]
     mode_was_explicit = bool(requested_supply_mode)
     has_preparation = (
@@ -865,7 +1062,7 @@ async def start_offer(
     current_time = datetime.now(timezone.utc)
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
     if player_state is None:
-        return RedirectResponse("/regional?error=Estado%20regional%20indispon%C3%ADvel", status_code=303)
+        return _start_error_redirect("Estado regional indisponível.", form)
     event_for_activity, access_error = _regional_offer_rebellion_access(
         db, campaign, guild.id, offer, current_time,
     )
@@ -918,7 +1115,7 @@ async def start_offer(
         if requested_supply_mode == "prepared":
             return _start_error_redirect("Esta oferta não possui suprimento preparado.", form)
     if offer.status == "supply_preparing" and offer.reserved_by_guild_state_id != player_state.id:
-        return RedirectResponse("/regional?error=Oferta%20em%20prepara%C3%A7%C3%A3o%20por%20outra%20guilda", status_code=303)
+        return _start_error_redirect("Oferta em preparação por outra guilda.", form)
     try:
         claim_result = db.execute(
             update(RegionalOffer)
@@ -931,10 +1128,10 @@ async def start_offer(
         )
     except OperationalError:
         db.rollback()
-        return RedirectResponse("/regional?error=Oferta%20j%C3%A1%20reservada", status_code=303)
+        return _start_error_redirect("Oferta já reservada.", form)
     if claim_result.rowcount != 1:
         db.rollback()
-        return RedirectResponse("/regional?error=Oferta%20j%C3%A1%20reservada", status_code=303)
+        return _start_error_redirect("Oferta já reservada.", form)
     offer.status = "player_reserved"
     offer.reserved_by_guild_state_id = player_state.id
     mercenary_ids = form.get("mercenary_ids", [])
@@ -994,7 +1191,9 @@ async def start_offer(
         db.commit()
     except (IntegrityError, OperationalError):
         db.rollback()
-        return RedirectResponse("/regional?error=Oferta%20j%C3%A1%20reservada", status_code=303)
+        return _start_error_redirect("Oferta já reservada.", form)
+    if _validated_regional_return_to(form, fallback="").startswith("/regional/events"):
+        return _regional_redirect(form, message="Atividade regional iniciada")
     return RedirectResponse("/regional?message=Contrato%20regional%20iniciado", status_code=303)
 
 
@@ -1082,6 +1281,8 @@ async def prepare_regional_offer_supply(
     offer.supply_preparation_snapshot_json = preparation_snapshot
     db.add(offer)
     db.commit()
+    if _validated_regional_return_to(form, fallback="").startswith("/regional/events"):
+        return _regional_redirect(form, message="Preparo de suprimento iniciado")
     return RedirectResponse("/regional?message=Preparo%20de%20suprimento%20iniciado", status_code=303)
 
 
@@ -1098,6 +1299,7 @@ async def decide_regional_event(
     guild, _resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
+    form = await read_form_multi_fields(request)
     event = db.scalar(select(RegionalEvent).where(
         RegionalEvent.id == event_id,
         RegionalEvent.campaign_id == campaign.campaign_id,
@@ -1105,10 +1307,9 @@ async def decide_regional_event(
     ))
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
     if event is None or player_state is None:
-        return RedirectResponse("/regional?error=Convite%20indispon%C3%ADvel", status_code=303)
+        return _start_error_redirect("Convite indisponível.", form, f"#regional-event-{event_id}")
     current_time = datetime.now(timezone.utc)
     expire_due_events(db, campaign.campaign_id, current_time)
-    form = await read_form_multi_fields(request)
     decision = str((form.get("decision") or [""])[0]).strip().lower()
     try:
         record_rebellion_decision(db, event, player_state.id, decision, current_time)
@@ -1116,8 +1317,12 @@ async def decide_regional_event(
     except ValueError as error:
         db.rollback()
         return _start_error_redirect(error, form)
-    label = "Convite%20aceito" if decision == "accept" else "Rebeli%C3%A3o%20delegada%20%C3%A0%20CPU"
-    return RedirectResponse(f"/regional?message={label}#regional-event-{event_id}", status_code=303)
+    message = "Convite aceito" if decision == "accept" else "Rebelião delegada à CPU"
+    return _regional_redirect(
+        form,
+        fallback_anchor=f"#regional-event-{event_id}",
+        message=message,
+    )
 
 
 @router.post("/events/{event_id}/portals/supply-quote")
@@ -1140,7 +1345,7 @@ async def regional_portal_supply_quote(
     from app.repositories.mercenary_repository import list_available_mercenaries_by_ids
     from app.services.dungeon_service import (
         get_advanced_dungeon_chance, parse_dungeon_mercenary_ids,
-        scouts_values, validate_advanced_party_requirements, validate_dungeon_requirements,
+        scouts_values, validate_dungeon_party_requirements, validate_dungeon_requirements,
     )
     from app.services.building_service import get_building_level
     from app.services.skill_service import get_party_skill_effects
@@ -1165,11 +1370,9 @@ async def regional_portal_supply_quote(
         return JSONResponse({"available": False, "reason": "Conteúdo do chefe indisponível."}, status_code=409)
     try:
         validate_dungeon_requirements(db, guild, template)
-        validate_advanced_party_requirements(db, guild, template, members)
+        validate_dungeon_party_requirements(db, guild, template, members)
     except ValueError as error:
         return JSONResponse({"available": False, "reason": str(error)})
-    if not template.min_party_size <= len(members) <= template.max_party_size:
-        return JSONResponse({"available": False, "reason": "O grupo não atende ao tamanho exigido pelo chefe."})
     chance = get_advanced_dungeon_chance(db, guild.id, template, members)["final_chance"]
     chance = min(95, chance + scouts_values(get_building_level(db, guild.id, "scouts"))["success_bonus_percentage_points"])
     skills = get_party_skill_effects(db, members)
@@ -1199,13 +1402,14 @@ async def start_regional_portal(
     guild, _resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
+    form = await read_form_multi_fields(request)
     now = datetime.now(timezone.utc)
     expire_due_events(db, campaign.campaign_id, now)
     event = db.get(RegionalEvent, event_id)
     player_state = get_current_player_regional_guild(db, campaign.campaign_id, guild.id)
     blocker = _portal_action_blocker(db, campaign, event, player_state, now)
     if blocker:
-        return _start_error_redirect(blocker, {}, f"#regional-event-{event_id}")
+        return _start_error_redirect(blocker, form, f"#regional-event-{event_id}")
     template = db.get(DungeonTemplate, event.dungeon_template_id)
     try:
         event_summary = json.loads(event.summary_json or "{}")
@@ -1215,7 +1419,6 @@ async def start_regional_portal(
     boss_snapshot = boss_record.get("template") if isinstance(boss_record, dict) else None
     if not isinstance(boss_snapshot, dict) or int(boss_snapshot.get("id", -1)) != template.id:
         boss_snapshot = build_portal_boss_snapshot(template)
-    form = await read_form_multi_fields(request)
     try:
         run = start_dungeon(
             db, guild, str(template.id), form.get("mercenary_ids", []), commit=False,
@@ -1238,5 +1441,11 @@ async def start_regional_portal(
         db.commit()
     except (IntegrityError, OperationalError):
         db.rollback()
-        return RedirectResponse("/regional?error=Entrada%20de%20portal%20j%C3%A1%20reservada", status_code=303)
+        return _start_error_redirect("Entrada de portal já reservada.", form, f"#regional-event-{event_id}")
+    if _validated_regional_return_to(form, fallback="").startswith("/regional/events"):
+        return _regional_redirect(
+            form,
+            fallback_anchor=f"#regional-event-{event_id}",
+            message="Expedição de portal iniciada",
+        )
     return RedirectResponse("/dungeons?message=Expedi%C3%A7%C3%A3o%20de%20portal%20iniciada", status_code=303)

@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import create_database_engine
 from app.models import Base, CampaignMetadata, Guild, RegionalEvent, RegionalEventParticipant, RegionalGuildState, User
-from app.routes.regional_routes import _portal_action_blocker, _regional_offer_rebellion_access
+from app.routes.regional_routes import (
+    _portal_action_blocker,
+    _regional_offer_rebellion_access,
+    _validated_regional_return_to,
+)
 from app.services.regional_cycle_service import REGIONS
 
 
@@ -121,6 +125,31 @@ class RegionalRouteAccessTests(unittest.TestCase):
                 self.assertNotIn("rebelião aceita", blocker.lower())
         finally:
             engine.dispose()
+
+    def test_event_return_to_allows_only_local_sections_and_event_anchors(self):
+        self.assertEqual(
+            _validated_regional_return_to({
+                "return_to": ["/regional/events?section=rebellions#regional-event-42"],
+            }),
+            "/regional/events?section=rebellions#regional-event-42",
+        )
+        self.assertEqual(
+            _validated_regional_return_to(
+                {"return_to": ["https://example.invalid/phishing"]},
+                fallback_anchor="#regional-event-42",
+            ),
+            "/regional#regional-event-42",
+        )
+        self.assertEqual(
+            _validated_regional_return_to({"return_to": ["//example.invalid/path"]}),
+            "/regional",
+        )
+        self.assertEqual(
+            _validated_regional_return_to({
+                "return_to": ["/regional/events?section=anything#regional-event-42"],
+            }),
+            "/regional",
+        )
 
 
 if __name__ == "__main__":

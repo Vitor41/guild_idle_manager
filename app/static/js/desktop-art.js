@@ -26,7 +26,16 @@
   ];
 
   function routeMatches(route, path) {
-    return route === path || (route !== "/dashboard" && path.startsWith(`${route}/`));
+    return route === path || (
+      route !== "/dashboard" && route !== "/regional" && path.startsWith(`${route}/`)
+    );
+  }
+
+  function sidebarRouteMatches(route, path) {
+    const regionalDetail = route === "/regional"
+      && path.startsWith("/regional/")
+      && !path.startsWith("/regional/events");
+    return regionalDetail || routeMatches(route, path);
   }
 
   function makeImage(url, className) {
@@ -60,6 +69,14 @@
     pistoleiro: "shooter",
     sacerdote: "high_priest",
   };
+
+  function classSpriteKey(value, iconMaps, sprites) {
+    const code = normalizeKey(value);
+    const canonical = classAliases[code] || code;
+    const key = iconMaps.classes?.[canonical] || `class-${canonical}`;
+    return sprites?.[key] ? key : null;
+  }
+
   let desktopArtManifestPromise = null;
 
   function loadDesktopArtManifest() {
@@ -84,6 +101,18 @@
     element.dataset.desktopArtApplied = key;
   }
 
+  function applyTitleArt(queryRoot, title, titleSprite, spriteUrl) {
+    const detailClassMark = queryRoot.querySelector(".desktop-detail-class-mark");
+    if (detailClassMark) {
+      queryRoot.querySelectorAll(".desktop-title-art").forEach((image) => image.remove());
+      return;
+    }
+    const iconUrl = titleSprite && spriteUrl(titleSprite);
+    if (title && iconUrl && !title.querySelector(".desktop-title-art")) {
+      title.prepend(makeImage(iconUrl, "desktop-title-art"));
+    }
+  }
+
   async function applyDesktopArt(root = document) {
     const queryRoot = root && typeof root.querySelectorAll === "function" ? root : document;
     body.dataset.desktopArtStatus = "loading";
@@ -102,12 +131,11 @@
       const iconMaps = manifest.icon_maps || {};
       const navigationArt = manifest.navigation || {};
       let navigationErrors = 0;
+      let currentNavigationArtKey = null;
 
       for (const element of queryRoot.querySelectorAll("[data-desktop-class]")) {
-        const code = normalizeKey(element.dataset.desktopClass);
-        const canonical = classAliases[code] || code;
-        const key = iconMaps.classes?.[canonical] || `class-${canonical}`;
-        if (manifest.sprites?.[key]) installEntityIcon(element, key, spriteUrl);
+        const key = classSpriteKey(element.dataset.desktopClass, iconMaps, manifest.sprites);
+        if (key) installEntityIcon(element, key, spriteUrl);
       }
 
       for (const element of queryRoot.querySelectorAll("[data-desktop-building]")) {
@@ -154,7 +182,10 @@
         const href = link.getAttribute("href");
         const key = navigationArt[href];
         link.removeAttribute("aria-current");
-        if (href && routeMatches(href, route)) link.setAttribute("aria-current", "page");
+        if (href && sidebarRouteMatches(href, route)) {
+          link.setAttribute("aria-current", "page");
+          if (key && manifest.sprites?.[key]) currentNavigationArtKey = key;
+        }
         const icon = link.querySelector(".nav-icon");
         if (!icon) {
           navigationErrors += 1;
@@ -169,6 +200,11 @@
           navigationErrors += 1;
           continue;
         }
+        const existingArt = icon.querySelector(".desktop-nav-art");
+        if (existingArt?.getAttribute("src") === url) {
+          icon.classList.remove("desktop-nav-icon--fallback");
+          continue;
+        }
         const image = makeImage(url, "desktop-nav-art");
         image.addEventListener("error", () => {
           icon.replaceChildren();
@@ -181,13 +217,6 @@
       body.dataset.desktopArtStatus = navigationErrors === 0 ? "ready" : "error";
 
       const currentArt = routeArt.find((entry) => routeMatches(entry.path, route));
-      if (!currentArt) return;
-      const title = queryRoot.querySelector("main.game-shell h1, main.desktop-shell h1");
-      const iconUrl = spriteUrl(currentArt.sprite);
-      if (title && iconUrl && !title.querySelector(".desktop-title-art")) {
-        title.prepend(makeImage(iconUrl, "desktop-title-art"));
-      }
-
       const brand = queryRoot.querySelector(".brand-sigil, .seal");
       const crestUrl = spriteUrl("guild-sigil");
       if (brand && crestUrl && !brand.querySelector("img")) brand.replaceChildren(makeImage(crestUrl, "desktop-brand-art"));
@@ -205,6 +234,12 @@
           mark.replaceChildren(makeImage(campaignMarkUrl, "desktop-campaign-art"), initial);
         }
       }
+
+      const title = queryRoot.querySelector("main.game-shell h1, main.desktop-shell h1");
+      const titleSprite = currentArt?.sprite || currentNavigationArtKey;
+      applyTitleArt(queryRoot, title, titleSprite, spriteUrl);
+
+      if (!currentArt) return;
 
       const illustration = currentArt.illustration && illustrationUrl(currentArt.illustration);
       const header = queryRoot.querySelector(".masthead, .dashboard > .topbar, .dashboard > .desktop-operations-intro");

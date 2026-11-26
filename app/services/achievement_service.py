@@ -17,7 +17,10 @@ from app.repositories.achievement_repository import (
     get_guild_stat, list_active_achievements, list_codex_entries, list_codex_unlocks,
 )
 from app.models.regional import RegionalEvent, RegionalEventParticipant, RegionalGuildState, RegionalOffer, RegionalRunOutcome
-from app.services.display_service import annotate_mercenary_display, clean_generated_name
+from app.services.display_service import (
+    annotate_mercenary_display, canonical_generated_equipment_description,
+    clean_generated_name, rarity_label,
+)
 from app.services.guild_progression_service import add_guild_xp
 from app.services.icon_service import get_class_icon_path, get_item_icon_path
 
@@ -67,6 +70,21 @@ INITIAL_ACHIEVEMENTS = [
     ("codex_250", "Grande Coleção", "Desbloqueie 250 registros no Códex.", "codex_discovered", 250, 0, 1000),
     ("codex_500", "Arquivo Lendário", "Desbloqueie 500 registros no Códex.", "codex_discovered", 500, 5000, 0),
 ]
+
+_KNOWN_ITEM_RARITIES = {"common", "uncommon", "rare", "epic", "legendary", "mythic"}
+
+
+def _canonicalize_codex_item_presentation(entry: CodexEntry, item: ItemTemplate) -> None:
+    """Use the current item template for display without changing saved Codex data."""
+    set_committed_value(entry, "rarity", item.rarity)
+    if item.item_type != "equipment" or item.rarity not in _KNOWN_ITEM_RARITIES:
+        return
+
+    canonical_description = canonical_generated_equipment_description(
+        entry.description, item.rarity, item.level_band,
+    )
+    if entry.description != canonical_description:
+        set_committed_value(entry, "description", canonical_description)
 
 
 CAMPAIGN_ACHIEVEMENTS = [
@@ -521,6 +539,8 @@ def get_codex_context(
             entry.icon_path = get_class_icon_path(entry.reference_key)
         elif entry.category == "item":
             item = items_by_id.get(int(entry.reference_key)) if entry.reference_key.isdigit() else None
+            if item is not None:
+                _canonicalize_codex_item_presentation(entry, item)
             entry.icon_path = get_item_icon_path(item) if item is not None else None
         else:
             entry.icon_path = "assets/desktop/sprites/64/dungeon-gate.png"

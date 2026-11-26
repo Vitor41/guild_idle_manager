@@ -1,5 +1,12 @@
 # Histórico de alterações
 
+## 0.11.0 — Portais regionais e interface
+
+- Acrescenta portais nas novas regras regionais com chance-base de 8%, acréscimos por falhas elegíveis até 20% e bônus dos Exploradores até o limite total de 25%; preserva ciclos legados já materializados.
+- Centraliza portais e rebeliões regionais e permite participação da CPU conforme conteúdo e equipes realmente elegíveis, com prazos, reservas e efeitos aplicados uma única vez.
+- Apresenta drops, requisitos, custos, disponibilidade, resultados e progresso com estados mais claros em atividades, inventário, oficinas, Docas, Mercado, construções, classes, profissões e Códex.
+- Mantém o Guia, a consulta de atualizações e estimadores de oficina funcionais após navegação parcial, e impede que respostas atrasadas substituam a tela aberta mais recentemente.
+
 ## 0.10.0 — Eventos regionais, progressão e qualidade de vida
 
 - Torna portais e rebeliões regionais mais fáceis de localizar e participar; usa 5% de chance por Vigília elegível nas novas regras de rebelião e preserva 2% nos ciclos legados. O prazo de entrada do portal continua correndo durante o processamento offline; acesso e cooldowns permanecem iguais.

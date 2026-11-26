@@ -16,6 +16,11 @@ ART_ROOT = STATIC / "assets" / "desktop"
 
 
 class DesktopArtIntegrationTests(unittest.TestCase):
+    def test_regional_events_template_exposes_review_revision_and_stable_summary_focus(self):
+        template = (ROOT / "app" / "templates" / "regional" / "events.html").read_text(encoding="utf-8")
+        self.assertIn('data-review-token="{{ regional_events_review_token }}"', template)
+        self.assertIn('id="portal-next-attempt-summary"', template)
+
     @unittest.skipUnless(shutil.which("node"), "Node.js is required for the JavaScript queue regression.")
     def test_initial_and_partial_regional_notices_are_sorted_before_opening(self):
         script = r"""
@@ -138,7 +143,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("async function applyDesktopArt(root = document)", script)
         self.assertIn('element.querySelector(".desktop-entity-art")', script)
         self.assertIn('element.querySelector(".desktop-resource-art")', script)
-        self.assertIn('window.GIMApplyDesktopArt?.(currentMain)', main)
+        self.assertIn('window.GIMApplyDesktopArt?.(document)', main)
 
     def test_regional_event_notices_use_persisted_pending_states_and_reenter_vigil(self):
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
@@ -146,8 +151,8 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         dialogs = (STATIC / "js" / "evolution-dialogs.js").read_text(encoding="utf-8")
         theme = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
 
-        self.assertIn("request.url.path == '/regional' and pending_rebellion_invite", base)
-        self.assertIn("request.url.path == '/regional' and pending_portal_notice", base)
+        self.assertIn("request.url.path in ['/regional', '/regional/events'] and pending_rebellion_invite", base)
+        self.assertIn("request.url.path in ['/regional', '/regional/events'] and pending_portal_notice", base)
         for asset in ("regional-rebellion.webp", "rebellion-shield.png", "dimensional-portal.webp", "portal-gate.png"):
             self.assertIn(asset, base)
         self.assertIn("Aceitar convite", base)
@@ -155,7 +160,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         portal_dialog = base.split('id="regional-portal-notice"', 1)[1].split("</dialog>", 1)[0]
         self.assertNotIn('name="decision"', portal_dialog)
         self.assertIn("uma entrada", portal_dialog)
-        self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument)", main)
+        self.assertIn("syncRegionalEventNoticeDialogs(parsedDocument, Boolean(nextUrl.hash))", main)
         self.assertIn("window.GIMEnqueueRegionalNotice?.(dialog)", main)
         self.assertIn("modalQueue?.beginBatch?.()", main)
         self.assertIn("modalQueue?.endBatch?.()", main)
@@ -167,7 +172,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn('document.visibilityState === "hidden"', main)
         self.assertIn("dialog.dataset.eventDeadline", dialogs)
         self.assertIn(
-            "scroll-margin-top: calc(var(--regional-event-sticky-topbar-height, 0px) + 16px)",
+            "scroll-margin-top: calc(var(--game-sticky-topbar-height, 0px) + 12px)",
             theme,
         )
         self.assertIn("getBoundingClientRect().height", main)
@@ -178,12 +183,183 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("@media (prefers-reduced-motion: reduce)", theme)
         self.assertIn(".regional-event-notice *", theme)
 
+    def test_regional_events_show_authoritative_portal_attempt_breakdown(self):
+        route = (ROOT / "app" / "routes" / "regional_routes.py").read_text(encoding="utf-8")
+        template = (ROOT / "app" / "templates" / "regional" / "events.html").read_text(encoding="utf-8")
+
+        self.assertIn("portal_spawn_status_for_region(", route)
+        self.assertIn("portal_spawn_status.effective_chance_pp", template)
+        self.assertIn("portal_spawn_status.base_chance_pp", template)
+        self.assertIn("portal_spawn_status.failure_bonus_pp", template)
+        self.assertIn("portal_spawn_status.explorer_bonus_pp", template)
+        self.assertIn("portal_spawn_status.maximum_failure_stacks", template)
+        self.assertIn("portal_spawn_status.failure_cap_reached", template)
+        self.assertIn("portal_spawn_status.cooldown_until_iso", template)
+        self.assertIn("portal_spawn_status.unavailable_label", template)
+        self.assertIn("não garante o surgimento", template)
+
+    def test_regional_event_action_contrast_and_notice_link_targets(self):
+        css = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+
+        for selector in (
+            '.regional-events-page a.evolution-button--primary[href="/dungeons"]',
+            '.regional-event-history a.evolution-button--primary[href="/dungeons"]',
+        ):
+            self.assertIn(selector, css)
+        self.assertIn(".regional-events-page a.evolution-button--primary[href=\"/dungeons\"]:hover", css)
+        self.assertIn(".regional-events-page a.evolution-button--primary[href=\"/dungeons\"]:focus-visible", css)
+        self.assertIn(".regional-event-history a.evolution-button--primary[href=\"/dungeons\"]:hover", css)
+        self.assertIn(".regional-event-history a.evolution-button--primary[href=\"/dungeons\"]:focus-visible", css)
+        self.assertIn(".regional-event-notice .regional-rebellion-dialog__details", css)
+        self.assertIn("display: inline-flex", css)
+        self.assertIn("min-height: 40px", css)
+
+        def luminance(color):
+            channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+            linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4 for channel in channels]
+            return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear))
+
+        foreground = luminance("#152025")
+        for background in ("#e6b965", "#f5d798"):
+            ratio = (max(foreground, luminance(background)) + 0.05) / (min(foreground, luminance(background)) + 0.05)
+            self.assertGreaterEqual(ratio, 4.5, f"contrast for {background}: {ratio:.3f}:1")
+
+    def test_portal_notice_primary_cta_overrides_global_link_color_in_all_states(self):
+        css = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+
+        portal_dialog = base.split('id="regional-portal-notice"', 1)[1].split("</dialog>", 1)[0]
+        self.assertIn('class="evolution-button evolution-button--primary"', portal_dialog)
+        self.assertIn('href="/regional/events?section=portals#regional-event-{{ pending_portal_notice.event_id }}"', portal_dialog)
+        self.assertIn("data-async-navigation data-regional-notice-close", portal_dialog)
+        self.assertIn('id="regional-rebellion-notice"', base)
+        self.assertIn("desktop-evolution.css') }}?v=20261126-2", base)
+
+        self.assertIn('body[data-app-mode="desktop"] a', theme)
+        self.assertLess(base.index("desktop-theme.css"), base.index("desktop-evolution.css"))
+        selector = (
+            r"#regional-portal-notice\s+\.regional-rebellion-dialog__actions\s*>\s*a\.evolution-button--primary\s*,"
+            r"\s*#regional-portal-notice\s+\.regional-rebellion-dialog__actions\s*>\s*a\.evolution-button--primary:hover\s*,"
+            r"\s*#regional-portal-notice\s+\.regional-rebellion-dialog__actions\s*>\s*a\.evolution-button--primary:focus-visible"
+        )
+        rule = re.search(selector + r"\s*\{(?P<body>[^}]*)\}", css)
+        self.assertIsNotNone(rule)
+        declarations = rule.group("body")
+        self.assertIn("color: #152025", declarations)
+        self.assertIn("border-color: #152025", declarations)
+        self.assertGreater(rule.start(), css.index(".evolution-button--primary:hover"))
+        self.assertIn(".evolution-button--primary { color: #152025; background: var(--e-gold); border-color: var(--e-gold); }", css)
+        self.assertIn(".evolution-button--primary:hover { background: var(--e-gold-soft); }", css)
+        self.assertIn(".regional-portal-dialog { --e-gold: #8ed9d1; --e-gold-soft: #b6eee5;", css)
+        self.assertIn(".evolution-dialog :focus-visible { outline: 3px solid var(--e-gold-soft); outline-offset: 3px; }", css)
+
+        def luminance(color):
+            channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+            linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4 for channel in channels]
+            return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear))
+
+        def contrast_ratio(first, second):
+            first_luminance = luminance(first)
+            second_luminance = luminance(second)
+            return (max(first_luminance, second_luminance) + 0.05) / (min(first_luminance, second_luminance) + 0.05)
+
+        for background in ("#8ed9d1", "#b6eee5"):
+            text_contrast = contrast_ratio("#152025", background)
+            border_contrast = contrast_ratio("#152025", background)
+            self.assertGreaterEqual(text_contrast, 4.5, f"text on {background}: {text_contrast:.3f}:1")
+            self.assertGreaterEqual(border_contrast, 3.0, f"border on {background}: {border_contrast:.3f}:1")
+        focus_contrast = contrast_ratio("#b6eee5", "#17272b")
+        self.assertGreaterEqual(focus_contrast, 3.0, f"focus ring against portal dialog: {focus_contrast:.3f}:1")
+
+    def test_regional_offer_modal_keeps_compact_header_and_scrollable_offer_body(self):
+        regional = (ROOT / "app" / "templates" / "regional" / "index.html").read_text(encoding="utf-8")
+        events = (ROOT / "app" / "templates" / "regional" / "events.html").read_text(encoding="utf-8")
+        css = (STATIC / "css" / "desktop-evolution.css").read_text(encoding="utf-8")
+
+        modal_match = re.search(
+            r'<dialog class="evolution-dialog" id="offer-.*?</dialog>', regional, re.DOTALL
+        )
+        self.assertIsNotNone(modal_match)
+        modal = modal_match.group(0)
+        header_match = re.search(
+            r'<form method="dialog" class="regional-offer-dialog__header">(.*?)</form>',
+            modal,
+            re.DOTALL,
+        )
+        body_match = re.search(
+            r'<div class="regional-offer-dialog__body">(.*?)</div>\s*</dialog>',
+            modal,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(header_match)
+        self.assertIsNotNone(body_match)
+        header = header_match.group(1)
+        body = body_match.group(1)
+
+        self.assertIn('class="evolution-dialog__close" aria-label="Fechar"', header)
+        self.assertIn('class="evolution-eyebrow"', header)
+        self.assertIn('id="offer-{{ offer.id }}-title"', header)
+        self.assertNotIn("description_snapshot", header)
+        self.assertNotIn("<dl>", header)
+        self.assertIn('class="regional-offer-dialog__summary"', body)
+        self.assertIn("offer.description_snapshot", body)
+        self.assertLess(body.index("class=\"regional-offer-dialog__summary\""), body.index("drop_preview("))
+        self.assertLess(body.index("drop_preview("), body.index('action="/regional/offers/{{ offer.id }}/start"'))
+        self.assertIn('method="post" action="/regional/offers/{{ offer.id }}/start"', body)
+        self.assertIn('data-supply-quote-url="/regional/offers/{{ offer.id }}/supply-quote"', body)
+        self.assertIn("offer_team_fieldset(offer, available_mercenaries)", body)
+        self.assertIn('name="supply_mode"', body)
+        self.assertIn('formaction="/regional/offers/{{ offer.id }}/prepare"', body)
+
+        self.assertRegex(
+            css,
+            r'\.evolution-dialog\[id\^="offer-"\]\[open\]\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)[^}]*overflow:\s*hidden',
+        )
+        self.assertRegex(
+            css,
+            r'\.evolution-dialog\[id\^="offer-"\]\s*>\s*\.regional-offer-dialog__body\s*\{[^}]*overflow-y:\s*auto[^}]*scroll-padding-block:\s*12px',
+        )
+        self.assertNotRegex(css, r'\.evolution-dialog\[id\^="offer-"\]\s*>\s*form:first-child\s*\{[^}]*position:\s*sticky')
+        self.assertIn('.evolution-dialog[id^="report-"][open]', css)
+        self.assertIn("offer_action_form(offer, available_mercenaries", events)
+
+    def test_guide_catalog_uses_a_keyboard_accessible_local_scroller_in_desktop_shell(self):
+        guide = (ROOT / "app" / "templates" / "guide" / "index.html").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        catalog_section = guide.split('id="equipamentos-materiais"', 1)[1].split("</section>", 1)[0]
+
+        wrapper = re.search(r'<div class="guide-catalog-table-wrap"[^>]*data-guide-catalog-wrap[^>]*>', catalog_section)
+        self.assertIsNotNone(wrapper)
+        wrapper_markup = wrapper.group(0)
+        self.assertIn('role="region"', wrapper_markup)
+        self.assertIn('aria-label="Catálogo de equipamentos e materiais;', wrapper_markup)
+        self.assertIn('tabindex="0"', wrapper_markup)
+        self.assertIn('data-guide-catalog-rows', catalog_section)
+        self.assertEqual(catalog_section.count('<th scope="col">'), 6)
+        self.assertIn('class="guide-catalog-controls" data-guide-filters', catalog_section)
+
+        rule = re.search(
+            r'body\[data-app-mode="desktop"\]\s+#equipamentos-materiais\s*>\s*\.guide-catalog-table-wrap\s*\{([^}]*)\}',
+            theme,
+        )
+        self.assertIsNotNone(rule)
+        declarations = rule.group(1)
+        self.assertIn("width: 100%", declarations)
+        self.assertIn("min-width: 0", declarations)
+        self.assertIn("max-width: 100%", declarations)
+        self.assertIn("overflow-x: auto", declarations)
+        self.assertIn("overscroll-behavior-x: contain", declarations)
+        self.assertRegex(theme, r'body\[data-app-mode="desktop"\]\s+#equipamentos-materiais\s*>\s*\.guide-catalog-table-wrap:focus-visible\s*\{[^}]*outline: 3px solid var\(--gold-2\)[^}]*outline-offset: 3px')
+        self.assertIn("desktop-theme.css') }}?v=20261126-2", base)
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
         navigation_routes = re.findall(r'<a href="(/[^"#]+)"[^>]*>.*?<span class="nav-icon">', base)
 
-        self.assertEqual(len(navigation_routes), 22)
+        self.assertEqual(len(navigation_routes), 23)
         self.assertEqual(set(navigation_routes), set(manifest["navigation"]))
         for route in navigation_routes:
             sprite_key = manifest["navigation"][route]
@@ -353,7 +529,7 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn("if (scrollToTop) window.scrollTo({ top: 0", main)
         self.assertIn("document.body.dataset.route = nextUrl.pathname", main)
         self.assertIn('window.addEventListener("pageshow"', main)
-        self.assertIn('document.body.dataset.route !== "/regional"', main)
+        self.assertIn('!new Set(["/regional", "/regional/events"]).has(document.body.dataset.route)', main)
         self.assertIn("window.location.hash", main)
         self.assertIn('window.scrollTo({ top: 0, behavior: "auto" })', main)
         self.assertIn("url_for('static', path='/js/main.js') }}?v=", base)

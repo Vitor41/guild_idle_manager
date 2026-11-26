@@ -10,7 +10,10 @@ from app.core.forms import read_form_fields
 from app.models.user import User
 from app.services.dock_service import DockError, buy_dock_offer, get_docks_context
 from app.services.guild_service import get_current_guild_context
-from app.services.display_service import clean_generated_name, rarity_label
+from app.services.display_service import (
+    canonical_generated_equipment_description, clean_generated_name, rarity_label,
+)
+from app.services.equipment_service import get_equipment_slot_label
 from app.services.icon_service import get_item_icon_path
 
 
@@ -49,7 +52,10 @@ def docks_index(request: Request, db: DbSession, current_user: User | None = Dep
         "current_user": current_user, "guild": guild, "resources": resources,
         "message": request.query_params.get("message"), "error": error,
         "merchant_type_labels": MERCHANT_TYPE_LABELS, "rarity_label": rarity_label,
-        "clean_generated_name": clean_generated_name, **dock_context,
+        "clean_generated_name": clean_generated_name,
+        "canonical_generated_equipment_description": canonical_generated_equipment_description,
+        "get_equipment_slot_label": get_equipment_slot_label,
+        **dock_context,
     })
 
 

@@ -90,6 +90,10 @@ class ML030BonusRulesTests(unittest.TestCase):
         self.assertEqual(item.bonus_rolls, before)
         self.assertEqual(item.rng_bonus_attribute, next(roll["attribute"] for roll in before if roll["kind"] == "normal"))
         self.assertEqual(item.rng_bonus_value, next(roll["value"] for roll in before if roll["kind"] == "normal"))
+        labels = {"power": "Força", "vitality": "Vitalidade", "agility": "Agilidade",
+                  "intelligence": "Inteligência", "luck": "Sorte", "armor": "Armadura"}
+        self.assertTrue(item.normal_bonuses_view)
+        self.assertTrue(all(roll["attribute_label"] == labels[roll["attribute"]] for roll in item.normal_bonuses_view))
 
     def test_extreme_bonus_points_and_effective_power_do_not_invert_adjacent_rarities(self):
         rarity_order = tuple(equipment_service.RARITY_BONUS_RULES)

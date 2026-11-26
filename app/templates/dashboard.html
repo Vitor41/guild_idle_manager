@@ -26,13 +26,7 @@
     <div>
       <p class="eyebrow">Sala da Guilda</p>
       <h1 id="dashboard-title">{{ guild.name }}</h1>
-      <p class="note">{% if desktop_mode %}Comande missões, reúna a companhia e prepare a próxima incursão.{% else %}Comande missões, equipe mercenários e evolua sua fortaleza.{% endif %}</p>
-      {% if desktop_mode %}
-        <div class="action-row compact desktop-hero-actions">
-          <a class="button-link" href="/missions">Ver operações</a>
-          <a class="button-link secondary" href="/mercenaries">Preparar companhia</a>
-        </div>
-      {% endif %}
+      {% if not desktop_mode %}<p class="note">Comande missões, equipe mercenários e evolua sua fortaleza.</p>{% endif %}
     </div>
   </header>
   {% if desktop_mode %}

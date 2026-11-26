@@ -389,3 +389,17 @@ def get_building_summary(db: Session, guild_id: int) -> dict[str, int]:
         "contract_reward_bonus_percent": mission_office_values(get_building_level(db, guild_id, "contract_office"))["reward_bonus_percent"],
         "max_run_multiplier": get_max_run_multiplier(db, guild_id),
     }
+
+
+def prepare_buildings_for_display(buildings: list[GuildBuilding]) -> list[GuildBuilding]:
+    """Attach the shared requirement and benefit presentation used by building views."""
+    for building in buildings:
+        building.next_required_guild_level = max(
+            building.building_template.required_guild_level,
+            (building.level + 2) // 2,
+        )
+        building.benefit = get_building_benefit(
+            building.building_template.effect_type,
+            building.level,
+        )
+    return buildings

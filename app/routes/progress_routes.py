@@ -6,7 +6,12 @@ from fastapi.templating import Jinja2Templates
 
 from app.core.dependencies import DbSession, get_current_player
 from app.models.user import User
-from app.services.building_service import ensure_guild_buildings, get_building_bonus_summary, get_building_summary
+from app.services.building_service import (
+    ensure_guild_buildings,
+    get_building_bonus_summary,
+    get_building_summary,
+    prepare_buildings_for_display,
+)
 from app.services.guild_progression_service import GUILD_MAX_LEVEL, guild_xp_required_for_level
 from app.services.guild_service import get_current_guild_context
 
@@ -23,6 +28,7 @@ def guild_progress(request: Request, db: DbSession, current_user: User | None = 
     if guild is None:
         return RedirectResponse("/guild/create", status_code=303)
     buildings = ensure_guild_buildings(db, guild.id)
+    prepare_buildings_for_display(buildings)
     return templates.TemplateResponse(request=request, name="guild/progress.html", context={
         "current_user": current_user, "guild": guild, "resources": resources, "buildings": buildings,
         "building_summary": get_building_summary(db, guild.id),

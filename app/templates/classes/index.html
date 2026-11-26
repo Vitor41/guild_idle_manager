@@ -16,15 +16,15 @@
       </div>
     </header>
 
-    <nav class="guide-index classes-guide-index" aria-label="Índice do Guia de Classes">
+    <nav id="classes-guide-index" class="guide-index classes-guide-index" aria-label="Índice do Guia de Classes">
       <a href="#guia-classes">Classes</a><a href="#guia-habilidades">Habilidades</a><a href="#guia-atributos">Atributos</a><a href="#guia-combinacoes">Combinações</a><a href="#guia-coleta">Coleta</a><a href="#guia-dungeons">Masmorras</a>
     </nav>
 
     <section class="panel table-panel guide-section" id="guia-classes" aria-labelledby="guia-classes-title" tabindex="-1">
       <header class="guide-section-heading"><span class="guide-number">01</span><div><p class="eyebrow">Academia da Guilda</p><h2 id="guia-classes-title">Caminhos de classe</h2></div></header>
     {% for tier, tier_label in class_tiers.items() %}
-      <section class="panel table-panel">
-        <h2>{{ tier_label }}</h2>
+      <section class="class-tier-group" id="class-tier-{{ loop.index }}" aria-labelledby="class-tier-title-{{ loop.index }}">
+        <header class="class-tier-heading"><h3 id="class-tier-title-{{ loop.index }}">{{ tier_label }}</h3><a href="#classes-guide-index">Voltar ao índice</a></header>
         <div class="class-guide-grid">
           {% for card in class_cards if card.class.tier == tier %}
             <article class="class-guide-card">

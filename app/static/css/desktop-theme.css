@@ -117,7 +117,8 @@ body[data-app-mode="desktop"] .desktop-save-state small { margin-bottom: 3px; co
 body[data-app-mode="desktop"] .desktop-save-state strong { color: #d8e4de; font-size: .78rem; }
 
 body[data-app-mode="desktop"] .game-topbar {
-  min-height: 76px; gap: 14px; padding: 11px 24px; border-color: #2b4146;
+  display: grid; grid-template-columns: auto minmax(150px, .8fr) minmax(250px, 1fr) auto;
+  min-height: 0; gap: 10px; padding: 9px 18px; border-color: #2b4146;
   background: rgba(13, 23, 26, .95); backdrop-filter: blur(12px);
 }
 body[data-app-mode="desktop"] .topbar-back-button {
@@ -132,7 +133,12 @@ body[data-app-mode="desktop"] .crest-placeholder {
 }
 body[data-app-mode="desktop"] .topbar-label,
 body[data-app-mode="desktop"] .topbar-stats small { color: #8fa6a6; }
-body[data-app-mode="desktop"] .guild-banner strong { color: var(--text); font-family: Georgia, "Times New Roman", serif; }
+body[data-app-mode="desktop"] .guild-banner { min-width: 0; margin-right: 0; }
+body[data-app-mode="desktop"] .guild-banner > div { min-width: 0; }
+body[data-app-mode="desktop"] .guild-banner strong { display: block; color: var(--text); font-family: Georgia, "Times New Roman", serif; line-height: 1.15; overflow-wrap: anywhere; }
+body[data-app-mode="desktop"] .topbar-stats { display: grid; grid-template-columns: max-content max-content minmax(130px, 1fr); gap: 6px; min-width: 0; }
+body[data-app-mode="desktop"] .topbar-stats > span { min-width: 0; padding: 6px 8px; font-size: .82rem; }
+body[data-app-mode="desktop"] .treasury-menu { min-width: 0; }
 body[data-app-mode="desktop"] .topbar-stats span,
 body[data-app-mode="desktop"] .treasury-menu summary {
   border-color: #334b50; border-radius: 7px; background: #162428;
@@ -144,8 +150,8 @@ body[data-app-mode="desktop"] .treasury-popover dl div { border-color: #2a4146; 
 
 body[data-app-mode="desktop"] .page-shell { width: min(100% - 48px, 1500px); padding: 26px 0 44px; }
 body[data-app-mode="desktop"] .dashboard > .topbar {
-  position: relative; isolation: isolate; min-height: 174px; margin-bottom: 24px;
-  padding: clamp(22px, 3vw, 38px); border-color: #3c5b5e; border-radius: 10px;
+  position: relative; isolation: isolate; min-height: 0; margin-bottom: 12px;
+  padding: 16px clamp(18px, 2.5vw, 28px); border-color: #3c5b5e; border-radius: 10px;
   background: linear-gradient(100deg, #193034 0%, #17272a 54%, #142327 100%);
 }
 body[data-app-mode="desktop"] .dashboard > .topbar > div:first-child { max-width: min(720px, 74%); }
@@ -266,6 +272,10 @@ body[data-app-mode="desktop"] .secondary-button:focus-visible { outline: 2px sol
 body[data-app-mode="desktop"] .button-link.secondary:focus-visible,
 body[data-app-mode="desktop"] .secondary-button:focus-visible { outline-color: var(--teal, #68c3b5); }
 body[data-app-mode="desktop"] .danger-button:focus-visible { outline-color: #d17669; }
+body[data-app-mode="desktop"] .blacksmith-craft-action > button:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
+body[data-app-mode="desktop"] .inventory-filters :focus-visible,
+body[data-app-mode="desktop"] .market-max-button:focus-visible,
+body[data-app-mode="desktop"] .dock-offer [data-dock-buy]:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
 
 body[data-app-mode="desktop"] .equipment-slot.filled > button.equipment-slot__trigger:not(.secondary-button):not(.danger-button):not(.topbar-back-button):not(.text-button),
 body[data-app-mode="desktop"] .equipment-slot.filled > button.equipment-slot__trigger:not(.secondary-button):not(.danger-button):not(.topbar-back-button):not(.text-button):hover:not(:disabled),
@@ -328,6 +338,20 @@ body[data-app-mode="desktop"] .multi-select-filter summary { min-height: 36px; p
 body[data-app-mode="desktop"] .catalog-toolbar > button { min-height: 36px; padding: 7px 12px; }
 body[data-app-mode="desktop"] .filter-tabs { flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding: 2px 0 7px; scrollbar-width: thin; }
 body[data-app-mode="desktop"] .filter-tabs a { flex: 0 0 auto; min-height: 34px; padding: 7px 10px; white-space: nowrap; }
+body[data-app-mode="desktop"] #equipamentos-materiais { min-width: 0; }
+body[data-app-mode="desktop"] #equipamentos-materiais > .guide-catalog-table-wrap {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+body[data-app-mode="desktop"] #equipamentos-materiais > .guide-catalog-table-wrap:focus-visible {
+  outline: 3px solid var(--gold-2);
+  outline-offset: 3px;
+}
 body[data-app-mode="desktop"] .mission-card h3 { font-family: Georgia, "Times New Roman", serif; }
 body[data-app-mode="desktop"] .mission-timer,
 body[data-app-mode="desktop"] [data-ends-at] { font-variant-numeric: tabular-nums; }
@@ -439,15 +463,68 @@ body[data-app-mode="desktop"] .gathering-capacity p { margin: 4px 0 0; color: va
 body[data-app-mode="desktop"] .gathering-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 body[data-app-mode="desktop"] .gathering-card { min-height: 220px; }
 body[data-app-mode="desktop"] .gathering-card h2 { margin: 2px 0 10px; font: 700 1.35rem Georgia, "Times New Roman", serif; }
-body[data-app-mode="desktop"] .gathering-status { color: var(--teal); }
+body[data-app-mode="desktop"] .gathering-status { max-width: 100%; white-space: normal; }
+body[data-app-mode="desktop"] .gathering-capacity-state { margin: 8px 0 0; }
+body[data-app-mode="desktop"] .gathering-capacity > .gathering-capacity-state { color: #f0c46e; }
 body[data-app-mode="desktop"] .gathering-progress { color: var(--muted); font-variant-numeric: tabular-nums; }
 body[data-app-mode="desktop"] .gathering-assignment-form { display: grid; gap: 8px; }
 body[data-app-mode="desktop"] .gathering-assignment-form select { min-height: 42px; }
 body[data-app-mode="desktop"] .offline-ack-error { color: var(--red); }
+body[data-app-mode="desktop"] .offline-summary { padding: 16px 20px; }
+body[data-app-mode="desktop"] .offline-gold-total { grid-column: 1 / -1; gap: 4px; }
+body[data-app-mode="desktop"] .offline-gold-total dd { font-size: 1.45rem; }
+body[data-app-mode="desktop"] .offline-gold-breakdown { display: block; margin-top: 2px; color: var(--muted); font-size: .76rem; font-weight: 500; line-height: 1.35; }
+body[data-app-mode="desktop"] .offline-cap-warning { margin: 8px 0; }
 body[data-app-mode="desktop"] .offline-gathering-list { display: grid; gap: 6px; padding-left: 18px; }
 body[data-app-mode="desktop"] .offline-gathering-list li { display: flex; justify-content: space-between; gap: 14px; }
 body[data-app-mode="desktop"] .offline-gathering-list li span { text-align: right; color: var(--muted); }
 body[data-app-mode="desktop"] .status-gathering { color: var(--blue); border-color: var(--blue); }
+body[data-app-mode="desktop"] .candidate-hire-form__summary { margin: 0; }
+body[data-app-mode="desktop"] .candidate-hire-form__reason,
+body[data-app-mode="desktop"] .bulk-hire-form__reason { margin: 0; color: var(--gold-2); }
+body[data-app-mode="desktop"] .mercenary-hiring-summary { margin-top: 16px; }
+body[data-app-mode="desktop"] .mercenary-attribute-table-wrap { overflow-x: visible; }
+body[data-app-mode="desktop"] table.mercenary-attribute-table { width: 100%; min-width: 0; table-layout: fixed; }
+body[data-app-mode="desktop"] .mercenary-attribute-table th,
+body[data-app-mode="desktop"] .mercenary-attribute-table td { min-width: 0; overflow-wrap: anywhere; padding: 9px 10px; }
+body[data-app-mode="desktop"] .mercenary-attribute-table__mobile-label { display: none; }
+body[data-app-mode="desktop"] .mercenary-dismiss-form { margin-top: 14px; }
+body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button {
+  min-height: 40px; border-color: #78544c; background: transparent; color: #f0c0b5; font-weight: 650;
+}
+body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button:hover:not(:disabled),
+body[data-app-mode="desktop"] .mercenary-dismiss-form .danger-button:focus-visible { background: #3a2927; }
+body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove {
+  min-height: 40px; border-color: #a66f62; background: transparent; color: #f0c0b5; font-size: .86rem; font-weight: 650;
+}
+body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove:hover:not(:disabled),
+body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove:focus-visible { background: #3a2927; }
+body[data-app-mode="desktop"] .equipment-slot .equipment-slot__remove:focus-visible { outline: 3px solid #f5d798; outline-offset: 3px; }
+body[data-app-mode="desktop"] .result-history-details { padding-top: 8px; border-top: 1px solid rgba(233, 198, 116, .14); }
+body[data-app-mode="desktop"] .result-history-details > summary {
+  display: flex; align-items: center; min-height: 40px; padding: 4px 0; color: var(--gold-2); font-weight: 700; cursor: pointer;
+}
+body[data-app-mode="desktop"] .result-history-details > summary:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
+body[data-app-mode="desktop"] .result-history-details[open] > summary { margin-bottom: 10px; }
+
+@media (max-width: 480px) {
+  body[data-app-mode="desktop"] .mercenary-attribute-table-wrap { overflow: visible; }
+  body[data-app-mode="desktop"] table.mercenary-attribute-table { min-width: 0; font-size: .84rem; }
+  body[data-app-mode="desktop"] .mercenary-attribute-table thead {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody { display: grid; gap: 8px; }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody tr {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;
+    padding: 8px; border: 1px solid rgba(233, 198, 116, .13); border-radius: 7px;
+  }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody th[scope="row"] { grid-column: 1 / -1; padding: 2px 0 5px; border: 0; }
+  body[data-app-mode="desktop"] .mercenary-attribute-table tbody td {
+    display: grid; gap: 3px; padding: 4px; border: 0; overflow-wrap: anywhere;
+  }
+  body[data-app-mode="desktop"] .mercenary-attribute-table__mobile-label { display: inline; color: var(--muted); font-size: .72rem; }
+}
 
 @media (max-width: 760px) {
   body[data-app-mode="desktop"] .gathering-grid { grid-template-columns: 1fr; }
@@ -455,3 +532,65 @@ body[data-app-mode="desktop"] .status-gathering { color: var(--blue); border-col
   body[data-app-mode="desktop"] .gathering-hero > img:first-child { z-index: 0; opacity: .7; }
   body[data-app-mode="desktop"] .gathering-hero > div { position: relative; z-index: 1; }
 }
+
+/* Responsive overrides for the shared campaign header, kept last so the
+   compact layout retains the full balance, stamina and help controls. */
+@media (max-width: 1100px) {
+  body[data-app-mode="desktop"] .game-topbar { grid-template-columns: 42px minmax(0, 1fr) auto; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-back-button { grid-column: 1; grid-row: 1; }
+  body[data-app-mode="desktop"] .game-topbar > .guild-banner { grid-column: 2; grid-row: 1; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats { grid-column: 1 / -1; grid-row: 2; grid-template-columns: minmax(64px, .45fr) minmax(64px, .45fr) minmax(140px, 1fr); }
+  body[data-app-mode="desktop"] .game-topbar > .offline-action { grid-column: 3; grid-row: 1; }
+}
+@media (max-width: 800px) {
+  body[data-app-mode="desktop"] .game-topbar { display: grid; grid-template-columns: 42px minmax(0, 1fr); }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-back-button { grid-column: 1; grid-row: 1; width: 42px; min-width: 42px; padding: 8px; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-back-button > span:last-child { display: none; }
+  body[data-app-mode="desktop"] .game-topbar > .guild-banner { grid-column: 2; grid-row: 1; min-width: 0; }
+  body[data-app-mode="desktop"] .game-topbar > .guild-banner strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(52px, .45fr) minmax(52px, .45fr) minmax(0, 1fr); gap: 6px; }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats > span:nth-child(1),
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats > span:nth-child(3) { display: block; }
+  body[data-app-mode="desktop"] .game-topbar > .offline-action { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
+  body[data-app-mode="desktop"] .offline-action .topbar-back-button { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 3px 8px; width: auto; max-width: calc(100vw - 80px); min-height: 40px; text-align: left; }
+  body[data-app-mode="desktop"] .offline-stamina-value { white-space: normal; }
+  body[data-app-mode="desktop"] .offline-action .topbar-back-button > .offline-stamina-value { display: block; flex: 1 0 100%; min-width: 0; overflow-wrap: anywhere; }
+}
+@media (max-width: 460px) {
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body[data-app-mode="desktop"] .game-topbar > .topbar-stats > .treasury-menu { grid-column: 1 / -1; }
+}
+body[data-app-mode="desktop"] .offline-regional-context a,
+body[data-app-mode="desktop"] .offline-summary__notice a { display: inline-flex; align-items: center; min-width: 40px; min-height: 40px; padding: 4px 8px; border-radius: 5px; vertical-align: middle; }
+body[data-app-mode="desktop"] .offline-regional-context a:focus-visible,
+body[data-app-mode="desktop"] .offline-summary__notice a:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 2px; }
+body[data-app-mode="desktop"] .tutorial-actions form[action="/tutorial/decline"] > button.text-button {
+  min-height: 40px;
+  padding-block: 8px;
+}
+
+body[data-app-mode="desktop"] .achievement-card details > summary {
+  min-height: 40px;
+  padding: 10px 8px;
+  cursor: pointer;
+}
+body[data-app-mode="desktop"] .codex-card a,
+body[data-app-mode="desktop"] .codex-entry-detail .section-heading > a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+body[data-app-mode="desktop"] .achievement-card details > summary:focus-visible,
+body[data-app-mode="desktop"] .codex-card a:focus-visible,
+body[data-app-mode="desktop"] .codex-entry-detail .section-heading > a:focus-visible {
+  outline: 3px solid var(--gold-2);
+  outline-offset: 3px;
+}
+body[data-app-mode="desktop"] .building-card button:focus-visible,
+body[data-app-mode="desktop"] form[action="/professions/train"] button:focus-visible {
+  outline: 3px solid var(--gold-2);
+  outline-offset: 3px;
+}
+body[data-app-mode="desktop"] .profession-card .eyebrow { letter-spacing: 0; }

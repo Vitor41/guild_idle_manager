@@ -13,8 +13,8 @@ from app.services.building_service import (
     BuildingError,
     ensure_guild_buildings,
     get_effect_label,
-    get_building_benefit,
     get_upgrade_cost,
+    prepare_buildings_for_display,
     upgrade_guild_building,
 )
 from app.services.guild_service import get_current_guild_context
@@ -58,13 +58,9 @@ def buildings_index(
         reset_id = int(reset_id_raw)
     except (TypeError, ValueError):
         reset_id = None
+    prepare_buildings_for_display(buildings)
     for building in buildings:
         building.view_icon = get_building_icon(building.building_template.effect_type)
-        building.next_required_guild_level = max(
-            building.building_template.required_guild_level,
-            (building.level + 2) // 2,
-        )
-        building.benefit = get_building_benefit(building.building_template.effect_type, building.level)
     return templates.TemplateResponse(
         request=request,
         name="buildings/index.html",

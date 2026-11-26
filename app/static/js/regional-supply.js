@@ -10,21 +10,47 @@ const syncPreparedStartButton = (form) => {
   const exactTeam = preparedIds.size > 0
     && selectedIds.size === preparedIds.size
     && Array.from(preparedIds).every((id) => selectedIds.has(id));
+  const preparedMembersRetained = preparedIds.size > 0
+    && Array.from(preparedIds).every((id) => selectedIds.has(id));
   const teamAvailable = form.dataset.preparedTeamAvailable === "true"
     && form.dataset.preparedTeamValid === "true";
+  const withoutSupplyButton = form.querySelector("[data-start-without-supply]");
+  if (typeof form.dataset.preparedTeamCanStart === "undefined") {
+    form.dataset.preparedTeamCanStart = String(Boolean(withoutSupplyButton && !withoutSupplyButton.disabled));
+  }
+  const preparedTeamCanStart = form.dataset.preparedTeamCanStart === "true";
   const preparationReady = form.dataset.preparedSupplyReady === "true";
-  button.disabled = !(preparationReady && teamAvailable && exactTeam);
+  const teamBounds = form.querySelector("fieldset[data-min-party-size]")?.dataset || {};
+  const minimumParty = Number(teamBounds.minPartySize);
+  const maximumParty = Number(teamBounds.maxPartySize);
+  const validPartySize = Number.isInteger(minimumParty)
+    && Number.isInteger(maximumParty)
+    && minimumParty >= 1
+    && maximumParty >= minimumParty
+    && selectedIds.size >= minimumParty
+    && selectedIds.size <= maximumParty;
+  button.disabled = !(preparationReady && teamAvailable && preparedTeamCanStart && exactTeam && validPartySize);
+  if (withoutSupplyButton) {
+    withoutSupplyButton.disabled = !(teamAvailable && preparedTeamCanStart && preparedMembersRetained && validPartySize);
+  }
   button.textContent = preparationReady
     ? button.dataset.readyLabel || button.textContent
     : "Aguardando preparo";
 
   const status = form.querySelector("[data-prepared-team-status]");
   if (!status) return;
-  if (!exactTeam) {
-    const missingPrepared = Array.from(preparedIds).some((id) => !selectedIds.has(id));
-    status.textContent = missingPrepared
-      ? "Mantenha toda a equipe preparada selecionada. O bônus exige a equipe exata; reforços podem iniciar sem suprimento."
-      : "Há reforços selecionados. O bônus preparado exige a equipe exata; use “Iniciar sem suprimento” para manter os reforços.";
+  if (!Number.isInteger(minimumParty) || !Number.isInteger(maximumParty) || maximumParty < minimumParty) {
+    status.textContent = "O limite da equipe não está disponível. Atualize a Vigília antes de iniciar.";
+  } else if (selectedIds.size < minimumParty) {
+    status.textContent = `Equipe incompleta: selecione ao menos ${minimumParty} integrante(s) para iniciar.`;
+  } else if (selectedIds.size > maximumParty) {
+    status.textContent = `Equipe acima do limite: selecione no máximo ${maximumParty} integrante(s) para iniciar.`;
+  } else if (!preparedMembersRetained) {
+    status.textContent = "A equipe original do preparo deve permanecer; adicione reforços sem substituir integrantes preparados.";
+  } else if (!exactTeam) {
+    status.textContent = "Há reforços selecionados. O bônus preparado exige a equipe exata; use “Iniciar sem suprimento” para manter os reforços.";
+  } else if (!preparedTeamCanStart) {
+    status.textContent = "A equipe preparada não pode iniciar nesta oferta. Atualize a Vigília para conferir os requisitos.";
   } else if (!preparationReady) {
     status.textContent = "Equipe preparada selecionada. O bônus ficará disponível quando o preparo terminar.";
   } else {
@@ -33,7 +59,7 @@ const syncPreparedStartButton = (form) => {
 };
 
 window.initializeRegionalSupply = (root = document) => {
-  root.querySelectorAll(".supply-preparation-progress").forEach((progressBox) => {
+  root.querySelectorAll('form[data-supply-quote-url] .supply-preparation-progress').forEach((progressBox) => {
     if (progressBox.dataset.regionalTimerInitialized === "true") return;
     progressBox.dataset.regionalTimerInitialized = "true";
     const time = progressBox.querySelector("time[data-ends-at]");
@@ -84,6 +110,18 @@ window.initializeRegionalSupply = (root = document) => {
   root.querySelectorAll("form[data-supply-quote-url]").forEach((form) => {
     if (form.dataset.regionalSupplyInitialized === "true") return;
     form.dataset.regionalSupplyInitialized = "true";
+    const syncReinforcementBadges = () => {
+      const selectedIds = new Set(Array.from(form.querySelectorAll('input[name="mercenary_ids"]'))
+        .filter((input) => input.checked || input.dataset.preparedMemberHidden === "true")
+        .map((input) => String(input.value)));
+      form.querySelectorAll("[data-reinforcement-badge]").forEach((badge) => {
+        badge.hidden = !selectedIds.has(String(badge.dataset.reinforcementBadge));
+      });
+    };
+    form.addEventListener("change", (event) => {
+      if (event.target?.matches?.('input[name="mercenary_ids"]')) syncReinforcementBadges();
+    });
+    syncReinforcementBadges();
     const supply = form.querySelector('input[name="supply"]');
     const summary = form.querySelector(".supply-preparation small");
     if (!supply || !summary) return;

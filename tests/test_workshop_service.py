@@ -82,6 +82,39 @@ class WorkshopServiceTests(unittest.TestCase):
             GuildInventoryItem.item_template_id == self.meat.id,
         )), 3)
 
+    def test_presentation_context_reports_actual_missing_inputs_without_mutating_stock(self):
+        self._stock(self.meat, MEAT_PER_KIT - 1)
+        self._stock(self.herb, HERBS_PER_KIT - 1)
+
+        context = get_supply_workshop_context(self.db, self.guild)
+
+        self.assertEqual(context["requirements"], {"meat": MEAT_PER_KIT, "herb": HERBS_PER_KIT})
+        self.assertEqual(context["material_shortfalls"], {"meat": 1, "herb": 1})
+        self.assertFalse(context["materials_available"])
+        self.assertFalse(context["can_craft"])
+        self.assertEqual(context["stock"]["meat"], MEAT_PER_KIT - 1)
+        self.assertEqual(context["stock"]["herb"], HERBS_PER_KIT - 1)
+
+    def test_presentation_context_reports_warehouse_limited_batch_separately(self):
+        filler = ItemTemplate(
+            name="Material após capacidade", description="", item_type="material", rarity="common",
+            material_family="wood", item_level=1, level_band="1-20", tier=1,
+        )
+        self.db.add(filler)
+        self.db.flush()
+        self._stock(self.meat, MEAT_PER_KIT)
+        self._stock(self.herb, HERBS_PER_KIT)
+        capacity = get_inventory_capacity(self.db, self.guild)
+        self._stock(filler, capacity - 4)
+
+        context = get_supply_workshop_context(self.db, self.guild)
+
+        self.assertTrue(context["materials_available"])
+        self.assertEqual(context["max_batch"], 0)
+        self.assertTrue(context["warehouse_limited"])
+        self.assertFalse(context["can_craft"])
+        self.assertEqual(context["warehouse_usage"], capacity + 1)
+
     def test_recipe_sums_and_consumes_materials_across_tiers(self):
         higher_tier_meat = ItemTemplate(
             name="Carne de tier superior", description="", item_type="material", rarity="common",

@@ -1,8 +1,8 @@
-(() => {
+const initializedRoots = new WeakSet();
+function initializeGameGuide(root = document.querySelector(".game-guide")) {
   const utils = window.GuideUtils;
-  if (!utils) return;
-  const root = document.querySelector(".game-guide");
-  if (!root) return;
+  if (!utils || !root || initializedRoots.has(root)) return;
+  initializedRoots.add(root);
 
   const searchForm = root.querySelector("[data-guide-search-form]");
   const searchInput = searchForm?.querySelector("#guide-search-query");
@@ -360,4 +360,6 @@
       exportButton.disabled = false;
     }
   });
-})();
+}
+window.initializeGameGuide = initializeGameGuide;
+window.initializeGameGuide();

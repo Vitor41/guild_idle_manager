@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>Campanhas · Guild Idle Manager</title>
-    <link rel="stylesheet" href="/static/css/desktop-evolution.css?v=20261029-1">
-    <link rel="stylesheet" href="/static/css/desktop-campaigns.css?v=20261029-2">
+    <link rel="stylesheet" href="/static/css/desktop-evolution.css?v=20261125-1">
+    <link rel="stylesheet" href="/static/css/desktop-campaigns.css?v=20261125-1">
     <link rel="stylesheet" href="/static/css/desktop-art.css">
     <script src="/static/js/desktop-campaigns.js" defer></script>
-    <script src="/static/js/desktop-art.js" defer></script>
+    <script src="/static/js/desktop-art.js?v=20261125-1" defer></script>
   </head>
   <body data-app-mode="desktop" data-route="/desktop/campaigns">
     <main class="campaign-manager evolution-page">
@@ -18,7 +18,7 @@
           <img src="/static/assets/desktop/evolution/sprites/ui_64/vigil-tower.png" width="38" height="38" alt="">
           <span><strong>GUILD IDLE MANAGER</strong><small>SELEÇÃO LOCAL</small></span>
         </a>
-        <span>SUAS CAMPANHAS <b>/</b> COLETA</span>
+        <span>CAMPANHAS <b>/</b> SELEÇÃO LOCAL</span>
       </header>
 
       <section class="campaign-workspace" aria-labelledby="campaign-page-title">
@@ -26,8 +26,8 @@
           <img src="/static/assets/desktop/evolution/illustrations/region-home.webp" width="1600" height="900" alt="" fetchpriority="high">
           <div>
             <p class="evolution-eyebrow">IDENTIDADE DA CAMPANHA</p>
-            <h1 id="campaign-page-title">Campanhas e trabalhadores</h1>
-            <p>O nome da guilda identifica cada campanha local. A região natal aparece logo abaixo para você reconhecer sua jornada.</p>
+            <h1 id="campaign-page-title">Campanhas</h1>
+            <p>Continue uma jornada local ou organize suas cópias de segurança. A região natal ajuda a reconhecer cada campanha.</p>
           </div>
         </div>
 
@@ -71,11 +71,15 @@
                 </div>
                 <div class="campaign-actions" aria-label="Ações para {{ campaign.guild_name }}">
                   <button class="evolution-button evolution-button--primary open-campaign" type="button">Continuar</button>
-                  <button class="evolution-button evolution-button--secondary rename-campaign" type="button">Renomear guilda</button>
-                  <button class="evolution-button evolution-button--secondary backup-campaign" type="button">Criar cópia de segurança</button>
-                  <button class="evolution-button evolution-button--secondary export-campaign" type="button">Exportar</button>
-                  <button class="evolution-button evolution-button--secondary restore-campaign" type="button">Restaurar cópia</button>
-                  <button class="evolution-button evolution-button--danger delete-campaign" type="button">Excluir</button>
+                  <div class="campaign-maintenance-actions" role="group" aria-label="Manutenção da campanha">
+                    <button class="evolution-button evolution-button--secondary rename-campaign" type="button">Renomear guilda</button>
+                    <button class="evolution-button evolution-button--secondary backup-campaign" type="button">Criar cópia de segurança</button>
+                    <button class="evolution-button evolution-button--secondary export-campaign" type="button">Exportar</button>
+                    <button class="evolution-button evolution-button--secondary restore-campaign" type="button">Restaurar cópia</button>
+                  </div>
+                  <div class="campaign-destructive-actions" role="group" aria-label="Ações destrutivas">
+                    <button class="evolution-button evolution-button--danger delete-campaign" type="button">Excluir</button>
+                  </div>
                 </div>
               </article>
             {% endfor %}
@@ -93,7 +97,7 @@
           <div><p class="evolution-eyebrow">RECUPERAÇÃO</p><h2 id="recovery-title">Arquivos que precisam de recuperação</h2><p>Os arquivos foram preservados. Selecione uma cópia compatível para restaurar a campanha.</p></div>
           <ul>
             {% for entry in unavailable_campaigns %}
-              <li><strong>{{ entry.filename }}</strong><span>{{ entry.reason }}</span>
+              <li><strong>Arquivo de campanha preservado</strong><span>Arquivo local: {{ entry.filename }}</span><span>{{ entry.reason }}</span>
                 {% if entry.campaign_id %}<button class="evolution-button evolution-button--secondary restore-unavailable" type="button" data-campaign-id="{{ entry.campaign_id }}">Restaurar cópia</button>{% endif %}
               </li>
             {% endfor %}

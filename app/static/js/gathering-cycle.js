@@ -30,7 +30,7 @@
           window.clearInterval(timer);
           return;
         }
-        if (document.hidden) return;
+        if (document.hidden || cycle.hidden) return;
         update((elapsed + 1) % 60);
       }, 1000);
     });
@@ -51,26 +51,58 @@
       if (!response.ok) return;
       const state = await response.json();
       if (!page.isConnected || document.querySelector("[data-gathering-status-url]") !== page) return;
-      const warehouseLabel = page.querySelector("[data-gathering-warehouse-label]");
-      const warehouseProgress = page.querySelector("[data-gathering-warehouse-progress]");
-      if (warehouseLabel) {
-        warehouseLabel.textContent = `${Number(state.warehouse.used).toLocaleString("pt-BR")} / ${Number(state.warehouse.capacity).toLocaleString("pt-BR")}`;
-      }
-      if (warehouseProgress) {
-        warehouseProgress.max = state.warehouse.capacity;
-        warehouseProgress.value = Math.min(state.warehouse.used, state.warehouse.capacity);
-      }
-      page.querySelectorAll("[data-gathering-family-count]").forEach((counter) => {
-        counter.textContent = String(state.inventory_by_family[counter.dataset.gatheringFamilyCount] || 0);
-      });
-      page.querySelectorAll("[data-gathering-card]").forEach((card) => {
-        if (card.dataset.gatheringAssigned !== "true") return;
+      const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+      const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+      if (!isRecord(state) || !isRecord(state.warehouse)
+          || !isRecord(state.inventory_by_family) || !isRecord(state.assignments)) return;
+      const used = state.warehouse.used;
+      const capacity = state.warehouse.capacity;
+      if (!isFiniteNumber(used) || used < 0 || !isFiniteNumber(capacity) || capacity <= 0) return;
+      if (Object.values(state.inventory_by_family).some((quantity) => !Number.isInteger(quantity) || quantity < 0)) return;
+      const assignmentEntries = [];
+      for (const card of page.querySelectorAll("[data-gathering-card]")) {
+        if (card.dataset.gatheringAssigned !== "true") continue;
         const family = card.dataset.gatheringCard;
-        const assignment = state.assignments[family];
-        if (!assignment) {
+        if (!Object.prototype.hasOwnProperty.call(state.assignments, family)) {
           window.location.reload();
           return;
         }
+        const assignment = state.assignments[family];
+        if (!isRecord(assignment)
+            || !Number.isInteger(assignment.progress_seconds)
+            || assignment.progress_seconds < 0 || assignment.progress_seconds > 59
+            || typeof assignment.capacity_paused !== "boolean"
+            || typeof assignment.catalog_unavailable !== "boolean"
+            || typeof assignment.worker !== "string"
+            || !(assignment.target_item_name === null || typeof assignment.target_item_name === "string")
+            || !(assignment.target_item_rarity === null || typeof assignment.target_item_rarity === "string")) return;
+        assignmentEntries.push([card, assignment]);
+      }
+      const warehouseLabel = page.querySelector("[data-gathering-warehouse-label]");
+      const warehouseProgress = page.querySelector("[data-gathering-warehouse-progress]");
+      const capacityStateLabel = page.querySelector("[data-gathering-capacity-state]");
+      const displayedUsed = Math.min(used, capacity);
+      if (warehouseLabel) {
+        const nextLabel = `${used.toLocaleString("pt-BR")} / ${capacity.toLocaleString("pt-BR")}`;
+        if (warehouseLabel.textContent !== nextLabel) warehouseLabel.textContent = nextLabel;
+      }
+      if (warehouseProgress) {
+        warehouseProgress.max = capacity;
+        warehouseProgress.value = displayedUsed;
+        warehouseProgress.setAttribute?.("aria-label", `Armazém: ${used} de ${capacity}`);
+      }
+      if (capacityStateLabel) {
+        const full = used >= capacity;
+        if (capacityStateLabel.hidden === full) capacityStateLabel.hidden = !full;
+      }
+      page.querySelectorAll("[data-gathering-family-count]").forEach((counter) => {
+        const family = counter.dataset.gatheringFamilyCount;
+        const quantity = Object.prototype.hasOwnProperty.call(state.inventory_by_family, family)
+          ? state.inventory_by_family[family]
+          : 0;
+        counter.textContent = String(quantity);
+      });
+      assignmentEntries.forEach(([card, assignment]) => {
         const cycle = card.querySelector("[data-gathering-cycle]");
         const status = card.querySelector("[data-gathering-status]");
         const catalogWarning = card.querySelector("[data-gathering-catalog-warning]");
@@ -90,19 +122,27 @@
           const rarity = rarityLabels[assignment.target_item_rarity] || assignment.target_item_rarity;
           targetValue.textContent = `${assignment.target_item_name} · ${rarity}`;
         }
+        const setStatus = (className, text) => {
+          if (!status) return;
+          status.classList?.remove("evolution-status--active", "evolution-status--paused", "evolution-status--muted");
+          status.classList?.add(className);
+          if (status.textContent !== text) status.textContent = text;
+        };
         if (catalogWarning) catalogWarning.hidden = !assignment.catalog_unavailable;
         if (assignment.catalog_unavailable) {
           if (cycle) cycle.hidden = true;
           if (capacityHelp) capacityHelp.hidden = true;
-          if (status) status.textContent = `Indisponível · catálogo · ${assignment.worker}`;
+          cycleUpdaters.get(cycle)?.(assignment.progress_seconds);
+          setStatus("evolution-status--muted", `Indisponível · catálogo · ${assignment.worker}`);
         } else if (assignment.capacity_paused) {
           if (cycle) cycle.hidden = true;
           if (capacityHelp) capacityHelp.hidden = false;
-          if (status) status.textContent = `Pausada · Armazém cheio · ${assignment.worker}`;
+          cycleUpdaters.get(cycle)?.(assignment.progress_seconds);
+          setStatus("evolution-status--paused", `Pausada · Armazém cheio · ${assignment.worker}`);
         } else {
           if (cycle) cycle.hidden = false;
           if (capacityHelp) capacityHelp.hidden = true;
-          if (status) status.textContent = `Em produção · ${assignment.worker}`;
+          setStatus("evolution-status--active", `Em produção · ${assignment.worker}`);
           if (cycle) cycleUpdaters.get(cycle)?.(assignment.progress_seconds);
         }
       });

@@ -17,6 +17,7 @@ from app.desktop import gameplay_diagnostics
 from app.desktop.gameplay_diagnostics import close_gameplay_logger
 from app.main import protect_desktop_loopback
 from app.models import CampaignMetadata, Guild, GuildInventoryItem, ItemTemplate
+from app.models.guild import GuildResources
 from app.models.workshop import SupplyWorkshopJob
 from app.repositories.item_repository import add_inventory_quantity
 from app.routes import workshop_routes
@@ -67,6 +68,9 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
             )
             db.add_all([campaign, guild, meat, herb, filler])
             db.flush()
+            db.add(GuildResources(
+                guild_id=guild.id, gold=1_234_567, wood=23_456, ore=7_890, crystals=123,
+            ))
             ensure_supply_kit(db)
             db.commit()
             self.guild_id = guild.id
@@ -110,7 +114,9 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
             yield db
 
     def _guild_context(self, db, _current_user):
-        return db.get(Guild, self.guild_id), None
+        return db.get(Guild, self.guild_id), db.scalar(
+            select(GuildResources).where(GuildResources.guild_id == self.guild_id)
+        )
 
     def _request(self, path: str):
         async def run():
@@ -172,6 +178,9 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
         response_text = body.decode("utf-8")
         self.assertEqual(status, 200, response_text)
         self.assertIn("Oficina de Suprimentos", response_text)
+        self.assertIn('class="treasury-menu"', response_text)
+        self.assertIn('data-resource-total="gold">1234567', response_text)
+        self.assertIn('data-resource-total="wood">23456', response_text)
         self.assertNotIn("Não foi possível abrir esta tela", response_text)
 
     def test_regional_advance_exception_before_workshop_route_is_persisted(self):
@@ -217,8 +226,8 @@ class WorkshopRouteDiagnosticsTests(unittest.TestCase):
 
         response_text = body.decode("utf-8")
         self.assertEqual(status, 200, response_text)
-        self.assertIn("Produção pronta, aguardando espaço no Armazém", response_text)
-        self.assertIn("O débito dos materiais já realizado e a reserva dos Kits foram preservados", response_text)
+        self.assertIn("Pronta · aguardando espaço no Armazém", response_text)
+        self.assertIn("Materiais já debitados; Kits reservados até haver espaço", response_text)
         with Session(self.engine, autoflush=False, expire_on_commit=False) as db:
             job = db.get(SupplyWorkshopJob, job_id)
             guild = db.get(Guild, self.guild_id)

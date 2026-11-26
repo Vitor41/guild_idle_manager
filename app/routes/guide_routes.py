@@ -17,6 +17,10 @@ from app.services.display_service import rarity_label
 from app.services.guide_catalog_service import SOURCE_LABELS, build_guide_catalog
 from app.services.guild_service import get_current_guild_context
 from app.services.offline_progress_service import get_passive_gold_rate
+from app.services.portal_spawn_rules import (
+    CURRENT_PORTAL_SPAWN_RULES_VERSION,
+    get_portal_spawn_rules,
+)
 
 
 router = APIRouter(prefix="/guide")
@@ -27,6 +31,7 @@ def _guide_context(request: Request, db, current_user):
     guild, resources = get_current_guild_context(db, current_user.id)
     if guild is None:
         return None
+    portal_rules = get_portal_spawn_rules(CURRENT_PORTAL_SPAWN_RULES_VERSION)
     return {
         "current_user": current_user, "guild": guild, "resources": resources,
         "idle_rate": get_passive_gold_rate(db, guild),
@@ -42,6 +47,16 @@ def _guide_context(request: Request, db, current_user):
             for rarity, seconds in MARKET_RARITY_SECONDS.items()
         ],
         "market_rarity_label": rarity_label,
+        "portal_spawn_rules": {
+            "base_chance_pp": portal_rules.base_chance_pp,
+            "failure_increment_pp": portal_rules.failure_increment_pp,
+            "base_chance_cap_pp": portal_rules.base_chance_cap_pp,
+            "explorer_bonus_cap_pp": portal_rules.explorer_bonus_cap_pp,
+            "max_failure_stacks": portal_rules.max_stack(),
+            "cooldown_hours": portal_rules.cooldown_hours,
+            "entry_window_hours": portal_rules.entry_window_hours,
+            "total_chance_cap_pp": portal_rules.base_chance_cap_pp + portal_rules.explorer_bonus_cap_pp,
+        },
     }
 
 

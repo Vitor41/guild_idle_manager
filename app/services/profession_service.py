@@ -7,6 +7,7 @@ from app.core.time import as_utc, prepare_timer_context
 from app.models.content import ProfessionTemplate, ProfessionTraining
 from app.models.guild import Guild, GuildResources
 from app.models.mercenary import Mercenary
+from app.services.display_service import status_label
 
 
 class ProfessionError(ValueError):
@@ -41,6 +42,8 @@ def get_professions_context(db: Session, guild: Guild) -> dict[str, object]:
     mercenaries = list(db.scalars(select(Mercenary).options(joinedload(Mercenary.profession)).where(
         Mercenary.guild_id == guild.id, Mercenary.status != "dismissed"
     ).order_by(Mercenary.name)))
+    for mercenary in mercenaries:
+        mercenary.status_label = status_label(mercenary.status)
     trainings = list(db.scalars(select(ProfessionTraining).options(joinedload(ProfessionTraining.mercenary), joinedload(ProfessionTraining.profession)).where(
         ProfessionTraining.guild_id == guild.id, ProfessionTraining.status == "in_progress").order_by(ProfessionTraining.ends_at)))
     now = utc_now()

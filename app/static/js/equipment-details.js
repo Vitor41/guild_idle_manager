@@ -1,6 +1,12 @@
 (() => {
   const initializedTriggers = new WeakSet();
 
+  const panelForTrigger = (trigger) => {
+    const controlledId = trigger.getAttribute?.("aria-controls");
+    const controlledPanel = controlledId ? document.getElementById?.(controlledId) : null;
+    return controlledPanel || trigger.closest(".equipment-slot")?.querySelector("[data-equipment-details]") || null;
+  };
+
   const closePanel = (trigger, panel, { restoreFocus = false } = {}) => {
     trigger.setAttribute("aria-expanded", "false");
     panel.hidden = true;
@@ -16,24 +22,32 @@
   };
 
   const positionPanel = (trigger, panel) => {
-    if (window.matchMedia("(max-width: 760px)").matches) return;
     const rect = trigger.getBoundingClientRect();
     const margin = 12;
-    const width = Math.min(360, window.innerWidth - margin * 2);
-    const estimatedHeight = Math.min(panel.scrollHeight || 300, window.innerHeight - margin * 2);
-    const rightSpace = window.innerWidth - rect.right;
-    const left = rightSpace >= width + margin
-      ? rect.right + margin
-      : Math.max(margin, rect.left - width - margin);
-    const top = Math.max(margin, Math.min(rect.top, window.innerHeight - estimatedHeight - margin));
+    const viewportWidth = window.visualViewport?.width || window.innerWidth;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const width = Math.max(0, Math.min(360, viewportWidth - margin * 2));
+    const estimatedHeight = Math.min(panel.scrollHeight || 300, viewportHeight - margin * 2);
+    const narrow = window.matchMedia("(max-width: 760px)").matches;
+    const rightSpace = viewportWidth - rect.right;
+    const left = narrow
+      ? Math.max(margin, (viewportWidth - width) / 2)
+      : rightSpace >= width + margin
+        ? rect.right + margin
+        : Math.max(margin, rect.left - width - margin);
+    const belowTop = (rect.bottom ?? rect.top) + margin;
+    const topCandidate = narrow && belowTop + estimatedHeight > viewportHeight - margin
+      ? rect.top - estimatedHeight - margin
+      : narrow ? belowTop : rect.top;
+    const top = Math.max(margin, Math.min(topCandidate, viewportHeight - estimatedHeight - margin));
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
-    panel.style.maxHeight = `${window.innerHeight - margin * 2}px`;
+    panel.style.maxHeight = `${viewportHeight - margin * 2}px`;
   };
 
   const positionVisiblePanels = () => {
     document.querySelectorAll("[data-equipment-details-trigger][aria-expanded='true']").forEach((trigger) => {
-      const panel = trigger.closest(".equipment-slot")?.querySelector("[data-equipment-details]");
+      const panel = panelForTrigger(trigger);
       if (panel && !panel.hidden) positionPanel(trigger, panel);
     });
   };
@@ -44,9 +58,8 @@
     const triggers = root.querySelectorAll?.("[data-equipment-details-trigger]") ?? [];
     for (const trigger of triggers) {
       if (initializedTriggers.has(trigger)) continue;
-      const slot = trigger.closest(".equipment-slot");
-      const panel = slot?.querySelector("[data-equipment-details]");
-      if (!slot || !panel) continue;
+      const panel = panelForTrigger(trigger);
+      if (!panel) continue;
 
       let pinned = false;
       let closeTimer = 0;

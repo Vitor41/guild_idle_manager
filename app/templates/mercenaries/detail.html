@@ -49,7 +49,7 @@
           <div><dt>Poder total</dt><dd>{{ attribute_summary.total_power_score }}</dd></div>
         </dl>
         <form
-          class="form-stack"
+          class="form-stack mercenary-dismiss-form"
           method="post"
           action="/mercenaries/{{ mercenary.id }}/dismiss"
           data-confirm-title="Demitir {{ mercenary.name }}?"
@@ -58,22 +58,22 @@
           data-confirm-variant="danger"
           data-confirm-key="dismiss_mercenary"
         >
-          <button class="danger-button" type="submit" {% if mercenary.status != "available" %}disabled{% endif %}>Demitir mercenário</button>
+          <button class="danger-button secondary-button" type="submit" {% if mercenary.status != "available" %}disabled{% endif %}>Demitir mercenário</button>
         </form>
       </article>
 
       <article class="panel">
         <h2>Atributos</h2>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Atributo</th><th>Base</th><th>Bonus</th><th>Total</th></tr></thead>
+        <div class="table-wrap mercenary-attribute-table-wrap">
+          <table class="mercenary-attribute-table">
+            <thead><tr><th scope="col">Atributo</th><th scope="col">Base</th><th scope="col">Bônus</th><th scope="col">Total</th></tr></thead>
             <tbody>
               {% for key, label in [('power', 'FOR'), ('vitality', 'VIT'), ('agility', 'AGI'), ('intelligence', 'INT'), ('luck', 'SOR'), ('armor', 'ARM')] %}
                 <tr>
-                  <td title="{{ attribute_tooltips.get(key, '') }}">{{ label }}</td>
-                  <td>{{ attribute_summary.base[key] }}</td>
-                  <td>{{ attribute_summary.bonus[key] }}</td>
-                  <td>{{ attribute_summary.total[key] }}</td>
+                  <th scope="row" title="{{ attribute_tooltips.get(key, '') }}">{{ label }}</th>
+                  <td><span class="mercenary-attribute-table__mobile-label" aria-hidden="true">Base</span>{{ attribute_summary.base[key] }}</td>
+                  <td><span class="mercenary-attribute-table__mobile-label" aria-hidden="true">Bônus</span>{{ attribute_summary.bonus[key] }}</td>
+                  <td><span class="mercenary-attribute-table__mobile-label" aria-hidden="true">Total</span>{{ attribute_summary.total[key] }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -157,7 +157,7 @@
               </section>
               <form method="post" action="/mercenaries/{{ mercenary.id }}/unequip">
                 <input type="hidden" name="item_instance_id" value="{{ equipped.id }}">
-                <button type="submit">Remover</button>
+                <button class="secondary-button danger-button equipment-slot__remove" type="submit">Remover</button>
               </form>
             {% else %}
               <span class="slot-icon" data-desktop-item-slot="{{ slot_key }}" data-desktop-item-group="" data-desktop-item-family=""><span aria-hidden="true">{{ slot_icons.get(slot_key, '◇') }}</span></span>

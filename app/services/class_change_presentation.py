@@ -18,7 +18,7 @@ def build_transition_stage_cards(
     transitions: list[dict[str, int | str]],
     mercenaries: list[dict[str, int | str]],
     *,
-    gold: int,
+    gold: int | None,
     guild_level: int,
     training_ground_level: int,
 ) -> list[dict[str, object]]:
@@ -49,11 +49,14 @@ def build_transition_stage_cards(
         available_workers = [worker for worker in matching_workers if worker["status"] == "available"]
         busy_workers = [worker for worker in matching_workers if worker["status"] != "available"]
         current_mercenary_level = max((int(worker["level"]) for worker in matching_workers), default=None)
+        gold_available = gold is not None
+        current_gold = int(gold) if gold_available else None
         eligible_ids = {
             int(worker["id"])
             for worker in available_workers
             if int(worker["level"]) >= required_mercenary_level
-            and int(gold) >= gold_cost
+            and gold_available
+            and current_gold >= gold_cost
             and int(guild_level) >= required_guild_level
             and int(training_ground_level) >= required_training_ground_level
         }
@@ -61,9 +64,10 @@ def build_transition_stage_cards(
             {
                 "label": "Ouro",
                 "required": gold_cost,
-                "current": int(gold),
-                "met": int(gold) >= gold_cost,
-                "shortfall": max(0, gold_cost - int(gold)),
+                "current": current_gold if gold_available else "—",
+                "met": gold_available and current_gold >= gold_cost,
+                "shortfall": max(0, gold_cost - current_gold) if gold_available else None,
+                "missing": "Saldo indisponível" if not gold_available else "",
             },
             {
                 "label": "Guilda",
@@ -139,7 +143,9 @@ def build_transition_stage_cards(
                 f"Sem mercenário disponível; maior nível ocupado Nv. {busy_max_level} "
                 f"(necessário Nv. {required_mercenary_level})."
             )
-        if eligible_count:
+        if not gold_available:
+            state = "Saldo indisponível"
+        elif eligible_count:
             state = "Liberada"
         elif global_checks_met:
             if not matching_workers:
@@ -158,6 +164,7 @@ def build_transition_stage_cards(
             "Nível insuficiente": "pending",
             "Mercenário ocupado": "occupied",
             "Sem mercenário na classe": "empty",
+            "Saldo indisponível": "pending",
         }[state]
         cards.append({
             "label": TIER_LABELS.get(tier, f"Evolução tier {tier}"),

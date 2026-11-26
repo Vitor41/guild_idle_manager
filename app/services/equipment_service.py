@@ -4,7 +4,7 @@ from functools import lru_cache
 from itertools import combinations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.item import GuildItemInstance, ItemTemplate
 from app.models.mercenary import Mercenary
@@ -24,7 +24,7 @@ from app.services.balance_service import (
     power_success_adjustment,
     rarity_success_bonus,
 )
-from app.services.display_service import clean_generated_name, format_attribute_bonus
+from app.services.display_service import attribute_label, clean_generated_name, format_attribute_bonus
 
 
 LEGACY_SLOT_MAP = {
@@ -189,6 +189,7 @@ def annotate_item_bonus_view(item: GuildItemInstance) -> None:
         {
             "kind": roll.get("kind", "normal"),
             "attribute": roll["attribute"],
+            "attribute_label": attribute_label(roll["attribute"]),
             "value": int(roll["value"]),
             "label": STRONG_BONUS_LABELS[roll["attribute"]] if roll.get("kind") == "strong" else format_attribute_bonus(roll["attribute"], int(roll["value"]), generated=True),
         }
@@ -482,6 +483,45 @@ def get_mercenary_attribute_summary(
         "total_power_score": total_power_score,
         "equipment_items": equipment_items,
         "equipment_by_slot": build_equipment_slots(equipment_items),
+    }
+
+
+def get_party_validation_data(
+    db: Session,
+    guild_id: int,
+    mercenaries: list[Mercenary],
+) -> dict[str, object]:
+    """Load authoritative power and equipped gear once for party eligibility checks."""
+    mercenary_ids = [mercenary.id for mercenary in mercenaries]
+    equipment_by_mercenary_id: dict[int, list[GuildItemInstance]] = {
+        mercenary_id: [] for mercenary_id in mercenary_ids
+    }
+    if mercenary_ids:
+        equipment = db.scalars(
+            select(GuildItemInstance)
+            .options(joinedload(GuildItemInstance.item_template))
+            .where(
+                GuildItemInstance.guild_id == guild_id,
+                GuildItemInstance.equipped_to_mercenary_id.in_(mercenary_ids),
+            )
+            .order_by(GuildItemInstance.id)
+        )
+        for item in equipment:
+            equipment_by_mercenary_id.setdefault(item.equipped_to_mercenary_id, []).append(item)
+
+    power_scores: dict[int, int] = {}
+    for mercenary in mercenaries:
+        equipment_items = equipment_by_mercenary_id[mercenary.id]
+        bonus = get_equipment_bonus_totals(equipment_items)
+        attributes = {
+            attribute: (int(getattr(mercenary, attribute)) if attribute != "armor" else 0)
+            + bonus[attribute]
+            for attribute in EQUIPMENT_ATTRIBUTE_KEYS
+        }
+        power_scores[mercenary.id] = calculate_total_power_score(attributes)
+    return {
+        "power_scores": power_scores,
+        "equipment_by_mercenary_id": equipment_by_mercenary_id,
     }
 
 

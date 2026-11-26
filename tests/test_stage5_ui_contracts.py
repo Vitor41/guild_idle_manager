@@ -165,7 +165,8 @@ class Stage5UiContractTests(unittest.TestCase):
 
         self.assertIn('id="missions-title"', missions)
         self.assertIn("Decida, prepare e colete.", missions)
-        self.assertIn('href="#available-missions-title"', missions)
+        self.assertIn('href="/regional"', missions)
+        self.assertNotIn('href="#available-missions-title"', missions)
         self.assertIn('href="/regional#regional-board"', missions)
         self.assertIn('id="dungeons-title"', dungeons)
         self.assertIn("Prepare a companhia para a incursão.", dungeons)
@@ -233,7 +234,7 @@ class Stage5UiContractTests(unittest.TestCase):
         submit_catch = main.split('} catch (error) {', 1)[1].split('\n  }\n});', 1)[0]
         self.assertNotIn('form.submit()', submit_catch)
         self.assertRegex(base, r"main\.css.*?\?v=20\d{6}-\d+")
-        self.assertIn("?v=20261110-1", base)
+        self.assertIn("/js/equipment-details.js') }}?v=20261125-2", base)
 
     def test_gathering_assignment_feedback_and_accessible_offline_and_class_guides(self):
         gathering = self.read("app/templates/gathering/index.html")
@@ -250,8 +251,9 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("Próxima recarga de 2h em", base)
         self.assertIn('aria-describedby="offline-stamina-description"', base)
         offline_css = self.read("app/static/css/main.css")
-        self.assertIn(".offline-action:hover .offline-help__popover", offline_css)
-        self.assertIn(".offline-action:focus-within .offline-help__popover", offline_css)
+        self.assertIn(".offline-help[open] .offline-help__popover", offline_css)
+        self.assertNotIn(".offline-action:hover .offline-help__popover", offline_css)
+        self.assertNotIn(".offline-action:focus-within .offline-help__popover", offline_css)
         self.assertIn("offline-help__popover", offline_css)
 
         classes = self.read("app/templates/classes/index.html")
@@ -262,7 +264,8 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn("aria-current", class_guide_js)
         self.assertIn("nav.scrollTo({ left: nav.scrollLeft", class_guide_js)
         self.assertNotIn("link.scrollIntoView", class_guide_js)
-        self.assertIn("escape-dismissed", self.read("app/static/js/main.js"))
+        self.assertIn("dismissHeaderPopoverOnEscape", self.read("app/static/js/main.js"))
+        self.assertIn("initializeHeaderPopovers(currentTopbar)", self.read("app/static/js/main.js"))
         self.assertIn("prefers-reduced-motion: reduce", self.read("app/static/css/main.css"))
 
     def test_gathering_live_status_polls_and_updates_counts_without_a_reload(self):
@@ -274,9 +277,15 @@ class Stage5UiContractTests(unittest.TestCase):
         self.assertIn('const page = document.querySelector("[data-gathering-status-url]");', script)
         self.assertIn('if (!page.isConnected || document.querySelector("[data-gathering-status-url]") !== page) return;', script)
         self.assertIn('window.setInterval(refreshGatheringStatus, 15000)', script)
-        self.assertIn('counter.textContent = String(state.inventory_by_family', script)
-        self.assertIn('warehouseProgress.value = Math.min(state.warehouse.used, state.warehouse.capacity)', script)
+        self.assertIn('counter.textContent = String(quantity)', script)
+        self.assertIn('Object.prototype.hasOwnProperty.call(state.inventory_by_family, family)', script)
+        self.assertIn('const displayedUsed = Math.min(used, capacity)', script)
+        self.assertIn('typeof value === "number" && Number.isFinite(value)', script)
+        self.assertIn('typeof assignment.capacity_paused !== "boolean"', script)
         self.assertIn('cycleUpdaters.get(cycle)?.(assignment.progress_seconds)', script)
+        evolution_css = self.read("app/static/css/desktop-evolution.css")
+        self.assertIn('.evolution-status[hidden] { display: none !important; }', evolution_css)
+        self.assertIn('color: var(--e-blue, var(--blue))', evolution_css)
 
     def test_naive_sqlite_utc_timestamps_are_parsed_as_utc(self):
         main = self.read("app/static/js/main.js")
@@ -306,11 +315,35 @@ class Stage5UiContractTests(unittest.TestCase):
         blacksmith = self.read("app/templates/blacksmith/index.html")
         guide = self.read("app/templates/guide/index.html")
         service = self.read("app/services/crafting_service.py")
-        self.assertIn("Total ao fabricar: {{ recipe.effective_gold_cost }} ouro", blacksmith)
+        css = self.read("app/static/css/main.css")
+        self.assertIn("Total ao fabricar: <strong>{{ recipe.effective_gold_cost }} ouro</strong>", blacksmith)
         self.assertIn("o valor da receita é sempre o exato débito", blacksmith)
+        self.assertIn('class="blacksmith-craft-action"', blacksmith)
+        self.assertIn("availability.materials_ready", blacksmith)
+        self.assertIn('class="blacksmith-cost-details"', blacksmith)
+        self.assertIn('class="salvage-history-list"', blacksmith)
+        self.assertIn('class="salvage-item-return"', blacksmith)
+        locked_slot = css.split(".salvage-slot-card.is-locked {", 1)[1].split("}", 1)[0]
+        self.assertIn("min-height: 0", locked_slot)
+        self.assertNotIn("opacity:", locked_slot)
         self.assertIn("total de ouro de cada receita aparece na oficina", guide)
         self.assertIn("recipe.effective_gold_cost = _effective_recipe_gold_cost", service)
         self.assertIn("resources.gold -= gold_cost", service)
+
+    def test_workshop_presentation_uses_service_requirements_and_distinguishes_capacity(self):
+        workshop = self.read("app/templates/workshops/index.html")
+        service = self.read("app/services/workshop_service.py")
+        css = self.read("app/static/css/main.css")
+
+        self.assertIn("{{ requirements.meat }} Carnes + {{ requirements.herb }} Ervas", workshop)
+        self.assertIn("data-meat-per-kit=\"{{ requirements.meat }}\"", workshop)
+        self.assertIn("data-herbs-per-kit=\"{{ requirements.herb }}\"", workshop)
+        self.assertIn("{{ material_shortfalls.meat }}", workshop)
+        self.assertIn("{{ warehouse_usage }}/{{ warehouse_capacity }}", workshop)
+        self.assertIn('class="evolution-status evolution-status--paused"', workshop)
+        self.assertIn('class="workshop-batch-form"', workshop)
+        self.assertIn('"warehouse_limited": warehouse_limited', service)
+        self.assertIn(".workshop-blocked-reason", css)
 
     def test_market_max_explains_stock_and_slots_without_a_rolling_quota(self):
         template = self.read("app/templates/market/index.html")

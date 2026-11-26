@@ -10,7 +10,7 @@ import random
 from types import SimpleNamespace
 
 from sqlalchemy import func, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.game_balance import GUILD_MAX_LEVEL, GUILD_XP_BASE, GUILD_XP_GROWTH
 from app.models.campaign import CampaignMetadata
@@ -42,25 +42,35 @@ from app.services.balance_service import (
     power_success_adjustment,
 )
 from app.services.equipment_service import get_mercenary_attribute_summary
+from app.services.display_service import annotate_mercenary_display
 from app.models.content import ProfessionTemplate
 from app.services.mission_power_service import recommended_regional_contract_power
 from app.services.tavern_service import get_discounted_hire_cost, get_tavern_apprentice_chances, next_apprentice_cost
+from app.services.portal_spawn_rules import CURRENT_PORTAL_SPAWN_RULES_VERSION
 
 
 LEGACY_VIGILIA_RULES_VERSION = "vigilia-v2"
 VIGILIA_V6_RULES_VERSION = "vigilia-v6"
 VIGILIA_V7_RULES_VERSION = "vigilia-v7"
 CPU_INTERNAL_CONTRACT_RULES_VERSION = "vigilia-v8"
-VIGILIA_RULES_VERSION = CPU_INTERNAL_CONTRACT_RULES_VERSION
-TARGETED_PRESSURE_RULES_VERSIONS = frozenset({
-    VIGILIA_V6_RULES_VERSION, VIGILIA_V7_RULES_VERSION, VIGILIA_RULES_VERSION,
+VIGILIA_V9_RULES_VERSION = "vigilia-v9"
+VIGILIA_V9_EVENT_RULES_VERSION = "regional-events-v6"
+VIGILIA_RULES_VERSION = VIGILIA_V9_RULES_VERSION
+CPU_INTERNAL_CONTRACT_RULES_VERSIONS = frozenset({
+    CPU_INTERNAL_CONTRACT_RULES_VERSION, VIGILIA_V9_RULES_VERSION,
 })
-V7_PLUS_RULES_VERSIONS = frozenset({VIGILIA_V7_RULES_VERSION, VIGILIA_RULES_VERSION})
+TARGETED_PRESSURE_RULES_VERSIONS = frozenset({
+    VIGILIA_V6_RULES_VERSION, VIGILIA_V7_RULES_VERSION,
+    CPU_INTERNAL_CONTRACT_RULES_VERSION, VIGILIA_V9_RULES_VERSION,
+})
+V7_PLUS_RULES_VERSIONS = frozenset({
+    VIGILIA_V7_RULES_VERSION, CPU_INTERNAL_CONTRACT_RULES_VERSION, VIGILIA_V9_RULES_VERSION,
+})
 CPU_INTERNAL_CONTRACT_TYPE = "cpu_internal"
 PUBLIC_REGIONAL_OFFER_TYPES = ("contract", "dungeon", "boss")
 RIVAL_CALM_RULES_VERSIONS = frozenset({
     "vigilia-v3", "vigilia-v4", "vigilia-v5", "vigilia-v6",
-    VIGILIA_V7_RULES_VERSION, VIGILIA_RULES_VERSION,
+    VIGILIA_V7_RULES_VERSION, CPU_INTERNAL_CONTRACT_RULES_VERSION, VIGILIA_V9_RULES_VERSION,
 })
 CYCLE_SECONDS = 6 * 60 * 60
 RANKS = ("E", "D", "C", "B", "A", "S")
@@ -950,6 +960,7 @@ def _materialize_cycle(
         player_level_snapshot=level,
         player_power_snapshot=power,
         rank_weights_json=json.dumps(weight_payload, ensure_ascii=False, sort_keys=True),
+        portal_spawn_rules_version=CURRENT_PORTAL_SPAWN_RULES_VERSION,
         status="open",
     )
     db.add(cycle)
@@ -1235,6 +1246,8 @@ def _cpu_offer_party(
     require_equipment_for_each_member: bool = True,
     optimize_cpu_value: bool = False,
     latest_start_before: datetime | None = None,
+    allow_finish_after_cycle: bool = False,
+    enforce_min_mercenary_level: bool = False,
 ) -> tuple[datetime, list[RegionalCpuMercenary]] | None:
     if state.level < offer.required_guild_level_snapshot:
         return None
@@ -1246,11 +1259,16 @@ def _cpu_offer_party(
     required_support = max(0, int(offer.required_support_count_snapshot or 0))
     required_damage = max(0, int(offer.required_damage_count_snapshot or 0))
     required_equipment = max(0, int(offer.required_equipment_tier_snapshot or 0))
+    required_min_member_level = max(1, int(offer.required_min_mercenary_level_snapshot or 1))
     earliest: tuple[datetime, int, list[RegionalCpuMercenary]] | None = None
     best_value: tuple[tuple[float, int, datetime, int, int], datetime,
                       list[RegionalCpuMercenary]] | None = None
     for size in range(party_size, min(maximum_size, len(roster)) + 1):
         for party in combinations(roster, size):
+            if enforce_min_mercenary_level and any(
+                int(member.level or 1) < required_min_member_level for member in party
+            ):
+                continue
             if required_class and not any(member.class_code.casefold() == required_class for member in party):
                 continue
             roles = {"tank": 0, "support": 0, "damage": 0}
@@ -1290,7 +1308,7 @@ def _cpu_offer_party(
                 continue
             if optimize_cpu_value:
                 duration = max(1, int(offer.duration_seconds_snapshot))
-                if start + timedelta(seconds=duration) > cycle_end:
+                if not allow_finish_after_cycle and start + timedelta(seconds=duration) > cycle_end:
                     continue
                 class_bonus = min(
                     8, sum(CLASS_SUCCESS_BONUS.get(member.class_code, 0) for member in party),
@@ -1390,6 +1408,7 @@ def _cpu_portal_offer_for_guild(
     *,
     current_rules: bool,
     cycle_start: datetime,
+    diagnostics: dict[str, object] | None = None,
 ) -> SimpleNamespace | None:
     portal = db.scalar(select(RegionalEvent).where(
         RegionalEvent.campaign_id == campaign_id,
@@ -1399,22 +1418,40 @@ def _cpu_portal_offer_for_guild(
         RegionalEvent.created_at_utc <= cycle_start,
         RegionalEvent.expires_at_utc > cycle_start,
     ).order_by(RegionalEvent.id.desc()).limit(1))
-    if portal is None or db.scalar(select(RegionalEventParticipant.id).where(
+    if portal is None:
+        return None
+    new_schedule_rules = (
+        cycle.rules_version == VIGILIA_V9_RULES_VERSION
+        and portal.rules_version == VIGILIA_V9_EVENT_RULES_VERSION
+    )
+    if diagnostics is not None:
+        diagnostics.update({
+            "event_id": portal.id,
+            "event_rules_version": portal.rules_version,
+        })
+    if db.scalar(select(RegionalEventParticipant.id).where(
         RegionalEventParticipant.event_id == portal.id,
         RegionalEventParticipant.guild_state_id == state.id,
     )) is not None:
+        if diagnostics is not None:
+            diagnostics.update({"event_id": portal.id, "reason_code": "entry_already_used"})
         return None
     portal_summary = json.loads(portal.summary_json or "{}")
     portal_boss = portal_summary.get("portal_boss", {}).get("template", {})
-    portal_rng = _rng(portal.seed, plan_seed, "cpu-portal-entry")
-    if portal_rng.random() >= 0.25 or not (
-        current_rules
-        or (not portal_boss.get("required_building_type")
-            and int(portal_boss.get("required_building_level") or 0) == 0)
+    if not new_schedule_rules and (
+        _rng(portal.seed, plan_seed, "cpu-portal-entry").random() >= 0.25
+        or not (
+            current_rules
+            or (not portal_boss.get("required_building_type")
+                and int(portal_boss.get("required_building_level") or 0) == 0)
+        )
     ):
+        if diagnostics is not None:
+            diagnostics.update({"reason_code": "legacy_entry_roll_not_selected"})
         return None
     introductory_boss = (
-        current_rules
+        not new_schedule_rules
+        and current_rules
         and portal_boss.get("content_type") == "boss"
         and portal_boss.get("level_band") == "1-20"
         and int(portal_boss.get("recommended_level") or 1) <= 1
@@ -1455,6 +1492,8 @@ def _cpu_portal_offer_for_guild(
         duration_seconds_snapshot=max(1, int(portal_boss.get("duration_seconds") or 1)),
         expires_at_utc=_utc(portal.expires_at_utc),
         event_id=portal.id,
+        pending_cpu_resolution=new_schedule_rules,
+        enforce_min_mercenary_level=new_schedule_rules,
     )
 
 
@@ -1477,17 +1516,71 @@ def _cpu_has_public_action(
             latest_start_before=(
                 _utc(offer.expires_at_utc) if offer.offer_type == "portal" else None
             ),
+            allow_finish_after_cycle=bool(getattr(offer, "pending_cpu_resolution", False)),
+            enforce_min_mercenary_level=bool(getattr(offer, "enforce_min_mercenary_level", False)),
         )
         if party_choice is None:
             continue
         start_at, _party = party_choice
         end_at = start_at + timedelta(seconds=max(1, int(offer.duration_seconds_snapshot)))
-        if end_at > cycle_end:
+        if end_at > cycle_end and not getattr(offer, "pending_cpu_resolution", False):
             continue
         if offer.offer_type == "portal" and start_at >= _utc(offer.expires_at_utc):
             continue
         return True
     return False
+
+
+def _cpu_pending_portal_reservations(
+    db: Session,
+    guild_state_id: int,
+    cycle_start: datetime,
+) -> dict[int, datetime]:
+    """Keep a portal party busy through its due time during offline planning."""
+    reservations: dict[int, datetime] = {}
+    activities = db.scalars(select(RegionalEventActivity).where(
+        RegionalEventActivity.guild_state_id == guild_state_id,
+        RegionalEventActivity.source_type == "cpu_portal",
+        RegionalEventActivity.status.in_(("in_progress", "resolved")),
+        RegionalEventActivity.due_at_utc.is_not(None),
+        RegionalEventActivity.due_at_utc > cycle_start,
+    ).order_by(RegionalEventActivity.due_at_utc, RegionalEventActivity.id))
+    for activity in activities:
+        try:
+            snapshot = json.loads(activity.snapshot_json or "{}")
+            member_ids = snapshot.get("mercenary_ids", [])
+            due_at = _utc(activity.due_at_utc)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if not isinstance(member_ids, list):
+            continue
+        for member_id in member_ids:
+            try:
+                member_id = int(member_id)
+            except (TypeError, ValueError):
+                continue
+            reservations[member_id] = max(reservations.get(member_id, cycle_start), due_at)
+    return reservations
+
+
+def _cpu_busy_until_for_roster(
+    db: Session,
+    guild_state_id: int,
+    roster: list[RegionalCpuMercenary],
+    cycle_start: datetime,
+    player_priority_ends_at: datetime,
+) -> dict[int, datetime]:
+    """Merge the cycle priority floor with every persisted party reservation."""
+    start = _utc(cycle_start)
+    priority_end = _utc(player_priority_ends_at)
+    busy_until = {member.id: priority_end for member in roster}
+    for member_id, reservation_end in _cpu_pending_portal_reservations(
+        db, guild_state_id, start,
+    ).items():
+        busy_until[member_id] = max(
+            busy_until.get(member_id, start), _utc(reservation_end),
+        )
+    return busy_until
 
 
 def _cpu_internal_contract_for_guild(
@@ -1587,7 +1680,7 @@ def _prepare_cpu_region_cycle_start(
     all region CPUs have had their normal hiring opportunity and before any CPU
     can consume a public offer.
     """
-    if cycle.rules_version != CPU_INTERNAL_CONTRACT_RULES_VERSION:
+    if cycle.rules_version not in CPU_INTERNAL_CONTRACT_RULES_VERSIONS:
         return {}
 
     prepared: dict[int, dict[str, object]] = {}
@@ -1633,7 +1726,9 @@ def _prepare_cpu_region_cycle_start(
         roster = start_state["roster"]
         if not state.active or not roster:
             continue
-        busy_until = {member.id: player_priority_ends_at for member in roster}
+        busy_until = _cpu_busy_until_for_roster(
+            db, state.id, roster, cycle_start, player_priority_ends_at,
+        )
         plan_seed = _seed_text(campaign_id, cycle.cycle_number, state.id, cycle.rules_version, "cpu-plan")
         portal_offer = _cpu_portal_offer_for_guild(
             db, campaign_id, cycle, region, state, plan_seed,
@@ -1774,15 +1869,23 @@ def _cpu_plan_for_guild_v6(
     rng = _rng(plan_seed)
     cycle_start, cycle_end = _utc(cycle.starts_at_utc), _utc(cycle.ends_at_utc)
     player_priority_ends_at = cycle_start + timedelta(hours=1)
-    busy_until = {member.id: player_priority_ends_at for member in roster}
+    busy_until = _cpu_busy_until_for_roster(
+        db, state.id, roster, cycle_start, player_priority_ends_at,
+    )
     all_offers = list(db.scalars(select(RegionalOffer).where(
         RegionalOffer.cycle_id == cycle.id,
         RegionalOffer.region_code == region.region_code,
         RegionalOffer.offer_type.in_(PUBLIC_REGIONAL_OFFER_TYPES),
     ).order_by(RegionalOffer.offer_type, RegionalOffer.slot)))
+    portal_diagnostics: dict[str, object] = {}
     portal_offer = _cpu_portal_offer_for_guild(
         db, campaign_id, cycle, region, state, plan_seed,
         current_rules=v7_rules, cycle_start=cycle_start,
+        diagnostics=portal_diagnostics,
+    )
+    new_schedule_rules = bool(
+        cycle.rules_version == VIGILIA_V9_RULES_VERSION
+        and portal_diagnostics.get("event_rules_version") == VIGILIA_V9_EVENT_RULES_VERSION
     )
     planned_actions = sum(offer.status == "available" for offer in all_offers)
     planned_actions += int(portal_offer is not None and portal_offer.status == "available")
@@ -1825,13 +1928,15 @@ def _cpu_plan_for_guild_v6(
                 latest_start_before=(
                     _utc(offer.expires_at_utc) if offer.offer_type == "portal" else None
                 ),
+                allow_finish_after_cycle=bool(getattr(offer, "pending_cpu_resolution", False)),
+                enforce_min_mercenary_level=bool(getattr(offer, "enforce_min_mercenary_level", False)),
             )
             if party_choice is None:
                 continue
             any_eligible = True
             start_at, party = party_choice
             end_at = start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot))
-            if end_at > cycle_end:
+            if end_at > cycle_end and not getattr(offer, "pending_cpu_resolution", False):
                 continue
             if offer.offer_type == "portal" and start_at >= _utc(offer.expires_at_utc):
                 continue
@@ -1841,7 +1946,10 @@ def _cpu_plan_for_guild_v6(
                 preference = _cpu_offer_preference(
                     offer, state.archetype, party_power, len(party), class_bonus,
                 )
-                sort_key = (preference[0], preference[1], start_at,
+                portal_priority = (
+                    0 if new_schedule_rules and offer.offer_type == "portal" else 1
+                )
+                sort_key = (portal_priority, preference[0], preference[1], start_at,
                             preference[2], preference[3], preference[4])
             else:
                 preference = _cpu_offer_preference_v6(offer, state.archetype)
@@ -1852,7 +1960,9 @@ def _cpu_plan_for_guild_v6(
         return feasible, any_eligible
 
     while True:
-        if state.archetype == "exploration":
+        if new_schedule_rules:
+            preferred_types = ("portal", "contract", "dungeon", "boss")
+        elif state.archetype == "exploration":
             preferred_types = ("portal", "dungeon", "boss", "contract")
         else:
             preferred_types = ("contract", "dungeon", "boss", "portal")
@@ -1865,13 +1975,14 @@ def _cpu_plan_for_guild_v6(
             )
             initially_blocked_from_public = not public_feasible
             initial_public_viability_checked = True
-            if initially_blocked_from_public and cycle.rules_version == CPU_INTERNAL_CONTRACT_RULES_VERSION:
+            if (initially_blocked_from_public
+                    and cycle.rules_version in CPU_INTERNAL_CONTRACT_RULES_VERSIONS):
                 internal_offer_copy = _cpu_internal_contract_copy_for_guild(
                     db, cycle, region, state,
                 )
 
         candidates = list(available_public_candidates)
-        if state.archetype == "security":
+        if state.archetype == "security" and not new_schedule_rules:
             defensive = [offer for offer in candidates if any(
                 token in (offer.name_snapshot + " " + offer.description_snapshot).casefold()
                 for token in ("patrulha", "vigia", "guarda", "defesa", "ameaça")
@@ -1896,6 +2007,9 @@ def _cpu_plan_for_guild_v6(
         feasible.sort(key=lambda entry: entry[0])
         (_key, offer, party) = feasible[0]
         is_internal_contract = bool(getattr(offer, "internal_contract", False))
+        pending_portal = bool(
+            offer.offer_type == "portal" and getattr(offer, "pending_cpu_resolution", False)
+        )
         start_at = max(busy_until[member.id] for member in party)
         end_at = start_at + timedelta(seconds=max(1, offer.duration_seconds_snapshot))
         for member in party:
@@ -1930,25 +2044,75 @@ def _cpu_plan_for_guild_v6(
             "event_id": offer.event_id if offer.offer_type == "portal" else None,
             "rank": offer.rank,
             "mercenary_slots": [member.slot for member in party],
+            "mercenary_ids": [member.id for member in party],
             "duration_seconds": offer.duration_seconds_snapshot,
             "player_priority_ends_at_utc": player_priority_ends_at.isoformat(),
             "started_at_utc": start_at.isoformat(),
             "resolved_at_utc": end_at.isoformat(),
             "success_chance": chance,
         }
+        if pending_portal:
+            decision["pending_cpu_resolution"] = True
+            decision["result_success_snapshot"] = success
+            decision["event_rules_version"] = VIGILIA_V9_EVENT_RULES_VERSION
+            member = party[0]
+            family = profession_family.get(member.profession_code or "")
+            material_resource_code = PROFESSION_RESOURCE_CODES.get(
+                member.profession_code or "", family or "",
+            )
+            reward_xp_on_failure = max(0, offer.xp_reward_snapshot // 4)
+            decision["planner_effects_snapshot"] = {
+                "success": success,
+                "rank_value": rank_value,
+                "gold_earned": reward_gold if success else 0,
+                "xp_earned": reward_xp * len(party) if success else 0,
+                "gold_resource_delta": (
+                    reward_gold if success and resource_by_code.get("gold") is not None else 0
+                ),
+                "xp_resource_delta": (
+                    (reward_xp if success else reward_xp_on_failure) * len(party)
+                    if resource_by_code.get("xp") is not None else 0
+                ),
+                "profession_resource_code": (
+                    material_resource_code
+                    if success and resource_by_code.get(material_resource_code) is not None
+                    else None
+                ),
+                "profession_resource_delta": (
+                    1 if success and resource_by_code.get(material_resource_code) is not None else 0
+                ),
+            }
+            decision["party_snapshot"] = [
+                {
+                    "id": member.id,
+                    "slot": member.slot,
+                    "name": member.name,
+                    "class": member.class_code,
+                    "level": member.level,
+                    "total_power": _cpu_member_power(member),
+                    "equipment_bonus": json.loads(member.equipment_bonus_json or "{}"),
+                }
+                for member in party
+            ]
+            portal_diagnostics.update({"reason_code": "started_pending_resolution"})
         if is_internal_contract:
             decision["internal_contract"] = True
         decisions.append(decision)
-        outcomes.append({
-            "action": len(decisions),
-            "offer_id": offer.id,
-            "rank": offer.rank,
-            "success": success,
-            "gold": reward_gold,
-            "xp": reward_xp,
-            "contribution": rank_value,
-        })
-        if offer.offer_type == "portal":
+        if not pending_portal:
+            outcomes.append({
+                "action": len(decisions),
+                "offer_id": offer.id,
+                "rank": offer.rank,
+                "success": success,
+                "gold": reward_gold,
+                "xp": reward_xp,
+                "contribution": rank_value,
+            })
+        if pending_portal:
+            # The frozen result is not an outcome yet. The resolver applies all
+            # economic, guild, and regional effects at the activity's due time.
+            pass
+        elif offer.offer_type == "portal":
             if portal_offer is not None:
                 portal_offer.status = "cpu_completed"
             successes += int(success)
@@ -1986,6 +2150,33 @@ def _cpu_plan_for_guild_v6(
             state.reputation = max(0, state.reputation - max(1, rank_value // 2))
         if offer.offer_type != "portal" and reward_xp > 0:
             _apply_cpu_xp(state, party, reward_xp * len(party))
+        if pending_portal:
+            break
+
+    if portal_diagnostics.get("event_id") and new_schedule_rules and not any(
+        decision.get("pending_cpu_resolution") for decision in decisions
+    ):
+        reason_code = portal_diagnostics.get("reason_code")
+        if not reason_code:
+            if portal_offer is None:
+                reason_code = "portal_offer_unavailable"
+            else:
+                available_now = {member.id: cycle_start for member in roster}
+                capable_now = _cpu_offer_party(
+                    portal_offer, state, roster, available_now, cycle_end, class_roles,
+                    include_synergy_power=True,
+                    require_equipment_for_each_member=True,
+                    optimize_cpu_value=False,
+                    latest_start_before=None,
+                    allow_finish_after_cycle=True,
+                    enforce_min_mercenary_level=True,
+                )
+                reason_code = (
+                    "party_reserved_past_entry_deadline"
+                    if capable_now is not None
+                    else "no_party_meets_portal_requirements"
+                )
+            portal_diagnostics.update({"reason_code": reason_code})
 
     state.power = sum(_cpu_member_power(member) for member in roster)
     state.roster_size = len(roster)
@@ -2000,6 +2191,7 @@ def _cpu_plan_for_guild_v6(
         resources_after_json=json.dumps(after_resources, sort_keys=True),
         decisions_json=json.dumps(decisions, ensure_ascii=False, sort_keys=True),
         outcomes_json=json.dumps(outcomes, ensure_ascii=False, sort_keys=True),
+        event_diagnostics_json=json.dumps(portal_diagnostics, ensure_ascii=False, sort_keys=True),
         actions=len(decisions),
         planned_actions=planned_actions,
         eligible_actions=eligible_actions,
@@ -2065,14 +2257,51 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
         raise RegionalCycleError("O ciclo regional tem um estado inválido e foi preservado.")
     # Materialize priority-expired rebellions before CPU plans are generated so
     # the first cycle whose start follows the priority deadline can participate.
-    from app.services.regional_event_service import expire_due_events
+    from app.services.regional_event_service import (
+        expire_due_events,
+        resolve_due_cpu_portal_activities,
+    )
 
+    # Resolve work due by this cycle's start before using its state for plans.
+    # Results due later in the interval are applied after this interval's plans.
+    resolve_due_cpu_portal_activities(db, campaign_id, cycle.starts_at_utc)
     expire_due_events(db, campaign_id, cycle.starts_at_utc)
     regions = list(db.scalars(select(RegionalRegionState).where(
         RegionalRegionState.campaign_id == campaign_id,
     ).order_by(RegionalRegionState.region_code)))
+    cycle_start_region_rows: dict[str, RegionalCycleRegion] = {}
+    if cycle.cycle_number > 0:
+        previous_cycle = db.scalar(select(RegionalCycle).where(
+            RegionalCycle.campaign_id == campaign_id,
+            RegionalCycle.cycle_number == cycle.cycle_number - 1,
+        ))
+        if previous_cycle is not None:
+            cycle_start_region_rows = {
+                row.region_code: row
+                for row in db.scalars(select(RegionalCycleRegion).where(
+                    RegionalCycleRegion.cycle_id == previous_cycle.id,
+                ))
+            }
+
+    def cycle_start_values(region: RegionalRegionState) -> tuple[float, float, int]:
+        snapshot = cycle_start_region_rows.get(region.region_code)
+        if snapshot is None:
+            return float(region.security), float(region.threat), int(region.influence)
+        return (
+            float(snapshot.security_after),
+            float(snapshot.threat_after),
+            int(snapshot.influence_after),
+        )
+
+    planning_regions = [SimpleNamespace(
+        region_code=region.region_code,
+        region_name=region.region_name,
+        security=cycle_start_values(region)[0],
+        threat=cycle_start_values(region)[1],
+        influence=cycle_start_values(region)[2],
+    ) for region in regions]
     pressure_target = None
-    if cycle.rules_version in TARGETED_PRESSURE_RULES_VERSIONS and regions:
+    if cycle.rules_version in TARGETED_PRESSURE_RULES_VERSIONS and planning_regions:
         current_window_start = (
             cycle.cycle_number // REGIONAL_PRESSURE_WINDOW_CYCLES
         ) * REGIONAL_PRESSURE_WINDOW_CYCLES
@@ -2111,11 +2340,15 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
                     recently_targeted_regions.add(previous_target)
         if pressure_target not in {region.region_code for region in regions}:
             pressure_target = regional_pressure_target_code(
-                campaign_id, cycle.cycle_number, regions, recently_targeted_regions,
+                campaign_id, cycle.cycle_number, planning_regions, recently_targeted_regions,
             )
     if cycle.rules_version in TARGETED_PRESSURE_RULES_VERSIONS:
+        region_start_by_code = {
+            row.region_code: row for row in planning_regions
+        }
         regions.sort(key=lambda region: (
-            -(float(region.threat) + 100.0 - float(region.security)),
+            -(float(region_start_by_code[region.region_code].threat)
+              + 100.0 - float(region_start_by_code[region.region_code].security)),
             region.region_code,
         ))
     for region in regions:
@@ -2125,23 +2358,20 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
         ))
         if existing_snapshot is not None:
             raise RegionalCycleError("O histórico regional parcial não será aplicado novamente.")
-        previous_region_snapshot = None
-        if cycle.cycle_number > 0:
-            previous_cycle = db.scalar(select(RegionalCycle).where(
-                RegionalCycle.campaign_id == campaign_id,
-                RegionalCycle.cycle_number == cycle.cycle_number - 1,
-            ))
-            if previous_cycle is not None:
-                previous_region_snapshot = db.scalar(select(RegionalCycleRegion).where(
-                    RegionalCycleRegion.cycle_id == previous_cycle.id,
-                    RegionalCycleRegion.region_code == region.region_code,
-                ))
+        previous_region_snapshot = cycle_start_region_rows.get(region.region_code)
         before = (
             (previous_region_snapshot.security_after,
              previous_region_snapshot.threat_after,
              previous_region_snapshot.influence_after)
             if previous_region_snapshot is not None
             else (50.0, 25.0, 0)
+        )
+        plan_region = SimpleNamespace(
+            region_code=region.region_code,
+            region_name=region.region_name,
+            security=float(before[0]),
+            threat=float(before[1]),
+            influence=int(before[2]),
         )
         security = float(region.security)
         threat = float(region.threat)
@@ -2158,17 +2388,17 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
             rotation = cycle.cycle_number % len(cpu_guilds)
             cpu_guilds = cpu_guilds[rotation:] + cpu_guilds[:rotation]
         prepared_cpu_starts = _prepare_cpu_region_cycle_start(
-            db, campaign_id, cycle, region, cpu_guilds,
+            db, campaign_id, cycle, plan_region, cpu_guilds,
         )
         archetype_totals: dict[str, int] = {}
         for cpu in cpu_guilds:
             if cpu.id in prepared_cpu_starts:
                 plan_result = _cpu_plan_for_guild(
-                    db, campaign_id, cycle, region, cpu,
+                    db, campaign_id, cycle, plan_region, cpu,
                     prepared_start=prepared_cpu_starts[cpu.id],
                 )
             else:
-                plan_result = _cpu_plan_for_guild(db, campaign_id, cycle, region, cpu)
+                plan_result = _cpu_plan_for_guild(db, campaign_id, cycle, plan_region, cpu)
             plan, threat_delta, security_delta, action_successes, action_failures, _rank_sum = plan_result
             from app.services.regional_event_service import record_cpu_event_activity
 
@@ -2191,6 +2421,29 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
             threat = round(max(0.0, min(100.0,
                 threat + threat_delta + portal_threat_delta)), 4)
             archetype_totals[cpu.archetype] = archetype_totals.get(cpu.archetype, 0) + plan.actions
+        portal_effects = resolve_due_cpu_portal_activities(
+            db, campaign_id, cycle.ends_at_utc, region_code=region.region_code,
+        )
+        portal_security_delta, portal_threat_delta = portal_effects.get(
+            region.region_code, (0.0, 0.0),
+        )
+        security = round(max(0.0, min(100.0, security + portal_security_delta)), 4)
+        threat = round(max(0.0, min(100.0, threat + portal_threat_delta)), 4)
+        cycle_cpu_plans = list(db.scalars(
+            select(RegionalCpuCyclePlan)
+            .join(RegionalGuildState, RegionalGuildState.id == RegionalCpuCyclePlan.guild_state_id)
+            .where(
+                RegionalCpuCyclePlan.cycle_id == cycle.id,
+                RegionalGuildState.region_code == region.region_code,
+            )
+        ))
+        cpu_started = sum(max(0, int(plan.started_actions or 0)) for plan in cycle_cpu_plans)
+        cpu_resolved = sum(max(0, int(plan.resolved_actions or 0)) for plan in cycle_cpu_plans)
+        cpu_pending = cpu_started - cpu_resolved
+        if cpu_pending < 0:
+            raise ValueError("O ciclo regional resolveu mais ações CPU do que iniciou.")
+        successes = sum(max(0, int(plan.successes or 0)) for plan in cycle_cpu_plans)
+        failures = sum(max(0, int(plan.failures or 0)) for plan in cycle_cpu_plans)
         player_outcomes = list(db.scalars(
             select(RegionalRunOutcome)
             .join(RegionalGuildState, RegionalGuildState.id == RegionalRunOutcome.guild_state_id)
@@ -2304,7 +2557,7 @@ def _process_cycle(db: Session, campaign_id: str, cycle: RegionalCycle, world: R
                 "actions_by_archetype": archetype_totals,
                 "cpu_activity": {
                     "planned": cpu_planned, "eligible": cpu_eligible,
-                    "started": cpu_started, "resolved": cpu_resolved,
+                    "started": cpu_started, "resolved": cpu_resolved, "pending": cpu_pending,
                     "hires": cpu_hires, "hire_gold_spent": cpu_hire_gold_spent,
                 },
                 "successes": successes,
@@ -2366,6 +2619,9 @@ def advance_regional_world(
         db.add(active_cycle)
         db.commit()
         db.refresh(active_cycle)
+    from app.services.regional_event_service import resolve_due_cpu_portal_activities
+
+    resolve_due_cpu_portal_activities(db, campaign.campaign_id, current_time)
     return active_cycle
 
 
@@ -2435,6 +2691,14 @@ def get_regional_board(
         if offer.status in {"available", "supply_preparing"}
         and max(1, int(guild.level or 1)) >= offer.required_guild_level_snapshot
     ]
+    available_mercenaries = list(db.scalars(select(Mercenary).options(
+        selectinload(Mercenary.mercenary_class),
+    ).where(
+        Mercenary.guild_id == guild.id,
+        Mercenary.status == "available",
+    ).order_by(Mercenary.level.desc(), Mercenary.id)))
+    for mercenary in available_mercenaries:
+        annotate_mercenary_display(mercenary)
     return {
         "world": db.get(RegionalWorldState, campaign.campaign_id),
         "cycle": active_cycle,
@@ -2451,10 +2715,7 @@ def get_regional_board(
         "portal_events": portal_events,
         "rebellion_event": rebellion_event,
         "event_history": event_history,
-        "available_mercenaries": list(db.scalars(select(Mercenary).where(
-            Mercenary.guild_id == guild.id,
-            Mercenary.status == "available",
-        ).order_by(Mercenary.level.desc(), Mercenary.id))),
+        "available_mercenaries": available_mercenaries,
         "active_offer_count": len(open_offers),
         "rank_progression_stage": json.loads(active_cycle.rank_weights_json).get("stage", 0.0),
         "contract_rank_weights": json.loads(active_cycle.rank_weights_json).get("contract", {}),

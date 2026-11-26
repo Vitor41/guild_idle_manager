@@ -54,6 +54,96 @@ window.GIMStartupModalQueue = startupModalQueue;
 
 let navigationWorkStatusRequest = null;
 let navigationWorkStatusController = null;
+let regionalEventsRefreshRequest = null;
+
+async function refreshRegionalEventsPageFromServer() {
+  if (regionalEventsRefreshRequest) return regionalEventsRefreshRequest;
+  const currentUrl = new URL(window.location.href);
+  if (currentUrl.pathname !== "/regional/events") return false;
+  const currentRoot = document.querySelector(".regional-events-page[data-regional-events]");
+  if (!currentRoot) return false;
+
+  const pendingRequest = fetch(`${currentUrl.pathname}${currentUrl.search}`, {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
+  }).then(async (response) => {
+    if (!response.ok) return false;
+    const responseUrl = response.url ? new URL(response.url, currentUrl) : currentUrl;
+    if (responseUrl.origin !== currentUrl.origin || responseUrl.pathname !== currentUrl.pathname) return false;
+    const parsedDocument = new DOMParser().parseFromString(await response.text(), "text/html");
+    const incomingRoot = parsedDocument.querySelector(".regional-events-page[data-regional-events]");
+    if (!incomingRoot || window.location.pathname !== currentUrl.pathname
+        || document.querySelector(".regional-events-page[data-regional-events]") !== currentRoot) return false;
+
+    const formState = captureGameFormState();
+    const activeElement = document.activeElement;
+    let focusState = null;
+    if (activeElement && currentRoot.contains(activeElement)) {
+      const form = activeElement.form || activeElement.closest?.("form");
+      if (activeElement.id) {
+        focusState = { id: activeElement.id };
+      } else if (form && activeElement.name) {
+        const matchingControls = Array.from(form.elements).filter(
+          (control) => getControlStateKey(control) === getControlStateKey(activeElement),
+        );
+        focusState = {
+          formKey: getFormStateKey(form),
+          controlKey: getControlStateKey(activeElement),
+          controlIndex: matchingControls.indexOf(activeElement),
+          selectionStart: typeof activeElement.selectionStart === "number" ? activeElement.selectionStart : null,
+          selectionEnd: typeof activeElement.selectionEnd === "number" ? activeElement.selectionEnd : null,
+        };
+      }
+    }
+    const openDetails = Array.from(currentRoot.querySelectorAll("details[open]")).map((details) => ({
+      id: details.id,
+      index: Array.from(currentRoot.querySelectorAll("details")).indexOf(details),
+    }));
+    const scrollPosition = window.scrollY;
+    const replacement = document.importNode(incomingRoot, true);
+    currentRoot.replaceWith(replacement);
+
+    const replacementDetails = Array.from(replacement.querySelectorAll("details"));
+    for (const detail of openDetails) {
+      const target = (detail.id && replacement.querySelector(`#${detail.id}`)) || replacementDetails[detail.index];
+      if (target) target.open = true;
+    }
+    restoreGameFormState(formState);
+    window.GIMApplyDesktopArt?.(replacement);
+    window.initializeRegionalSupply?.(replacement);
+    updateGenericCountdowns();
+    window.refreshRegionalEventAnchorOffset?.();
+
+    let focusTarget = focusState?.id ? document.getElementById(focusState.id) : null;
+    if (!focusTarget && focusState?.formKey) {
+      const form = Array.from(replacement.querySelectorAll("form")).find(
+        (candidate) => getFormStateKey(candidate) === focusState.formKey,
+      );
+      const matches = form
+        ? Array.from(form.elements).filter((control) => getControlStateKey(control) === focusState.controlKey)
+        : [];
+      focusTarget = matches[focusState.controlIndex] || matches[0] || null;
+    }
+    focusTarget?.focus?.({ preventScroll: true });
+    if (focusTarget && Number.isInteger(focusState?.selectionStart)
+        && typeof focusTarget.setSelectionRange === "function") {
+      focusTarget.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
+    }
+    window.scrollTo({ top: scrollPosition, behavior: "auto" });
+    return true;
+  }).catch(() => {
+    // Keep the last rendered event state when the authoritative page request fails.
+    return false;
+  }).finally(() => {
+    if (regionalEventsRefreshRequest === pendingRequest) regionalEventsRefreshRequest = null;
+  });
+  regionalEventsRefreshRequest = pendingRequest;
+  return regionalEventsRefreshRequest;
+}
+window.refreshRegionalEventsPageFromServer = refreshRegionalEventsPageFromServer;
+
 async function refreshNavigationWorkIndicators(force = false) {
   if (navigationWorkStatusRequest && !force) return navigationWorkStatusRequest;
   if (force) navigationWorkStatusController?.abort();
@@ -61,18 +151,69 @@ async function refreshNavigationWorkIndicators(force = false) {
   if (!links.length) return;
   const controller = new AbortController();
   navigationWorkStatusController = controller;
+  let refreshRegionalEvents = false;
+  let regionalEventStatusTransition = null;
+  const regionalEventsPageRoot = document.querySelector(".regional-events-page[data-regional-events]");
+  const markUnavailable = (link) => {
+    link.querySelector(".nav-work-indicator")?.remove();
+    const indicator = document.createElement("span");
+    indicator.className = "nav-work-indicator";
+    indicator.dataset.state = "unknown";
+    indicator.setAttribute("aria-hidden", "true");
+    link.append(indicator);
+    link.dataset.workState = "unknown";
+    const label = `${link.dataset.navWorkLabel || "Atividade"}: status indisponível`;
+    link.setAttribute("aria-label", label);
+    link.title = label;
+  };
   const pendingRequest = fetch("/api/navigation/work-status", {
     credentials: "same-origin",
     cache: "no-store",
     signal: controller.signal,
     headers: { "Accept": "application/json", "X-Requested-With": "fetch" },
   }).then(async (response) => {
-    if (!response.ok) return;
+    if (!response.ok) {
+      links.forEach(markUnavailable);
+      return;
+    }
     const payload = await response.json();
     for (const link of links) {
       const status = payload.menus?.[link.dataset.navWorkMenu];
-      const active = Number(status?.active || 0);
-      const ready = Number(status?.ready || 0);
+      if (!status || !Number.isInteger(status.active) || status.active < 0
+          || !Number.isInteger(status.ready) || status.ready < 0
+          || typeof status.label !== "string" || !status.label.trim()
+          || (link.dataset.navWorkMenu === "regional_events" && typeof status.review_token !== "string")) {
+        markUnavailable(link);
+        continue;
+      }
+      const active = status.active;
+      const ready = status.ready;
+      const previousActive = Number(link.dataset.workActive);
+      const previousReady = Number(link.dataset.workReady);
+      let previousReviewToken = link.dataset.workReviewToken;
+      if (link.dataset.navWorkMenu === "regional_events" && regionalEventsPageRoot?.dataset.reviewToken) {
+        previousReviewToken = regionalEventsPageRoot.dataset.reviewToken;
+        link.dataset.workReviewToken = previousReviewToken;
+      }
+      const nextReviewToken = link.dataset.navWorkMenu === "regional_events"
+        ? status.review_token
+        : undefined;
+      const reviewChanged = typeof nextReviewToken === "string"
+        && previousReviewToken !== undefined
+        && previousReviewToken !== nextReviewToken;
+      if (link.dataset.navWorkMenu === "regional_events"
+          && ((Number.isInteger(previousActive) && Number.isInteger(previousReady)
+              && (previousActive !== active || previousReady !== ready))
+            || reviewChanged)) {
+        refreshRegionalEvents = true;
+        regionalEventStatusTransition = {
+          link, previousActive, previousReady, active, ready,
+          previousReviewToken, nextReviewToken,
+        };
+      }
+      link.dataset.workActive = String(active);
+      link.dataset.workReady = String(ready);
+      if (typeof nextReviewToken === "string") link.dataset.workReviewToken = nextReviewToken;
       link.querySelector(".nav-work-indicator")?.remove();
       if (!active && !ready) {
         link.removeAttribute("data-work-state");
@@ -92,7 +233,31 @@ async function refreshNavigationWorkIndicators(force = false) {
       link.setAttribute("aria-label", accessibleLabel);
       link.title = accessibleLabel;
     }
-  }).catch(() => {}).finally(() => {
+    if (refreshRegionalEvents && window.location.pathname === "/regional/events") {
+      const pageRefresh = window.refreshRegionalEventsPageFromServer?.();
+      const restorePreviousCounts = () => {
+        if (!regionalEventStatusTransition) return;
+        const { link, previousActive, previousReady, active, ready, previousReviewToken, nextReviewToken } = regionalEventStatusTransition;
+        if (link.dataset.workActive === String(active) && link.dataset.workReady === String(ready)) {
+          link.dataset.workActive = String(previousActive);
+          link.dataset.workReady = String(previousReady);
+        }
+        if (nextReviewToken !== undefined && link.dataset.workReviewToken === nextReviewToken) {
+          if (previousReviewToken === undefined) delete link.dataset.workReviewToken;
+          else link.dataset.workReviewToken = previousReviewToken;
+        }
+      };
+      if (pageRefresh && typeof pageRefresh.then === "function") {
+        void pageRefresh.then((updated) => {
+          if (updated !== true) restorePreviousCounts();
+        }).catch(restorePreviousCounts);
+      } else {
+        restorePreviousCounts();
+      }
+    }
+  }).catch(() => {
+    if (!controller.signal.aborted) links.forEach(markUnavailable);
+  }).finally(() => {
     if (navigationWorkStatusRequest === pendingRequest) {
       navigationWorkStatusRequest = null;
       navigationWorkStatusController = null;
@@ -148,19 +313,43 @@ function updateGenericCountdowns() {
   });
 }
 
+const resourceTotalFormatter = new Intl.NumberFormat("pt-BR");
+let resourceTotalsRequest = null;
+
+function parseResourceTotal(value) {
+  const normalized = String(value ?? "").trim().replace(/[.\s\u00a0\u202f]/g, "");
+  if (!/^\d+$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function formatResourceTotals(root = document) {
+  root.querySelectorAll("[data-resource-total]").forEach((element) => {
+    const value = parseResourceTotal(element.textContent);
+    if (value !== null) element.textContent = resourceTotalFormatter.format(value);
+  });
+}
+
 async function refreshResourceTotals() {
+  formatResourceTotals();
   if (!document.querySelector("[data-resource-total]")) return;
-  try {
-    const response = await fetch("/api/resources", { credentials: "same-origin", cache: "no-store" });
-    if (!response.ok) return;
-    const totals = await response.json();
-    document.querySelectorAll("[data-resource-total]").forEach((element) => {
-      const value = totals[element.dataset.resourceTotal];
-      if (Number.isFinite(value)) element.textContent = new Intl.NumberFormat("pt-BR").format(value);
-    });
-  } catch (_error) {
-    // Live totals are a convenience; the server-rendered balance remains visible.
-  }
+  if (resourceTotalsRequest) return resourceTotalsRequest;
+  resourceTotalsRequest = (async () => {
+    try {
+      const response = await fetch("/api/resources", { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) return;
+      const totals = await response.json();
+      document.querySelectorAll("[data-resource-total]").forEach((element) => {
+        const value = totals[element.dataset.resourceTotal];
+        if (Number.isSafeInteger(value) && value >= 0) element.textContent = resourceTotalFormatter.format(value);
+      });
+    } catch (_error) {
+      // Live totals are a convenience; the server-rendered balance remains visible.
+    } finally {
+      resourceTotalsRequest = null;
+    }
+  })();
+  return resourceTotalsRequest;
 }
 
 refreshResourceTotals();
@@ -173,9 +362,20 @@ window.parseUtcTimestamp = (value) => {
   return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
 };
 
-function initializeClassGuideIndex() {
-  const nav = document.querySelector(".classes-page .classes-guide-index");
-  if (!nav) return;
+let activeClassGuideObserver = null;
+let activeClassGuideNav = null;
+
+function initializeClassGuideIndex(root = document) {
+  const nav = root?.matches?.(".classes-page .classes-guide-index")
+    ? root
+    : root?.querySelector?.(".classes-page .classes-guide-index") || null;
+  if (activeClassGuideNav && activeClassGuideNav !== nav) {
+    activeClassGuideObserver?.disconnect();
+    activeClassGuideObserver = null;
+    activeClassGuideNav = null;
+  }
+  if (!nav || nav.dataset.classGuideIndexInitialized === "true") return;
+  nav.dataset.classGuideIndexInitialized = "true";
   const links = [...nav.querySelectorAll('a[href^="#"]')];
   const sections = links.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1)))).filter(Boolean);
   const revealLinkHorizontally = (link) => {
@@ -200,6 +400,8 @@ function initializeClassGuideIndex() {
     const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
     if (visible) setActive(visible.target);
   }, { rootMargin: "-120px 0px -65% 0px", threshold: [0, 0.2, 0.5] });
+  activeClassGuideObserver = observer;
+  activeClassGuideNav = nav;
   sections.forEach((section) => observer.observe(section));
   nav.addEventListener("click", (event) => {
     const link = event.target.closest('a[href^="#"]');
@@ -208,19 +410,39 @@ function initializeClassGuideIndex() {
   });
 }
 
-document.addEventListener("keydown", (event) => {
+function initializeHeaderPopovers(root = document) {
+  root.querySelectorAll(".treasury-menu, .offline-help").forEach((popover) => {
+    if (popover.dataset.headerPopoverInitialized === "true") return;
+    popover.dataset.headerPopoverInitialized = "true";
+    popover.addEventListener("toggle", () => closeOtherHeaderPopovers(popover));
+  });
+}
+
+function closeOtherHeaderPopovers(activePopover) {
+  if (!activePopover.open) return;
+  document.querySelectorAll(".game-topbar .treasury-menu, .game-topbar .offline-help").forEach((other) => {
+    if (other !== activePopover && other.open) other.open = false;
+  });
+}
+
+function dismissHeaderPopoversOutside(event) {
+  document.querySelectorAll(".game-topbar .treasury-menu, .game-topbar .offline-help").forEach((popover) => {
+    if (popover.open && !popover.contains(event.target)) popover.open = false;
+  });
+}
+
+function dismissHeaderPopoverOnEscape(event) {
   if (event.key !== "Escape") return;
-  const help = document.querySelector(".offline-action:hover .offline-help, .offline-action:focus-within .offline-help");
-  if (!help) return;
-  help.open = false;
-  help.classList.add("escape-dismissed");
-  help.querySelector("summary")?.blur();
-});
-document.querySelectorAll(".offline-help").forEach((help) => {
-  help.addEventListener("toggle", () => { if (help.open) help.classList.remove("escape-dismissed"); });
-  help.addEventListener("pointerleave", () => help.classList.remove("escape-dismissed"));
-  help.addEventListener("focusin", () => help.classList.remove("escape-dismissed"));
-});
+  const popover = document.querySelector(".game-topbar .treasury-menu[open], .game-topbar .offline-help[open]");
+  if (!popover) return;
+  popover.open = false;
+  popover.querySelector("summary")?.focus();
+  event.preventDefault();
+}
+
+document.addEventListener("click", dismissHeaderPopoversOutside);
+document.addEventListener("keydown", dismissHeaderPopoverOnEscape);
+initializeHeaderPopovers();
 
 const offlineDialog = document.querySelector("#offline-dialog[data-auto-open]");
 if (offlineDialog) {
@@ -286,10 +508,42 @@ const formatMarketEstimate = (seconds) => {
 function updateMarketEstimate(node) {
   const form = node.closest("form");
   const quantityInput = form?.querySelector("[data-market-quantity]");
-  const quantity = quantityInput ? Number.parseInt(quantityInput.value, 10) : 1;
-  if (!Number.isInteger(quantity) || quantity < 1) {
-    node.textContent = "Informe a quantidade para estimar o prazo.";
-    return;
+  const totalOutput = form?.querySelector("[data-market-total]");
+  let quantity = 1;
+  if (quantityInput) {
+    const raw = quantityInput.value;
+    const parsed = raw === "" ? NaN : Number(raw);
+    const minimum = Number(quantityInput.min || 0);
+    const maximum = quantityInput.max === "" ? Number.POSITIVE_INFINITY : Number(quantityInput.max);
+    const step = Number(quantityInput.step || 1);
+    const offset = parsed - minimum;
+    const valid = Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum
+      && Number.isFinite(step) && step > 0
+      && Math.abs(offset / step - Math.round(offset / step)) <= 1e-9;
+    const unitPrice = form.dataset.unitPrice === "" ? NaN : Number(form.dataset.unitPrice);
+    const unitPriceValid = Number.isSafeInteger(unitPrice) && unitPrice > 0;
+    const totalValue = valid && unitPriceValid ? unitPrice * parsed : NaN;
+    const totalValid = !totalOutput || (Number.isSafeInteger(totalValue) && totalValue > 0);
+    const sellButton = form.querySelector(".market-sell-button");
+    if (sellButton && sellButton.dataset.marketServerDisabled === undefined) {
+      sellButton.dataset.marketServerDisabled = String(sellButton.disabled);
+    }
+    if (sellButton) sellButton.disabled = sellButton.dataset.marketServerDisabled === "true" || !valid || !totalValid;
+    if (!valid) {
+      if (totalOutput) totalOutput.textContent = "Indisponível para esta quantidade.";
+      node.textContent = "Informe uma quantidade válida para estimar o prazo.";
+      return;
+    }
+    if (totalOutput) {
+      totalOutput.textContent = totalValid
+        ? `${new Intl.NumberFormat("pt-BR").format(totalValue)} ouro`
+        : "Preço total indisponível.";
+    }
+    if (!totalValid) {
+      node.textContent = "Preço unitário indisponível para estimar o prazo.";
+      return;
+    }
+    quantity = parsed;
   }
   const baseSeconds = Number.parseInt(node.dataset.durationBase || form?.dataset.durationBase || "30", 10);
   const reduction = Number.parseInt(node.dataset.timeReduction || form?.dataset.timeReduction || "0", 10);
@@ -302,10 +556,91 @@ function initializeMarketEstimates(root = document) {
   root.querySelectorAll("[data-market-estimate]").forEach((node) => updateMarketEstimate(node));
 }
 
+function updateDockPurchaseEstimate(form) {
+  const input = form.querySelector("[data-dock-quantity]");
+  const total = form.querySelector("[data-dock-total]");
+  const button = form.querySelector("[data-dock-buy]");
+  if (!input || !total || !button) return;
+  const raw = input.value;
+  const quantity = raw === "" ? NaN : Number(raw);
+  const minimum = Number(input.min || 0);
+  const maximum = input.max === "" ? Number.POSITIVE_INFINITY : Number(input.max);
+  const step = Number(input.step || 1);
+  const offset = quantity - minimum;
+  const valid = Number.isSafeInteger(quantity) && quantity >= minimum && quantity <= maximum
+    && Number.isFinite(step) && step > 0
+    && Math.abs(offset / step - Math.round(offset / step)) <= 1e-9;
+  const unitPrice = Number(form.dataset.unitPrice);
+  const canBuyByDefault = form.dataset.dockServerDisabled !== "true";
+  button.disabled = !canBuyByDefault || !valid || !Number.isSafeInteger(unitPrice) || unitPrice < 1;
+  total.textContent = valid && Number.isSafeInteger(unitPrice)
+    ? `Total: ${new Intl.NumberFormat("pt-BR").format(unitPrice * quantity)} ouro`
+    : "Informe uma quantidade disponível para consultar o total.";
+}
+
+function initializeDockPurchaseEstimates(root = document) {
+  root.querySelectorAll("[data-dock-buy-form]").forEach((form) => {
+    if (form.dataset.dockEstimatesInitialized === "true") return;
+    form.dataset.dockEstimatesInitialized = "true";
+    const button = form.querySelector("[data-dock-buy]");
+    form.dataset.dockServerDisabled = String(Boolean(button?.disabled));
+    updateDockPurchaseEstimate(form);
+  });
+}
+
+function initializeUpdateChecks(root = document) {
+  root.querySelectorAll("[data-check-release-update], [data-check-local-update]").forEach((button) => {
+    const packagedCheck = button.hasAttribute("data-check-release-update");
+    const status = root.querySelector(packagedCheck ? "[data-release-update-status]" : "[data-local-update-status]");
+    if (!status || button.dataset.updateCheckBound === "true") return;
+    button.dataset.updateCheckBound = "true";
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      status.textContent = packagedCheck ? "Consultando versões assinadas…" : "Lendo a versão do checkout local…";
+      try {
+        const response = await fetch("/updates/check", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.reason || (packagedCheck ? "Consulta indisponível." : "Verificação indisponível."));
+        if (result.failed) {
+          status.textContent = packagedCheck
+            ? `Não foi possível verificar atualizações: ${result.reason || "tente novamente."}`
+            : (result.reason || "Não foi possível verificar a versão local.");
+        } else if (packagedCheck && result.available) {
+          status.textContent = `A versão ${result.available_version} está disponível. Feche a campanha e abra o launcher pelo atalho para atualizar.`;
+        } else if (packagedCheck) {
+          status.textContent = result.reason || `Guild Idle Manager ${result.current_version} está atualizado.`;
+        } else if (result.available) {
+          status.textContent = `Versão ${result.available_version} detectada. Feche esta campanha para carregar os arquivos do projeto.`;
+        } else {
+          status.textContent = result.reason || `Checkout local na versão ${result.current_version}.`;
+        }
+      } catch (error) {
+        status.textContent = error.message || (packagedCheck
+          ? "Não foi possível consultar atualizações."
+          : "Não foi possível verificar a versão local.");
+      } finally {
+        button.disabled = packagedCheck && button.dataset.updateQueryEnabled === "false";
+      }
+    });
+  });
+}
+
+initializeClassGuideIndex();
+initializeUpdateChecks();
 initializeMarketEstimates();
+initializeDockPurchaseEstimates();
 document.addEventListener("input", (event) => {
-  if (!event.target.matches("[data-market-quantity]")) return;
-  event.target.closest("form")?.querySelectorAll("[data-market-estimate]").forEach(updateMarketEstimate);
+  if (event.target.matches("[data-market-quantity]")) {
+    event.target.closest("form")?.querySelectorAll("[data-market-estimate]").forEach(updateMarketEstimate);
+  } else if (event.target.matches("[data-dock-quantity]")) {
+    const form = event.target.closest("[data-dock-buy-form]");
+    if (form) updateDockPurchaseEstimate(form);
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -348,25 +683,47 @@ if (sessionFrame) {
 
 updateGenericCountdowns();
 setInterval(updateGenericCountdowns, 1000);
-document.addEventListener("DOMContentLoaded", initializeClassGuideIndex);
 
 function updateSalvagePreview(form) {
   const itemSelect = form.querySelector("[data-salvage-item]");
   const quantityInput = form.querySelector("[data-salvage-quantity]");
   if (!itemSelect || !quantityInput) return;
   const option = itemSelect.selectedOptions[0];
-  const available = Math.max(1, Number(option?.dataset.available || 1));
+  const available = Number(option?.dataset.available || 0);
   quantityInput.max = String(available);
-  const quantity = Math.min(available, Math.max(1, Number(quantityInput.value || 1)));
-  quantityInput.value = String(quantity);
-  const unitCost = Number(form.dataset.unitCost || 0);
-  const unitSeconds = Number(option?.dataset.unitSeconds || 0);
+  const raw = quantityInput.value;
+  const quantity = raw === "" ? NaN : Number(raw);
+  const min = Number(quantityInput.min || 0);
+  const max = Number(quantityInput.max || 0);
+  const step = Number(quantityInput.step || 1);
+  const offset = quantity - min;
+  const valid = Number.isInteger(quantity) && quantity >= min && quantity <= max
+    && Number.isFinite(step) && step > 0
+    && Math.abs(offset / step - Math.round(offset / step)) <= 1e-9;
+  const unitCost = Number(form.dataset.unitCost);
+  const unitSeconds = Number(option?.dataset.unitSeconds);
   const cost = form.querySelector("[data-salvage-cost]");
   const possibleReturn = form.querySelector("[data-salvage-return]");
   const duration = form.querySelector("[data-salvage-duration]");
-  if (cost) cost.textContent = `${unitCost * quantity} ouro`;
-  if (possibleReturn) possibleReturn.textContent = `${quantity}–${quantity * 3} materiais`;
-  if (duration) duration.textContent = formatGenericRemaining(unitSeconds * quantity * 1000);
+  const submit = form.querySelector("[data-salvage-submit]");
+  const status = form.querySelector("[data-salvage-status]");
+  const goldKnown = form.dataset.goldKnown === "true" && form.dataset.goldBalance !== "";
+  const goldBalance = goldKnown ? Number(form.dataset.goldBalance) : NaN;
+  const totalCost = valid ? unitCost * quantity : NaN;
+  const affordable = goldKnown && Number.isFinite(goldBalance) && goldBalance >= totalCost;
+
+  if (cost) cost.textContent = valid ? `${totalCost} ouro` : "—";
+  if (possibleReturn) possibleReturn.textContent = valid ? `${quantity}–${quantity * 3} materiais` : "—";
+  if (duration) duration.textContent = valid ? formatGenericRemaining(unitSeconds * quantity * 1000) : "—";
+  if (submit) submit.disabled = !valid || !affordable;
+  if (status) {
+    if (!valid) status.textContent = "Informe uma quantidade inteira disponível para desmontar.";
+    else if (!goldKnown) status.textContent = "Saldo de ouro não informado; confira os recursos antes de desmontar.";
+    else if (!Number.isFinite(goldBalance)) status.textContent = "Saldo de ouro indisponível para confirmar este serviço.";
+    else if (!affordable) status.textContent = `Faltam ${totalCost - goldBalance} ouro para desmontar esta quantidade.`;
+    else status.textContent = "";
+    status.hidden = status.textContent === "";
+  }
 }
 
 function initializeSalvagePreviews() {
@@ -622,11 +979,15 @@ function preserveRequestedNavigationFragment(responseUrl, requestedUrl) {
 
 let regionalEventTopbarObserver = null;
 let regionalEventTopbarObserved = null;
+let classesGuideIndexObserver = null;
+let classesGuideIndexObserved = null;
 
 function refreshRegionalEventAnchorOffset() {
   const topbar = document.querySelector(".game-topbar");
+  const classesGuideIndex = document.querySelector(".classes-page .classes-guide-index");
   const root = document.documentElement;
   let offset = 0;
+  let classesIndexOffset = 0;
   if (topbar) {
     const style = window.getComputedStyle(topbar);
     if (style.position === "sticky" || style.position === "fixed") {
@@ -634,7 +995,15 @@ function refreshRegionalEventAnchorOffset() {
       offset = Math.ceil(topbar.getBoundingClientRect().height + (Number.isFinite(top) ? Math.max(0, top) : 0));
     }
   }
+  if (classesGuideIndex) {
+    const style = window.getComputedStyle(classesGuideIndex);
+    if (style.position === "sticky" || style.position === "fixed") {
+      classesIndexOffset = Math.ceil(classesGuideIndex.getBoundingClientRect().height);
+    }
+  }
+  root.style.setProperty("--game-sticky-topbar-height", `${offset}px`);
   root.style.setProperty("--regional-event-sticky-topbar-height", `${offset}px`);
+  root.style.setProperty("--classes-guide-index-height", `${classesIndexOffset}px`);
 
   if (regionalEventTopbarObserved !== topbar && regionalEventTopbarObserver) {
     if (regionalEventTopbarObserved) regionalEventTopbarObserver.unobserve(regionalEventTopbarObserved);
@@ -645,14 +1014,111 @@ function refreshRegionalEventAnchorOffset() {
     regionalEventTopbarObserved = topbar;
     regionalEventTopbarObserver.observe(topbar);
   }
+  if (classesGuideIndexObserved !== classesGuideIndex && classesGuideIndexObserver) {
+    if (classesGuideIndexObserved) classesGuideIndexObserver.unobserve(classesGuideIndexObserved);
+    classesGuideIndexObserved = null;
+  }
+  if (classesGuideIndex && classesGuideIndexObserved !== classesGuideIndex && typeof ResizeObserver === "function") {
+    classesGuideIndexObserver ||= new ResizeObserver(() => refreshRegionalEventAnchorOffset());
+    classesGuideIndexObserved = classesGuideIndex;
+    classesGuideIndexObserver.observe(classesGuideIndex);
+  }
 }
 
 window.refreshRegionalEventAnchorOffset = refreshRegionalEventAnchorOffset;
 window.addEventListener("resize", refreshRegionalEventAnchorOffset);
 refreshRegionalEventAnchorOffset();
 
+function syncCurrentSidebarPage(pathname) {
+  const currentPath = pathname.startsWith("/regional/events")
+    ? "/regional/events"
+    : pathname.startsWith("/regional") ? "/regional" : pathname;
+  for (const link of document.querySelectorAll(".sidebar-nav a[href]")) {
+    const linkPath = new URL(link.href, window.location.origin).pathname;
+    if (linkPath === currentPath) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+}
+
+let guideAssetLoadPromise = null;
+function initializeGameGuideForContent(parsedDocument, currentMain) {
+  const guideRoot = currentMain.querySelector(".game-guide");
+  if (!guideRoot) return;
+  if (typeof window.initializeGameGuide === "function") {
+    window.initializeGameGuide(guideRoot);
+    return;
+  }
+  const showRecoverableError = () => {
+    const catalog = guideRoot.querySelector("#equipamentos-materiais");
+    const status = catalog?.querySelector("[data-guide-catalog-status]");
+    const error = catalog?.querySelector("[data-guide-catalog-error]");
+    if (!error) return;
+    if (status) status.textContent = "";
+    error.hidden = false;
+    error.setAttribute("role", "alert");
+    const message = error.querySelector("p");
+    if (message) message.textContent = "Não foi possível iniciar os recursos do Guia. Saia e abra o Guia novamente para tentar.";
+    const retry = error.querySelector("[data-guide-catalog-retry]");
+    if (retry && retry.dataset.guideAssetRetryBound !== "true") {
+      retry.dataset.guideAssetRetryBound = "true";
+      retry.addEventListener("click", () => {
+        if (document.querySelector(".game-guide") !== guideRoot) return;
+        guideAssetLoadPromise = null;
+        error.hidden = true;
+        initializeGameGuideForContent(parsedDocument, currentMain);
+      });
+    }
+  };
+  const scriptSrcFor = (expectedPath) => {
+    for (const script of parsedDocument.querySelectorAll("script[src]")) {
+      const rawSrc = script.getAttribute("src");
+      if (!rawSrc) continue;
+      let candidate;
+      try {
+        candidate = new URL(rawSrc, window.location.origin);
+      } catch {
+        continue;
+      }
+      if ((candidate.protocol !== "http:" && candidate.protocol !== "https:")
+          || candidate.origin !== window.location.origin
+          || candidate.username || candidate.password
+          || candidate.pathname !== expectedPath || candidate.hash) continue;
+      return candidate.href;
+    }
+    return null;
+  };
+  const utilitySrc = scriptSrcFor("/static/js/guide-utils.js");
+  const guideSrc = scriptSrcFor("/static/js/guide.js");
+  if (!utilitySrc || !guideSrc) {
+    showRecoverableError();
+    return;
+  }
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", reject, { once: true });
+    document.head.append(script);
+  });
+  guideAssetLoadPromise ||= loadScript(utilitySrc)
+    .then(() => loadScript(guideSrc))
+    .catch((error) => {
+      guideAssetLoadPromise = null;
+      throw error;
+    });
+  void guideAssetLoadPromise.then(() => {
+    if (document.querySelector(".game-guide") === guideRoot) {
+      window.initializeGameGuide?.(guideRoot);
+    }
+  }).catch((error) => {
+    if (document.querySelector(".game-guide") === guideRoot) showRecoverableError();
+    console.error("Não foi possível inicializar o Guia após a navegação.", error);
+  });
+}
+
 function replaceGameContent(html, responseUrl, previousPath, scrollPosition, updateTopbar, formState, scrollToTop = false) {
   const parsedDocument = new DOMParser().parseFromString(html, "text/html");
+  const nextUrl = new URL(responseUrl, window.location.origin);
   const incomingMain = parsedDocument.querySelector(".game-shell");
   const currentMain = document.querySelector(".game-shell");
   if (!incomingMain || !currentMain) {
@@ -662,22 +1128,29 @@ function replaceGameContent(html, responseUrl, previousPath, scrollPosition, upd
   }
 
   currentMain.innerHTML = incomingMain.innerHTML;
+  initializeClassGuideIndex(currentMain);
+  window.initializeWorkshopSupplyControls?.(currentMain);
+  initializeDockPurchaseEstimates(currentMain);
+  initializeUpdateChecks(currentMain);
+  initializeGameGuideForContent(parsedDocument, currentMain);
   window.initializeEquipmentDetails?.(currentMain);
   window.initializeBuildingResetDialogs?.(currentMain);
   initializeMarketEstimates(currentMain);
-  syncRegionalEventNoticeDialogs(parsedDocument);
+  syncRegionalEventNoticeDialogs(parsedDocument, Boolean(nextUrl.hash));
   window.initializeGatheringCycles?.();
   const incomingTopbar = parsedDocument.querySelector(".game-topbar");
   const currentTopbar = document.querySelector(".game-topbar");
   if (updateTopbar && incomingTopbar && currentTopbar) {
     currentTopbar.innerHTML = incomingTopbar.innerHTML;
+    initializeHeaderPopovers(currentTopbar);
   }
+  refreshResourceTotals();
   window.refreshRegionalEventAnchorOffset?.();
 
   document.title = parsedDocument.title || document.title;
-  const nextUrl = new URL(responseUrl, window.location.origin);
   document.body.dataset.route = nextUrl.pathname;
-  window.GIMApplyDesktopArt?.(currentMain);
+  syncCurrentSidebarPage(nextUrl.pathname);
+  window.GIMApplyDesktopArt?.(document);
   window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   updateGenericCountdowns();
   initializeSalvagePreviews();
@@ -713,8 +1186,17 @@ function regionalNoticeMatches(current, replacement) {
 }
 window.GIMRegionalNoticeMatches = regionalNoticeMatches;
 
-function syncRegionalEventNoticeDialogs(parsedDocument) {
+function syncRegionalEventNoticeDialogs(parsedDocument, suppressAutoOpen = false) {
   const modalQueue = window.GIMStartupModalQueue;
+  if (suppressAutoOpen) {
+    for (const current of document.querySelectorAll("dialog[data-regional-event-notice]")) {
+      current.dataset.regionalNoticeProgrammaticClose = "true";
+      modalQueue?.remove(current);
+      if (current.open) current.close();
+      current.remove();
+    }
+    return;
+  }
   modalQueue?.beginBatch?.();
   try {
     const incoming = [...parsedDocument.querySelectorAll("dialog[data-regional-event-notice]")];
@@ -761,7 +1243,7 @@ function initializeRegionalComparison(root = document) {
         const values = {
           wealth: data.wealth,
           roster: data.roster,
-          tiers: Object.entries(data.tier_counts || {}).sort(([left], [right]) => left.localeCompare(right)).map(([tier, count]) => `${tier} ${count}`).join(" · ") || "—",
+          tiers: Object.entries(data.tier_counts_display || {}).map(([tier, count]) => `${tier} ${count}`).join(" · ") || "—",
           contracts: data.results?.contracts ?? 0,
           dungeons: data.results?.dungeons ?? 0,
           bosses: data.results?.bosses ?? 0,
@@ -786,6 +1268,21 @@ function initializeRegionalComparison(root = document) {
 window.initializeRegionalComparison = initializeRegionalComparison;
 initializeRegionalComparison();
 
+let gameNavigationRevision = 0;
+function beginGameNavigation() {
+  return {
+    revision: ++gameNavigationRevision,
+    root: document.querySelector(".game-shell"),
+    route: document.body.dataset.route,
+  };
+}
+
+function isCurrentGameNavigation(navigation) {
+  return navigation.revision === gameNavigationRevision
+    && navigation.root === document.querySelector(".game-shell")
+    && navigation.route === document.body.dataset.route;
+}
+
 document.addEventListener("click", async (event) => {
   if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
     const noticeLink = event.target.closest("[data-regional-notice-close]");
@@ -805,6 +1302,7 @@ document.addEventListener("click", async (event) => {
   const scrollPosition = window.scrollY;
   const scrollToTop = link.hasAttribute("data-scroll-top");
   const formState = captureGameFormState();
+  const navigation = beginGameNavigation();
   link.setAttribute("aria-busy", "true");
   try {
     const response = await fetch(targetUrl, {
@@ -812,9 +1310,12 @@ document.addEventListener("click", async (event) => {
       credentials: "same-origin",
       headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
     });
+    if (!isCurrentGameNavigation(navigation)) return;
     if (!response.ok) throw new Error("Falha ao atualizar a tela");
+    const html = await response.text();
+    if (!isCurrentGameNavigation(navigation)) return;
     replaceGameContent(
-      await response.text(),
+      html,
       preserveRequestedNavigationFragment(response.url || targetUrl.href, targetUrl.href),
       previousPath,
       scrollPosition,
@@ -823,13 +1324,14 @@ document.addEventListener("click", async (event) => {
       scrollToTop,
     );
   } catch (error) {
+    if (!isCurrentGameNavigation(navigation)) return;
     if (scrollToTop) window.scrollTo({ top: 0, behavior: "auto" });
     window.location.assign(targetUrl);
   }
 });
 
 window.addEventListener("pageshow", () => {
-  if (document.body.dataset.route !== "/regional" || window.location.hash) return;
+  if (!new Set(["/regional", "/regional/events"]).has(document.body.dataset.route) || window.location.hash) return;
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
 });
 
@@ -878,6 +1380,7 @@ function lockTavernActionsUntilReload(form, submitter, previousUrl) {
 }
 
 document.addEventListener("submit", async (event) => {
+  if (event.defaultPrevented) return;
   const form = event.target;
   const method = form instanceof HTMLFormElement ? form.method.toLowerCase() : "";
   if (
@@ -894,6 +1397,7 @@ document.addEventListener("submit", async (event) => {
 
   delete form.dataset.confirmed;
   event.preventDefault();
+  const navigation = beginGameNavigation();
   const submitter = event.submitter;
   const formData = new FormData(form);
   if (submitter && submitter.name) {
@@ -938,7 +1442,9 @@ document.addEventListener("submit", async (event) => {
       requestOptions.body = new URLSearchParams(formData);
     }
     const response = await fetch(requestUrl, requestOptions);
+    if (!isCurrentGameNavigation(navigation)) return;
     let html = await response.text();
+    if (!isCurrentGameNavigation(navigation)) return;
     let responseUrl = response.url || window.location.href;
     const contextualUrl = method === "post"
       ? preservePageContext(responseUrl, previousUrl)
@@ -949,13 +1455,16 @@ document.addEventListener("submit", async (event) => {
         credentials: "same-origin",
         headers: { "Accept": "text/html", "X-Requested-With": "fetch" },
       });
+      if (!isCurrentGameNavigation(navigation)) return;
       if (contextualResponse.ok) {
         html = await contextualResponse.text();
+        if (!isCurrentGameNavigation(navigation)) return;
         responseUrl = contextualResponse.url;
       }
     }
     replaceGameContent(html, responseUrl, previousPath, scrollPosition, response.ok, formState);
   } catch (error) {
+    if (!isCurrentGameNavigation(navigation)) return;
     form.removeAttribute("aria-busy");
     const needsTavernRevalidation = form.dataset.revalidateOnError === "true";
     if (submitter && !needsTavernRevalidation) {
@@ -965,6 +1474,7 @@ document.addEventListener("submit", async (event) => {
     }
     if (needsTavernRevalidation) {
       const refreshed = await fetchTavernStateAfterUncertainAction(previousUrl);
+      if (!isCurrentGameNavigation(navigation)) return;
       if (refreshed) {
         replaceGameContent(
           refreshed.html,
