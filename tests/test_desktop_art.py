@@ -324,6 +324,36 @@ if (/Base antes da redução|redução do Mercado/.test(equipmentNode.textConten
         self.assertIn('.evolution-dialog[id^="report-"][open]', css)
         self.assertIn("offer_action_form(offer, available_mercenaries", events)
 
+    def test_guide_catalog_uses_a_keyboard_accessible_local_scroller_in_desktop_shell(self):
+        guide = (ROOT / "app" / "templates" / "guide" / "index.html").read_text(encoding="utf-8")
+        theme = (STATIC / "css" / "desktop-theme.css").read_text(encoding="utf-8")
+        base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+        catalog_section = guide.split('id="equipamentos-materiais"', 1)[1].split("</section>", 1)[0]
+
+        wrapper = re.search(r'<div class="guide-catalog-table-wrap"[^>]*data-guide-catalog-wrap[^>]*>', catalog_section)
+        self.assertIsNotNone(wrapper)
+        wrapper_markup = wrapper.group(0)
+        self.assertIn('role="region"', wrapper_markup)
+        self.assertIn('aria-label="Catálogo de equipamentos e materiais;', wrapper_markup)
+        self.assertIn('tabindex="0"', wrapper_markup)
+        self.assertIn('data-guide-catalog-rows', catalog_section)
+        self.assertEqual(catalog_section.count('<th scope="col">'), 6)
+        self.assertIn('class="guide-catalog-controls" data-guide-filters', catalog_section)
+
+        rule = re.search(
+            r'body\[data-app-mode="desktop"\]\s+#equipamentos-materiais\s*>\s*\.guide-catalog-table-wrap\s*\{([^}]*)\}',
+            theme,
+        )
+        self.assertIsNotNone(rule)
+        declarations = rule.group(1)
+        self.assertIn("width: 100%", declarations)
+        self.assertIn("min-width: 0", declarations)
+        self.assertIn("max-width: 100%", declarations)
+        self.assertIn("overflow-x: auto", declarations)
+        self.assertIn("overscroll-behavior-x: contain", declarations)
+        self.assertRegex(theme, r'body\[data-app-mode="desktop"\]\s+#equipamentos-materiais\s*>\s*\.guide-catalog-table-wrap:focus-visible\s*\{[^}]*outline: 3px solid var\(--gold-2\)[^}]*outline-offset: 2px')
+        self.assertIn("desktop-theme.css') }}?v=20261126-1", base)
+
     def test_desktop_ui_asset_references_resolve_through_the_art_manifest(self):
         manifest = json.loads((ART_ROOT / "manifest.json").read_text(encoding="utf-8"))
         base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")

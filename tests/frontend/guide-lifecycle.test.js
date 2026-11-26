@@ -13,7 +13,7 @@ assert.ok(helperSource, "partial-navigation Guide initializer is present");
 const replacementSource = mainSource.match(/^function replaceGameContent\([\s\S]*?^\}/m)?.[0];
 assert.match(replacementSource || "", /initializeGameGuideForContent\(parsedDocument, currentMain\)/);
 
-function makeGuideFixture({ initialRoot }) {
+function makeGuideFixture({ initialRoot, catalogItems = [], catalogFilters = {} }) {
   const listeners = new Map();
   const fetchCalls = [];
   const exportDestinations = [];
@@ -45,6 +45,22 @@ function makeGuideFixture({ initialRoot }) {
     querySelector(selector) { return selector === "#guide-search-query" ? searchInput : null; },
   });
   const rows = { children: [], replaceChildren(...children) { this.children = children; }, append(child) { this.children.push(child); } };
+  const filterNodes = new Map();
+  for (const [name, selector, initialValue, tagName] of [
+    ["name", "[data-filter-name]", "", "INPUT"],
+    ["type", "[data-filter-type]", "all", "SELECT"],
+    ["family", "[data-filter-family]", "all", "SELECT"],
+    ["band", "[data-filter-band]", "all", "SELECT"],
+    ["source", "[data-filter-source]", "all", "SELECT"],
+  ]) {
+    filterNodes.set(selector, {
+      value: initialValue,
+      tagName,
+      options: [],
+      append(option) { this.options.push(option); },
+      addEventListener(eventName, callback) { listeners.set(`catalog:${name}:${eventName}`, callback); },
+    });
+  }
   const catalogStatus = { textContent: "", hidden: false };
   const retryButton = { dataset: {}, listeners: {}, addEventListener(name, callback) { this.listeners[name] = callback; } };
   const errorMessage = { textContent: "Não foi possível carregar o catálogo agora." };
@@ -67,7 +83,7 @@ function makeGuideFixture({ initialRoot }) {
     ["[data-guide-catalog-wrap]", tableWrap],
   ]);
   const catalogRoot = {
-    querySelector(selector) { return catalogNodes.get(selector) || null; },
+    querySelector(selector) { return catalogNodes.get(selector) || filterNodes.get(selector) || null; },
     querySelectorAll() { return []; },
   };
   const rootNodes = new Map([
@@ -113,7 +129,12 @@ function makeGuideFixture({ initialRoot }) {
         scrollIntoView() {},
         focus() { searchFocusTargets.push("result"); },
       };
-      return { append() {}, setAttribute() {}, addEventListener() {} };
+      return {
+        dataset: {}, children: [],
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = [...children]; },
+        setAttribute() {}, addEventListener() {},
+      };
     },
     createTreeWalker() {
       let walked = false;
@@ -144,7 +165,7 @@ function makeGuideFixture({ initialRoot }) {
   };
   const fetch = async (url) => {
     fetchCalls.push(url);
-    if (url === "/guide/catalog.json") return { ok: true, json: async () => ({ items: [], filters: {} }) };
+    if (url === "/guide/catalog.json") return { ok: true, json: async () => ({ items: catalogItems, filters: catalogFilters }) };
     return {
       ok: true,
       headers: { get(name) { return name === "content-type" ? "text/markdown; charset=utf-8" : 'attachment; filename="guide.md"'; } },
@@ -174,6 +195,7 @@ function makeGuideFixture({ initialRoot }) {
     context, document, listeners, fetchCalls, exportDestinations, searchRanges, searchFocusTargets, root, searchStatus,
     exportStatus, exportButton, catalogStatus,
     catalogError, errorMessage, retryButton, loadedAssets, attemptedAssets,
+    rows, tableWrap, filterNodes,
     searchForm, searchInput, genericFormDataCalls: () => genericFormDataCalls,
     failNextAssetLoad() { failNextAssetLoad = true; },
     setCurrentRoot(value) { activeRoot = value; },
@@ -216,6 +238,55 @@ test("the Guide initializes directly and after partial navigation from another p
   assert.equal(partial.listeners.get("search:submit") !== undefined, true);
   assert.equal(partial.fetchCalls.filter((path) => path === "/guide/catalog.json").length, 1,
     "reinitializing the same root does not duplicate handlers or catalog requests");
+});
+
+test("loaded Guide catalog filters correctly after direct and partial entry", async () => {
+  const items = [
+    {
+      id: 41, name: "Minério Azul", item_type: "material", item_type_label: "Material",
+      family: "ore", equipment_slot: null, level_band: "1-10", rarity: "Comum", icon: null,
+      sources: [{
+        filter_key: "mission", type: "mission", label: "Missões", name: "Expedição Norte",
+        requirement: "Guilda Nv. 2+", recommendation: "", chance: "12%", quantity: "1 unidade",
+        price: null, condition: "",
+      }],
+    },
+    {
+      id: 42, name: "Madeira Lunar", item_type: "material", item_type_label: "Material",
+      family: "wood", equipment_slot: null, level_band: "1-10", rarity: "Raro", icon: null,
+      sources: [{
+        filter_key: "mission", type: "mission", label: "Missões", name: "Expedição Norte",
+        requirement: "Guilda Nv. 2+", recommendation: "", chance: "8%", quantity: "1 unidade",
+        price: null, condition: "",
+      }],
+    },
+  ];
+  const catalogFilters = { families: ["ore", "wood"], level_bands: ["1-10"], sources: ["mission"] };
+  for (const entry of ["direct", "partial"]) {
+    const fixture = makeGuideFixture({ initialRoot: null, catalogItems: items, catalogFilters });
+    fixture.setCurrentRoot(fixture.root);
+    if (entry === "direct") {
+      vm.runInContext(utilsSource, fixture.context);
+      vm.runInContext(guideSource, fixture.context);
+    } else {
+      vm.runInContext(helperSource, fixture.context);
+      fixture.context.initializeGameGuideForContent(fixture.parsedDocument, fixture.currentMain);
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const visibleIds = () => fixture.rows.children
+      .filter((row) => row.dataset.guideCatalogRow !== undefined)
+      .map((row) => row.dataset.guideItemId);
+    assert.deepEqual(visibleIds(), ["41", "42"], `${entry} entry renders both catalog rows`);
+    assert.equal(fixture.tableWrap.hidden, false, `${entry} entry reveals the loaded table region`);
+    assert.match(fixture.catalogStatus.textContent, /2 item\(ns\)/);
+
+    fixture.filterNodes.get("[data-filter-family]").value = "ore";
+    fixture.listeners.get("catalog:family:input")();
+    assert.deepEqual(visibleIds(), ["41"], `${entry} entry applies the family filter to loaded rows`);
+    assert.match(fixture.catalogStatus.textContent, /1 item\(ns\)/);
+    assert.equal(fixture.tableWrap.hidden, false, `${entry} filtered table remains visible inside its region`);
+  }
 });
 
 test("Guide Enter and button searches stay in the Guide before the global form handler", async () => {

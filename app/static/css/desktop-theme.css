@@ -338,6 +338,20 @@ body[data-app-mode="desktop"] .multi-select-filter summary { min-height: 36px; p
 body[data-app-mode="desktop"] .catalog-toolbar > button { min-height: 36px; padding: 7px 12px; }
 body[data-app-mode="desktop"] .filter-tabs { flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding: 2px 0 7px; scrollbar-width: thin; }
 body[data-app-mode="desktop"] .filter-tabs a { flex: 0 0 auto; min-height: 34px; padding: 7px 10px; white-space: nowrap; }
+body[data-app-mode="desktop"] #equipamentos-materiais { min-width: 0; }
+body[data-app-mode="desktop"] #equipamentos-materiais > .guide-catalog-table-wrap {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+body[data-app-mode="desktop"] #equipamentos-materiais > .guide-catalog-table-wrap:focus-visible {
+  outline: 3px solid var(--gold-2);
+  outline-offset: 2px;
+}
 body[data-app-mode="desktop"] .mission-card h3 { font-family: Georgia, "Times New Roman", serif; }
 body[data-app-mode="desktop"] .mission-timer,
 body[data-app-mode="desktop"] [data-ends-at] { font-variant-numeric: tabular-nums; }
