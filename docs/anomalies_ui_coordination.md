@@ -21,7 +21,19 @@ O usuário autorizou abrir o jogo e navegar por toda a plataforma no save real p
 6. Integração: testar interações, migrações, segurança, exportação, navegação parcial e ausência; verificar cobertura de todas as telas auditadas e todos os critérios do artefato.
 7. Só após entrega integral e aprovações sem achados: push, PR, merge, tag e workflow de release com manifesto assinado. Confirmar artefatos e assinatura e atualizar o histórico após publicar. Aceite manual do usuário é posterior; ML-028 segue pendente desse aceite, não de implementação automática.
 
-## Estado inicial
+## Status final — 2026-11-26
+
+| Frente | Gate técnico/visual | Limites e estado de publicação |
+| --- | --- | --- |
+| ML-052 | CR e DA aprovaram o candidato cumulativo `2669ec2f809657dc309b591117ac1086b11e5853`; ajuste inicial e Guia estão documentados nos relatórios selecionados. | Reflow anterior equivalente a 200% não era zoom nativo; B7 verificou avisos e catálogo no Chrome a 200%. Sem validação de Setup instalado ou aceite manual global. |
+| ML-053 | Levantamento dos 36 achados concluído; correções derivadas foram reconciliadas em ML-056/057 e cobertas pelo fechamento CR/DA do candidato `2669ec2f809657dc309b591117ac1086b11e5853`. | As 62 evidências privadas continuam locais e não foram adicionadas ao Git; cobertura e limites constam em `reports/ml053_coverage_checkpoint_2026-11-24.md`. |
+| ML-054 | Núcleo CR `4999670`; integração B0–B6 aprovada em `604cad188d66918e30f3e06ac530a2f1c1fc01d9`; B7 visual fechada na DA e CR cumulativo em `2669ec2f809657dc309b591117ac1086b11e5853`. | +5 p.p. nas cinco regiões é sensibilidade, não campanha real; não alegar participação CPU real validada por essa simulação. |
+| ML-055 | Backend e central receberam gates focais CR/DA; integração B0–B6 e fechamento visual B7 foram aprovados no candidato cumulativo `2669ec2f809657dc309b591117ac1086b11e5853`. | Sem ação no save real. Resultado integrado não altera limites nem requisitos de gameplay. |
+| ML-056 | Critérios de apresentação/estado e dependências compartilhadas foram aprovados pelos gates CR/DA focal e pelo fechamento B7 no mesmo candidato cumulativo. | Consultas mantêm a autoridade dos serviços; dados ausentes não são tratados como zero e ações de consulta não resgatam nem alteram recursos. |
+| ML-057 | Shell, navegação, layouts e fluxos receberam aprovação CR/DA focal; B7/P01–P03 fechados no candidato cumulativo `2669ec2f809657dc309b591117ac1086b11e5853`. | Teste de cache contrato-only posterior `51e88d4be85a84067f302fb5a97f5ff24cba59ff`: suíte Node 81/81, zero skips. |
+| Versão/publicação | Fonte/changelog 0.11.0 e contratos aprovados pelo CR em `ad381ab230a5b10aeb6c7169d5b0d3dc9ba6c0e3`. | Publicação ainda aguarda a coordenação. Não houve tag, build de distribuição, instalação, push, PR ou merge neste checkpoint. Aprovação técnica/visual não é aceite manual global. |
+
+## Estado no início do pacote (registro histórico)
 
 ### Decisão de conteúdo e participação CPU
 
@@ -39,7 +51,7 @@ Nas novas regras, remover o pré-sorteio de 25% de entrada CPU e priorizar a ava
 | ML-057 | Implementação e gates focais concluídos; integração técnica B0–B6 aprovada em `604cad1` | B7/zoom visual integrado aguarda autorização da ferramenta. Não publicado nem aceito manualmente |
 | Publicação | Não iniciada | Concluir B7/zoom integrado e demais gates de aceite antes de tag/build/publicação |
 
-## Checkpoint de acompanhamento - 2026-11-25
+## Histórico de acompanhamento - 2026-11-25
 
 ### Reconciliação posterior de integração
 

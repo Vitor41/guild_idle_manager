@@ -1,11 +1,13 @@
 # ML-052–057 — checkpoint DEV e matriz F01–F36
 
-Data: 2026-11-25
+> Atualização de encerramento em 2026-11-26: a matriz abaixo é o checkpoint de 25/11; estados B7 “pendente” nela são históricos e foram superados pelo fechamento final registrado ao fim deste arquivo.
+
+Data base da matriz: 2026-11-25
 Branch única: `feature/anomalies-ui-audit`
 Base: `986b6b7c885c3a2bc8564ebc61514c3e0099223e`
-Candidato de runtime integrado: `604cad188d66918e30f3e06ac530a2f1c1fc01d9` (base do pacote `986b6b7c885c3a2bc8564ebc61514c3e0099223e`). Versão/changelog/testes 0.11.0: `ad381ab230a5b10aeb6c7169d5b0d3dc9ba6c0e3`, aprovado focalmente pelo CR.
+Candidato integrado B0–B6: `604cad188d66918e30f3e06ac530a2f1c1fc01d9` (base do pacote `986b6b7c885c3a2bc8564ebc61514c3e0099223e`). Candidato cumulativo final B7: `2669ec2f809657dc309b591117ac1086b11e5853`. Versão/changelog/testes 0.11.0: `ad381ab230a5b10aeb6c7169d5b0d3dc9ba6c0e3`, aprovado focalmente pelo CR.
 
-Este é um checkpoint de desenvolvimento, não o aceite final do pacote. As aprovações registradas abaixo são focais e permanecem sujeitas à revisão dos commits posteriores que tocaram componentes compartilhados. O CR aprovou tecnicamente a integração cumulativa B0–B6 em `604cad188d66918e30f3e06ac530a2f1c1fc01d9`, sem achados em aberto; a revisão visual integrada DA B7/zoom continua pendente. As três pendências visuais registradas em `reports/ml056_final_views_da_78d4363_2026-11-25.md` foram corrigidas no commit `0ba1066107ab660c504282d9bb85e5538c6bd273`: alvos do Códex, foco de Construções/Profissões e letter-spacing de Profissões. Os contratos de testes antigos e as fixtures ML-054 foram alinhados em commit de testes `0907cae150dd8e48e8423e2aea394248bade2880`; o CR aprovou a integração corrigida. Ainda não houve aprovação visual integrada, aceite manual ou publicação.
+No checkpoint de 25/11, as aprovações abaixo eram focais e B7 ainda estava pendente. Esse estado foi superado pelo fechamento CR/DA registrado na seção final de 26/11; as observações anteriores permanecem como histórico. Naquele ponto, o CR havia aprovado B0–B6 em `604cad188d66918e30f3e06ac530a2f1c1fc01d9`, sem achados em aberto; as três pendências visuais registradas em `reports/ml056_final_views_da_78d4363_2026-11-25.md` foram corrigidas em `0ba1066107ab660c504282d9bb85e5538c6bd273`. Os contratos de testes e fixtures ML-054 foram alinhados em `0907cae150dd8e48e8423e2aea394248bade2880`. O fechamento atualizado está ao fim deste relatório.
 
 Os identificadores curtos de commit na matriz são abreviações únicas nesta branch. Os hashes completos permanecem no histórico Git. Nenhuma captura privada, caminho absoluto de harness ou dado de save foi incluído neste relatório.
 
@@ -61,8 +63,16 @@ Os identificadores curtos de commit na matriz são abreviações únicas nesta b
 - O CR concluiu B0–B6 contra `604cad1` e aprovou a versão/changelog/testes no commit `ad381ab` sem achados em aberto. Isso não cobre a avaliação visual integrada DA B7/zoom nem aceite manual.
 - Os gates e limites históricos de ML-052/054/055/057 estão registrados nos checkpoints anteriores e nos resultados de CR/DA. Evidência sintética não é operação no save real nem aceite manual.
 
-## Preservação e próximo gate
+## Preservação e próximos gates no checkpoint inicial de 25/11 (histórico)
 
 Os commits de implementação, testes e versão não incluem os documentos de coordenação nem o simulador preexistente. `AGENTS.md`, `ML-BUGS.md`, `docs/anomalies_ui_coordination.md` e este checkpoint serão registrados em commit documental dedicado; `scripts/balance/simulate_regional_cpu_campaigns.py` permanece fora. Não houve migração, uso do save real, build, instalação, push, PR, merge ou publicação.
 
-Próximos gates: registrar este checkpoint documental em commit separado e enviá-lo ao CR para revisão de rastreabilidade; a DA ainda precisa concluir B7/zoom no candidato atualizado. A integração técnica CR B0–B6 e o delta de versão estão aprovados, mas o pacote global segue sem aceite visual integrado/manual e não está publicado.
+Naquele checkpoint, os próximos gates eram registrar a documentação e concluir B7/zoom. A aprovação final DA ocorreu depois e está registrada abaixo.
+
+## Fechamento CR/DA e status atual — 2026-11-26
+
+- **Candidato de implementação:** CR aprovou tecnicamente a integração cumulativa B0–B6 em `604cad188d66918e30f3e06ac530a2f1c1fc01d9`; a correção final de navegação/cache e os deltas B7 foram aprovados cumulativamente no SHA `2669ec2f809657dc309b591117ac1086b11e5853`. A DA aprovou B7/P01–P03 nesse mesmo candidato, sem achados remanescentes no escopo. Ver [parecer final DA B7](ml052_ml057_b7_final_da_2669ec2_2026-11-26.md) e [integração CR sanitizada](ml052_ml057_cr_integration_2026-11-26.md).
+- **B7:** P01/P02 foram retestados em Chrome nativo a 200%; P03 foi verificado com catálogo carregado e filtrado. As medidas e limites por viewport constam no relatório final DA. A exportação Save As foi conferida como versão 0.11.0, 2.853.100 bytes, UTF-8 e PT-BR; a consulta de Atualizações e a restauração do navegador a 100% também foram concluídas. Isso não é uma instalação distribuída nem aceite manual global.
+- **Contrato de cache posterior:** no commit test-only `51e88d4be85a84067f302fb5a97f5ff24cba59ff`, a suíte Node solicitada (`node --test tests/js/*.test.mjs tests/frontend/*.test.js tests/guide_frontend_utils.test.js`) passou 81/81, zero falhas e zero skips. Não houve mudança de runtime nesse commit.
+- **Versão:** 0.11.0 e changelog foram preparados e aprovados tecnicamente pelo CR no commit `ad381ab230a5b10aeb6c7169d5b0d3dc9ba6c0e3`. A publicação permanece sob responsabilidade da coordenação; este checkpoint não autoriza nem relata tag, build, instalação, push, PR, merge ou release.
+- **Limites:** não houve operação no save real, nem teste do Setup instalado. A aprovação aqui registrada é CR técnico e DA visual/funcional dos critérios acordados; não representa aceite manual do usuário nem status publicado.

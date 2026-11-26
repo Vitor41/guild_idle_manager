@@ -1,6 +1,6 @@
 # ML-052–057 — integração técnica CR e retestes
 
-Consolidado em 2026-11-26; execuções de integração e retestes em 2026-11-25. Versão sanitizada para inclusão futura no repositório. Não constitui aprovação visual, aceite manual nem autorização de publicação.
+Consolidado em 2026-11-26; execuções de integração e retestes em 2026-11-25. Cópia sanitizada preparada para versionamento em 2026-11-26. Não constitui aprovação visual, aceite manual nem autorização de publicação.
 
 ## Parecer e fontes fixadas
 
@@ -164,7 +164,7 @@ python -B -m unittest tests.test_guide_routes
 
 Releases: executar as seis funções `test_` de `tests/test_github_releases.py`, com `monkeypatch.setattr` equivalente a `ExitStack`/`patch.object` e `tmp_path` em diretório temporário, mantendo isolamento por função. Os cenários de assinatura/hash usam respostas falsas e nunca executam o instalador. O teste adicional de navegação usou os helpers/handlers reais extraídos do arquivo testado; o código auxiliar local não faz parte do produto nem é pré-requisito do gate.
 
-## Limites e documentação pré-B7
+## Limites e documentação pré-B7 — checkpoint histórico
 
 B0–B6 aprovados tecnicamente em604cad1 e estendidos a ad381ab. B7 visual/zoom real permanece aguardando autorização na conversa DA; reflow equivalente200% não é zoom nativo WebView2. Login/admin e catálogo inteiro não foram auditados visualmente nesta integração. As observações do save real pertencem ao levantamento DA previamente autorizado; nenhum save real foi usado pelo CR.
 
@@ -178,3 +178,89 @@ A revisão documental47b7ec3 contém36/36linhas, preserva história e distingue 
 Também são relevantes ao fechamento das declarações finais as evidências locais `reports/ml056_f22_f24_f25_f33_da_0434c60_2026-11-25.md` e `reports/ml056_a01_a03_da_0ba1066_2026-11-25.md`, além dos fechamentos focais de elenco, Coleta e restante057. Incluir versões textuais sanitizadas e os links necessários em checkpoint separado; não incluir capturas, perfis ou dados brutos privados. A existência local e a revisão das conclusões não tornam esses arquivos parte do commit revisado.
 
 A lacuna documental não revoga o gate de runtime ad381ab, mas precisa ser reconciliada antes de declarar a evidência versionada completa. Este relatório não concede aprovação global, de DA ou de publicação. Não houve staging/commit pelo CR.
+
+## Reconciliação documental e extensões técnicas P01–P03 — checkpoint CR pré-fechamento DA, 2026-11-26
+
+**Estado técnico atualizado:** aprovação cumulativa estendida a `2669ec2f809657dc309b591117ac1086b11e5853`, sem achados técnicos abertos nesses recortes. B7 visual permanece em andamento na conversa DA; P03 e as últimas verificações ainda não tinham conclusão visual consolidada quando esta atualização foi preparada. Não há aprovação global, aceite manual ou autorização de publicação neste parecer.
+
+### Fechamento da lacuna documental
+
+O P2 documental de `47b7ec3af6fc2b1195e3fffcc283e9964f509170` foi fechado em `3af71b185ec74185f4e0300ba9430b4f806926b9`: seis relatórios DA mínimos e este parecer foram versionados. As quatro referências expressas antes ausentes passaram a existir na árvore Git, junto dos fechamentos F22–F25/F33 e A01–A03. A cópia CR coincidiu byte a byte com a fonte sanitizada no sistema de arquivos; o Git normalizou CRLF para LF sem mudar o conteúdo. Pareceres, medidas, SHAs, falhas históricas e limites foram preservados. A inspeção dos arquivos adicionados não encontrou caminhos privados, UUIDs, credenciais ou evidências brutas. Runtime intacto, sem repetição de testes nesse gate documental.
+
+### P01 — contraste do aviso de portal
+
+Fonte: `4e37cc8f4d0353ef87c9a825c3e1cb198a9a3c40`, base `3af71b1`. O seletor específico do CTA do aviso de portal passou a prevalecer sobre a cor global de links nos estados normal, hover e foco. Texto/borda usam `#152025`; fundos e foco 3px/3px foram preservados. O cache de desktop-evolution foi atualizado para `20261126-1`.
+
+Revisão independente confirmou markup dos diálogos de portal e rebelião idêntico à base: href/deep-link, navegação assíncrona e fechamento preservados; rebelião não recebeu alteração. Contrastes calculados para as cores declaradas: 10,272:1 no fundo normal `#8ed9d1`, 12,923:1 no hover `#b6eee5` e 12,009:1 para o anel contra o fundo do diálogo. Esses cálculos e contratos não substituem medição visual computada da DA.
+
+Seletores Python efetivamente executados em cópia fixa, **2/2, zero skips**:
+
+```text
+python -B -m unittest tests.test_desktop_art.DesktopArtIntegrationTests.test_portal_notice_primary_cta_overrides_global_link_color_in_all_states tests.test_desktop_art.DesktopArtIntegrationTests.test_regional_event_action_contrast_and_notice_link_targets
+```
+
+Como nas baterias anteriores, a execução original usou coletor externo de unittest; o comando apresentado é sua forma portátil equivalente.
+
+### P02 — corpo rolável e foco da equipe
+
+Fonte de estrutura/layout: `8630cf8e097788ff7ef8470cc52862d9d2f35fd1`, base P01. Cache e contrato complementar: `41d924ff58b6f3c4d30fa3c6e6933aedd81c23ef`.
+
+O cabeçalho passou a conter Fechar/rank/título, com descrição, estatísticas, drops e equipe no corpo rolável. Grid aplica-se somente a `dialog[open]` de ofertas. Blocos POST foram comparados à base e permaneceram idênticos, incluindo action, formaction de preparo, quote, IDs, snapshot preparado e controles de composição. Macro compartilhada, central inline, diálogo de relatório, serviços e JavaScript não mudaram.
+
+| Execução independente | Fonte | Resultado |
+| --- | --- | --- |
+| Contrato estrutural P02 + dois contratos P01 + autoridade da seleção regional | 8630cf8 | 4/4 Python, zero skips |
+| Preparo/equipe original/reforços/limites e indisponibilidade | 8630cf8 | 4/4 JS, zero skips |
+| Smoke HTTP completo | 8630cf8 | 1/1, zero skips; 72,110 s |
+| Contratos P01/P02 após cache | 41d924f | 2/2 Python, zero skips |
+
+```text
+python -B -m unittest tests.test_desktop_art.DesktopArtIntegrationTests.test_regional_offer_modal_keeps_compact_header_and_scrollable_offer_body tests.test_desktop_art.DesktopArtIntegrationTests.test_portal_notice_primary_cta_overrides_global_link_color_in_all_states tests.test_desktop_art.DesktopArtIntegrationTests.test_regional_event_action_contrast_and_notice_link_targets tests.test_regional_selection_authority
+node --test tests/js/regional-supply.test.mjs
+python -B -m unittest tests.test_desktop_http_smoke
+```
+
+No navegador headless isolado, em **532×408 CSS px**, o corpo teve 270px úteis e 1.380px de conteúdo. Vinte e cinco verificações por Tab, incluindo os checkboxes de equipe, confirmaram controle dentro do corpo e hit-test sem obstrução; a rolagem local percorreu 505–1.110px. Título e Fechar permaneceram acessíveis; Escape fechou o modal, restaurou o foco ao acionador e o diálogo fechado teve `display:none`. Nenhum POST foi enviado por esse ensaio de consulta/teclado.
+
+A primeira tentativa estava com aviso automático de portal sobreposto e não alcançou os checkboxes da oferta. Isso foi corrigido apenas no ensaio, encerrando os avisos da fixture antes de abrir o modal correto; não foi classificado como defeito de P02 nem contado como passagem aprovada. O reteste final passou.
+
+O CSS servido com `desktop-evolution.css?v=20261126-2` retornou HTTP200 e hash idêntico aos bytes da fonte fixa. Esse viewport equivalente não é zoom real de WebView2 e não substitui a validação DA.
+
+### P03 — catálogo do Guia após JSON/filtro
+
+Fonte de geometria e região acessível: `80821c690469838c44c8b94eb6e88155208c2cd6`. Foi identificado pelo CR um desvio C12 novo: afastamento de foco de 2px, também exigido pelo teste. Correção e cache: `2669ec2f809657dc309b591117ac1086b11e5853`, com afastamento 3px e desktop-theme `20261126-2`. A geometria é idêntica entre esses dois SHAs; nenhum desvio de 2px permanece aberto no candidato cumulativo.
+
+Escopo limitado ao desktop e à seção/região da tabela: min-width zero, largura máxima do container e overflow horizontal local. Wrapper nomeado e focável; seis colunas, controles, JavaScript do Guia, dados e serviços intactos.
+
+```text
+python -B -m unittest tests.test_desktop_art.DesktopArtIntegrationTests.test_guide_catalog_uses_a_keyboard_accessible_local_scroller_in_desktop_shell
+node --test tests/frontend/guide-lifecycle.test.js tests/frontend/guide-render.test.js
+```
+
+Contrato Python: **1/1** em80821 e **1/1** no delta C12 em2669, ambos zero skips. Bateria JS executada pelo CR: **8/8**, zero skips; não atribuída ao CR uma contagem maior relatada por outro papel.
+
+Seis entradas reais direta/parcial, com JSON canônico carregado e filtro aplicado, passaram em Chrome headless:
+
+| Viewport CSS | Entradas | Documento | Área útil da tabela | Largura rolável | Teclado |
+| --- | --- | ---: | ---: | ---: | --- |
+| 390×900 | direta e parcial | 375px | 307px | 760px | scroll local453px, página0 |
+| 532×408 | direta e parcial | 517px | 441px | 760px | scroll local319px, página0 |
+| 1440×900 | direta e parcial | 1425px | 1021px | 1021px | sem rolagem necessária; foco mantido |
+
+Nenhum overflow horizontal global após carregamento ou filtro. Seis cabeçalhos e seis células por linha de dados foram preservados. Loading, vazio por filtro, erro controlado e retry mantiveram a região oculta ou visível conforme o estado, sem ampliar a página. A entrega do JSON foi temporariamente retida e a falha de consulta injetada apenas no ensaio para observar esses estados; não são alegações de erro espontâneo do backend.
+
+O ensaio inicial de teclado não estava com o foco correto no conteúdo; o controle de foco/sobreposições foi ajustado fora do produto antes da passagem válida. Os seis casos finais passaram, com zero exceções JS e zero POSTs. No cumulativo2669, repetiu-se somente o recorte532×408 para o foco/cache: anel sólido3px, afastamento3px, foco mantido e nenhum ancestral de clipping cortando o contorno. Desktop-theme versão2 foi servido por HTTP200 com hash conferido contra a fonte.
+
+### Reuso e alcance desta extensão
+
+Os gates B0–B6 anteriores permanecem reusados nos blobs intactos: nenhuma nova migração, regra, custo, recompensa, scheduler ou simulação foi introduzida por P01–P03. Não foram repetidas as baterias de serviços nem a simulação de100ciclos. Apenas os testes focais e o smoke P02 acima foram executados; esta edição do parecer não executou nova suíte.
+
+As verificações headless são técnicas e usam perfis descartáveis; medidas de viewport equivalente não constituem zoom nativo. O estado visual de P01/P02 é acompanhado pela DA e não concedido por este relatório. B7/P03 e últimas verificações visuais ainda aguardavam consolidação própria. Aprovação técnica cumulativa em2669 não autoriza publicação, instalação, build ou aceite manual. Nenhum staging ou commit foi feito pelo CR.
+
+## Atualização de coordenação após o fechamento DA B7 — 2026-11-26
+
+Após a elaboração deste parecer CR, a DA concluiu B7 no candidato `2669ec2f809657dc309b591117ac1086b11e5853`, fechando P01–P03 sem achados visuais remanescentes no escopo. O registro final da DA está em `reports/ml052_ml057_b7_final_da_2669ec2_2026-11-26.md`; os relatórios anteriores preservam os checkpoints de 604cad e 41d924f como histórico.
+
+A DA verificou os avisos P01/P02 em Chrome nativo a 200% e as telas em 532×408, 720 e 1440; P03 foi conferido após carregar o catálogo JSON e aplicar filtros. A exportação Save As foi conferida como arquivo v0.11.0 de 2.853.100 bytes, UTF-8 e PT-BR; a consulta de Atualizações e o retorno do navegador a 100% também foram verificados. A evidência representa as verificações manuais e técnicas registradas no relatório DA, não uma instalação de distribuição nem aceite manual global.
+
+Este adendo registra somente o status DA posterior; não altera os achados, métodos, limites ou opinião técnica independente do CR. O pacote aguarda a etapa de publicação pela coordenação. Não houve tag, build de distribuição, instalação, push, PR ou publicação neste checkpoint.
