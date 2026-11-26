@@ -31,9 +31,17 @@ O usuário autorizou abrir o jogo e navegar por toda a plataforma no save real p
 | ML-055 | Backend e central receberam gates focais CR/DA; integração B0–B6 e fechamento visual B7 foram aprovados no candidato cumulativo `2669ec2f809657dc309b591117ac1086b11e5853`. | Sem ação no save real. Resultado integrado não altera limites nem requisitos de gameplay. |
 | ML-056 | Critérios de apresentação/estado e dependências compartilhadas foram aprovados pelos gates CR/DA focal e pelo fechamento B7 no mesmo candidato cumulativo. | Consultas mantêm a autoridade dos serviços; dados ausentes não são tratados como zero e ações de consulta não resgatam nem alteram recursos. |
 | ML-057 | Shell, navegação, layouts e fluxos receberam aprovação CR/DA focal; B7/P01–P03 fechados no candidato cumulativo `2669ec2f809657dc309b591117ac1086b11e5853`. | Teste de cache contrato-only posterior `51e88d4be85a84067f302fb5a97f5ff24cba59ff`: suíte Node 81/81, zero skips. |
-| Versão/publicação | Fonte/changelog 0.11.0 e contratos aprovados pelo CR em `ad381ab230a5b10aeb6c7169d5b0d3dc9ba6c0e3`. | Publicação ainda aguarda a coordenação. Não houve tag, build de distribuição, instalação, push, PR ou merge neste checkpoint. Aprovação técnica/visual não é aceite manual global. |
+| Versão/publicação | `DEV-v0.11.0` publicada como prerelease após aprovação CR/DA do pacote. | PR #25 foi integrado em `2cadd4451eaee5d1a122743338b81d0e80c62146`; tag `DEV-v0.11.0`, workflow `45897483540` e verificação dos assets estão registrados em [`reports/dev_v0.11.0_release_verification_2026-11-26.md`](../reports/dev_v0.11.0_release_verification_2026-11-26.md). Nenhum Setup foi aberto/instalado localmente e nenhum save real foi alterado. Aceite manual do usuário é posterior à entrega. |
+
+## Registro de publicação — DEV-v0.11.0 — 2026-11-26
+
+O pacote ML-052–057 foi publicado como prerelease `DEV-v0.11.0` em 2026-11-26 às 21:23:32 UTC. PR #25 foi integrado no merge `2cadd4451eaee5d1a122743338b81d0e80c62146`; a tag aponta para esse merge. O workflow de release `45897483540` concluiu com sucesso e os smokes do pacote, campanha e launcher passaram. A verificação criptográfica, hashes dos três assets, escopo e limites constam no [relatório sanitizado de verificação](../reports/dev_v0.11.0_release_verification_2026-11-26.md).
+
+ML-052–057 estão entregues. A validação manual do usuário pode ocorrer posteriormente e não é pendência de desenvolvimento. A publicação não envolveu abrir/instalar o Setup nesta máquina nem operar ou alterar um save real. Os registros de ML-028, ML-045 e BUG-014 não recebem aceite novo neste pacote; o aceite de BUG-013 permanece preservado.
 
 ## Estado no início do pacote (registro histórico)
+
+O estado abaixo foi capturado antes do fechamento B7 e da publicação; é preservado para cronologia e não substitui o status final de 26/11 registrado acima.
 
 ### Decisão de conteúdo e participação CPU
 
@@ -53,9 +61,11 @@ Nas novas regras, remover o pré-sorteio de 25% de entrada CPU e priorizar a ava
 
 ## Histórico de acompanhamento - 2026-11-25
 
+Os registros desta seção descrevem o estado conhecido em 25/11 e checkpoints anteriores. Pendências ali anotadas foram atualizadas pelo fechamento CR/DA e pela publicação registrados acima.
+
 ### Reconciliação posterior de integração
 
-- **Estado mais recente:** CR aprovou B0–B6 cumulativo em `604cad188d66918e30f3e06ac530a2f1c1fc01d9`, sem achados técnicos abertos. A corrida de navegação foi corrigida em `8bead5bc6e2670815a185fabe7341f29d1ba050e`; CR repetiu 80 testes JavaScript, quatro casos adicionais e jornada de 16 registros, além de conferir por HTTP o asset com cache versão 10. Grupos anteriores intactos foram reconciliados por fonte, sem alegar repetição integral simultânea de todos os testes.
+- **Estado naquele checkpoint:** CR aprovou B0–B6 cumulativo em `604cad188d66918e30f3e06ac530a2f1c1fc01d9`, sem achados técnicos abertos. A corrida de navegação foi corrigida em `8bead5bc6e2670815a185fabe7341f29d1ba050e`; CR repetiu 80 testes JavaScript, quatro casos adicionais e jornada de 16 registros, além de conferir por HTTP o asset com cache versão 10. Grupos anteriores intactos foram reconciliados por fonte, sem alegar repetição integral simultânea de todos os testes.
 - A passagem visual integrada B7/zoom real continua aguardando autorização obrigatória da ferramenta. Retestes focais não substituem essa etapa. A versão 0.11.0 e changelog foram preparados em `ad381ab230a5b10aeb6c7169d5b0d3dc9ba6c0e3`; o checkpoint documental está sendo fechado em commit separado. Não houve tag, build, instalação, push ou publicação. Os pontos seguintes preservam a cronologia da integração e não reabrem achados já corrigidos.
 
 - F26 recebeu correção de Progresso da Guilda em `bc654a00d9e233deb7066584262845e65e96a53f` e restauração do requisito base em `78d43630fe04799dd1f6f0bb4538969a79d89c75`, aprovada tecnicamente pelo CR. O recorte visual de conteúdo e estados foi verificado pela DA.
